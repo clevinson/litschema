@@ -6,5 +6,5 @@ Pipeline phases:
   04_pdf_to_markdown     - Convert PDFs to markdown (pymupdf4llm)
   06_resolve_entities    - Deduplicate authors and institutions
   09_llm_extraction      - Extract non-bibliographic fields (via agent skill)
-  10_assemble_corpus     - Assemble final LinkML-valid corpus.yaml
+  10_assemble_corpus     - Legacy export of LinkML-valid corpus.yaml
 """

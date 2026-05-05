@@ -20,7 +20,6 @@ Typical usage::
 
     from litschema.config import load_config
     cfg = load_config()
-    corpus = cfg.corpus_file       # -> Path
     md_dir = cfg.fulltext_md_dir   # -> Path
 
 The loader result is cached per resolved path; pass ``reload=True`` to bust.

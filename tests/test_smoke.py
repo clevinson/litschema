@@ -13,10 +13,12 @@ from __future__ import annotations
 import shutil
 import subprocess
 import sys
+from types import SimpleNamespace
 from pathlib import Path
 
 import pytest
 import yaml
+from typer.testing import CliRunner
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -102,3 +104,63 @@ def test_cli_status_exits_zero() -> None:
     assert result.returncode == 0, result.stderr
     assert "papers:" in result.stdout
     assert "extracted:" in result.stdout
+
+
+def test_status_treats_missing_corpus_as_optional(tmp_path: Path, monkeypatch) -> None:
+    """Per-article projects should not look broken when corpus.yaml is absent."""
+    (tmp_path / "schema").mkdir()
+    (tmp_path / "schema" / "erw_articles.yaml").write_text("name: test\nclasses: {}\n")
+    paper_dir = tmp_path / "data" / "papers" / "smith-2024"
+    paper_dir.mkdir(parents=True)
+    (paper_dir / "agent-extraction.json").write_text('{"article_id": "smith-2024"}')
+    (tmp_path / "litschema.yaml").write_text(
+        'project_root: "."\n'
+        'schema_dir: "schema"\n'
+        'schema_root: "erw_articles.yaml"\n'
+        'article_store_dir: "data/papers"\n'
+    )
+    monkeypatch.setenv("LITSCHEMA_CONFIG", str(tmp_path / "litschema.yaml"))
+
+    from litschema.cli import app
+
+    result = CliRunner().invoke(app, ["status"])
+
+    assert result.exit_code == 0, result.output
+    assert "corpus:" not in result.output
+    assert "[FAIL]" not in result.output
+
+
+def test_validate_defaults_to_extractions_without_requiring_corpus(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    """`litschema validate` should not require the legacy corpus snapshot."""
+    (tmp_path / "schema").mkdir()
+    (tmp_path / "schema" / "erw_articles.yaml").write_text("name: test\nclasses: {}\n")
+    paper_dir = tmp_path / "data" / "papers" / "smith-2024"
+    paper_dir.mkdir(parents=True)
+    (paper_dir / "agent-extraction.json").write_text('{"article_id": "smith-2024"}')
+    (tmp_path / "litschema.yaml").write_text(
+        'project_root: "."\n'
+        'schema_dir: "schema"\n'
+        'schema_root: "erw_articles.yaml"\n'
+        'article_store_dir: "data/papers"\n'
+    )
+    monkeypatch.setenv("LITSCHEMA_CONFIG", str(tmp_path / "litschema.yaml"))
+
+    from litschema import cli
+
+    calls = []
+
+    def fake_run(args, **kwargs):
+        calls.append(args)
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(cli.subprocess, "run", fake_run)
+
+    result = CliRunner().invoke(cli.app, ["validate"])
+
+    assert result.exit_code == 0, result.output
+    assert len(calls) == 1
+    assert calls[0][-1] == str(tmp_path / "data" / "papers")
+    assert "corpus" not in result.output.lower()

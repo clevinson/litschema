@@ -1,9 +1,9 @@
 ---
 name: validate-corpus
-description: "Validate the ERW corpus and extractions against LinkML schemas. Run after extraction or assembly to catch errors."
+description: "Validate ERW article metadata, extractions, and reasoning against project schemas. Run after extraction to catch errors."
 ---
 
-# Validate Corpus
+# Validate Article Store
 
 Run validation across the ERW pipeline outputs and report issues.
 
@@ -43,10 +43,35 @@ print(f'\nReasoning: {valid}/{valid+invalid} valid')
 "
 ```
 
-3. **Validate corpus.yaml** against the LinkML schema:
+3. **Validate article metadata files** exist and are parseable:
 
 ```bash
-uv run linkml-validate -s schema/erw_articles.yaml corpus.yaml
+uv run python -c "
+import json
+from pathlib import Path
+
+valid = missing = invalid = 0
+for paper_dir in sorted(Path('data/papers').iterdir()):
+    if not paper_dir.is_dir():
+        continue
+    path = paper_dir / 'article-metadata.json'
+    if not path.exists():
+        missing += 1
+        print(f'MISSING: {path}')
+        continue
+    try:
+        data = json.loads(path.read_text())
+    except Exception as e:
+        invalid += 1
+        print(f'INVALID: {path}: {e}')
+        continue
+    if not data.get('id'):
+        invalid += 1
+        print(f'INVALID: {path}: missing id')
+    else:
+        valid += 1
+print(f'\nMetadata: {valid} valid, {missing} missing, {invalid} invalid')
+"
 ```
 
 4. **Report summary** of all validation results. If any step fails, list the specific files and errors.

@@ -18,7 +18,12 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
-from ..articles import article_files, iter_article_ids_with_extractions, read_review_events
+from ..articles import (
+    article_files,
+    iter_article_ids_with_extractions,
+    read_article_metadata,
+    read_review_events,
+)
 from ..config import load_config
 from .search import strip_references
 
@@ -51,15 +56,29 @@ def _load_corpus() -> dict:
     return _corpus_cache or {}
 
 
+def _load_author_index() -> dict[str, dict]:
+    _load_corpus()
+    if _author_index:
+        return _author_index
+    authors_path = _CFG.data_dir / "authors.yaml"
+    if not authors_path.exists():
+        return {}
+    authors = yaml.safe_load(authors_path.read_text()) or []
+    return {a.get("id"): a for a in authors if a.get("id")}
+
+
 def _article_meta(article_id: str) -> dict:
     """Return a compact bibliographic dict for an article id."""
     _load_corpus()
-    a = (_article_index or {}).get(article_id)
+    a = read_article_metadata(article_files(_CFG, article_id))
+    if not a:
+        a = (_article_index or {}).get(article_id)
     if not a:
         return {}
     authors = []
+    author_index = _load_author_index()
     for aid in a.get("author_ids") or []:
-        auth = (_author_index or {}).get(aid)
+        auth = author_index.get(aid)
         if auth:
             family = auth.get("family_name") or ""
             given = auth.get("given_name") or ""
@@ -75,9 +94,11 @@ def _article_meta(article_id: str) -> dict:
 
 
 def _article_pdf_filename(article_id: str) -> str | None:
-    """Look up PDF filename from corpus.yaml."""
+    """Look up PDF filename from per-article metadata or legacy corpus.yaml."""
     _load_corpus()
-    a = (_article_index or {}).get(article_id)
+    a = read_article_metadata(article_files(_CFG, article_id))
+    if not a:
+        a = (_article_index or {}).get(article_id)
     if not a:
         return None
     return a.get("filename") or a.get("standard_filename")
@@ -261,7 +282,6 @@ def main():
     print(f"Legacy markdown dir: {_CFG.fulltext_md_dir}")
     print(f"Legacy extraction dir: {_CFG.llm_extractions_dir}")
     print(f"Papers dir: {PAPERS_DIR}")
-    print(f"Corpus: {CORPUS_PATH}")
     webbrowser.open("http://localhost:8000")
     uvicorn.run(app, host="127.0.0.1", port=8000)
 

@@ -1,7 +1,7 @@
 """Phase 2b: Convert PDFs to markdown for LLM extraction.
 
 Uses pymupdf4llm for fast, CPU-only PDF-to-markdown conversion.
-Reads corpus.yaml for article_id -> filename mapping.
+Reads data/papers/<article_id>/article-metadata.json for filename mapping.
 
 Usage:
     uv run python -m litschema.ingest.pdf_to_markdown [--force] [--papers-dir DIR]
@@ -10,12 +10,13 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 from pathlib import Path
 
 import yaml
 
-from ..articles import article_files
+from ..articles import article_files, iter_metadata_paths
 from ..config import load_config
 
 logger = logging.getLogger(__name__)
@@ -40,20 +41,35 @@ def convert_pdf(pdf_path: Path, out_path: Path) -> int:
     return len(md_text)
 
 
+def _load_articles(corpus_path: Path | None = None) -> list[dict]:
+    if corpus_path is not None:
+        with open(corpus_path) as f:
+            return (yaml.safe_load(f) or {}).get("articles", [])
+
+    articles = []
+    for path in iter_metadata_paths(_CFG):
+        data = json.loads(path.read_text())
+        data.setdefault("id", path.parent.name)
+        articles.append(data)
+    if articles:
+        return sorted(articles, key=lambda article: article.get("id", ""))
+
+    if CORPUS_PATH.exists():
+        return _load_articles(CORPUS_PATH)
+    return []
+
+
 def run(
-    corpus_path: Path = CORPUS_PATH,
+    corpus_path: Path | None = None,
     papers_dir: Path = PAPERS_DIR,
     output_dir: Path | None = None,
     force: bool = False,
 ) -> dict:
-    """Convert all PDFs referenced in corpus.yaml to markdown."""
+    """Convert all PDFs referenced by per-article metadata to markdown."""
     if output_dir is not None:
         output_dir.mkdir(parents=True, exist_ok=True)
 
-    with open(corpus_path) as f:
-        corpus = yaml.safe_load(f)
-
-    articles = corpus.get("articles", [])
+    articles = _load_articles(corpus_path)
     stats = {"total": 0, "converted": 0, "skipped": 0, "empty": 0, "missing": 0, "errors": 0}
 
     for article in articles:
@@ -109,7 +125,12 @@ def main():
     parser = argparse.ArgumentParser(description="Convert PDFs to markdown for LLM extraction")
     parser.add_argument("--force", action="store_true", help="Re-convert existing files")
     parser.add_argument("--papers-dir", type=Path, default=PAPERS_DIR)
-    parser.add_argument("--corpus", type=Path, default=CORPUS_PATH)
+    parser.add_argument(
+        "--corpus",
+        type=Path,
+        default=None,
+        help="Legacy corpus.yaml input. Defaults to data/papers/*/article-metadata.json",
+    )
     parser.add_argument(
         "--output-dir",
         type=Path,

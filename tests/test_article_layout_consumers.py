@@ -3,9 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import yaml
-
 from litschema import analysis
+from litschema.webapp import app as webapp
 from litschema.config import LitSchemaConfig
 from litschema.ingest import assemble_corpus, pdf_to_markdown
 
@@ -61,8 +60,10 @@ def test_pdf_conversion_defaults_to_article_folder(
 ) -> None:
     cfg = _cfg(tmp_path)
     cfg.papers_dir.mkdir(parents=True)
-    cfg.corpus_file.write_text(
-        yaml.safe_dump({"articles": [{"id": "smith-2024", "filename": "smith.pdf"}]})
+    article_dir = cfg.article_store_dir / "smith-2024"
+    article_dir.mkdir(parents=True)
+    (article_dir / "article-metadata.json").write_text(
+        json.dumps({"id": "smith-2024", "filename": "smith.pdf"})
     )
     (cfg.papers_dir / "smith.pdf").write_text("pdf placeholder")
     monkeypatch.setattr(pdf_to_markdown, "_CFG", cfg)
@@ -74,7 +75,7 @@ def test_pdf_conversion_defaults_to_article_folder(
     monkeypatch.setattr(pdf_to_markdown, "convert_pdf", fake_convert_pdf)
 
     stats = pdf_to_markdown.run(
-        corpus_path=cfg.corpus_file,
+        corpus_path=None,
         papers_dir=cfg.papers_dir,
         output_dir=None,
     )
@@ -100,3 +101,40 @@ def test_analysis_loads_extractions_from_article_folders(
 
     assert dfs["articles"]["article_id"].tolist() == ["smith-2024"]
     assert dfs["articles"]["confidence"].tolist() == [0.8]
+
+
+def test_webapp_reads_bibliography_and_pdf_filename_from_article_metadata(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    cfg = _cfg(tmp_path)
+    article_dir = cfg.article_store_dir / "smith-2024"
+    article_dir.mkdir(parents=True)
+    (article_dir / "article-metadata.json").write_text(
+        json.dumps(
+            {
+                "id": "smith-2024",
+                "title": "Smith example",
+                "year": 2024,
+                "doi": "10.1234/example",
+                "journal": "Example Journal",
+                "publisher": "Example Publisher",
+                "filename": "smith.pdf",
+            }
+        )
+    )
+    monkeypatch.setattr(webapp, "_CFG", cfg)
+    monkeypatch.setattr(webapp, "CORPUS_PATH", cfg.corpus_file)
+    monkeypatch.setattr(webapp, "_corpus_cache", None)
+    monkeypatch.setattr(webapp, "_article_index", None)
+    monkeypatch.setattr(webapp, "_author_index", None)
+
+    assert webapp._article_meta("smith-2024") == {
+        "title": "Smith example",
+        "year": 2024,
+        "journal": "Example Journal",
+        "doi": "10.1234/example",
+        "publisher": "Example Publisher",
+        "authors": [],
+    }
+    assert webapp._article_pdf_filename("smith-2024") == "smith.pdf"

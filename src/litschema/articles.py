@@ -141,6 +141,12 @@ def iter_review_paths(cfg: LitSchemaConfig) -> Iterator[Path]:
     )
 
 
+def iter_metadata_paths(cfg: LitSchemaConfig) -> Iterator[Path]:
+    if not cfg.article_store_dir.is_dir():
+        return
+    yield from sorted(cfg.article_store_dir.glob("*/article-metadata.json"))
+
+
 def _iter_artifact_paths(
     cfg: LitSchemaConfig,
     *,
@@ -163,6 +169,14 @@ def _iter_artifact_paths(
 def iter_article_ids_with_extractions(cfg: LitSchemaConfig) -> Iterator[str]:
     for path in iter_extraction_paths(cfg):
         yield article_id_from_extraction_path(path)
+
+
+def read_article_metadata(files: ArticleFiles) -> dict:
+    if not files.metadata.exists():
+        return {}
+    data = json.loads(files.metadata.read_text())
+    data.setdefault("id", files.article_id)
+    return data
 
 
 def _read_jsonl(path: Path) -> list[dict]:

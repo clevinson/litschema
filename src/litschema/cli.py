@@ -1,9 +1,9 @@
 """litschema CLI — single entry point for the pipeline.
 
-Verbs: harvest / convert / extract / assemble / validate / verify / mcp /
-status / doctor / skills install / schema compile / init. The pipeline
-verbs delegate to ingest-module mains; status/doctor/skills/schema/mcp
-have first-class implementations here.
+Verbs: harvest / convert / extract / validate / verify / mcp / status /
+doctor / skills install / schema compile / init. The pipeline verbs delegate
+to ingest-module mains; status/doctor/skills/schema/mcp have first-class
+implementations here.
 """
 
 from __future__ import annotations
@@ -19,6 +19,7 @@ import typer
 from .articles import (
     iter_extraction_paths,
     iter_markdown_paths,
+    iter_metadata_paths,
     iter_reasoning_paths,
     iter_review_paths,
 )
@@ -133,7 +134,8 @@ def convert(ctx: typer.Context):
 
 @app.command(
     context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
-    help="Assemble the corpus YAML from extractions + bibliographic data.",
+    help="Legacy: export corpus.yaml from extractions + bibliographic data.",
+    hidden=True,
 )
 def assemble(ctx: typer.Context):
     _require_config()
@@ -148,6 +150,9 @@ def validate(
     ctx: typer.Context,
     extractions_only: bool = typer.Option(
         False, "--extractions-only", help="Skip corpus validation"
+    ),
+    corpus: bool = typer.Option(
+        False, "--corpus", help="Also validate legacy corpus.yaml against the schema"
     ),
     corpus_only: bool = typer.Option(
         False, "--corpus-only", help="Skip per-article extraction validation"
@@ -164,9 +169,11 @@ def validate(
         )
         had_failures = had_failures or result.returncode != 0
 
-    if not extractions_only:
+    validate_corpus = corpus or corpus_only
+
+    if validate_corpus and not extractions_only:
         schema_root = _schema_root_path(cfg)
-        corpus = cfg.corpus_file
+        corpus_file = cfg.corpus_file
         if not schema_root.exists():
             typer.secho(
                 f"{CROSS} required for corpus validation: {schema_root} not found. "
@@ -175,17 +182,17 @@ def validate(
                 fg=typer.colors.RED,
             )
             had_failures = True
-        elif not corpus.exists():
+        elif not corpus_file.exists():
             typer.secho(
-                f"{CROSS} required for corpus validation: {corpus} not found. "
-                f"Run `litschema assemble` first, or re-run with --extractions-only.",
+                f"{CROSS} required for corpus validation: {corpus_file} not found. "
+                f"Run `litschema assemble` first, or omit --corpus.",
                 fg=typer.colors.RED,
             )
             had_failures = True
         else:
             typer.echo(f"{DIM}→ validating corpus against {schema_root.name}{RESET}")
             result = subprocess.run(
-                ["uv", "run", "linkml-validate", "-s", str(schema_root), str(corpus)]
+                ["uv", "run", "linkml-validate", "-s", str(schema_root), str(corpus_file)]
             )
             had_failures = had_failures or result.returncode != 0
 
@@ -398,13 +405,13 @@ def skills_install(
 def status():
     cfg = _require_config()
 
+    metadata = len(list(iter_metadata_paths(cfg)))
     converted = len(list(iter_markdown_paths(cfg)))
     extractions = len(list(iter_extraction_paths(cfg)))
     reasoning = len(list(iter_reasoning_paths(cfg)))
     annotations = len(list(iter_review_paths(cfg)))
 
     schema_yaml = _schema_root_path(cfg)
-    corpus = cfg.corpus_file
     papers = _count_files(cfg.papers_dir, "*.pdf")
 
     def _rel(path: Path) -> str:
@@ -421,17 +428,10 @@ def status():
         else f"schema:      {CROSS} not found"
     )
     typer.echo(f"papers:      {papers} PDFs in {cfg.papers_dir.name}/")
+    typer.echo(f"articles:    {metadata} metadata files")
     typer.echo(f"converted:   {converted} markdown files")
     typer.echo(f"extracted:   {extractions} extractions")
     typer.echo(f"reasoning:   {reasoning} reasoning files")
-    typer.echo(
-        f"corpus:      {corpus.name}"
-        + (
-            f" ({corpus.stat().st_size // 1024} KB)"
-            if corpus.exists()
-            else f" {CROSS} not assembled"
-        )
-    )
     typer.echo(f"annotations: {annotations}")
 
 
