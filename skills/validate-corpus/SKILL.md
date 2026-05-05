@@ -1,0 +1,87 @@
+---
+name: validate-corpus
+description: "Validate the ERW corpus and extractions against LinkML schemas. Run after extraction or assembly to catch errors."
+---
+
+# Validate Corpus
+
+Run validation across the ERW pipeline outputs and report issues.
+
+## Steps
+
+1. **Validate all extractions** against the ExtractionArtifact JSON Schema:
+
+```bash
+uv run python -m litschema.ingest.validate_extraction data/llm_extractions/
+```
+
+2. **Validate all reasoning files** against the ExtractionReasoning JSON Schema:
+
+```bash
+uv run python -c "
+import json
+from pathlib import Path
+from jsonschema import Draft202012Validator
+
+schema = json.load(open('reasoning_schema.json'))
+validator = Draft202012Validator(schema)
+valid = invalid = 0
+for f in sorted(Path('data/extraction_reasoning').glob('*.json')):
+    errors = list(validator.iter_errors(json.loads(f.read_text())))
+    if errors:
+        invalid += 1
+        print(f'INVALID: {f.stem}')
+        for e in errors[:3]:
+            path = '.'.join(str(p) for p in e.absolute_path)
+            print(f'  {path}: {e.message[:100]}')
+    else:
+        valid += 1
+print(f'\nReasoning: {valid}/{valid+invalid} valid')
+"
+```
+
+3. **Validate corpus.yaml** against the LinkML schema:
+
+```bash
+uv run linkml-validate -s schema/erw_articles.yaml corpus.yaml
+```
+
+4. **Report summary** of all validation results. If any step fails, list the specific files and errors.
+
+5. **Check reasoning coverage** — for articles with reasoning files, report what percentage of extraction fields have corresponding reasoning entries:
+
+```bash
+uv run python -c "
+import json
+from pathlib import Path
+
+ext_dir = Path('data/llm_extractions')
+reason_dir = Path('data/extraction_reasoning')
+
+def count_leaves(obj, path=''):
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            yield from count_leaves(v, f'{path}.{k}' if path else k)
+    elif isinstance(obj, list):
+        for i, item in enumerate(obj):
+            yield from count_leaves(item, f'{path}[{i}]')
+    else:
+        if path not in ('article_id', 'confidence', 'reasoning'):
+            yield path
+
+for rf in sorted(reason_dir.glob('*.json')):
+    aid = rf.stem
+    ext = json.loads((ext_dir / f'{aid}.json').read_text())
+    reason = json.loads(rf.read_text())
+    rpaths = set()
+    for f in reason.get('fields', []):
+        p = f['path']
+        if p.startswith('.'): p = p[1:]
+        rpaths.add(p)
+    leaves = list(count_leaves(ext))
+    covered = sum(1 for l in leaves if l in rpaths)
+    pct = round(100 * covered / len(leaves)) if leaves else 0
+    flag = ' <<<' if pct < 80 else ''
+    print(f'{aid:40s} {covered:3d}/{len(leaves):3d} ({pct}%){flag}')
+"
+```

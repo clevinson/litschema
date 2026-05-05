@@ -1,0 +1,240 @@
+id: https://example.org/litschema-templates/agriculture
+name: agriculture_extraction
+description: >-
+  Demo extraction schema for agricultural research literature. Designed
+  as a starter for new litschema projects — small but realistic, exercising
+  scalars, enums, multivalued slots, and nested object slots.
+license: Apache-2.0
+
+prefixes:
+  ag: https://example.org/litschema-templates/agriculture/
+  linkml: https://w3id.org/linkml/
+default_prefix: ag
+default_range: string
+
+imports:
+  - linkml:types
+
+# ──────────────────────────────────────────────────────────────────────
+# Classes
+# ──────────────────────────────────────────────────────────────────────
+
+classes:
+
+  AgricultureExtraction:
+    tree_root: true
+    description: >-
+      Structured output from extracting one agricultural research article.
+      The root document for documents that validate against this schema.
+    attributes:
+      article_id:
+        identifier: true
+        required: true
+        description: Stable identifier for this article (e.g. first-author + year).
+      confidence:
+        range: float
+        description: >-
+          Self-rated confidence (0.0–1.0) in this extraction's overall quality.
+      reasoning:
+        description: >-
+          Free-text rationale the extractor wrote about choices made during
+          extraction. Not validated; useful for downstream review.
+      study_type:
+        range: StudyTypeEnum
+        description: One-of classification of the work's methodology.
+      crops:
+        multivalued: true
+        description: Crops featured in the study (free-form names).
+      experiments:
+        multivalued: true
+        range: Experiment
+        description: >-
+          One entry per distinct experimental run. A paper comparing
+          two soils at one location has two experiments; a paper running
+          the same trial at three sites has three. Can be empty for
+          modeling-only or review papers.
+      sample_size:
+        range: integer
+        description: Total replicate count across the study, when reported.
+
+  Experiment:
+    description: >-
+      One experimental run within a study. Bundles the things that
+      hang together at the per-experiment level: where it ran, where
+      the soil came from (if different), the soil itself, and the
+      treatments applied (each with its own measured outcomes).
+    attributes:
+      site:
+        range: Region
+        description: >-
+          Where this experiment was physically conducted. For field
+          trials, also where the soil lives.
+      soil_source:
+        range: Region
+        description: >-
+          Where the soil was collected from. Set when soil came from a
+          different location than `site` (typical for lab / greenhouse
+          studies). Leave null when the experimental site is also the
+          soil source (typical for field trials).
+      soil:
+        range: Soil
+        description: Soil description for this experiment.
+      treatments:
+        multivalued: true
+        range: Treatment
+        description: >-
+          Treatments / interventions applied in this experiment. Each
+          treatment carries its own list of measured outcomes — that
+          way a paper comparing several treatments (e.g. cover crop,
+          no-till, combined) can record per-treatment effect direction
+          on the same shared outcome variables (yield, soil C, etc.).
+
+  Region:
+    description: One geographic location.
+    attributes:
+      country:
+        required: true
+      admin_boundary:
+        description: Sub-national region (state, province, prefecture, etc.).
+      latitude:
+        range: float
+      longitude:
+        range: float
+
+  Soil:
+    description: >-
+      Description of one soil used in the study. Texture is the most
+      commonly-reported field; taxonomy is opportunistic.
+    attributes:
+      texture_class:
+        range: SoilTextureEnum
+        description: USDA 12-class texture (sand / loam / clay / etc.).
+      sand_pct:
+        range: float
+        minimum_value: 0.0
+        maximum_value: 100.0
+        description: Sand fraction (% by mass).
+      silt_pct:
+        range: float
+        minimum_value: 0.0
+        maximum_value: 100.0
+        description: Silt fraction (% by mass).
+      clay_pct:
+        range: float
+        minimum_value: 0.0
+        maximum_value: 100.0
+        description: Clay fraction (% by mass).
+      taxonomy_system:
+        range: SoilTaxonomySystemEnum
+        description: >-
+          Optional. Which taxonomy system `taxonomy_class` is reported in.
+      taxonomy_class:
+        description: >-
+          Optional. Soil class within the chosen taxonomy system
+          (e.g. "Mollisol" / "Vertisol" for USDA, "Cambisol" for WRB).
+
+  Treatment:
+    description: One experimental treatment / intervention and its observed effects.
+    attributes:
+      name:
+        required: true
+        description: Short label for this treatment (e.g. "compost amendment").
+      type:
+        range: TreatmentTypeEnum
+      rate:
+        description: >-
+          Application rate or dose, free-form (e.g. "100 kg N/ha", "20 t/ha").
+      outcomes:
+        multivalued: true
+        range: Outcome
+        description: >-
+          Outcome variables observed under this treatment, each with the
+          direction of effect relative to the experiment's control.
+          Same variable may appear across multiple treatments — that's
+          how you capture differing effects across treatments on the
+          same measured quantity (e.g. yield positive under no-till,
+          neutral under cover-crop alone).
+
+  Outcome:
+    description: One measured outcome variable.
+    attributes:
+      variable:
+        required: true
+        description: Name of the measured variable (e.g. "yield", "soil organic carbon").
+      unit:
+        description: Reported unit (e.g. "kg/ha", "%", "Mg C/ha").
+      effect_direction:
+        range: EffectDirectionEnum
+        description: Sign of the effect relative to the comparison/control.
+
+# ──────────────────────────────────────────────────────────────────────
+# Enums
+# ──────────────────────────────────────────────────────────────────────
+
+enums:
+
+  StudyTypeEnum:
+    permissible_values:
+      field_trial:
+        description: On-farm or research-station field experiment.
+      greenhouse:
+        description: Controlled-environment plant trial (greenhouse / growth chamber).
+      lab:
+        description: Bench/lab-scale work (incubation, soil column, batch reactor).
+      modeling:
+        description: Computational / process-based modeling, no new field data.
+      review:
+        description: Narrative review of prior literature.
+      meta_analysis:
+        description: Quantitative synthesis of effect sizes from prior studies.
+
+  TreatmentTypeEnum:
+    permissible_values:
+      fertilizer:
+      irrigation:
+      tillage:
+      cultivar:
+      pesticide:
+      cover_crop:
+      amendment:
+        description: Soil amendments not classified above (lime, biochar, compost, etc.).
+      other:
+
+  EffectDirectionEnum:
+    permissible_values:
+      positive:
+        description: Treatment associated with an increase in the outcome variable.
+      neutral:
+        description: No statistically detectable effect.
+      negative:
+        description: Treatment associated with a decrease in the outcome variable.
+      mixed:
+        description: Effects varied by sub-group, season, or other interaction.
+
+  SoilTextureEnum:
+    description: USDA soil texture classes (12-class system).
+    permissible_values:
+      sand:
+      loamy_sand:
+      sandy_loam:
+      loam:
+      silt_loam:
+      silt:
+      sandy_clay_loam:
+      clay_loam:
+      silty_clay_loam:
+      sandy_clay:
+      silty_clay:
+      clay:
+
+  SoilTaxonomySystemEnum:
+    description: >-
+      Soil classification system used to report `taxonomy_class`. Optional —
+      only set if the paper specifies one.
+    permissible_values:
+      USDA:
+        description: USDA Soil Taxonomy (Soil Survey Staff).
+      WRB:
+        description: World Reference Base for Soil Resources (FAO/IUSS).
+      FAO:
+        description: Older FAO/UNESCO Soil Classification.

@@ -1,0 +1,31 @@
+id: https://example.org/litschema-test/organic
+name: organic_agriculture_extraction
+description: >-
+  Test fixture — extends the agriculture template via is_a, adds two slots
+  specific to organic agriculture, marks the subclass as the new tree_root.
+prefixes:
+  org: https://example.org/litschema-test/organic/
+  ag: https://example.org/litschema-templates/agriculture/
+  linkml: https://w3id.org/linkml/
+default_prefix: org
+default_range: string
+
+imports:
+  - linkml:types
+  - ./agriculture_extraction      # the template (symlinked into this dir)
+
+classes:
+  OrganicAgricultureExtraction:
+    is_a: AgricultureExtraction      # inherits all 9 base slots
+    tree_root: true                   # mark this as MY root (LinkML doesn't inherit tree_root)
+    description: >-
+      Agricultural research focused on organic / certified-organic systems.
+      Inherits everything from AgricultureExtraction and adds two slots.
+    attributes:
+      certification_body:
+        description: e.g. USDA Organic, EU Organic, JAS, India Organic.
+      organic_practices:
+        multivalued: true
+        description: >-
+          Organic-specific practices used (cover cropping, crop rotation,
+          green manure, intercropping, biological pest control, etc.).

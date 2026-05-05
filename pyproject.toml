@@ -1,0 +1,129 @@
+[project]
+name = "litschema"
+version = "0.1.0"
+description = "Schema-driven, agentic extraction of structured data from scientific literature. LinkML-native, local-first, with bundled agent skills."
+requires-python = ">=3.13"
+# All runtime deps live here. We deliberately do NOT split into extras —
+# the pipeline's five steps (harvest / convert / extract-skill / verify /
+# mcp) form a coherent tool surface, and anyone reaching for litschema is
+# almost certainly going to use the full pipeline. Forcing `--extra X`
+# incantations for first-time users was a net DX loss against a ~130 MB
+# total install, which is unremarkable by scientific-Python standards.
+# Revisit only if someone wants litschema as a *library* inside a larger
+# project and hits a real version conflict.
+dependencies = [
+    "linkml>=1.10.0",
+    "requests>=2.31.0",
+    "pyyaml>=6.0",
+    "jellyfish>=1.0.0",
+    "typer>=0.12.0",
+    "pymupdf4llm>=0.0.17",       # `convert` — PDF → markdown
+    "openpyxl>=3.1.0",           # paper-tracking spreadsheet reader
+    "fastapi[standard]>=0.115",  # `verify` — verification webapp
+    "duckdb>=1.0.0",             # `mcp` — explore store
+    "mcp>=1.27.0",               # `mcp` — Model Context Protocol server
+]
+
+[project.scripts]
+litschema = "litschema.cli:app"
+# Legacy per-step entry points (deprecated; use `litschema <verb>` instead).
+litschema-harvest-openalex = "litschema.ingest.openalex_harvest:main"
+litschema-harvest-crossref = "litschema.ingest.crossref_harvest:main"
+litschema-resolve = "litschema.ingest.resolve_entities:main"
+litschema-assemble = "litschema.ingest.assemble_corpus:main"
+litschema-verify = "litschema.webapp.app:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+docs-build = ["mkdocs-material>=9.5", "mkdocs-mermaid2-plugin>=1.1", "linkml>=1.10.0", "pyyaml>=6.0"]
+verify-build = ["pyyaml>=6.0"]
+dev = [
+    "folium>=0.20.0",
+    "ipyleaflet>=0.20.0",
+    "matplotlib>=3.10.8",
+    "notebook>=7.5.4",
+    "pandas>=3.0.1",
+    "openpyxl>=3.1.0",
+    "pytest>=8.0",
+    "pre-commit>=4.0",
+    "ruff>=0.8",
+    "mypy>=1.11",
+]
+
+# ── Tooling configs ────────────────────────────────────────────────────────
+
+[tool.ruff]
+target-version = "py313"
+src = ["src", "tests"]
+line-length = 100
+extend-exclude = [
+    "data",       # generated JSON/YAML fixtures; not our source
+    "papers",     # PDFs only
+    "static-site",
+    "site",
+    ".litschema",
+    "notebooks",  # lint separately when we care
+]
+
+[tool.ruff.lint]
+# Opinionated but quiet: formatting handled by ruff-format; lint catches the
+# high-value stuff without shouting about style nits.
+select = ["E", "F", "W", "I", "B", "UP", "SIM"]
+ignore = [
+    "E501",  # line-length handled by the formatter
+    "B008",  # typer.Option() in defaults is correct usage
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101"]  # asserts are expected in tests
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+addopts = "--strict-config --strict-markers -ra"
+log_level = "INFO"
+xfail_strict = true
+filterwarnings = [
+    "error",
+    # third-party warnings we don't control; don't break CI on them
+    "ignore::DeprecationWarning:dateutil.*",
+    "ignore::DeprecationWarning:linkml.*",
+    "ignore::DeprecationWarning:linkml_runtime.*",
+    "ignore::Warning:requests.*",  # RequestsDependencyWarning + UserWarnings
+]
+
+[tool.mypy]
+python_version = "3.13"
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+# Not strict-mode yet — legacy ingest code isn't typed. Tighten
+# per-module over time via [[tool.mypy.overrides]] blocks.
+ignore_missing_imports = true
+exclude = [
+    "^data/",
+    "^papers/",
+    "^notebooks/",
+    "^static-site/",
+    "^site/",
+]
+
+[tool.hatch.envs.test]
+description = "Run the test suite with pytest."
+dependencies = ["pytest>=8.0"]
+scripts.run = "pytest {args:tests}"
+
+[tool.hatch.envs.lint]
+description = "Run ruff lint + format check."
+dependencies = ["ruff>=0.8"]
+scripts.check = [
+    "ruff check .",
+    "ruff format --check .",
+]
+scripts.fix = [
+    "ruff check --fix .",
+    "ruff format .",
+]

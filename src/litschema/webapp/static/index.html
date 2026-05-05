@@ -1,0 +1,3568 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ERW Extraction Verifier</title>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.19/cdn/themes/dark.css" />
+<script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.19/cdn/shoelace-autoloader.js"></script>
+<style>
+  :root {
+    --sl-color-primary-600: #b0863e;
+    --radius: 6px;
+    --font-sans: 'DM Sans', -apple-system, sans-serif;
+    --font-mono: 'DM Mono', 'SF Mono', monospace;
+
+    /* Light mode (default) */
+    --bg: #fafaf9;
+    --bg-raised: #ffffff;
+    --bg-overlay: #f3f3f2;
+    --bg-input: #ffffff;
+    --text: #1c1c1e;
+    --text-secondary: #6b6b73;
+    --text-dim: #9d9da5;
+    --accent: #a0762e;
+    --accent-muted: rgba(160, 118, 46, 0.1);
+    --accent-strong: rgba(160, 118, 46, 0.2);
+    --cited: #4a6dd9;
+    --cited-muted: rgba(74, 109, 217, 0.08);
+    --cited-strong: rgba(74, 109, 217, 0.18);
+    --green: #16a34a;
+    --yellow: #ca8a04;
+    --red: #dc2626;
+    --grey: #c4c4c4;
+    --border: #e4e4e7;
+    --border-subtle: #ededf0;
+    --val-string: #1a7a2e;
+    --val-number: #7c3aad;
+
+    /* Shoelace overrides for popup panels (hoisted to body) */
+    --sl-color-neutral-0: var(--bg-raised);
+    --sl-color-neutral-50: var(--bg-overlay);
+    --sl-color-neutral-100: var(--bg-overlay);
+    --sl-color-neutral-700: var(--text);
+    --sl-panel-background-color: var(--bg-raised);
+    --sl-panel-border-color: var(--border);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --sl-color-primary-600: #d4a054;
+      --bg: #111113;
+      --bg-raised: #18181b;
+      --bg-overlay: #1e1e22;
+      --bg-input: #131315;
+      --text: #e4e4e7;
+      --text-secondary: #8b8b92;
+      --text-dim: #55555e;
+      --accent: #d4a054;
+      --accent-muted: rgba(212, 160, 84, 0.15);
+      --accent-strong: rgba(212, 160, 84, 0.3);
+      --cited: #7c9cf5;
+      --cited-muted: rgba(124, 156, 245, 0.12);
+      --cited-strong: rgba(124, 156, 245, 0.25);
+      --green: #4ade80;
+      --yellow: #facc15;
+      --red: #f87171;
+      --grey: #444;
+      --border: #27272a;
+      --border-subtle: #1f1f23;
+      --val-string: #a3d9a5;
+      --val-number: #c4a5e0;
+      --sl-color-neutral-0: #18181b;
+      --sl-color-neutral-50: #1e1e22;
+      --sl-color-neutral-100: #1e1e22;
+      --sl-color-neutral-700: #e4e4e7;
+      --sl-panel-background-color: #18181b;
+      --sl-panel-border-color: #27272a;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --sl-color-primary-600: #d4a054;
+    --bg: #111113;
+    --bg-raised: #18181b;
+    --bg-overlay: #1e1e22;
+    --bg-input: #131315;
+    --text: #e4e4e7;
+    --text-secondary: #8b8b92;
+    --text-dim: #55555e;
+    --accent: #d4a054;
+    --accent-muted: rgba(212, 160, 84, 0.15);
+    --accent-strong: rgba(212, 160, 84, 0.3);
+    --cited: #7c9cf5;
+    --cited-muted: rgba(124, 156, 245, 0.12);
+    --cited-strong: rgba(124, 156, 245, 0.25);
+    --green: #4ade80;
+    --yellow: #facc15;
+    --red: #f87171;
+    --grey: #444;
+    --border: #27272a;
+    --border-subtle: #1f1f23;
+    --sl-color-neutral-0: #18181b;
+    --sl-color-neutral-50: #1e1e22;
+    --sl-color-neutral-100: #1e1e22;
+    --sl-color-neutral-700: #e4e4e7;
+    --sl-panel-background-color: #18181b;
+    --sl-panel-border-color: #27272a;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: var(--font-sans);
+    background: var(--bg);
+    color: var(--text);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    font-size: 13px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── Toolbar ── */
+  .toolbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 16px;
+    background: var(--bg-raised);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    height: 48px;
+  }
+
+  /* Native select — reliable dropdown rendering */
+  #article-select {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text);
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 6px 28px 6px 10px;
+    height: 32px;
+    min-width: 280px;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%238b8b92' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    cursor: pointer;
+    outline: none;
+  }
+
+  #article-select:focus {
+    border-color: var(--accent);
+  }
+
+  /* Article nav: ◀ 3/179 ▶ */
+  .article-nav {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    height: 32px;
+    flex-shrink: 0;
+  }
+
+  .article-nav button {
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    cursor: pointer;
+    padding: 0 7px;
+    height: 100%;
+    font-size: 11px;
+    display: flex;
+    align-items: center;
+    transition: color 0.1s;
+  }
+
+  .article-nav button:hover:not(:disabled) { color: var(--text); }
+  .article-nav button:disabled { opacity: 0.3; cursor: default; }
+
+  .article-nav .nav-counter {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-secondary);
+    padding: 0 2px;
+    min-width: 40px;
+    text-align: center;
+    border-left: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Filter buttons */
+  .filter-group {
+    display: flex;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    height: 32px;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+
+  .filter-btn {
+    font-family: var(--font-sans);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    background: none;
+    border: none;
+    border-right: 1px solid var(--border);
+    color: var(--text-dim);
+    padding: 0 12px;
+    cursor: pointer;
+    transition: all 0.1s;
+  }
+
+  .filter-btn:last-child { border-right: none; }
+  .filter-btn:hover:not(.active) { color: var(--text-secondary); }
+
+  .filter-btn.active {
+    background: var(--bg-overlay);
+    color: var(--text);
+  }
+
+  .confidence-badge {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    padding: 3px 7px;
+    border-radius: 3px;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+  }
+
+  .confidence-badge strong {
+    color: var(--accent);
+    font-weight: 500;
+  }
+
+  .tags {
+    display: flex;
+    gap: 3px;
+    flex-wrap: nowrap;
+    overflow: hidden;
+  }
+
+  .tag {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    font-weight: 400;
+    letter-spacing: 0.04em;
+    padding: 1px 6px;
+    border-radius: 3px;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    background: transparent;
+  }
+
+  .tag.study { color: var(--accent); border-color: rgba(212, 160, 84, 0.25); }
+  .tag.focus { color: var(--green); border-color: rgba(74, 222, 128, 0.15); }
+
+  .toolbar-spacer { flex: 1; }
+
+  .theme-btn {
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    cursor: pointer;
+    padding: 4px;
+    display: flex;
+    align-items: center;
+    font-size: 16px;
+    transition: color 0.1s;
+  }
+
+  .theme-btn:hover { color: var(--text); }
+
+  /* ── Search (inside left panel header) ── */
+  .panel-header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  .search-row {
+    padding-top: 6px;
+    gap: 8px;
+  }
+
+  .search-container {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    height: 28px;
+    overflow: hidden;
+    transition: border-color 0.1s;
+  }
+
+  .search-container:focus-within {
+    border-color: var(--accent);
+  }
+
+  .search-container .search-input {
+    flex: 1;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text);
+    background: transparent;
+    border: none;
+    padding: 0 8px;
+    height: 100%;
+    outline: none;
+    min-width: 0;
+  }
+
+  .search-container .search-input::placeholder {
+    color: var(--text-dim);
+  }
+
+  .search-results {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    height: 100%;
+    border-left: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  .search-results .search-arrow {
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    cursor: pointer;
+    padding: 0 5px;
+    height: 100%;
+    font-size: 9px;
+    display: flex;
+    align-items: center;
+    transition: color 0.1s;
+  }
+
+  .search-results .search-arrow:hover {
+    color: var(--text);
+    background: var(--bg-overlay);
+  }
+
+  .search-results .search-counter {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-secondary);
+    padding: 0 2px;
+    white-space: nowrap;
+    min-width: 32px;
+    text-align: center;
+  }
+
+  .toolbar-btn {
+    font-family: var(--font-sans);
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 0 10px;
+    height: 28px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    white-space: nowrap;
+    transition: all 0.1s;
+    flex-shrink: 0;
+  }
+
+  .toolbar-btn:hover { color: var(--text); border-color: var(--text-dim); }
+
+  .toolbar-btn svg {
+    width: 11px;
+    height: 11px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 2;
+    flex-shrink: 0;
+  }
+
+  /* ── Panels ── */
+  .panels {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  .panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .panel-header {
+    display: flex;
+    flex-direction: column;
+    padding: 7px 16px;
+    background: var(--bg-raised);
+    border-bottom: 1px solid var(--border-subtle);
+    flex-shrink: 0;
+  }
+
+  .panel-header h3 {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    flex-shrink: 0;
+  }
+
+  .panel-header-right {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    overflow: hidden;
+  }
+
+  .panel-header .panel-meta {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-dim);
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .panel-header .panel-meta::before {
+    content: "\00b7";
+    margin-right: 6px;
+  }
+
+  .panel-left {
+    border-right: 1px solid var(--border);
+  }
+
+  .panel-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px 16px;
+  }
+
+  .panel-body::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .panel-body::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .panel-body::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 3px;
+  }
+
+  .panel-body::-webkit-scrollbar-thumb:hover {
+    background: #3a3a3f;
+  }
+
+  /* ── Markdown ── */
+  .md-content {
+    font-family: var(--font-sans);
+    font-size: 13px;
+    line-height: 1.75;
+    color: var(--text);
+  }
+
+  .md-line {
+    position: relative;
+    padding-left: 44px;
+    min-height: 1.75em;
+    transition: background 0.15s ease;
+    border-radius: 2px;
+  }
+
+  .md-line .line-num {
+    position: absolute;
+    left: 0;
+    width: 36px;
+    text-align: right;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 300;
+    color: var(--text-dim);
+    opacity: 0.6;
+    user-select: none;
+    line-height: 1.75em;
+  }
+
+  .md-line.reasoned-highlight {
+    border-left: 2px solid var(--cited);
+    background: var(--cited-muted);
+    padding-left: 42px;
+  }
+
+  .md-line.reasoned-highlight.active {
+    background: var(--cited-strong);
+  }
+
+  .md-content h1, .md-content h2, .md-content h3,
+  .md-content h4, .md-content h5, .md-content h6 {
+    color: var(--text);
+    font-weight: 600;
+    margin: 20px 0 8px 0;
+  }
+
+  .md-content h1 { font-size: 18px; }
+  .md-content h2 { font-size: 15px; }
+  .md-content h3 { font-size: 14px; }
+  .md-content p { margin: 2px 0; }
+  .md-content table { border-collapse: collapse; margin: 8px 0; width: 100%; }
+  .md-content th, .md-content td {
+    border: 1px solid var(--border);
+    padding: 4px 8px;
+    font-size: 12px;
+  }
+  .md-content th { background: var(--bg-raised); font-weight: 500; }
+  .md-content code {
+    font-family: var(--font-mono);
+    background: var(--bg-overlay);
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 12px;
+  }
+  .md-content a { color: var(--accent); text-decoration: none; }
+  .md-content a:hover { text-decoration: underline; }
+  .md-content img { max-width: 100%; border-radius: var(--radius); }
+
+  /* ── Table View ── */
+  .table-view {
+    font-family: var(--font-sans);
+    font-size: 13px;
+    padding: 4px 12px 12px;
+  }
+
+  .tv-heading {
+    display: flex;
+    align-items: baseline;
+    cursor: pointer;
+    user-select: none;
+    font-family: var(--font-sans);
+    font-weight: 600;
+    color: var(--text);
+    border: none;
+    background: none;
+    width: 100%;
+    text-align: left;
+    padding: 0;
+    gap: 0;
+  }
+
+  .tv-heading[data-depth="0"] {
+    font-size: 15px;
+    margin: 20px 0 6px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--border);
+  }
+  .tv-heading[data-depth="1"] {
+    font-size: 13px;
+    margin: 14px 0 4px;
+    color: var(--text-secondary);
+  }
+  .tv-heading[data-depth="2"] {
+    font-size: 12px;
+    margin: 10px 0 3px;
+    color: var(--text-secondary);
+  }
+  .tv-heading[data-depth="3"] {
+    font-size: 11px;
+    margin: 8px 0 2px;
+    color: var(--text-dim);
+  }
+
+  .tv-badges {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    margin-left: 8px;
+    flex-shrink: 0;
+  }
+
+  .tv-badge {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    font-weight: 500;
+    padding: 1px 6px;
+    border-radius: 8px;
+    white-space: nowrap;
+  }
+
+  .tv-badge-audit {
+    background: var(--bg-overlay);
+    color: var(--text-dim);
+  }
+
+  .tv-badge-flagged {
+    background: rgba(202, 138, 4, 0.15);
+    color: var(--yellow);
+  }
+
+  .tv-toggle {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-dim);
+    flex-shrink: 0;
+    margin-left: auto;
+    opacity: 0.4;
+    transition: opacity 0.15s;
+  }
+  .tv-heading:hover .tv-toggle { opacity: 1; }
+
+  .tv-heading.collapsed + .tv-body { display: none; }
+
+  .tv-body { }
+
+  .tv-indent {
+    margin-left: 14px;
+    padding-left: 14px;
+    border-left: 1px solid var(--border-subtle);
+  }
+
+  .ext-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+    margin: 2px 0 8px;
+  }
+
+  .ext-table colgroup .col-field { width: 35%; }
+  .ext-table colgroup .col-value { width: auto; }
+  .ext-table colgroup .col-source { width: 68px; }
+  .ext-table colgroup .col-status { width: 44px; }
+
+  .ext-table th {
+    font-size: 9px;
+    font-weight: 500;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    text-align: left;
+    padding: 2px 6px 3px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .ext-table td {
+    padding: 3px 6px;
+    border-bottom: 1px solid var(--border-subtle);
+    vertical-align: middle;
+    line-height: 1.5;
+  }
+
+  .ext-table td:first-child {
+    font-weight: 500;
+    color: var(--text-secondary);
+    font-size: 12px;
+  }
+
+  .ext-table td:nth-child(2) {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+  }
+
+  .ext-table td:nth-child(3) {
+    text-align: left;
+    font-size: 10px;
+    white-space: nowrap;
+  }
+
+  .source-nav {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-dim);
+  }
+
+  .source-nav-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-dim);
+    font-size: 9px;
+    padding: 0 2px;
+    line-height: 1;
+  }
+  .source-nav-btn:hover { color: var(--text); }
+
+  .ext-table td:nth-child(4) {
+    white-space: nowrap;
+    text-align: center;
+  }
+
+  .ext-table tr.clickable {
+    cursor: pointer;
+    transition: background 0.1s;
+  }
+
+  .ext-table tr.clickable:hover {
+    background: var(--bg-overlay);
+  }
+
+  .ext-table tr.selected {
+    background: var(--bg-overlay);
+    box-shadow: inset 3px 0 0 var(--cited);
+  }
+
+  .reasoning-tooltip-row td {
+    padding: 0 8px 4px 8px;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .reasoning-tooltip-row .reasoning-tooltip {
+    margin: 2px 0 4px 0;
+    padding: 6px 10px;
+    font-size: 11px;
+    word-wrap: break-word;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .source-link {
+    color: var(--cited);
+    text-decoration: underline;
+    cursor: pointer;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    background: none;
+    border: none;
+    padding: 0;
+  }
+
+  .source-link:hover {
+    color: var(--accent);
+  }
+
+  .view-toggle {
+    display: inline-flex;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    height: 24px;
+    overflow: hidden;
+    flex-shrink: 0;
+    margin-left: 8px;
+  }
+
+  .view-toggle button {
+    font-family: var(--font-sans);
+    font-size: 10px;
+    font-weight: 500;
+    background: none;
+    border: none;
+    border-right: 1px solid var(--border);
+    color: var(--text-dim);
+    padding: 0 10px;
+    cursor: pointer;
+    transition: all 0.1s;
+  }
+
+  .view-toggle button:last-child {
+    border-right: none;
+  }
+
+  .view-toggle button:hover:not(.active) {
+    color: var(--text-secondary);
+  }
+
+  .view-toggle button.active {
+    background: var(--bg-overlay);
+    color: var(--text);
+  }
+
+  .table-ann-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 2px;
+    font-size: 13px;
+    line-height: 1;
+    color: var(--text-dim);
+    min-width: 22px;
+    min-height: 22px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.3;
+    transition: opacity 0.15s;
+  }
+
+  tr.clickable:hover .table-ann-btn,
+  .table-ann-btn.ann-verified,
+  .table-ann-btn.ann-flagged { opacity: 1; }
+
+  .table-ann-btn.ann-verified { color: var(--green); }
+  .table-ann-btn.ann-flagged { color: var(--yellow); }
+
+  /* ── Extraction Tree ── */
+  .tree {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.7;
+  }
+
+  .tree-node {
+    padding-left: 14px;
+  }
+
+  .tree-key {
+    color: var(--text-secondary);
+    font-weight: 400;
+  }
+
+  .tree-toggle {
+    cursor: pointer;
+    user-select: none;
+    color: var(--text-dim);
+    display: inline-block;
+    width: 14px;
+    transition: color 0.1s;
+  }
+
+  .tree-toggle:hover { color: var(--text); }
+
+  .tree-leaf {
+    cursor: pointer;
+    padding: 1px 6px;
+    border-radius: 3px;
+    transition: background 0.1s;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: wrap;
+  }
+
+  .tree-leaf:hover {
+    background: var(--bg-overlay);
+  }
+
+  .tree-leaf.selected {
+    background: var(--bg-overlay);
+    outline: 1px solid var(--border);
+  }
+
+  .tree-leaf .indicator {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .indicator.reasoned { background: var(--cited); }
+  .indicator.uncited { background: var(--grey); }
+  .indicator.verified { background: var(--green); }
+  .indicator.flagged { background: var(--yellow); }
+
+  .ann-btn {
+    display: inline-block;
+    background: none;
+    border: 1px solid transparent;
+    border-radius: 3px;
+    cursor: pointer;
+    padding: 0 4px;
+    font-size: 10px;
+    line-height: 1.6;
+    color: var(--text-dim);
+    transition: all 0.1s;
+    flex-shrink: 0;
+    opacity: 0.4;
+  }
+
+  .tree-leaf:hover .ann-btn { opacity: 1; border-color: var(--border); }
+  .ann-btn:hover { border-color: var(--text-dim); color: var(--text); opacity: 1; }
+  .ann-btn.ann-verified { opacity: 1; color: var(--green); border-color: var(--green); }
+  .ann-btn.ann-flagged { opacity: 1; color: var(--yellow); border-color: var(--yellow); }
+
+  .reviewer-input {
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    padding: 4px 8px;
+    width: 180px;
+  }
+
+  .reviewer-input::placeholder { color: var(--text-dim); }
+
+  .flag-dialog-container {
+    position: relative;
+  }
+
+  .flag-dialog {
+    position: absolute;
+    left: 0;
+    right: 0;
+    z-index: 10;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+    border-radius: 0 0 var(--radius) var(--radius);
+  }
+
+  .flag-form {
+    padding: 10px 12px;
+    background: var(--bg-raised);
+    border-left: 3px solid var(--yellow);
+    border-bottom: 2px solid var(--yellow);
+    font-family: var(--font-sans);
+    font-size: 12px;
+  }
+
+  .flag-form-header {
+    display: flex;
+    gap: 12px;
+    align-items: baseline;
+    margin-bottom: 8px;
+    color: var(--text-secondary);
+  }
+
+  .flag-form-path {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+
+  .flag-form-current strong {
+    color: var(--val-string);
+  }
+
+  .flag-form-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 8px;
+  }
+
+  .flag-form-fields label {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .flag-form-fields label span {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-dim);
+  }
+
+  .flag-input, .flag-textarea {
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    padding: 5px 8px;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .flag-textarea {
+    font-family: var(--font-sans);
+    resize: vertical;
+  }
+
+  .flag-input:focus, .flag-textarea:focus {
+    outline: none;
+    border-color: var(--yellow);
+  }
+
+  .flag-form-actions {
+    display: flex;
+    gap: 6px;
+  }
+
+  .flag-save, .flag-cancel {
+    font-family: var(--font-sans);
+    font-size: 11px;
+    font-weight: 500;
+    padding: 4px 12px;
+    border-radius: var(--radius);
+    cursor: pointer;
+    border: 1px solid var(--border);
+    transition: all 0.1s;
+  }
+
+  .flag-save {
+    background: var(--yellow);
+    color: #000;
+    border-color: var(--yellow);
+  }
+
+  .flag-save:hover { opacity: 0.9; }
+
+  .flag-cancel {
+    background: none;
+    color: var(--text-secondary);
+  }
+
+  .flag-cancel:hover { border-color: var(--text-dim); }
+
+  .flag-dialog-inline {
+    position: relative;
+    margin: 4px 0 4px 24px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+
+  .flag-note-display {
+    font-size: 10px;
+    color: var(--text-dim);
+    font-style: italic;
+    margin-top: 1px;
+  }
+
+  .flag-correction {
+    font-size: 10px;
+    color: var(--yellow);
+    font-family: var(--font-mono);
+  }
+
+  .audit-progress {
+    font-size: 10px;
+    color: var(--text-dim);
+    margin-left: auto;
+    flex-shrink: 0;
+  }
+
+  .tree-value { color: var(--text); }
+  .tree-value.string { color: var(--val-string); }
+  .tree-value.number { color: var(--val-number); }
+
+  .collapsed > .tree-children { display: none; }
+  .collapsed > .tree-header .tree-toggle::after { content: "\25B8"; }
+  .tree-header .tree-toggle::after { content: "\25BE"; }
+
+  .match-nav {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-dim);
+    margin-left: auto;
+    flex-shrink: 0;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .reasoning-tooltip {
+    margin: 4px 0 10px 24px;
+    padding: 8px 12px;
+    background: var(--cited-muted);
+    border-left: 2px solid var(--cited);
+    border-radius: 0 var(--radius) var(--radius) 0;
+    font-family: var(--font-sans);
+    font-size: 12px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+  }
+
+  .section-nav {
+    display: inline-flex;
+    align-items: center;
+    gap: 1px;
+    margin-left: 8px;
+    flex-shrink: 0;
+  }
+
+  .section-nav button {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    cursor: pointer;
+    padding: 0 4px;
+    border-radius: 3px;
+    font-size: 10px;
+    line-height: 1.5;
+    transition: all 0.1s;
+  }
+
+  .section-nav button:hover {
+    color: var(--text);
+    border-color: var(--text-dim);
+  }
+
+  .section-nav .section-counter {
+    font-family: var(--font-mono);
+    color: var(--text-dim);
+    font-size: 10px;
+    min-width: 26px;
+    text-align: center;
+  }
+
+  /* ── Horizontal table (uniform arrays) ── */
+  .ext-table td.cell-selected {
+    background: var(--cited-muted);
+    box-shadow: inset 0 -2px 0 var(--cited);
+  }
+
+  .ext-table .cell-value {
+    cursor: pointer;
+  }
+
+  .ext-table .cell-value:hover {
+    background: var(--bg-overlay);
+  }
+
+  .ext-table.horizontal-table td:first-child {
+    font-weight: 400;
+    color: var(--text);
+    font-size: 11px;
+  }
+
+  .ext-table.horizontal-table td:nth-child(2) {
+    font-family: var(--font-mono);
+    font-size: 11px;
+  }
+
+  .ext-table.horizontal-table td {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+  }
+
+  .ext-table.horizontal-table tr.sub-row td {
+    border-top: 1px solid var(--border-subtle);
+  }
+
+
+  /* ── Welcome screen ── */
+  .welcome {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .welcome-content {
+    text-align: center;
+    max-width: 400px;
+  }
+
+  .welcome-content h1 {
+    font-family: var(--font-sans);
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 10px;
+    letter-spacing: -0.01em;
+  }
+
+  .welcome-content p {
+    font-size: 14px;
+    color: var(--text-secondary);
+    line-height: 1.6;
+    margin-bottom: 16px;
+  }
+
+  .welcome-shortcuts {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    align-items: center;
+  }
+
+  .shortcut {
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+
+  kbd {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    background: var(--bg-overlay);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 1px 5px;
+    color: var(--text-secondary);
+  }
+
+  /* ── States ── */
+  .loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--text-dim);
+    font-size: 13px;
+    gap: 10px;
+  }
+
+  /* ── Search clear button ── */
+  .search-clear {
+    background: var(--text-dim);
+    border: none;
+    color: var(--bg-raised);
+    cursor: pointer;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    font-size: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 6px;
+    flex-shrink: 0;
+    transition: background 0.1s;
+    line-height: 1;
+  }
+
+  .search-clear:hover { background: var(--text-secondary); }
+
+  .article-bibheader {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    padding: 10px 16px;
+    background: var(--bg-raised);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    min-height: 40px;
+  }
+
+  .article-bibheader .bib-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    line-height: 1.3;
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .article-bibheader .bib-meta {
+    font-size: 12px;
+    color: var(--text-secondary);
+    display: flex;
+    gap: 6px;
+    align-items: baseline;
+    flex-shrink: 0;
+  }
+
+  .article-bibheader .bib-authors {
+    font-size: 12px;
+    color: var(--text-secondary);
+    font-style: italic;
+    max-width: 28ch;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex-shrink: 1;
+  }
+
+  .article-bibheader .bib-sep {
+    color: var(--text-dim);
+  }
+
+  .article-bibheader .bib-doi {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-dim);
+    text-decoration: none;
+    flex-shrink: 0;
+  }
+
+  .article-bibheader .bib-doi:hover { color: var(--accent); }
+</style>
+</head>
+<body>
+
+<div class="toolbar">
+  <select id="article-select">
+    <option value="">Select an article...</option>
+  </select>
+  <div class="article-nav">
+    <button id="btn-prev" disabled>&#9664;</button>
+    <span class="nav-counter" id="nav-counter">&mdash;</span>
+    <button id="btn-next" disabled>&#9654;</button>
+  </div>
+  <div class="filter-group">
+    <button class="filter-btn active" data-filter="all">All</button>
+  </div>
+  <div class="toolbar-spacer"></div>
+  <input type="text" class="reviewer-input" id="reviewer-id" placeholder="ORCID (e.g., 0000-0002-...)" title="Your ORCID for annotations">
+  <button class="theme-btn" id="btn-theme" title="Toggle theme">&#9790;</button>
+</div>
+
+<div class="article-bibheader" id="article-bibheader" style="display:none">
+  <span class="bib-title" id="bib-title"></span>
+  <span class="bib-authors" id="bib-authors"></span>
+  <span class="bib-meta" id="bib-meta"></span>
+  <a class="bib-doi" id="bib-doi" target="_blank" rel="noopener" style="display:none"></a>
+</div>
+
+<div class="welcome" id="welcome">
+  <div class="welcome-content">
+    <h1>ERW Extraction Verifier</h1>
+    <p>Select an article from the dropdown to begin reviewing extractions.</p>
+    <div class="welcome-shortcuts">
+      <span class="shortcut"><kbd>Cmd</kbd>+<kbd>]</kbd> / <kbd>Cmd</kbd>+<kbd>[</kbd> to cycle articles</span>
+    </div>
+  </div>
+</div>
+
+<div class="panels" id="panels" style="display:none">
+  <div class="panel panel-left">
+    <div class="panel-header">
+      <div class="panel-header-row">
+        <h3>Source Document</h3>
+        <div class="panel-header-right">
+          <div class="tags" id="tags-display"></div>
+          <span class="panel-meta" id="panel-left-meta"></span>
+        </div>
+      </div>
+      <div class="panel-header-row search-row" id="search-row" style="display:none">
+        <div class="search-container">
+          <input type="text" class="search-input" id="search-box" placeholder="Search in document...">
+          <button class="search-clear" id="search-clear" style="display:none" title="Clear search">&#10005;</button>
+          <div class="search-results" id="search-results" style="display:none">
+            <button class="search-arrow" id="search-prev">&#9650;</button>
+            <span class="search-counter" id="search-counter"></span>
+            <button class="search-arrow" id="search-next">&#9660;</button>
+          </div>
+        </div>
+        <button class="toolbar-btn" id="btn-pdf" style="display:none">
+          PDF
+          <svg viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="panel-body" id="panel-left"></div>
+  </div>
+  <div class="panel panel-right">
+    <div class="panel-header">
+      <h3>Extraction Data</h3>
+      <div class="panel-header-right">
+        <div class="view-toggle">
+          <button class="active" id="btn-table-view">Table</button>
+          <button id="btn-json-view">JSON</button>
+        </div>
+        <span class="confidence-badge" id="confidence-display"></span>
+        <span class="panel-meta" id="panel-right-meta"></span>
+      </div>
+    </div>
+    <div class="panel-body" id="panel-right"></div>
+  </div>
+</div>
+
+<div id="stat-articles" style="display:none"></div>
+<div id="stat-citations" style="display:none"></div>
+
+<script>
+const $ = (sel) => document.querySelector(sel);
+const state = {
+  articles: [],
+  viewMode: "table",
+  currentId: null,
+  markdown: null,
+  extraction: null,
+  reasoning: null,
+  reasoningByPath: {},
+  annotations: {},  // path -> {status, reviewer, timestamp, note}
+  selectedPath: null,
+  sections: [],
+  sectionIndex: 0,
+  searchMatches: [],
+  searchIndex: 0,
+};
+
+// ── API helpers ──
+async function fetchJson(url) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+  return res.json();
+}
+
+// ── Theme ──
+function isDark() {
+  const saved = document.documentElement.getAttribute("data-theme");
+  if (saved) return saved === "dark";
+  return window.matchMedia("(prefers-color-scheme: dark)").matches;
+}
+
+function initTheme() {
+  const saved = localStorage.getItem("erw-theme");
+  if (saved) document.documentElement.setAttribute("data-theme", saved);
+  updateThemeIcon();
+}
+
+function toggleTheme() {
+  const next = isDark() ? "light" : "dark";
+  document.documentElement.setAttribute("data-theme", next);
+  localStorage.setItem("erw-theme", next);
+  updateThemeIcon();
+}
+
+function updateThemeIcon() {
+  $("#btn-theme").innerHTML = isDark() ? "&#9788;" : "&#9790;";
+}
+
+$("#btn-theme").addEventListener("click", toggleTheme);
+initTheme();
+
+// ── Init ──
+state.filteredArticles = [];
+
+async function init() {
+  const data = await fetchJson("/api/articles");
+  state.articles = data.articles;
+  populateDropdown("all");
+
+  // Filter handlers
+  document.querySelectorAll(".filter-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".filter-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      populateDropdown(btn.dataset.filter);
+    });
+  });
+
+  // Prev/next handlers
+  $("#btn-prev").addEventListener("click", () => navigateArticle(-1));
+  $("#btn-next").addEventListener("click", () => navigateArticle(1));
+}
+
+function populateDropdown(filter) {
+  const select = $("#article-select");
+  const currentVal = select.value;
+  // Remove all except placeholder
+  while (select.options.length > 1) select.remove(1);
+
+  state.filteredArticles = [...state.articles];
+
+  for (const a of state.filteredArticles) {
+    const opt = document.createElement("option");
+    opt.value = a.article_id;
+    const conf = a.confidence != null ? a.confidence.toFixed(2) : "?";
+    const annLabel = a.n_annotated > 0 ? ` \u2713${a.n_annotated}` : "";
+    opt.textContent = `${a.article_id}  (${conf})${annLabel}`;
+    select.appendChild(opt);
+  }
+
+  if (currentVal && state.filteredArticles.some(a => a.article_id === currentVal)) {
+    select.value = currentVal;
+  }
+
+  updateNavState();
+}
+
+function navigateArticle(direction) {
+  if (state.filteredArticles.length === 0) return;
+  const currentIdx = state.filteredArticles.findIndex(a => a.article_id === state.currentId);
+  const nextIdx = currentIdx + direction;
+  if (nextIdx < 0 || nextIdx >= state.filteredArticles.length) return;
+  const nextId = state.filteredArticles[nextIdx].article_id;
+  $("#article-select").value = nextId;
+  $("#article-select").dispatchEvent(new Event("change"));
+}
+
+function updateNavState() {
+  const idx = state.filteredArticles.findIndex(a => a.article_id === state.currentId);
+  const total = state.filteredArticles.length;
+  $("#btn-prev").disabled = idx <= 0;
+  $("#btn-next").disabled = idx < 0 || idx >= total - 1;
+  $("#nav-counter").textContent = idx >= 0 ? `${idx + 1}/${total}` : `\u2014/${total}`;
+}
+
+// ── Article selection ──
+$("#article-select").addEventListener("change", async (e) => {
+  const id = e.target.value;
+  if (!id) return;
+  state.currentId = id;
+  state.selectedPath = null;
+
+  // Show panels, hide welcome
+  $("#welcome").style.display = "none";
+  $("#panels").style.display = "flex";
+
+  // Clear search state
+  clearSearchFull();
+
+  $("#panel-left").innerHTML = '<div class="loading">Loading...</div>';
+  $("#panel-right").innerHTML = '<div class="loading">Loading...</div>';
+
+  const [mdData, extraction, reasoningData, annData] = await Promise.all([
+    fetchJson(`/api/markdown/${id}`),
+    fetchJson(`/api/article/${id}`),
+    fetchJson(`/api/reasoning/${id}`).catch(() => null),
+    fetchJson(`/api/annotations/${id}`).catch(() => ({ annotations: [] })),
+  ]);
+
+  state.markdown = mdData.markdown;
+  state.extraction = extraction;
+  state.reasoning = reasoningData;
+
+  state.reasoningByPath = {};
+  if (reasoningData && reasoningData.fields) {
+    for (const entry of reasoningData.fields) {
+      let p = entry.path;
+      if (p.startsWith(".")) p = p.slice(1);
+      p = p.replace(/\.(\d+)(?=\.|$)/g, "[$1]");
+      state.reasoningByPath[p] = entry;
+    }
+  }
+
+  state.annotations = {};
+  for (const ann of (annData.annotations || [])) {
+    let p = ann.path;
+    if (p.startsWith(".")) p = p.slice(1);
+    p = p.replace(/\.(\d+)(?=\.|$)/g, "[$1]");
+    state.annotations[p] = ann;
+  }
+
+  const meta = state.articles.find(a => a.article_id === id);
+  if (meta) {
+    $("#confidence-display").innerHTML = `<strong>${meta.confidence}</strong>`;
+    let tagsHtml = "";
+    for (const t of (meta.study_types || [])) {
+      tagsHtml += `<span class="tag study">${t}</span>`;
+    }
+    for (const f of (meta.focus_areas || [])) {
+      tagsHtml += `<span class="tag focus">${f}</span>`;
+    }
+    if (meta.document_type) {
+      tagsHtml += `<span class="tag">${meta.document_type}</span>`;
+    }
+    $("#tags-display").innerHTML = tagsHtml;
+    renderBibHeader(meta);
+  }
+
+  $("#btn-pdf").style.display = "flex";
+  $("#search-row").style.display = "flex";
+  $("#panel-left-meta").textContent = `${state.markdown.split("\n").length} lines`;
+  $("#panel-right-meta").textContent = Object.keys(state.reasoningByPath).length + " fields cited";
+  updateNavState();
+
+  renderMarkdown();
+  renderExtractionPanel();
+  updateStats();
+});
+
+// ── Bibliographic header ──
+function formatAuthors(authors) {
+  if (!authors || !authors.length) return "";
+  const families = authors.map(a => a.family || a.given || "").filter(Boolean);
+  if (families.length === 0) return "";
+  if (families.length === 1) return families[0];
+  if (families.length === 2) return `${families[0]} & ${families[1]}`;
+  return `${families[0]} et al.`;
+}
+
+function renderBibHeader(meta) {
+  const bar = $("#article-bibheader");
+  if (!bar) return;
+  const hasAny = meta && (meta.title || meta.year || meta.journal);
+  if (!hasAny) {
+    bar.style.display = "none";
+    return;
+  }
+  bar.style.display = "flex";
+  $("#bib-title").textContent = meta.title || meta.article_id || "";
+  $("#bib-title").title = meta.title || "";
+
+  const authorsText = formatAuthors(meta.authors);
+  const authorsEl = $("#bib-authors");
+  authorsEl.textContent = authorsText;
+  authorsEl.style.display = authorsText ? "inline" : "none";
+
+  const metaParts = [];
+  if (meta.journal) metaParts.push(escapeHtml(meta.journal));
+  if (meta.year) metaParts.push(String(meta.year));
+  $("#bib-meta").innerHTML = metaParts.join(' <span class="bib-sep">&middot;</span> ');
+
+  const doiEl = $("#bib-doi");
+  if (meta.doi) {
+    doiEl.textContent = meta.doi;
+    doiEl.href = `https://doi.org/${meta.doi}`;
+    doiEl.style.display = "inline";
+  } else {
+    doiEl.style.display = "none";
+  }
+}
+
+// ── Markdown rendering ──
+function renderMarkdown() {
+  const panel = $("#panel-left");
+  if (!state.markdown) {
+    panel.innerHTML = '<div class="loading">No markdown available</div>';
+    return;
+  }
+  const lines = state.markdown.split("\n");
+  let html = '<div class="md-content">';
+  for (let i = 0; i < lines.length; i++) {
+    const lineNum = i + 1;
+    const rendered = marked.parseInline(lines[i]);
+    html += `<div class="md-line" data-line="${lineNum}">`;
+    html += `<span class="line-num">${lineNum}</span>`;
+    html += rendered || "&nbsp;";
+    html += "</div>";
+  }
+  html += "</div>";
+  panel.innerHTML = html;
+}
+
+// ── Extraction tree ──
+function renderTree() {
+  const panel = $("#panel-right");
+  panel.innerHTML = '<div class="tree">' + buildTreeHtml(state.extraction, "") + "</div>";
+
+  panel.querySelectorAll(".tree-toggle").forEach(el => {
+    el.addEventListener("click", () => {
+      el.closest(".tree-branch").classList.toggle("collapsed");
+    });
+  });
+
+  panel.querySelectorAll(".tree-leaf").forEach(el => {
+    el.addEventListener("click", () => selectLeaf(el));
+  });
+
+  // Annotation buttons (tree view) — ○ → ✓ → ⚑+dialog → ○
+  panel.querySelectorAll(".tree-ann-btn").forEach(el => {
+    el.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const path = el.dataset.path;
+      const current = state.annotations[path];
+      const currentStatus = current ? current.status : "";
+      const hasOpenDialog = document.querySelectorAll(".flag-dialog").length > 0;
+
+      if (hasOpenDialog) {
+        document.querySelectorAll(".flag-dialog").forEach(d => d.remove());
+        delete state.annotations[path];
+        fetch(`/api/annotations/${state.currentId}/${path}`, { method: "DELETE" }).catch(() => {});
+        renderExtractionPanel();
+        updateStats();
+        return;
+      }
+
+      if (!currentStatus) {
+        handleAnnotation(path, "verified");
+      } else if (currentStatus === "verified") {
+        const reviewer = $("#reviewer-id").value.trim();
+        if (!reviewer) { alert("Please enter your ORCID in the toolbar before flagging."); return; }
+        const entry = { path: "." + path, status: "flagged", reviewer };
+        state.annotations[path] = entry;
+        fetch(`/api/annotations/${state.currentId}`, {
+          method: "PUT", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(entry),
+        }).catch(() => {});
+        renderExtractionPanel();
+        updateStats();
+        setTimeout(() => showFlagDialog(path, state.annotations[path]), 50);
+      } else {
+        delete state.annotations[path];
+        fetch(`/api/annotations/${state.currentId}/${path}`, { method: "DELETE" }).catch(() => {});
+        renderExtractionPanel();
+        updateStats();
+      }
+    });
+  });
+
+  // Source link clicks in tree view
+  panel.querySelectorAll(".tree .source-link").forEach(link => {
+    link.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const path = link.dataset.path;
+      selectLeaf(link.closest(".tree-leaf"));
+    });
+  });
+}
+
+// ── Table view ──
+function humanize(key) {
+  return key.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function sectionLabel(key, index, total) {
+  const name = humanize(key.replace(/\[\d+\]$/, ""));
+  if (total > 1) return `${name} #${index + 1}`;
+  return name;
+}
+
+function isLeaf(val) {
+  return val === null || val === undefined || typeof val !== "object";
+}
+
+function isPrimitiveArray(val) {
+  return Array.isArray(val) && val.length > 0 && val.every(v => isLeaf(v));
+}
+
+function renderTableView() {
+  const panel = $("#panel-right");
+  const data = state.extraction;
+  if (!data) {
+    panel.innerHTML = '<div class="loading">No extraction data</div>';
+    return;
+  }
+
+  const skipKeys = new Set(["article_id", "confidence", "reasoning"]);
+  let html = '<div class="table-view">';
+
+  // Partition top-level keys into scalars, primitive arrays, and complex
+  const scalarRows = [];
+  const primitiveArrayKeys = [];
+  const complexKeys = [];
+
+  for (const [key, val] of Object.entries(data)) {
+    if (skipKeys.has(key)) continue;
+    if (isLeaf(val)) {
+      scalarRows.push({ key, val, path: key });
+    } else if (isPrimitiveArray(val)) {
+      primitiveArrayKeys.push(key);
+    } else {
+      complexKeys.push(key);
+    }
+  }
+
+  // Unified table: scalars + primitive arrays merged with rowspan
+  const primitiveArrayEntries = primitiveArrayKeys.map(key => ({
+    key, val: data[key], path: key
+  }));
+  if (scalarRows.length > 0 || primitiveArrayEntries.length > 0) {
+    html += buildMergedTable(scalarRows, primitiveArrayEntries);
+  }
+
+  // Complex fields as headed sections
+  for (const key of complexKeys) {
+    const val = data[key];
+    html += renderValue(key, val, key, 0);
+  }
+
+  html += '</div>';
+  panel.innerHTML = html;
+  wireTableEvents(panel);
+}
+
+// ── Horizontal table for uniform arrays ──
+
+function isFlattenableWrapper(obj) {
+  if (!obj || typeof obj !== "object" || Array.isArray(obj)) return false;
+  for (const [k, v] of Object.entries(obj)) {
+    if (v === null || v === undefined) continue;
+    if (typeof v !== "object") continue; // leaf — OK
+    if (Array.isArray(v)) {
+      // Array of primitives OK, array of uniform ≤2-field objects OK
+      if (v.length === 0) continue;
+      if (typeof v[0] !== "object") continue; // primitive array OK
+      // Check if uniform objects with ≤2 fields
+      const keys = Object.keys(v[0]);
+      if (keys.length > 2) return false;
+      const allMatch = v.every(item => typeof item === "object" && item !== null && Object.keys(item).length <= 2);
+      if (!allMatch) return false;
+    } else {
+      // Nested object that isn't a wrapper itself — reject
+      return false;
+    }
+  }
+  return true;
+}
+
+function isUniformArray(arr) {
+  if (!Array.isArray(arr) || arr.length === 0) return false;
+  // All items must be non-null objects (not arrays)
+  if (!arr.every(item => item !== null && typeof item === "object" && !Array.isArray(item))) return false;
+
+  // Collect union of all keys
+  const allKeys = new Set();
+  for (const item of arr) {
+    for (const k of Object.keys(item)) allKeys.add(k);
+  }
+  const keyUnion = [...allKeys];
+
+  // Each item must have >60% of the union keys
+  for (const item of arr) {
+    const itemKeys = Object.keys(item);
+    const overlap = itemKeys.filter(k => allKeys.has(k)).length;
+    if (overlap / keyUnion.length < 0.6) return false;
+  }
+
+  // Check that all values are primitives, arrays of primitives, arrays of small uniform objects, or flattenable wrappers
+  let colCount = 0;
+  for (const k of keyUnion) {
+    let fieldCols = 1;
+    for (const item of arr) {
+      const v = item[k];
+      if (v === undefined || v === null || typeof v === "string" || typeof v === "number" || typeof v === "boolean") {
+        // primitive — ok
+      } else if (Array.isArray(v)) {
+        if (v.length === 0) continue;
+        if (v.every(el => el === null || typeof el !== "object")) {
+          // array of primitives — ok, single column
+        } else if (v.every(el => el !== null && typeof el === "object" && !Array.isArray(el))) {
+          // array of objects — check ≤2 leaf fields
+          const subKeys = new Set();
+          for (const obj of v) {
+            for (const sk of Object.keys(obj)) subKeys.add(sk);
+          }
+          if (subKeys.size > 2) return false;
+          // also check all sub-values are primitives
+          for (const obj of v) {
+            for (const sv of Object.values(obj)) {
+              if (sv !== null && typeof sv === "object") return false;
+            }
+          }
+          fieldCols = Math.max(fieldCols, subKeys.size);
+        } else {
+          return false; // mixed array
+        }
+      } else if (typeof v === "object" && !Array.isArray(v) && isFlattenableWrapper(v)) {
+        // Flattenable wrapper — will be unwrapped into columns
+        // Check that this wrapper key appears in 60%+ of items
+        const wrapperCount = arr.filter(it => it[k] && typeof it[k] === "object" && !Array.isArray(it[k])).length;
+        if (wrapperCount / arr.length < 0.6) return false;
+        // Count wrapper's contribution to columns
+        const wrapperChildKeys = new Set();
+        for (const it of arr) {
+          const w = it[k];
+          if (w && typeof w === "object" && !Array.isArray(w)) {
+            for (const ck of Object.keys(w)) wrapperChildKeys.add(ck);
+          }
+        }
+        let wrapperCols = 0;
+        for (const ck of wrapperChildKeys) {
+          let childFieldCols = 1;
+          for (const it of arr) {
+            const w = it[k];
+            if (!w) continue;
+            const cv = w[ck];
+            if (cv === undefined || cv === null || typeof cv !== "object") continue;
+            if (Array.isArray(cv) && cv.length > 0 && typeof cv[0] === "object") {
+              const subKeys = new Set();
+              for (const obj of cv) {
+                for (const sk of Object.keys(obj)) subKeys.add(sk);
+              }
+              childFieldCols = Math.max(childFieldCols, subKeys.size);
+            }
+          }
+          wrapperCols += childFieldCols;
+        }
+        fieldCols = wrapperCols;
+        continue; // already counted
+      } else {
+        return false; // nested object (not flattenable)
+      }
+    }
+    colCount += fieldCols;
+  }
+
+  return colCount <= 10;
+}
+
+function getUniformColumns(arr) {
+  const allKeys = new Set();
+  for (const item of arr) {
+    for (const k of Object.keys(item)) allKeys.add(k);
+  }
+  const keyUnion = [...allKeys];
+  const columns = [];
+
+  // Count how many wrapper keys exist (for header naming)
+  let wrapperKeyCount = 0;
+  for (const k of keyUnion) {
+    for (const item of arr) {
+      const v = item[k];
+      if (v && typeof v === "object" && !Array.isArray(v) && isFlattenableWrapper(v)) {
+        wrapperKeyCount++;
+        break;
+      }
+    }
+  }
+
+  for (const k of keyUnion) {
+    // Determine the type of this field across all items
+    let isSubObjArray = false;
+    let isWrapper = false;
+    let subKeys = null;
+
+    for (const item of arr) {
+      const v = item[k];
+      if (Array.isArray(v) && v.length > 0 && v.every(el => el !== null && typeof el === "object" && !Array.isArray(el))) {
+        isSubObjArray = true;
+        subKeys = subKeys || new Set();
+        for (const obj of v) {
+          for (const sk of Object.keys(obj)) subKeys.add(sk);
+        }
+      } else if (v && typeof v === "object" && !Array.isArray(v) && isFlattenableWrapper(v)) {
+        isWrapper = true;
+      }
+    }
+
+    if (isWrapper) {
+      // Unwrap the wrapper: collect all child keys across all items
+      const wrapperChildKeys = new Set();
+      for (const item of arr) {
+        const w = item[k];
+        if (w && typeof w === "object" && !Array.isArray(w)) {
+          for (const ck of Object.keys(w)) wrapperChildKeys.add(ck);
+        }
+      }
+
+      for (const ck of [...wrapperChildKeys]) {
+        // Determine child type: primitive/array-of-primitives, or array-of-small-objects
+        let isChildSubObjArray = false;
+        let childSubKeys = null;
+        for (const item of arr) {
+          const w = item[k];
+          if (!w) continue;
+          const cv = w[ck];
+          if (Array.isArray(cv) && cv.length > 0 && cv.every(el => el !== null && typeof el === "object" && !Array.isArray(el))) {
+            isChildSubObjArray = true;
+            childSubKeys = childSubKeys || new Set();
+            for (const obj of cv) {
+              for (const sk of Object.keys(obj)) childSubKeys.add(sk);
+            }
+          }
+        }
+
+        // Header: skip wrapper name if only one wrapper, else prefix it
+        const headerPrefix = wrapperKeyCount > 1 ? humanize(k) + ": " : "";
+
+        if (isChildSubObjArray && childSubKeys) {
+          // Expanded sub-object array columns (e.g., mineralogy)
+          for (const sk of [...childSubKeys]) {
+            columns.push({
+              key: `${k}.${ck}.${sk}`,
+              header: headerPrefix + humanize(sk),
+              isExpanded: true,
+              expandKey: `${k}.${ck}`,
+              getter: (item, itemPath, subIndex) => {
+                const w = item?.[k];
+                const arr2 = w?.[ck] || [];
+                const m = arr2[subIndex];
+                const val = m ? m[sk] : null;
+                const path = `${itemPath}.${k}.${ck}[${subIndex}].${sk}`;
+                return { value: val != null ? String(val) : "", path };
+              },
+              expandCount: (item) => (item?.[k]?.[ck] || []).length
+            });
+          }
+        } else {
+          // Simple child (primitive or array of primitives)
+          const capturedK = k;
+          const capturedCk = ck;
+          columns.push({
+            key: `${capturedK}.${capturedCk}`,
+            header: headerPrefix + humanize(capturedCk),
+            getter: (item, itemPath) => {
+              const w = item?.[capturedK];
+              const val = w ? w[capturedCk] : null;
+              const path = `${itemPath}.${capturedK}.${capturedCk}`;
+              if (val === null || val === undefined) return { value: "", path };
+              if (Array.isArray(val)) return { value: val.join(", "), path };
+              return { value: String(val), path };
+            }
+          });
+        }
+      }
+    } else if (isSubObjArray && subKeys && subKeys.size === 2) {
+      // Two columns, one per sub-key
+      const [sk1, sk2] = [...subKeys];
+      columns.push({
+        key: k,
+        subKey: sk1,
+        header: humanize(sk1),
+        getter: (item, itemPath) => {
+          const v = item[k];
+          if (!Array.isArray(v)) return { value: "", path: `${itemPath}.${k}` };
+          const vals = v.map(obj => obj[sk1] != null ? String(obj[sk1]) : "").filter(Boolean);
+          return { value: vals.join(", "), path: `${itemPath}.${k}` };
+        }
+      });
+      columns.push({
+        key: k,
+        subKey: sk2,
+        header: humanize(sk2),
+        getter: (item, itemPath) => {
+          const v = item[k];
+          if (!Array.isArray(v)) return { value: "", path: `${itemPath}.${k}` };
+          const vals = v.map(obj => obj[sk2] != null ? String(obj[sk2]) : "").filter(Boolean);
+          return { value: vals.join(", "), path: `${itemPath}.${k}` };
+        }
+      });
+    } else if (isSubObjArray && subKeys && subKeys.size === 1) {
+      // Single column, comma-join the one field
+      const [sk1] = [...subKeys];
+      columns.push({
+        key: k,
+        header: humanize(k),
+        getter: (item, itemPath) => {
+          const v = item[k];
+          if (!Array.isArray(v)) return { value: "", path: `${itemPath}.${k}` };
+          const vals = v.map(obj => obj[sk1] != null ? String(obj[sk1]) : "").filter(Boolean);
+          return { value: vals.join(", "), path: `${itemPath}.${k}` };
+        }
+      });
+    } else {
+      // Primitive or array-of-primitives — single column
+      columns.push({
+        key: k,
+        header: humanize(k),
+        getter: (item, itemPath) => {
+          const v = item[k];
+          const path = `${itemPath}.${k}`;
+          if (v === null || v === undefined) return { value: "", path };
+          if (Array.isArray(v)) return { value: v.join(", "), path };
+          return { value: String(v), path };
+        }
+      });
+    }
+  }
+
+  return columns;
+}
+
+function collectSourceLines(obj, basePath) {
+  const allLines = [];
+  for (const [path, entry] of Object.entries(state.reasoningByPath)) {
+    if (path === basePath || path.startsWith(basePath + ".") || path.startsWith(basePath + "[")) {
+      if (entry.source_lines) {
+        for (const part of entry.source_lines.split(",")) {
+          allLines.push(part.trim());
+        }
+      }
+    }
+  }
+  return [...new Set(allLines)];
+}
+
+function getRowAnnotationState(basePath) {
+  // Check all annotations under this basePath
+  let total = 0, verified = 0, flagged = 0;
+  for (const [path, ann] of Object.entries(state.annotations)) {
+    if (path === basePath || path.startsWith(basePath + ".") || path.startsWith(basePath + "[")) {
+      total++;
+      if (ann.status === "verified") verified++;
+      else if (ann.status === "flagged") flagged++;
+    }
+  }
+  // Count total leaf fields under basePath to know if "all" are annotated
+  return { total, verified, flagged };
+}
+
+function buildHorizontalTable(arr, basePath, key) {
+  const columns = getUniformColumns(arr);
+  const label = humanize(key);
+  const hasExpandedCols = columns.some(c => c.isExpanded);
+
+  let html = '';
+  // Section heading
+  const badges = auditBadgesHtml(arr, basePath);
+  html += `<button class="tv-heading" role="button" aria-expanded="true" data-depth="0" tabindex="0">`;
+  html += `${escapeHtml(label)}${badges}<span class="tv-toggle">\u2212</span>`;
+  html += `</button>`;
+  html += `<div class="tv-body">`;
+
+  html += '<table class="ext-table horizontal-table">';
+  html += '<colgroup>';
+  for (let c = 0; c < columns.length; c++) {
+    html += '<col style="width:auto">';
+  }
+  html += '<col style="width:68px">'; // source
+  html += '<col style="width:44px">'; // status
+  html += '</colgroup>';
+
+  // Header row
+  html += '<thead><tr>';
+  for (const col of columns) {
+    html += `<th>${escapeHtml(col.header)}</th>`;
+  }
+  html += '<th>Source</th><th></th>';
+  html += '</tr></thead><tbody>';
+
+  // One row per array item (with sub-rows for expanded columns)
+  for (let i = 0; i < arr.length; i++) {
+    const item = arr[i];
+    const itemPath = `${basePath}[${i}]`;
+
+    if (hasExpandedCols) {
+      // Calculate max expanded count for this item
+      let expandCount = 1;
+      for (const col of columns) {
+        if (col.isExpanded && col.expandCount) {
+          expandCount = Math.max(expandCount, col.expandCount(item));
+        }
+      }
+
+      for (let subIndex = 0; subIndex < expandCount; subIndex++) {
+        const borderClass = subIndex > 0 ? " sub-row" : "";
+        html += `<tr class="clickable horizontal-row${borderClass}" data-path="${itemPath}">`;
+
+        for (const col of columns) {
+          if (col.isExpanded) {
+            // Expanded column: one cell per sub-row
+            const { value, path } = col.getter(item, itemPath, subIndex);
+            let valStyle = "";
+            if (value !== "" && !isNaN(Number(value)) && value.indexOf(",") === -1) {
+              valStyle = ' style="color:var(--val-number)"';
+            } else if (value !== "") {
+              valStyle = ' style="color:var(--val-string)"';
+            }
+            html += `<td${value != null && value !== '' ? ` class="cell-value" data-path="${path}"` : ''}${valStyle}>${value != null && value !== '' ? escapeHtml(value) : '<span style="color:var(--text-dim)">\u2014</span>'}</td>`;
+          } else {
+            // Non-expanded column: only emit on first sub-row with rowspan
+            if (subIndex === 0) {
+              const { value, path } = col.getter(item, itemPath);
+              let valStyle = "";
+              if (value !== "" && !isNaN(Number(value)) && value.indexOf(",") === -1) {
+                valStyle = ' style="color:var(--val-number)"';
+              } else if (value !== "") {
+                valStyle = ' style="color:var(--val-string)"';
+              }
+              const rowspanAttr = expandCount > 1 ? ` rowspan="${expandCount}"` : "";
+              html += `<td class="cell-value" data-path="${path}"${valStyle}${rowspanAttr}>${escapeHtml(value) || '<span style="color:var(--text-dim)">\u2014</span>'}</td>`;
+            }
+            // else: skip — covered by rowspan
+          }
+        }
+
+        if (subIndex === 0) {
+          // Source column with rowspan
+          const rowSources = collectSourceLines(item, itemPath);
+          let sourceHtml = '';
+          if (rowSources.length === 1) {
+            sourceHtml = `<button class="source-link" data-path="${itemPath}" data-source-lines="${escapeHtml(rowSources[0])}">${escapeHtml(rowSources[0])}</button>`;
+          } else if (rowSources.length > 1) {
+            const rangesStr = rowSources.join(", ");
+            sourceHtml = `<span class="source-nav" data-path="${itemPath}" data-ranges="${escapeHtml(rangesStr)}">` +
+              `<button class="source-nav-btn source-prev" aria-label="Previous source">&#9664;</button>` +
+              `<span class="source-counter">1/${rowSources.length}</span>` +
+              `<button class="source-nav-btn source-next" aria-label="Next source">&#9654;</button>` +
+              `</span>`;
+          }
+          const rowspanAttr = expandCount > 1 ? ` rowspan="${expandCount}"` : "";
+          html += `<td${rowspanAttr}>${sourceHtml}</td>`;
+
+          // Status column with rowspan
+          const rowAnn = getRowAnnotationState(itemPath);
+          let annClass = "", annIcon = "&#9675;", annTitle = "Click to verify";
+          if (rowAnn.verified > 0 && rowAnn.flagged === 0) {
+            annClass = " ann-verified"; annIcon = "&#10003;"; annTitle = "Verified \u2014 click to flag";
+          } else if (rowAnn.flagged > 0) {
+            annClass = " ann-flagged"; annIcon = "&#9873;"; annTitle = "Flagged \u2014 click to clear";
+          }
+          html += `<td${rowspanAttr}><button class="table-ann-btn horizontal-ann-btn${annClass}" data-path="${itemPath}" aria-label="${annTitle}" title="${annTitle}">${annIcon}</button></td>`;
+        }
+
+        html += '</tr>';
+      }
+    } else {
+      // No expanded columns — simple one-row-per-item (original behavior)
+      html += `<tr class="clickable horizontal-row" data-path="${itemPath}">`;
+
+      for (const col of columns) {
+        const { value, path } = col.getter(item, itemPath);
+        let valStyle = "";
+        if (value !== "" && !isNaN(Number(value)) && value.indexOf(",") === -1) {
+          valStyle = ' style="color:var(--val-number)"';
+        } else if (value !== "") {
+          valStyle = ' style="color:var(--val-string)"';
+        }
+        html += `<td${value != null && value !== '' ? ` class="cell-value" data-path="${path}"` : ''}${valStyle}>${value != null && value !== '' ? escapeHtml(value) : '<span style="color:var(--text-dim)">\u2014</span>'}</td>`;
+      }
+
+      // Source column
+      const rowSources = collectSourceLines(item, itemPath);
+      let sourceHtml = '';
+      if (rowSources.length === 1) {
+        sourceHtml = `<button class="source-link" data-path="${itemPath}" data-source-lines="${escapeHtml(rowSources[0])}">${escapeHtml(rowSources[0])}</button>`;
+      } else if (rowSources.length > 1) {
+        const rangesStr = rowSources.join(", ");
+        sourceHtml = `<span class="source-nav" data-path="${itemPath}" data-ranges="${escapeHtml(rangesStr)}">` +
+          `<button class="source-nav-btn source-prev" aria-label="Previous source">&#9664;</button>` +
+          `<span class="source-counter">1/${rowSources.length}</span>` +
+          `<button class="source-nav-btn source-next" aria-label="Next source">&#9654;</button>` +
+          `</span>`;
+      }
+      html += `<td>${sourceHtml}</td>`;
+
+      // Status column
+      const rowAnn = getRowAnnotationState(itemPath);
+      let annClass = "", annIcon = "&#9675;", annTitle = "Click to verify";
+      if (rowAnn.verified > 0 && rowAnn.flagged === 0) {
+        annClass = " ann-verified"; annIcon = "&#10003;"; annTitle = "Verified \u2014 click to flag";
+      } else if (rowAnn.flagged > 0) {
+        annClass = " ann-flagged"; annIcon = "&#9873;"; annTitle = "Flagged \u2014 click to clear";
+      }
+      html += `<td><button class="table-ann-btn horizontal-ann-btn${annClass}" data-path="${itemPath}" aria-label="${annTitle}" title="${annTitle}">${annIcon}</button></td>`;
+
+      html += '</tr>';
+    }
+  }
+
+  html += '</tbody></table>';
+  html += '</div>';
+  return html;
+}
+
+function renderValue(key, val, basePath, depth) {
+  if (isLeaf(val)) return '';
+
+  // Array of primitives — render merged into parent table (handled by buildMergedTable)
+  if (isPrimitiveArray(val)) {
+    return buildMergedTable([], [{ key, val, path: basePath }]);
+  }
+
+  // Uniform array of objects → horizontal table
+  if (Array.isArray(val) && val.length > 0 && isUniformArray(val)) {
+    return buildHorizontalTable(val, basePath, key);
+  }
+
+  // Array of objects
+  if (Array.isArray(val)) {
+    let html = '';
+    for (let i = 0; i < val.length; i++) {
+      const item = val[i];
+      const itemPath = `${basePath}[${i}]`;
+      const label = sectionLabel(key, i, val.length);
+      if (isLeaf(item)) {
+        // Shouldn't happen often, but handle scalar in array
+        html += buildFieldTable([{ key: label, val: item, path: itemPath }]);
+      } else {
+        html += buildHeadedSection(label, item, itemPath, depth);
+      }
+    }
+    return html;
+  }
+
+  // Plain object
+  if (typeof val === "object" && val !== null) {
+    const label = humanize(key.replace(/\[\d+\]$/, ""));
+    return buildHeadedSection(label, val, basePath, depth);
+  }
+
+  return '';
+}
+
+function countFieldsUnderPath(obj, basePath) {
+  let total = 0;
+  if (obj === null || obj === undefined) return 0;
+  if (typeof obj !== "object") return 1;
+  if (Array.isArray(obj)) {
+    for (let i = 0; i < obj.length; i++) {
+      total += countFieldsUnderPath(obj[i], `${basePath}[${i}]`);
+    }
+  } else {
+    for (const [k, v] of Object.entries(obj)) {
+      const cp = `${basePath}.${k}`;
+      if (v !== null && typeof v === "object") {
+        total += countFieldsUnderPath(v, cp);
+      } else {
+        total++;
+      }
+    }
+  }
+  return total;
+}
+
+function auditBadgesHtml(obj, basePath) {
+  const total = countFieldsUnderPath(obj, basePath);
+  if (total === 0) return '';
+
+  let audited = 0, flagged = 0;
+  for (const [path, ann] of Object.entries(state.annotations)) {
+    if (path === basePath || path.startsWith(basePath + ".") || path.startsWith(basePath + "[")) {
+      audited++;
+      if (ann.status === "flagged") flagged++;
+    }
+  }
+
+  let html = '<span class="tv-badges">';
+  html += `<span class="tv-badge tv-badge-audit">${audited}/${total} audited</span>`;
+  if (flagged > 0) {
+    html += `<span class="tv-badge tv-badge-flagged">${flagged} flagged</span>`;
+  }
+  html += '</span>';
+  return html;
+}
+
+function buildHeadedSection(label, obj, basePath, depth) {
+  const depthAttr = Math.min(depth, 3);
+  let html = '';
+  const badges = depth <= 1 ? auditBadgesHtml(obj, basePath) : '';
+  html += `<button class="tv-heading" role="button" aria-expanded="true" data-depth="${depthAttr}" tabindex="0">`;
+  html += `${escapeHtml(label)}${badges}<span class="tv-toggle">\u2212</span>`;
+  html += `</button>`;
+  html += `<div class="tv-body">`;
+
+  const indent = depth > 0;
+  if (indent) html += '<div class="tv-indent">';
+
+  // Partition obj entries
+  const leafRows = [];
+  const primitiveArrayEntries = [];
+  const complexEntries = [];
+
+  const entries = Object.entries(obj);
+  for (const [k, v] of entries) {
+    const childPath = `${basePath}.${k}`;
+    if (isLeaf(v)) {
+      leafRows.push({ key: k, val: v, path: childPath });
+    } else if (isPrimitiveArray(v)) {
+      primitiveArrayEntries.push({ key: k, val: v, path: childPath });
+    } else {
+      complexEntries.push({ key: k, val: v, path: childPath });
+    }
+  }
+
+  // Build unified table: scalars + primitive arrays merged with rowspan
+  if (leafRows.length > 0 || primitiveArrayEntries.length > 0) {
+    html += buildMergedTable(leafRows, primitiveArrayEntries);
+  }
+
+  // Complex children recurse
+  for (const entry of complexEntries) {
+    html += renderValue(entry.key, entry.val, entry.path, depth + 1);
+  }
+
+  if (indent) html += '</div>';
+  html += '</div>';
+  return html;
+}
+
+function buildFieldTable(rows) {
+  return buildMergedTable(rows, []);
+}
+
+function buildMergedTable(scalarRows, primitiveArrayEntries) {
+  let html = '<table class="ext-table">';
+  html += '<colgroup><col class="col-field"><col class="col-value"><col class="col-source"><col class="col-status"></colgroup>';
+  html += '<thead><tr><th>Field</th><th>Value</th><th>Source</th><th></th></tr></thead><tbody>';
+
+  // Scalar rows first
+  for (const row of scalarRows) {
+    html += buildTableRow(row.key, row.val, row.path);
+  }
+
+  // Primitive array rows with rowspan on field name
+  for (const entry of primitiveArrayEntries) {
+    const arr = entry.val;
+    if (arr.length === 1) {
+      // Single element — render as a normal row
+      html += buildTableRow(entry.key, arr[0], `${entry.path}[0]`);
+    } else {
+      // Multiple — first row has rowspan, rest omit the field cell
+      for (let i = 0; i < arr.length; i++) {
+        const itemPath = `${entry.path}[${i}]`;
+        if (i === 0) {
+          html += buildTableRowWithRowspan(entry.key, arr[i], itemPath, arr.length);
+        } else {
+          html += buildTableRowNoField(arr[i], itemPath);
+        }
+      }
+    }
+  }
+
+  html += '</tbody></table>';
+  return html;
+}
+
+function buildTableRowWithRowspan(key, value, path, rowspan) {
+  const valCells = buildValueCells(value, path);
+  const selectedCls = state.selectedPath === path ? " selected" : "";
+  return `<tr class="clickable${selectedCls}" data-path="${path}">
+    <td rowspan="${rowspan}" style="vertical-align:top">${humanize(key)}</td>
+    ${valCells}
+  </tr>`;
+}
+
+function buildTableRowNoField(value, path) {
+  const valCells = buildValueCells(value, path);
+  const selectedCls = state.selectedPath === path ? " selected" : "";
+  return `<tr class="clickable${selectedCls}" data-path="${path}">
+    ${valCells}
+  </tr>`;
+}
+
+function buildValueCells(value, path) {
+  const entry = state.reasoningByPath[path];
+  const ann = state.annotations[path];
+
+  let valStyle = "";
+  let displayVal = "";
+  if (typeof value === "number") {
+    valStyle = ' style="color:var(--val-number)"';
+    displayVal = String(value);
+  } else if (typeof value === "string") {
+    valStyle = ' style="color:var(--val-string)"';
+    displayVal = escapeHtml(value);
+  } else if (value === null || value === undefined) {
+    displayVal = '<span style="color:var(--text-dim)">null</span>';
+  } else {
+    displayVal = escapeHtml(String(value));
+  }
+
+  let sourceHtml = '';
+  if (entry && entry.source_lines) {
+    const parts = entry.source_lines.split(',').map(s => s.trim());
+    if (parts.length === 1) {
+      sourceHtml = `<button class="source-link" data-path="${path}" aria-label="Source ${escapeHtml(parts[0])}">${escapeHtml(parts[0])}</button>`;
+    } else {
+      // Multiple ranges — show nav arrows with (1/n) counter
+      sourceHtml = `<span class="source-nav" data-path="${path}" data-ranges="${escapeHtml(entry.source_lines)}">` +
+        `<button class="source-nav-btn source-prev" aria-label="Previous source">&#9664;</button>` +
+        `<span class="source-counter">1/${parts.length}</span>` +
+        `<button class="source-nav-btn source-next" aria-label="Next source">&#9654;</button>` +
+        `</span>`;
+    }
+  }
+
+  const annStatus = ann ? ann.status : "";
+  let annClass = "", annIcon = "&#9675;", annTitle = "Click to verify";
+  if (annStatus === "verified") { annClass = " ann-verified"; annIcon = "&#10003;"; annTitle = "Verified — click to flag"; }
+  else if (annStatus === "flagged") { annClass = " ann-flagged"; annIcon = "&#9873;"; annTitle = "Flagged — click to clear"; }
+
+  // Show correction and note for flagged fields
+  let flagDetails = "";
+  if (annStatus === "flagged" && ann) {
+    if (ann.correct_value) flagDetails += `<div class="flag-correction">→ ${escapeHtml(ann.correct_value)}</div>`;
+    if (ann.note) flagDetails += `<div class="flag-note-display">${escapeHtml(ann.note)}</div>`;
+  }
+
+  return `<td${valStyle}>${displayVal}${flagDetails}</td>
+    <td>${sourceHtml}</td>
+    <td><button class="table-ann-btn${annClass}" data-path="${path}" aria-label="${annTitle}" title="${annTitle}">${annIcon}</button></td>`;
+}
+
+function buildTableRow(key, value, path) {
+  const valCells = buildValueCells(value, path);
+  const selectedCls = state.selectedPath === path ? " selected" : "";
+  return `<tr class="clickable${selectedCls}" data-path="${path}">
+    <td>${humanize(key)}</td>
+    ${valCells}
+  </tr>`;
+}
+
+// ── Source Navigation (spec: docs/specs/source-nav-interaction.md) ──
+
+function buildSourceMap(rowPath) {
+  const map = [];
+  for (const [path, entry] of Object.entries(state.reasoningByPath)) {
+    if (path === rowPath || path.startsWith(rowPath + ".") || path.startsWith(rowPath + "[")) {
+      if (entry.source_lines) {
+        for (const part of entry.source_lines.split(",")) {
+          const trimmed = part.trim();
+          const range = parseSourceLines(trimmed);
+          if (range.length > 0) {
+            map.push({
+              range: range[0],
+              path: path,
+              reasoning: entry.reasoning || null,
+              label: trimmed
+            });
+          }
+        }
+      }
+    }
+  }
+  map.sort((a, b) => a.range[0] - b.range[0]);
+  map.forEach((entry, i) => entry.index = i);
+  return map;
+}
+
+function findNavForCell(cell) {
+  // For rowspan tables, the nav may not be in the same <tr> — walk the row group.
+  const row = cell.closest("tr.horizontal-row");
+  if (!row) return null;
+  // Check this row first
+  let nav = row.querySelector(".source-nav") || row.querySelector(".source-link");
+  if (nav && nav.classList.contains("source-nav")) return nav;
+  // For rowspan groups, find the first row with the same data-path and look there
+  const rowPath = row.dataset.path;
+  const table = row.closest("table");
+  if (!table) return null;
+  const firstRow = table.querySelector(`tr.horizontal-row[data-path="${rowPath}"]`);
+  if (firstRow) {
+    nav = firstRow.querySelector(".source-nav");
+    if (nav) return nav;
+  }
+  // Also check sibling rows in the same tbody
+  const tbody = row.closest("tbody");
+  if (tbody) {
+    nav = tbody.querySelector(`.source-nav[data-path="${rowPath}"]`);
+    if (nav) return nav;
+  }
+  return null;
+}
+
+function findLastRowInGroup(row) {
+  const rowPath = row.dataset.path;
+  let last = row;
+  let sibling = row.nextElementSibling;
+  while (sibling && (
+    sibling.classList.contains("sub-row") ||
+    (sibling.classList.contains("horizontal-row") && sibling.dataset.path === rowPath && sibling.cells.length < row.cells.length)
+  )) {
+    last = sibling;
+    sibling = sibling.nextElementSibling;
+  }
+  return last;
+}
+
+function renderSourceState(nav) {
+  const sourceMap = nav._sourceMap;
+  const activeIndex = nav._activeIndex;
+  const counter = nav.querySelector(".source-counter");
+
+  // Clear all highlights
+  document.querySelectorAll(".reasoned-highlight").forEach(el => el.classList.remove("reasoned-highlight"));
+  document.querySelectorAll(".md-line.active").forEach(el => el.classList.remove("active"));
+  const table = nav.closest("table");
+  if (table) table.querySelectorAll(".cell-selected").forEach(el => el.classList.remove("cell-selected"));
+  document.querySelectorAll(".reasoning-tooltip-row").forEach(el => el.remove());
+
+  if (activeIndex === null || !sourceMap || sourceMap.length === 0) {
+    if (counter) counter.textContent = `1/${sourceMap ? sourceMap.length : 0}`;
+    $("#stat-citations").textContent = "";
+    return;
+  }
+
+  const entry = sourceMap[activeIndex];
+
+  // 1. Highlight range in document
+  const [start, end] = entry.range;
+  for (let ln = start; ln <= end; ln++) {
+    const lineEl = document.querySelector(`.md-line[data-line="${ln}"]`);
+    if (lineEl) lineEl.classList.add("reasoned-highlight");
+  }
+  const firstLine = document.querySelector(`.md-line[data-line="${start}"]`);
+  if (firstLine) {
+    firstLine.classList.add("active");
+    firstLine.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
+  // 2. Highlight matching cell
+  if (table) {
+    const cells = table.querySelectorAll(".cell-value");
+    for (const c of cells) {
+      const cellPath = c.dataset.path;
+      if (entry.path === cellPath || entry.path.startsWith(cellPath + ".") || entry.path.startsWith(cellPath + "[")) {
+        c.classList.add("cell-selected");
+        break;
+      }
+    }
+  }
+
+  // 3. Update counter
+  if (counter) counter.textContent = `${activeIndex + 1}/${sourceMap.length}`;
+
+  // 4. Show reasoning tooltip
+  if (entry.reasoning) {
+    const rowPath = nav.dataset.path;
+    const firstRow = table ? table.querySelector(`tr.horizontal-row[data-path="${rowPath}"]`) : null;
+    if (firstRow) {
+      const lastRow = findLastRowInGroup(firstRow);
+      const tooltip = document.createElement("tr");
+      tooltip.className = "reasoning-tooltip-row";
+      const totalCols = table ? table.querySelectorAll("thead th").length : 4;
+      tooltip.innerHTML = `<td colspan="${totalCols}"><div class="reasoning-tooltip">${escapeHtml(entry.reasoning)}</div></td>`;
+      lastRow.after(tooltip);
+    }
+  }
+
+  // 5. Update status bar
+  $("#stat-citations").textContent = `${entry.path}: ${entry.label} (${activeIndex + 1}/${sourceMap.length})`;
+}
+
+function resetAllSourceNavs() {
+  document.querySelectorAll(".source-nav").forEach(nav => {
+    nav._activeIndex = null;
+    if (nav._sourceMap) {
+      renderSourceState(nav);
+    }
+    // Reset counter text for ALL navs (including non-horizontal with closure state)
+    const counter = nav.querySelector(".source-counter");
+    const total = nav._sourceMap ? nav._sourceMap.length : (nav.dataset.ranges ? nav.dataset.ranges.split(",").length : 0);
+    if (counter && total > 0) counter.textContent = `1/${total}`;
+  });
+  document.querySelectorAll(".reasoned-highlight").forEach(el => el.classList.remove("reasoned-highlight"));
+  document.querySelectorAll(".md-line.active").forEach(el => el.classList.remove("active"));
+  document.querySelectorAll(".cell-selected").forEach(el => el.classList.remove("cell-selected"));
+  document.querySelectorAll(".reasoning-tooltip-row").forEach(el => el.remove());
+}
+
+function wireTableEvents(panel) {
+  // Heading toggles
+  panel.querySelectorAll(".tv-heading").forEach(heading => {
+    heading.addEventListener("click", () => {
+      const isCollapsed = heading.classList.toggle("collapsed");
+      heading.setAttribute("aria-expanded", String(!isCollapsed));
+      heading.querySelector(".tv-toggle").textContent = isCollapsed ? "+" : "\u2212";
+      if (isCollapsed) resetAllSourceNavs();
+    });
+  });
+
+  // Row clicks (non-horizontal rows use selectTableRow)
+  panel.querySelectorAll("tr.clickable:not(.horizontal-row)").forEach(row => {
+    row.addEventListener("click", () => {
+      selectTableRow(row.dataset.path);
+    });
+  });
+
+  // Horizontal row clicks — activate the nav to its first source
+  panel.querySelectorAll("tr.horizontal-row").forEach(row => {
+    row.addEventListener("click", (e) => {
+      // Don't handle if click was on a cell-value or button (those have their own handlers)
+      if (e.target.closest(".cell-value") || e.target.closest("button")) return;
+      const rowPath = row.dataset.path;
+      const nav = findNavForCell(row.querySelector(".cell-value") || row);
+      if (nav && nav._sourceMap && nav._sourceMap.length > 0) {
+        resetAllSourceNavs();
+        nav._activeIndex = 0;
+        renderSourceState(nav);
+      } else {
+        // Single source link or no source — use legacy selectHorizontalRowFallback
+        resetAllSourceNavs();
+        row.classList.add("selected");
+        const rowSources = collectSourceLines(state.extraction, rowPath);
+        if (rowSources.length > 0) {
+          renderMarkdown();
+          const allRangesStr = rowSources.join(", ");
+          const lineRanges = parseSourceLines(allRangesStr);
+          for (const [s, e2] of lineRanges) {
+            for (let ln = s; ln <= e2; ln++) {
+              const lineEl = document.querySelector(`.md-line[data-line="${ln}"]`);
+              if (lineEl) lineEl.classList.add("reasoned-highlight");
+            }
+          }
+          if (lineRanges.length > 0) {
+            const fl = document.querySelector(`.md-line[data-line="${lineRanges[0][0]}"]`);
+            if (fl) { fl.classList.add("active"); fl.scrollIntoView({ behavior: "smooth", block: "center" }); }
+          }
+          $("#stat-citations").textContent = `${rowPath}: ${allRangesStr}`;
+        }
+      }
+    });
+  });
+
+  // Source link clicks (single range) — non-horizontal only
+  panel.querySelectorAll(".source-link").forEach(link => {
+    link.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const isHorizontal = !!link.closest(".horizontal-table");
+      if (isHorizontal) {
+        // Single-source horizontal: highlight that range
+        const sourceLine = link.dataset.sourceLines;
+        if (sourceLine) {
+          resetAllSourceNavs();
+          const lineRanges = parseSourceLines(sourceLine);
+          renderMarkdown();
+          for (const [s, e2] of lineRanges) {
+            for (let ln = s; ln <= e2; ln++) {
+              const lineEl = document.querySelector(`.md-line[data-line="${ln}"]`);
+              if (lineEl) lineEl.classList.add("reasoned-highlight");
+            }
+          }
+          if (lineRanges.length > 0) {
+            const fl = document.querySelector(`.md-line[data-line="${lineRanges[0][0]}"]`);
+            if (fl) { fl.classList.add("active"); fl.scrollIntoView({ behavior: "smooth", block: "center" }); }
+          }
+          $("#stat-citations").textContent = `${link.dataset.path}: ${sourceLine}`;
+        }
+      } else {
+        selectTableRow(link.dataset.path);
+      }
+    });
+  });
+
+  // ── Source nav: build sourceMap and wire arrows (horizontal tables) ──
+  panel.querySelectorAll(".horizontal-table .source-nav").forEach(nav => {
+    const rowPath = nav.dataset.path;
+    nav._sourceMap = buildSourceMap(rowPath);
+    nav._activeIndex = null;
+
+    // Set initial counter
+    const counter = nav.querySelector(".source-counter");
+    if (counter) counter.textContent = `1/${nav._sourceMap.length}`;
+
+    nav.querySelector(".source-prev").addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (nav._sourceMap.length === 0) return;
+      if (nav._activeIndex === null) nav._activeIndex = nav._sourceMap.length - 1;
+      else nav._activeIndex = (nav._activeIndex - 1 + nav._sourceMap.length) % nav._sourceMap.length;
+      renderSourceState(nav);
+    });
+
+    nav.querySelector(".source-next").addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (nav._sourceMap.length === 0) return;
+      if (nav._activeIndex === null) nav._activeIndex = 0;
+      else nav._activeIndex = (nav._activeIndex + 1) % nav._sourceMap.length;
+      renderSourceState(nav);
+    });
+
+    // Clicking the counter area
+    nav.addEventListener("click", (e) => {
+      e.stopPropagation();
+    });
+  });
+
+  // ── Source nav arrows for non-horizontal (Mode 1) tables ──
+  panel.querySelectorAll(".source-nav:not(.horizontal-table .source-nav)").forEach(nav => {
+    // Check if this nav is inside a horizontal table (already handled above)
+    if (nav.closest(".horizontal-table")) return;
+    const path = nav.dataset.path;
+    const ranges = nav.dataset.ranges;
+    const parts = ranges.split(',').map(s => s.trim());
+    let idx = 0;
+
+    const update = () => {
+      nav.querySelector(".source-counter").textContent = `${idx + 1}/${parts.length}`;
+      selectTableRow(path, idx);
+    };
+
+    nav.querySelector(".source-prev").addEventListener("click", (e) => {
+      e.stopPropagation();
+      idx = (idx - 1 + parts.length) % parts.length;
+      update();
+    });
+    nav.querySelector(".source-next").addEventListener("click", (e) => {
+      e.stopPropagation();
+      idx = (idx + 1) % parts.length;
+      update();
+    });
+    nav.addEventListener("click", (e) => {
+      e.stopPropagation();
+      selectTableRow(path, idx);
+    });
+  });
+
+  // Annotation buttons (non-horizontal) — cycle: ○ → ✓ → ⚑+dialog → ○
+  panel.querySelectorAll(".table-ann-btn:not(.horizontal-ann-btn)").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const path = btn.dataset.path;
+      const current = state.annotations[path];
+      const currentStatus = current ? current.status : "";
+      const hasOpenDialog = document.querySelectorAll(".flag-dialog").length > 0;
+
+      // If dialog is open, any click on an annotation button closes it and clears
+      if (hasOpenDialog) {
+        document.querySelectorAll(".flag-dialog").forEach(el => el.remove());
+        delete state.annotations[path];
+        fetch(`/api/annotations/${state.currentId}/${path}`, { method: "DELETE" }).catch(() => {});
+        renderExtractionPanel();
+        updateStats();
+        return;
+      }
+
+      if (!currentStatus) {
+        handleAnnotation(path, "verified");
+      } else if (currentStatus === "verified") {
+        // Immediately set to flagged, then open dialog
+        const reviewer = $("#reviewer-id").value.trim();
+        if (!reviewer) { alert("Please enter your ORCID in the toolbar before flagging."); return; }
+        const entry = { path: "." + path, status: "flagged", reviewer };
+        state.annotations[path] = entry;
+        fetch(`/api/annotations/${state.currentId}`, {
+          method: "PUT", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(entry),
+        }).catch(() => {});
+        renderExtractionPanel();
+        updateStats();
+        // Open dialog after re-render so the ⚑ is visible
+        setTimeout(() => showFlagDialog(path, state.annotations[path]), 50);
+      } else {
+        // Flagged → clear
+        delete state.annotations[path];
+        fetch(`/api/annotations/${state.currentId}/${path}`, { method: "DELETE" }).catch(() => {});
+        renderExtractionPanel();
+        updateStats();
+      }
+    });
+  });
+
+  // ── Horizontal table: cell clicks ──
+  panel.querySelectorAll(".horizontal-table .cell-value").forEach(cell => {
+    cell.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const cellPath = cell.dataset.path;
+      const nav = findNavForCell(cell);
+
+      if (nav && nav._sourceMap && nav._sourceMap.length > 0) {
+        // Find indices in sourceMap that match this cell
+        const cellIndices = nav._sourceMap
+          .filter(s => s.path === cellPath || s.path.startsWith(cellPath + ".") || s.path.startsWith(cellPath + "["))
+          .map(s => s.index);
+
+        if (cellIndices.length === 0) return;
+
+        if (cellIndices.includes(nav._activeIndex)) {
+          // Currently highlighted cell — cycle to next within this cell
+          const currentPos = cellIndices.indexOf(nav._activeIndex);
+          nav._activeIndex = cellIndices[(currentPos + 1) % cellIndices.length];
+        } else {
+          // Different cell or idle — jump to its first source
+          nav._activeIndex = cellIndices[0];
+        }
+        renderSourceState(nav);
+      } else {
+        // No multi-source nav (single source link or no source) — look up reasoning directly
+        resetAllSourceNavs();
+        cell.classList.add("cell-selected");
+        const entry = state.reasoningByPath[cellPath];
+        if (entry && entry.source_lines) {
+          renderMarkdown();
+          const lineRanges = parseSourceLines(entry.source_lines);
+          for (const [s, e2] of lineRanges) {
+            for (let ln = s; ln <= e2; ln++) {
+              const lineEl = document.querySelector(`.md-line[data-line="${ln}"]`);
+              if (lineEl) lineEl.classList.add("reasoned-highlight");
+            }
+          }
+          if (lineRanges.length > 0) {
+            const fl = document.querySelector(`.md-line[data-line="${lineRanges[0][0]}"]`);
+            if (fl) { fl.classList.add("active"); fl.scrollIntoView({ behavior: "smooth", block: "center" }); }
+          }
+          $("#stat-citations").textContent = `${cellPath}: ${entry.source_lines}`;
+        }
+      }
+    });
+  });
+
+  // ── Horizontal table: row-level annotation (applies to ALL leaf fields under that row) ──
+  panel.querySelectorAll(".horizontal-ann-btn").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const rowPath = btn.dataset.path;
+      const rowAnn = getRowAnnotationState(rowPath);
+
+      // Determine current aggregate status and next status
+      let currentStatus = "";
+      if (rowAnn.verified > 0 && rowAnn.flagged === 0) currentStatus = "verified";
+      else if (rowAnn.flagged > 0) currentStatus = "flagged";
+
+      // Find the row element to get all cell paths
+      const row = btn.closest("tr.horizontal-row");
+      if (!row) return;
+      const cellPaths = [];
+      row.querySelectorAll(".cell-value[data-path]").forEach(c => {
+        cellPaths.push(c.dataset.path);
+      });
+
+      if (!currentStatus) {
+        // Empty → verified (all cells)
+        for (const cp of cellPaths) {
+          const ann = { path: "." + cp, status: "verified", reviewer: $("#reviewer-id").value.trim() };
+          state.annotations[cp] = ann;
+          fetch(`/api/annotations/${state.currentId}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(ann),
+          }).catch(() => {});
+        }
+        renderExtractionPanel();
+        updateStats();
+      } else if (currentStatus === "verified") {
+        // Verified → flag dialog for row path
+        const reviewer = $("#reviewer-id").value.trim();
+        if (!reviewer) { alert("Please enter your ORCID in the toolbar before flagging."); return; }
+        showFlagDialog(rowPath, state.annotations[rowPath]);
+      } else {
+        // Flagged → clear all child annotations
+        for (const cp of cellPaths) {
+          delete state.annotations[cp];
+          fetch(`/api/annotations/${state.currentId}/${cp}`, { method: "DELETE" }).catch(() => {});
+        }
+        document.querySelectorAll(".flag-dialog").forEach(el => el.remove());
+        renderExtractionPanel();
+        updateStats();
+      }
+    });
+  });
+}
+
+function selectTableRow(path, rangeIndex) {
+  // Clear previous highlights including any horizontal table nav state
+  resetAllSourceNavs();
+  clearSearchFull();
+  document.querySelectorAll("tr.selected").forEach(e => e.classList.remove("selected"));
+  document.querySelectorAll(".cell-selected").forEach(e => e.classList.remove("cell-selected"));
+  document.querySelectorAll(".reasoning-tooltip-row").forEach(e => e.remove());
+
+  // Highlight the row
+  const row = document.querySelector(`tr.clickable[data-path="${path}"]`);
+  if (row) row.classList.add("selected");
+
+  renderMarkdown();
+
+  state.selectedPath = path;
+  state.sections = [];
+  state.sectionIndex = 0;
+
+  const entry = state.reasoningByPath[path];
+  if (!entry || !entry.source_lines) {
+    $("#stat-citations").textContent = `${path}: no citation`;
+    return;
+  }
+
+  const lineRanges = parseSourceLines(entry.source_lines);
+
+  // If rangeIndex specified, only highlight that one range
+  const rangesToHighlight = (typeof rangeIndex === "number") ? [lineRanges[rangeIndex]] : lineRanges;
+
+  for (const [start, end] of rangesToHighlight) {
+    let sectionFirstLine = null;
+    for (let ln = start; ln <= end; ln++) {
+      const lineEl = document.querySelector(`.md-line[data-line="${ln}"]`);
+      if (lineEl) {
+        lineEl.classList.add("reasoned-highlight");
+        if (!sectionFirstLine) sectionFirstLine = lineEl;
+      }
+    }
+    if (sectionFirstLine) {
+      state.sections.push({
+        firstLine: sectionFirstLine,
+        label: start === end ? `L${start}` : `L${start}\u2013L${end}`,
+      });
+    }
+  }
+
+  // Show reasoning tooltip below the row (or after last row in rowspan group)
+  if (entry.reasoning && row) {
+    // Find the correct insertion point — if this row is part of a rowspan group,
+    // insert after the last sibling that lacks a field cell (td:first-child with rowspan)
+    let insertAfter = row;
+    let sibling = row.nextElementSibling;
+    while (sibling && sibling.matches("tr.clickable") && sibling.cells.length < 4) {
+      insertAfter = sibling;
+      sibling = sibling.nextElementSibling;
+    }
+    const tooltip = document.createElement("tr");
+    tooltip.className = "reasoning-tooltip-row";
+    tooltip.innerHTML = `<td colspan="4"><div class="reasoning-tooltip">${escapeHtml(entry.reasoning)}</div></td>`;
+    insertAfter.after(tooltip);
+  }
+
+  if (state.sections.length > 0) {
+    state.sections[0].firstLine.classList.add("active");
+    state.sections[0].firstLine.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
+  let statusMsg = `${path}: ${entry.source_lines}`;
+  if (entry.reasoning) statusMsg += ` \u2014 ${entry.reasoning}`;
+  $("#stat-citations").textContent = statusMsg;
+}
+
+// selectHorizontalRow and selectHorizontalRowByPathAndRanges removed —
+// replaced by sourceMap-based navigation in wireTableEvents
+
+function buildTreeHtml(obj, path) {
+  if (obj === null || obj === undefined) return "";
+
+  if (Array.isArray(obj)) {
+    if (obj.length === 0) return `<span class="tree-value">[]</span>`;
+    let html = "";
+    for (let i = 0; i < obj.length; i++) {
+      const childPath = `${path}[${i}]`;
+      const item = obj[i];
+      if (typeof item === "object" && item !== null) {
+        html += `<div class="tree-branch tree-node">
+          <div class="tree-header"><span class="tree-toggle"></span>
+          <span class="tree-key">[${i}]</span></div>
+          <div class="tree-children">${buildTreeHtml(item, childPath)}</div></div>`;
+      } else {
+        html += buildLeafHtml(String(i), item, childPath);
+      }
+    }
+    return html;
+  }
+
+  if (typeof obj === "object") {
+    let html = "";
+    for (const [key, val] of Object.entries(obj)) {
+      const childPath = path ? `${path}.${key}` : key;
+      if (!path && (key === "article_id" || key === "confidence" || key === "reasoning")) continue;
+
+      if (val !== null && typeof val === "object") {
+        const isEmpty = Array.isArray(val) ? val.length === 0 : Object.keys(val).length === 0;
+        if (isEmpty) {
+          html += `<div class="tree-node">
+            <span class="tree-key">${key}:</span>
+            <span class="tree-value">${Array.isArray(val) ? "[]" : "{}"}</span></div>`;
+        } else {
+          html += `<div class="tree-branch tree-node">
+            <div class="tree-header"><span class="tree-toggle"></span>
+            <span class="tree-key">${key}</span></div>
+            <div class="tree-children">${buildTreeHtml(val, childPath)}</div></div>`;
+        }
+      } else {
+        html += buildLeafHtml(key, val, childPath);
+      }
+    }
+    return html;
+  }
+
+  return "";
+}
+
+function buildLeafHtml(key, value, path) {
+  const showIndicator = value !== null && typeof value !== "boolean";
+
+  const entry = state.reasoningByPath[path];
+  const ann = state.annotations[path];
+  const annStatus = ann ? ann.status : "";
+
+  // Source lines (clickable)
+  let sourceHtml = "";
+  if (entry && entry.source_lines) {
+    sourceHtml = `<span class="match-nav source-link" data-path="${path}">${entry.source_lines}</span>`;
+  }
+
+  // Single cycling annotation button (matches table view: ○ → ✓ → ⚑ → ○)
+  let annClass = "", annIcon = "&#9675;", annTitle = "Click to verify";
+  if (annStatus === "verified") { annClass = " ann-verified"; annIcon = "&#10003;"; annTitle = "Verified — click to flag"; }
+  else if (annStatus === "flagged") { annClass = " ann-flagged"; annIcon = "&#9873;"; annTitle = "Flagged — click to clear"; }
+  const annBtn = `<span class="ann-btn tree-ann-btn${annClass}" data-path="${path}" title="${annTitle}">${annIcon}</span>`;
+
+  // Indicator dot
+  let indicatorClass = "uncited";
+  if (entry) indicatorClass = "reasoned";
+  if (annStatus === "verified") indicatorClass = "verified";
+  else if (annStatus === "flagged") indicatorClass = "flagged";
+
+  // Flag details
+  let flagDetails = "";
+  if (annStatus === "flagged" && ann) {
+    if (ann.correct_value) flagDetails += `<div class="flag-correction" style="margin-left:24px">→ ${escapeHtml(ann.correct_value)}</div>`;
+    if (ann.note) flagDetails += `<div class="flag-note-display" style="margin-left:24px">${escapeHtml(ann.note)}</div>`;
+  }
+
+  let valClass = "string";
+  if (typeof value === "number") valClass = "number";
+  else if (value === null) valClass = "";
+
+  const displayVal = value === null ? "null" : typeof value === "string" ? `"${value}"` : String(value);
+
+  return `<div class="tree-node tree-leaf" data-path="${path}">
+    ${showIndicator ? `<span class="indicator ${indicatorClass}"></span>` : ""}
+    <span class="tree-key">${key}:</span>
+    <span class="tree-value ${valClass}">${escapeHtml(displayVal)}</span>
+    ${sourceHtml}
+    ${annBtn}
+  </div>${flagDetails}`;
+}
+
+function escapeHtml(str) {
+  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;");
+}
+
+// ── Leaf selection & highlighting ──
+function selectLeaf(el) {
+  const path = el.dataset.path;
+
+  // Clear any active search
+  clearSearchFull();
+
+  document.querySelectorAll(".tree-leaf.selected").forEach(e => e.classList.remove("selected"));
+  document.querySelectorAll(".reasoning-tooltip").forEach(e => e.remove());
+  document.querySelectorAll(".section-nav").forEach(e => e.remove());
+  el.classList.add("selected");
+
+  renderMarkdown();
+
+  state.selectedPath = path;
+  state.sections = [];
+  state.sectionIndex = 0;
+
+  const entry = state.reasoningByPath[path];
+  if (!entry || !entry.source_lines) {
+    $("#stat-citations").textContent = `${path}: no citation`;
+    return;
+  }
+
+  const lineRanges = parseSourceLines(entry.source_lines);
+
+  for (const [start, end] of lineRanges) {
+    let sectionFirstLine = null;
+    for (let ln = start; ln <= end; ln++) {
+      const lineEl = document.querySelector(`.md-line[data-line="${ln}"]`);
+      if (lineEl) {
+        lineEl.classList.add("reasoned-highlight");
+        if (!sectionFirstLine) sectionFirstLine = lineEl;
+      }
+    }
+    if (sectionFirstLine) {
+      state.sections.push({
+        firstLine: sectionFirstLine,
+        label: start === end ? `L${start}` : `L${start}\u2013L${end}`,
+      });
+    }
+  }
+
+  if (entry.reasoning) {
+    const tooltip = document.createElement("div");
+    tooltip.className = "reasoning-tooltip";
+    tooltip.textContent = entry.reasoning;
+    el.after(tooltip);
+  }
+
+  let statusMsg = `${path}: ${entry.source_lines}`;
+  if (entry.reasoning) statusMsg += ` \u2014 ${entry.reasoning}`;
+  $("#stat-citations").textContent = statusMsg;
+
+  if (state.sections.length > 1) {
+    const nav = document.createElement("span");
+    nav.className = "section-nav";
+    nav.innerHTML = `<button class="nav-prev">\u25C0</button>` +
+      `<span class="section-counter">1/${state.sections.length}</span>` +
+      `<button class="nav-next">\u25B6</button>`;
+    el.appendChild(nav);
+
+    nav.querySelector(".nav-prev").addEventListener("click", (e) => {
+      e.stopPropagation();
+      state.sectionIndex = (state.sectionIndex - 1 + state.sections.length) % state.sections.length;
+      scrollToSection();
+    });
+    nav.querySelector(".nav-next").addEventListener("click", (e) => {
+      e.stopPropagation();
+      state.sectionIndex = (state.sectionIndex + 1) % state.sections.length;
+      scrollToSection();
+    });
+  }
+
+  if (state.sections.length > 0) scrollToSection();
+}
+
+function scrollToSection() {
+  document.querySelectorAll(".md-line.active").forEach(e => e.classList.remove("active"));
+
+  const section = state.sections[state.sectionIndex];
+  section.firstLine.classList.add("active");
+  section.firstLine.scrollIntoView({ behavior: "smooth", block: "center" });
+
+  const counter = document.querySelector(".section-nav .section-counter");
+  if (counter) counter.textContent = `${state.sectionIndex + 1}/${state.sections.length}`;
+
+  const path = state.selectedPath;
+  const entry = state.reasoningByPath[path];
+  let msg = `${path}: ${state.sectionIndex + 1}/${state.sections.length} (${section.label})`;
+  if (entry && entry.reasoning) msg += ` \u2014 ${entry.reasoning}`;
+  $("#stat-citations").textContent = msg;
+}
+
+function parseSourceLines(str) {
+  const ranges = [];
+  for (const part of str.split(",")) {
+    const trimmed = part.trim().replace(/^L/i, "");
+    if (trimmed.includes("-")) {
+      const [a, b] = trimmed.split("-").map(s => parseInt(s.replace(/^L/i, ""), 10));
+      if (!isNaN(a) && !isNaN(b)) ranges.push([a, b]);
+    } else {
+      const n = parseInt(trimmed, 10);
+      if (!isNaN(n)) ranges.push([n, n]);
+    }
+  }
+  return ranges;
+}
+
+function activateMatch(index, matches) {
+  document.querySelectorAll(".md-line.active").forEach(e => e.classList.remove("active"));
+
+  const m = matches[index];
+  const lineEl = document.querySelector(`.md-line[data-line="${m.line}"]`);
+  if (lineEl) {
+    lineEl.classList.add("active");
+    lineEl.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+}
+
+// ── Keyboard navigation ──
+document.addEventListener("keydown", (e) => {
+  // Cmd+] / Cmd+[ to cycle articles (Cmd+J/K reserved by browsers)
+  if (e.metaKey && !e.ctrlKey && !e.altKey && (e.key === "]" || e.key === "[")) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (document.activeElement) document.activeElement.blur();
+    setTimeout(() => navigateArticle(e.key === "]" ? 1 : -1), 0);
+    return;
+  }
+
+  // Section navigation (when a field is selected)
+  if (!state.selectedPath || state.sections.length < 2) return;
+  if (document.activeElement.tagName === "INPUT" || document.activeElement.tagName === "SELECT") return;
+
+  if ((e.key === "n" || e.key === "ArrowRight") && !e.ctrlKey && !e.metaKey) {
+    e.preventDefault();
+    state.sectionIndex = (state.sectionIndex + 1) % state.sections.length;
+    scrollToSection();
+  }
+  if ((e.key === "p" || e.key === "ArrowLeft") && !e.ctrlKey && !e.metaKey) {
+    e.preventDefault();
+    state.sectionIndex = (state.sectionIndex - 1 + state.sections.length) % state.sections.length;
+    scrollToSection();
+  }
+});
+
+// ── Search ──
+function doSearch() {
+  const query = $("#search-box").value.trim();
+  if (!query || !state.markdown) return;
+
+  // Show clear button
+  $("#search-clear").style.display = "flex";
+
+  // Reset markdown highlights
+  renderMarkdown();
+  state.selectedPath = null;
+
+  const lines = state.markdown.split("\n");
+  state.searchMatches = [];
+  const re = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
+
+  for (let i = 0; i < lines.length; i++) {
+    if (re.test(lines[i])) {
+      state.searchMatches.push(i + 1);
+      const lineEl = document.querySelector(`.md-line[data-line="${i + 1}"]`);
+      if (lineEl) lineEl.classList.add("highlighted");
+    }
+  }
+
+  state.searchIndex = 0;
+  if (state.searchMatches.length > 0) {
+    scrollToSearchMatch(0);
+  }
+  updateSearchNav();
+}
+
+function scrollToSearchMatch(index) {
+  document.querySelectorAll(".md-line.active").forEach(e => e.classList.remove("active"));
+  state.searchIndex = index;
+  const lineNum = state.searchMatches[index];
+  const lineEl = document.querySelector(`.md-line[data-line="${lineNum}"]`);
+  if (lineEl) {
+    lineEl.classList.add("active");
+    lineEl.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+  updateSearchNav();
+}
+
+function navigateSearch(direction) {
+  if (state.searchMatches.length === 0) return;
+  const next = (state.searchIndex + direction + state.searchMatches.length) % state.searchMatches.length;
+  scrollToSearchMatch(next);
+}
+
+function updateSearchNav() {
+  const resultsEl = $("#search-results");
+  if (state.searchMatches.length > 0) {
+    resultsEl.style.display = "flex";
+    $("#search-counter").textContent = `${state.searchIndex + 1}/${state.searchMatches.length}`;
+  } else {
+    resultsEl.style.display = "none";
+  }
+}
+
+function clearSearch() {
+  state.searchMatches = [];
+  state.searchIndex = 0;
+  state._lastQuery = "";
+  $("#search-results").style.display = "none";
+  $("#search-clear").style.display = "none";
+}
+
+function clearSearchFull() {
+  clearSearch();
+  $("#search-box").value = "";
+  if (state.markdown) renderMarkdown();
+}
+
+// Wire up the integrated search controls
+$("#search-prev").addEventListener("click", () => navigateSearch(-1));
+$("#search-next").addEventListener("click", () => navigateSearch(1));
+$("#search-clear").addEventListener("click", () => {
+  clearSearchFull();
+  $("#search-box").focus();
+});
+
+$("#search-box").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    if (e.shiftKey) {
+      navigateSearch(-1);
+    } else if (state.searchMatches.length > 0 && $("#search-box").value.trim() === state._lastQuery) {
+      navigateSearch(1);
+    } else {
+      state._lastQuery = $("#search-box").value.trim();
+      doSearch();
+    }
+    e.preventDefault();
+  } else if (e.key === "Escape") {
+    clearSearch();
+    renderMarkdown();
+    $("#search-box").blur();
+  } else if (e.key === "ArrowDown" && state.searchMatches.length > 0) {
+    e.preventDefault(); navigateSearch(1);
+  } else if (e.key === "ArrowUp" && state.searchMatches.length > 0) {
+    e.preventDefault(); navigateSearch(-1);
+  }
+});
+
+// ── PDF button ──
+$("#btn-pdf").addEventListener("click", () => {
+  if (!state.currentId) return;
+  const meta = state.articles.find(a => a.article_id === state.currentId);
+  // Static deploy (no server) uses DOI; local uses PDF API
+  const isStatic = location.protocol === "file:" || !location.origin.includes("localhost");
+  if (isStatic && meta && meta.doi) {
+    window.open(`https://doi.org/${meta.doi}`, "_blank");
+  } else {
+    window.open(`/api/pdf/${state.currentId}`, "_blank");
+  }
+});
+
+// ── Stats ──
+function updateStats() {
+  const reasoned = Object.keys(state.reasoningByPath).length;
+  const uncited = document.querySelectorAll(".indicator.uncited").length;
+  const total = reasoned + uncited;
+  const nVerified = Object.values(state.annotations).filter(a => a.status === "verified").length;
+  const nFlagged = Object.values(state.annotations).filter(a => a.status === "flagged").length;
+  let msg = `${reasoned}/${total} cited`;
+  if (nVerified > 0 || nFlagged > 0) {
+    msg += ` \u00b7 ${nVerified} verified`;
+    if (nFlagged > 0) msg += `, ${nFlagged} flagged`;
+  }
+  $("#stat-citations").textContent = msg;
+}
+
+// ── Annotations ──
+async function handleAnnotation(path, status) {
+  const reviewer = $("#reviewer-id").value.trim();
+  const existing = state.annotations[path];
+
+  // Toggle off if clicking same status
+  if (existing && existing.status === status) {
+    delete state.annotations[path];
+    await fetch(`/api/annotations/${state.currentId}/${path}`, { method: "DELETE" }).catch(() => {});
+    renderExtractionPanel();
+    updateStats();
+    return;
+  }
+
+  // Verified: save immediately (no dialog)
+  if (status === "verified") {
+    const entry = { path: "." + path, status, reviewer };
+    state.annotations[path] = entry;
+    await fetch(`/api/annotations/${state.currentId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(entry),
+    }).catch(() => {});
+    renderExtractionPanel();
+    updateStats();
+    return;
+  }
+
+  // Flagged: show inline dialog for correct_value + note
+  if (status === "flagged") {
+    if (!reviewer) {
+      alert("Please enter your ORCID in the toolbar before flagging.");
+      return;
+    }
+    showFlagDialog(path, existing);
+  }
+}
+
+function showFlagDialog(path, existing) {
+  // Remove any existing flag dialog
+  document.querySelectorAll(".flag-dialog").forEach(el => el.remove());
+
+  // Find the row/element to insert after
+  let anchor = document.querySelector(`[data-path="${path}"]`);
+  if (!anchor) return;
+
+  const currentValue = getValueAtPath(state.extraction, path);
+  const prevCorrect = existing ? (existing.correct_value || "") : "";
+  const prevNote = existing ? (existing.note || "") : "";
+
+  const dialogHtml = `
+    <div class="flag-form">
+      <div class="flag-form-header">
+        <span class="flag-form-path">${path}</span>
+        <span class="flag-form-current">Current: <strong>${escapeHtml(String(currentValue ?? "null"))}</strong></span>
+      </div>
+      <div class="flag-form-fields">
+        <label>
+          <span>Correct value</span>
+          <input type="text" class="flag-input" id="flag-correct" value="${escapeHtml(prevCorrect)}" placeholder="Enter correct value, or &quot;__remove__&quot; if field should not exist">
+        </label>
+        <label>
+          <span>Note</span>
+          <textarea class="flag-textarea" id="flag-note" rows="2" placeholder="Describe the error or uncertainty...">${escapeHtml(prevNote)}</textarea>
+        </label>
+      </div>
+      <div class="flag-form-actions">
+        <button class="flag-save" id="flag-save-btn">Save Flag</button>
+        <button class="flag-cancel" id="flag-cancel-btn">Cancel</button>
+      </div>
+    </div>`;
+
+  const row = anchor.closest("tr");
+  const treeLeaf = anchor.closest(".tree-leaf");
+  let dialog;
+
+  if (row) {
+    // Table view: overlay positioned below row
+    const section = row.closest(".ext-section") || row.closest(".table-view");
+    if (!section) return;
+    section.style.position = "relative";
+    dialog = document.createElement("div");
+    dialog.className = "flag-dialog";
+    const rowRect = row.getBoundingClientRect();
+    const sectionRect = section.getBoundingClientRect();
+    dialog.style.top = (rowRect.bottom - sectionRect.top) + "px";
+    dialog.innerHTML = dialogHtml;
+    section.appendChild(dialog);
+  } else if (treeLeaf) {
+    // JSON tree view: insert inline after the leaf
+    dialog = document.createElement("div");
+    dialog.className = "flag-dialog flag-dialog-inline";
+    dialog.innerHTML = dialogHtml;
+    treeLeaf.after(dialog);
+  } else {
+    return;
+  }
+
+  // Focus the correct value input
+  dialog.querySelector("#flag-correct").focus();
+
+  dialog.querySelector("#flag-save-btn").addEventListener("click", async () => {
+    const correctValue = dialog.querySelector("#flag-correct").value.trim();
+    const note = dialog.querySelector("#flag-note").value.trim();
+    const reviewer = $("#reviewer-id").value.trim();
+
+    const entry = { path: "." + path, status: "flagged", reviewer };
+    if (correctValue) entry.correct_value = correctValue;
+    if (note) entry.note = note;
+
+    state.annotations[path] = entry;
+    await fetch(`/api/annotations/${state.currentId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(entry),
+    }).catch(() => {});
+
+    dialog.remove();
+    renderExtractionPanel();
+    updateStats();
+  });
+
+  dialog.querySelector("#flag-cancel-btn").addEventListener("click", () => {
+    // Revert to verified (since we set flagged before opening)
+    const reviewer = $("#reviewer-id").value.trim();
+    const revertEntry = { path: "." + path, status: "verified", reviewer };
+    state.annotations[path] = revertEntry;
+    fetch(`/api/annotations/${state.currentId}`, {
+      method: "PUT", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(revertEntry),
+    }).catch(() => {});
+    dialog.remove();
+    renderExtractionPanel();
+    updateStats();
+  });
+
+  // Enter in input saves, Escape cancels
+  dialog.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") { dialog.querySelector("#flag-cancel-btn").click(); }
+    if (e.key === "Enter" && e.target.tagName !== "TEXTAREA") {
+      e.preventDefault();
+      dialog.querySelector("#flag-save-btn").click();
+    }
+  });
+}
+
+function getValueAtPath(obj, path) {
+  const parts = path.replace(/\[(\d+)\]/g, '.$1').split('.');
+  let current = obj;
+  for (const part of parts) {
+    if (current === null || current === undefined) return null;
+    current = current[part];
+  }
+  return current;
+}
+
+// Reviewer ID persistence
+const savedReviewer = localStorage.getItem("erw-reviewer-id") || "";
+$("#reviewer-id").value = savedReviewer;
+$("#reviewer-id").addEventListener("change", () => {
+  localStorage.setItem("erw-reviewer-id", $("#reviewer-id").value.trim());
+});
+
+// ── View toggle ──
+state.viewMode = localStorage.getItem("erw-view-mode") || "table";
+
+function renderExtractionPanel() {
+  if (state.viewMode === "table") {
+    renderTableView();
+  } else {
+    renderTree();
+  }
+  updateViewToggle();
+}
+
+function updateViewToggle() {
+  const tableBtn = document.getElementById("btn-table-view");
+  const jsonBtn = document.getElementById("btn-json-view");
+  if (tableBtn) {
+    tableBtn.classList.toggle("active", state.viewMode === "table");
+    jsonBtn.classList.toggle("active", state.viewMode === "json");
+  }
+}
+
+document.addEventListener("click", (e) => {
+  if (e.target.id === "btn-table-view") {
+    state.viewMode = "table";
+    localStorage.setItem("erw-view-mode", "table");
+    resetAllSourceNavs();
+    renderExtractionPanel();
+  } else if (e.target.id === "btn-json-view") {
+    state.viewMode = "json";
+    localStorage.setItem("erw-view-mode", "json");
+    resetAllSourceNavs();
+    renderExtractionPanel();
+  }
+});
+
+// ── Boot ──
+init();
+</script>
+</body>
+</html>

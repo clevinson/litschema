@@ -1,0 +1,41 @@
+id: https://example.org/litschema-test/clinical
+name: clinical_trial_extraction
+description: Test fixture — a totally custom extraction schema (clinical trials).
+prefixes:
+  ct: https://example.org/litschema-test/clinical/
+  linkml: https://w3id.org/linkml/
+default_prefix: ct
+default_range: string
+imports:
+  - linkml:types
+
+classes:
+  ClinicalTrialReport:
+    tree_root: true
+    description: Single clinical trial report extraction.
+    attributes:
+      article_id:
+        identifier: true
+        required: true
+      registry_id:
+        description: e.g. NCT01234567 (ClinicalTrials.gov).
+      n_arms:
+        range: integer
+      total_participants:
+        range: integer
+      primary_endpoint:
+        required: true
+      blinding:
+        range: BlindingEnum
+      interventions:
+        multivalued: true
+      outcomes_reported:
+        multivalued: true
+
+enums:
+  BlindingEnum:
+    permissible_values:
+      open_label:
+      single_blind:
+      double_blind:
+      triple_blind:
