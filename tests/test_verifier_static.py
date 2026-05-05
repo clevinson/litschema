@@ -28,3 +28,24 @@ def test_verifier_has_mobile_stacked_panel_layout() -> None:
     assert "@media (max-width: 760px)" in html
     assert "flex-direction: column" in html
     assert "min-width: 520px" in html
+
+
+def test_verifier_uses_explicit_annotation_actions() -> None:
+    html = STATIC_HTML.read_text()
+
+    assert "annotation-actions" in html
+    assert 'data-action="verify"' in html
+    assert 'data-action="flag"' in html
+    assert 'data-action="clear"' in html
+    assert "wireAnnotationActions" in html
+    assert "Click to verify" not in html
+
+
+def test_verifier_surfaces_annotation_save_feedback() -> None:
+    html = STATIC_HTML.read_text()
+
+    assert 'id="save-status"' in html
+    assert "setSaveStatus" in html
+    assert "saveAnnotation" in html
+    assert "clearAnnotation" in html
+    assert "Failed to save annotation" in html
