@@ -15,6 +15,7 @@ from pathlib import Path
 
 import yaml
 
+from ..articles import article_files
 from ..config import load_config
 
 logger = logging.getLogger(__name__)
@@ -42,11 +43,12 @@ def convert_pdf(pdf_path: Path, out_path: Path) -> int:
 def run(
     corpus_path: Path = CORPUS_PATH,
     papers_dir: Path = PAPERS_DIR,
-    output_dir: Path = FULLTEXT_DIR,
+    output_dir: Path | None = None,
     force: bool = False,
 ) -> dict:
     """Convert all PDFs referenced in corpus.yaml to markdown."""
-    output_dir.mkdir(parents=True, exist_ok=True)
+    if output_dir is not None:
+        output_dir.mkdir(parents=True, exist_ok=True)
 
     with open(corpus_path) as f:
         corpus = yaml.safe_load(f)
@@ -61,7 +63,11 @@ def run(
             continue
 
         stats["total"] += 1
-        out_path = output_dir / f"{article_id}.md"
+        if output_dir is None:
+            out_path = article_files(_CFG, article_id).markdown_path(for_write=True)
+        else:
+            # Explicit output-dir keeps the historical flat-folder behavior.
+            out_path = output_dir / f"{article_id}.md"
 
         if out_path.exists() and not force:
             stats["skipped"] += 1
@@ -74,6 +80,7 @@ def run(
             continue
 
         try:
+            out_path.parent.mkdir(parents=True, exist_ok=True)
             char_count = convert_pdf(pdf_path, out_path)
             if char_count < MIN_CHARS:
                 logger.warning("Empty/scanned PDF: %s (%d chars)", article_id, char_count)
@@ -103,7 +110,12 @@ def main():
     parser.add_argument("--force", action="store_true", help="Re-convert existing files")
     parser.add_argument("--papers-dir", type=Path, default=PAPERS_DIR)
     parser.add_argument("--corpus", type=Path, default=CORPUS_PATH)
-    parser.add_argument("--output-dir", type=Path, default=FULLTEXT_DIR)
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=None,
+        help="Write flat {article_id}.md files to DIR instead of data/papers/<id>/article.md",
+    )
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")

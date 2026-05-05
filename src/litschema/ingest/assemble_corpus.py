@@ -18,6 +18,7 @@ from pathlib import Path
 
 import yaml
 
+from ..articles import article_files
 from ..config import load_config
 
 logger = logging.getLogger(__name__)
@@ -29,7 +30,6 @@ CROSSREF_DIR = _CFG.crossref_dir
 DATA_DIR = _CFG.data_dir
 TRACKING_XLSX = _CFG.tracking_xlsx
 CORPUS_OUT = _CFG.corpus_file
-LLM_EXTRACTIONS_DIR = _CFG.llm_extractions_dir
 
 # Map CrossRef type to our DocumentTypeEnum
 CROSSREF_TYPE_MAP = {
@@ -60,11 +60,17 @@ OPENALEX_TYPE_MAP = {
 }
 
 
-def load_llm_extraction(article_id: str, extractions_dir: Path) -> dict | None:
+def load_llm_extraction(article_id: str, extractions_dir: Path | None = None) -> dict | None:
     """Load LLM extraction for an article if available."""
-    # Prefer JSON (new format), fall back to YAML (legacy)
-    json_path = extractions_dir / f"{article_id}.json"
-    yaml_path = extractions_dir / f"{article_id}.yaml"
+    if extractions_dir is None:
+        files = article_files(_CFG, article_id)
+        json_path = files.extraction_path()
+        yaml_path = files.legacy_extraction.with_suffix(".yaml")
+    else:
+        # Explicit directory arguments preserve the historical flat-folder API.
+        json_path = extractions_dir / f"{article_id}.json"
+        yaml_path = extractions_dir / f"{article_id}.yaml"
+
     if json_path.exists():
         data = json.loads(json_path.read_text())
     elif yaml_path.exists():
@@ -76,7 +82,7 @@ def load_llm_extraction(article_id: str, extractions_dir: Path) -> dict | None:
     return data
 
 
-def merge_llm_extraction(article: dict, extractions_dir: Path) -> None:
+def merge_llm_extraction(article: dict, extractions_dir: Path | None = None) -> None:
     """Merge LLM extraction fields into an article dict in-place."""
     extraction = load_llm_extraction(article["id"], extractions_dir)
     if not extraction:
@@ -254,7 +260,7 @@ def build_article(
         article["notes"] = str(notes)
 
     # Merge LLM extraction (study_types, experimental_setups, etc.)
-    merge_llm_extraction(article, LLM_EXTRACTIONS_DIR)
+    merge_llm_extraction(article)
 
     return article
 
@@ -291,7 +297,7 @@ def build_no_doi_article(tracking: dict, used_article_ids: set[str]) -> dict:
         article["notes"] = str(notes)
 
     # Merge LLM extraction (study_types, experimental_setups, etc.)
-    merge_llm_extraction(article, LLM_EXTRACTIONS_DIR)
+    merge_llm_extraction(article)
 
     return article
 

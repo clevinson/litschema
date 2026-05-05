@@ -19,12 +19,13 @@ from typing import Any
 
 import pandas as pd
 
+from ..articles import iter_extraction_paths
 from ..config import load_config
 
 
-def _default_extraction_dir() -> Path:
+def _default_extraction_paths() -> list[Path]:
     """Lazy lookup so tests / tooling can override LITSCHEMA_CONFIG."""
-    return load_config().llm_extractions_dir
+    return list(iter_extraction_paths(load_config()))
 
 
 def load_extractions(
@@ -36,16 +37,19 @@ def load_extractions(
     ----------
     extraction_dir : path, optional
         Directory containing ``{article_id}.json`` files.
-        Defaults to ``data/llm_extractions/`` relative to the package root.
+        Defaults to extraction files found under ``data/papers/<article_id>/``.
 
     Returns
     -------
     dict with keys: articles, setups, interventions, quantification, modeling
     """
-    extraction_dir = Path(extraction_dir) if extraction_dir else _default_extraction_dir()
+    if extraction_dir:
+        extraction_paths = sorted(Path(extraction_dir).glob("*.json"))
+    else:
+        extraction_paths = _default_extraction_paths()
 
     records: list[dict[str, Any]] = []
-    for f in sorted(extraction_dir.glob("*.json")):
+    for f in extraction_paths:
         with open(f) as fh:
             records.append(json.load(fh))
 

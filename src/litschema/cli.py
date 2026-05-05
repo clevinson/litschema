@@ -158,7 +158,7 @@ def validate(
 
     if not corpus_only:
         typer.echo(f"{DIM}→ validating extractions against extraction schema{RESET}")
-        target = ctx.args if ctx.args else [str(cfg.llm_extractions_dir)]
+        target = ctx.args if ctx.args else [str(cfg.article_store_dir)]
         result = subprocess.run(
             [sys.executable, "-m", "litschema.ingest.validate_extraction", *target]
         )
