@@ -16,6 +16,12 @@ from pathlib import Path
 
 import typer
 
+from .articles import (
+    iter_extraction_paths,
+    iter_markdown_paths,
+    iter_reasoning_paths,
+    iter_review_paths,
+)
 from .config import CONFIG_FILENAME, LitSchemaConfig, load_config
 
 app = typer.Typer(
@@ -392,10 +398,10 @@ def skills_install(
 def status():
     cfg = _require_config()
 
-    converted = _count_files(cfg.fulltext_md_dir, "*.md")
-    extractions = _count_files(cfg.llm_extractions_dir, "*.json")
-    reasoning = _count_files(cfg.extraction_reasoning_dir, "*.json")
-    annotations = _count_files(cfg.annotations_dir, "*.json")
+    converted = len(list(iter_markdown_paths(cfg)))
+    extractions = len(list(iter_extraction_paths(cfg)))
+    reasoning = len(list(iter_reasoning_paths(cfg)))
+    annotations = len(list(iter_review_paths(cfg)))
 
     schema_yaml = _schema_root_path(cfg)
     corpus = cfg.corpus_file

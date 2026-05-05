@@ -63,6 +63,7 @@ class LitSchemaConfig:
     llm_extractions_dir: Path
     extraction_reasoning_dir: Path
     annotations_dir: Path
+    article_store_dir: Path
 
     # External (typically sibling to project_root).
     papers_dir: Path
@@ -141,6 +142,7 @@ _PATH_FIELDS: tuple[tuple[str, str, str], ...] = (
         "data/extraction_reasoning",
     ),
     ("annotations_dir", "annotations_dir", "data/reviews"),
+    ("article_store_dir", "article_store_dir", "data/papers"),
     ("papers_dir", "papers_dir", "papers"),
     ("static_site_dir", "static_site_dir", "static-site"),
 )

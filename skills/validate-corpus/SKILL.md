@@ -12,7 +12,7 @@ Run validation across the ERW pipeline outputs and report issues.
 1. **Validate all extractions** against the ExtractionArtifact JSON Schema:
 
 ```bash
-uv run python -m litschema.ingest.validate_extraction data/llm_extractions/
+uv run python -m litschema.ingest.validate_extraction data/papers/
 ```
 
 2. **Validate all reasoning files** against the ExtractionReasoning JSON Schema:
@@ -26,7 +26,10 @@ from jsonschema import Draft202012Validator
 schema = json.load(open('reasoning_schema.json'))
 validator = Draft202012Validator(schema)
 valid = invalid = 0
-for f in sorted(Path('data/extraction_reasoning').glob('*.json')):
+paths = sorted(Path('data/papers').glob('*/agent-reasoning.json'))
+if not paths:
+    paths = sorted(Path('data/extraction_reasoning').glob('*.json'))
+for f in paths:
     errors = list(validator.iter_errors(json.loads(f.read_text())))
     if errors:
         invalid += 1
@@ -55,8 +58,9 @@ uv run python -c "
 import json
 from pathlib import Path
 
-ext_dir = Path('data/llm_extractions')
-reason_dir = Path('data/extraction_reasoning')
+paper_dir = Path('data/papers')
+legacy_ext_dir = Path('data/llm_extractions')
+legacy_reason_dir = Path('data/extraction_reasoning')
 
 def count_leaves(obj, path=''):
     if isinstance(obj, dict):
@@ -69,9 +73,16 @@ def count_leaves(obj, path=''):
         if path not in ('article_id', 'confidence', 'reasoning'):
             yield path
 
-for rf in sorted(reason_dir.glob('*.json')):
-    aid = rf.stem
-    ext = json.loads((ext_dir / f'{aid}.json').read_text())
+reason_paths = sorted(paper_dir.glob('*/agent-reasoning.json'))
+if not reason_paths:
+    reason_paths = sorted(legacy_reason_dir.glob('*.json'))
+
+for rf in reason_paths:
+    aid = rf.parent.name if rf.name == 'agent-reasoning.json' else rf.stem
+    ext_path = paper_dir / aid / 'agent-extraction.json'
+    if not ext_path.exists():
+        ext_path = legacy_ext_dir / f'{aid}.json'
+    ext = json.loads(ext_path.read_text())
     reason = json.loads(rf.read_text())
     rpaths = set()
     for f in reason.get('fields', []):

@@ -21,6 +21,12 @@ from typing import Any
 import yaml
 from linkml_runtime.utils.schemaview import SchemaView
 
+from ..articles import (
+    article_files,
+    article_id_from_extraction_path,
+    iter_extraction_paths,
+    read_review_events,
+)
 from ..config import LitSchemaConfig
 
 # Sensible default for *file* discovery only — the *class name* is never
@@ -89,15 +95,12 @@ def _apply_override(record: dict, path: str, value: Any) -> bool:
         return False
 
 
-def _build_override_map(reviews_dir: Path) -> dict[str, list[dict]]:
+def _build_override_map(cfg: LitSchemaConfig) -> dict[str, list[dict]]:
     """{article_id: [events sorted by timestamp ascending]}."""
     by_article: dict[str, list[dict]] = {}
-    if not reviews_dir.is_dir():
-        return by_article
-    for p in sorted(reviews_dir.iterdir()):
-        if p.suffix not in (".json", ".jsonl"):
-            continue
-        for ev in _walk_review_events(p):
+    for extraction_path in iter_extraction_paths(cfg):
+        article_id = article_id_from_extraction_path(extraction_path)
+        for ev in read_review_events(article_files(cfg, article_id)):
             by_article.setdefault(ev["article_id"], []).append(ev)
     for events in by_article.values():
         events.sort(key=lambda e: e.get("timestamp") or "")
@@ -375,7 +378,6 @@ def build_store(
     """
     import duckdb
 
-    extractions_dir = cfg.llm_extractions_dir
     reviews_dir = cfg.annotations_dir
     authors_path = cfg.data_dir / "authors.yaml"
     institutions_path = cfg.data_dir / "institutions.yaml"
@@ -384,7 +386,7 @@ def build_store(
         db_path = cfg.project_root / ".litschema" / "explore.duckdb"
     db_path.parent.mkdir(parents=True, exist_ok=True)
 
-    sources = [extractions_dir, reviews_dir, authors_path, institutions_path]
+    sources = [cfg.article_store_dir, cfg.llm_extractions_dir, reviews_dir, authors_path, institutions_path]
     if not force_rebuild and not _needs_rebuild(db_path, sources):
         con = duckdb.connect(str(db_path))
         try:
@@ -420,19 +422,20 @@ def build_store(
     columns = _derive_columns(sv, class_name)
     id_slot = _identifier_slot(sv, class_name)
 
-    override_map = _build_override_map(reviews_dir)
+    override_map = _build_override_map(cfg)
 
     records: list[dict] = []
     reviews_applied = 0
     overrides_applied = 0
-    for ext_path in sorted(extractions_dir.glob("*.json")):
+    for ext_path in iter_extraction_paths(cfg):
+        article_id = article_id_from_extraction_path(ext_path)
         data = json.loads(ext_path.read_text())
         if data.get("error"):
             continue
         # Honor either an in-record id or fall back to filename stem when
         # the schema's id_slot isn't `article_id`.
         if id_slot and id_slot not in data:
-            data[id_slot] = ext_path.stem
+            data[id_slot] = article_id
         events = override_map.get(data.get(id_slot or "article_id")) or []
         if events:
             data, applied = _apply_overrides_to_extraction(data, events)

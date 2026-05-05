@@ -15,12 +15,14 @@ The user will provide an `article_id` (e.g., `bell-2024`). You must:
 1. Read the domain context from `domain_context.md`
 2. Read the extraction schema from `extraction_schema.json`
 3. Read the reasoning schema from `reasoning_schema.json`
-4. Read the full-text markdown from `data/fulltext_md/{article_id}.md`
+4. Read the full-text markdown from `data/papers/{article_id}/article.md`
+   - If that does not exist yet, fall back to legacy path `data/fulltext_md/{article_id}.md`
 
 If the markdown file doesn't exist or is < 100 characters, write an error marker:
 ```json
 {"article_id": "{article_id}", "error": true, "reason": "markdown file missing or empty"}
 ```
+to `data/papers/{article_id}/agent-extraction.json`.
 
 ## How to Extract
 
@@ -35,7 +37,8 @@ Extract ONLY non-bibliographic fields. Bibliographic fields (title, DOI, year, a
 
 ## Output 1: Extraction JSON
 
-Write valid JSON to `data/llm_extractions/{article_id}.json`.
+Write valid JSON to `data/papers/{article_id}/agent-extraction.json`. Create the
+article directory first if needed.
 
 The output must conform to the extraction schema. Include `article_id`, `confidence` (0.0-1.0 reflecting extraction certainty), and `reasoning` (1-3 sentence explanation of extraction choices) as metadata fields, plus all extracted data fields from the schema.
 
@@ -43,7 +46,7 @@ The output must conform to the extraction schema. Include `article_id`, `confide
 
 ## Output 2: Extraction Reasoning
 
-Write a SEPARATE reasoning file to `data/extraction_reasoning/{article_id}.json`.
+Write a SEPARATE reasoning file to `data/papers/{article_id}/agent-reasoning.json`.
 
 This file documents WHY each value was extracted, with line-number evidence from the markdown. Every non-metadata leaf field in the extraction MUST have an entry.
 
@@ -61,14 +64,14 @@ After writing both JSON files, validate them:
 
 ```bash
 # Validate extraction against schema
-uv run python -m litschema.ingest.validate_extraction data/llm_extractions/{article_id}.json
+uv run python -m litschema.ingest.validate_extraction data/papers/{article_id}/agent-extraction.json
 
 # Validate reasoning against schema
 uv run python -c "
 import json
 from jsonschema import Draft202012Validator
 schema = json.load(open('reasoning_schema.json'))
-data = json.load(open('data/extraction_reasoning/{article_id}.json'))
+data = json.load(open('data/papers/{article_id}/agent-reasoning.json'))
 errors = list(Draft202012Validator(schema).iter_errors(data))
 if errors:
     for e in errors:
@@ -90,8 +93,8 @@ Do NOT finish until both validations pass or you have exhausted retries.
 ## Checklist
 
 Before finishing, verify:
-- [ ] `data/llm_extractions/{article_id}.json` exists and passes extraction validation
-- [ ] `data/extraction_reasoning/{article_id}.json` exists and passes reasoning validation
+- [ ] `data/papers/{article_id}/agent-extraction.json` exists and passes extraction validation
+- [ ] `data/papers/{article_id}/agent-reasoning.json` exists and passes reasoning validation
 - [ ] Every non-metadata leaf field in the extraction has a corresponding reasoning entry
 - [ ] All `source_lines` reference real line numbers from the markdown
 - [ ] No data was extracted from the References/Bibliography section

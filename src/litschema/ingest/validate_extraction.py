@@ -23,9 +23,11 @@ from pathlib import Path
 
 from jsonschema import Draft202012Validator
 
+from ..articles import iter_extraction_paths
 from ..config import load_config as _load_config
 
-EXTRACTION_SCHEMA_PATH = _load_config().schema_dir / "extraction.yaml"
+_CFG = _load_config()
+EXTRACTION_SCHEMA_PATH = _CFG.schema_dir / "extraction.yaml"
 
 
 def generate_extraction_schema(schema_path: Path = EXTRACTION_SCHEMA_PATH) -> dict:
@@ -78,7 +80,13 @@ def main():
     target = Path(args[0])
     schema = generate_extraction_schema()
 
-    files = sorted(target.glob("*.json")) if target.is_dir() else [target]
+    if target.is_dir():
+        files = sorted(target.glob("*.json"))
+        if not files:
+            cfg = _load_config()
+            files = list(iter_extraction_paths(cfg))
+    else:
+        files = [target]
 
     total = 0
     valid_count = 0
