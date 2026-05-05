@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ERW Extraction Verifier</title>
+<link rel="icon" href="data:,">
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1302,6 +1303,99 @@
   }
 
   .article-bibheader .bib-doi:hover { color: var(--accent); }
+
+  @media (max-width: 760px) {
+    body {
+      font-size: 12px;
+    }
+
+    .toolbar {
+      overflow-x: auto;
+      padding: 6px 8px;
+      gap: 8px;
+    }
+
+    #article-select {
+      min-width: 280px;
+    }
+
+    .toolbar-spacer,
+    .filter-group {
+      display: none;
+    }
+
+    .reviewer-input {
+      width: 150px;
+    }
+
+    .article-bibheader {
+      padding: 8px 10px;
+      gap: 8px;
+      overflow-x: auto;
+      min-height: 36px;
+    }
+
+    .article-bibheader .bib-title {
+      min-width: 160px;
+      max-width: 260px;
+    }
+
+    .article-bibheader .bib-authors {
+      display: none !important;
+    }
+
+    .panels {
+      flex-direction: column;
+    }
+
+    .panel {
+      min-height: 0;
+    }
+
+    .panel-left,
+    .panel-right {
+      flex: 1 1 50%;
+    }
+
+    .panel-left {
+      border-right: none;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .panel-header {
+      padding: 6px 10px;
+    }
+
+    .panel-body {
+      padding: 8px 10px;
+    }
+
+    .panel-header-row {
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .search-row {
+      overflow-x: auto;
+    }
+
+    .table-view {
+      overflow-x: auto;
+      padding: 4px 6px 10px;
+    }
+
+    .ext-table {
+      min-width: 520px;
+    }
+
+    .md-line {
+      padding-left: 36px;
+    }
+
+    .md-line .line-num {
+      width: 28px;
+    }
+  }
 </style>
 </head>
 <body>
@@ -1373,7 +1467,8 @@
       <h3>Extraction Data</h3>
       <div class="panel-header-right">
         <div class="view-toggle">
-          <button class="active" id="btn-table-view">Table</button>
+          <button class="active" id="btn-review-table">Review</button>
+          <button id="btn-pivot-view">Pivot</button>
           <button id="btn-json-view">JSON</button>
         </div>
         <span class="confidence-badge" id="confidence-display"></span>
@@ -1392,6 +1487,7 @@ const $ = (sel) => document.querySelector(sel);
 const state = {
   articles: [],
   viewMode: "table",
+  tableMode: "review",
   currentId: null,
   markdown: null,
   extraction: null,
@@ -2240,8 +2336,9 @@ function renderValue(key, val, basePath, depth) {
     return buildMergedTable([], [{ key, val, path: basePath }]);
   }
 
-  // Uniform array of objects → horizontal table
-  if (Array.isArray(val) && val.length > 0 && isUniformArray(val)) {
+  // Uniform array of objects → optional pivot table.
+  // Default review mode keeps nested rows stable for field-level editing.
+  if (state.tableMode === "pivot" && Array.isArray(val) && val.length > 0 && isUniformArray(val)) {
     return buildHorizontalTable(val, basePath, key);
   }
 
@@ -3528,6 +3625,7 @@ $("#reviewer-id").addEventListener("change", () => {
 
 // ── View toggle ──
 state.viewMode = localStorage.getItem("erw-view-mode") || "table";
+state.tableMode = localStorage.getItem("erw-table-mode") || "review";
 
 function renderExtractionPanel() {
   if (state.viewMode === "table") {
@@ -3539,18 +3637,29 @@ function renderExtractionPanel() {
 }
 
 function updateViewToggle() {
-  const tableBtn = document.getElementById("btn-table-view");
+  const reviewBtn = document.getElementById("btn-review-table");
+  const pivotBtn = document.getElementById("btn-pivot-view");
   const jsonBtn = document.getElementById("btn-json-view");
-  if (tableBtn) {
-    tableBtn.classList.toggle("active", state.viewMode === "table");
+  if (reviewBtn) {
+    reviewBtn.classList.toggle("active", state.viewMode === "table" && state.tableMode === "review");
+    pivotBtn.classList.toggle("active", state.viewMode === "table" && state.tableMode === "pivot");
     jsonBtn.classList.toggle("active", state.viewMode === "json");
   }
 }
 
 document.addEventListener("click", (e) => {
-  if (e.target.id === "btn-table-view") {
+  if (e.target.id === "btn-review-table") {
     state.viewMode = "table";
+    state.tableMode = "review";
     localStorage.setItem("erw-view-mode", "table");
+    localStorage.setItem("erw-table-mode", "review");
+    resetAllSourceNavs();
+    renderExtractionPanel();
+  } else if (e.target.id === "btn-pivot-view") {
+    state.viewMode = "table";
+    state.tableMode = "pivot";
+    localStorage.setItem("erw-view-mode", "table");
+    localStorage.setItem("erw-table-mode", "pivot");
     resetAllSourceNavs();
     renderExtractionPanel();
   } else if (e.target.id === "btn-json-view") {
