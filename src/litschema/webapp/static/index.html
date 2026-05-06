@@ -3573,12 +3573,12 @@ function collectLeafPaths(obj, basePath = "") {
   return paths;
 }
 
-function reviewableAnnotationPath(path) {
+function reviewableAnnotationPaths(path) {
   const value = getValueAtPath(state.extraction, path);
-  if (isPrimitiveArray(value) && value.length === 1) {
-    return `${path}[0]`;
+  if (isPrimitiveArray(value)) {
+    return value.map((_, idx) => `${path}[${idx}]`);
   }
-  return path;
+  return [path];
 }
 
 function collectReviewablePaths(basePath = null) {
@@ -3586,13 +3586,19 @@ function collectReviewablePaths(basePath = null) {
   return Object.entries(state.reasoningByPath)
     .filter(([path, entry]) => {
       if (!pathInScope(path, basePath)) return false;
-      const annPath = reviewableAnnotationPath(path);
-      if (!leafPaths.has(annPath)) return false;
       if (!entry || !entry.source_lines) return false;
-      if (state.annotations[annPath]) return false;
-      return getValueAtPath(state.extraction, annPath) !== undefined;
+      return reviewableAnnotationPaths(path).some(annPath =>
+        leafPaths.has(annPath) &&
+        !state.annotations[annPath] &&
+        getValueAtPath(state.extraction, annPath) !== undefined
+      );
     })
-    .map(([path]) => reviewableAnnotationPath(path));
+    .flatMap(([path]) => reviewableAnnotationPaths(path))
+    .filter(path =>
+      leafPaths.has(path) &&
+      !state.annotations[path] &&
+      getValueAtPath(state.extraction, path) !== undefined
+    );
 }
 
 function skippedBulkCount(basePath, reviewableCount) {
