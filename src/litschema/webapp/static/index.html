@@ -3573,17 +3573,26 @@ function collectLeafPaths(obj, basePath = "") {
   return paths;
 }
 
+function reviewableAnnotationPath(path) {
+  const value = getValueAtPath(state.extraction, path);
+  if (isPrimitiveArray(value) && value.length === 1) {
+    return `${path}[0]`;
+  }
+  return path;
+}
+
 function collectReviewablePaths(basePath = null) {
   const leafPaths = new Set(collectLeafPaths(state.extraction));
   return Object.entries(state.reasoningByPath)
     .filter(([path, entry]) => {
       if (!pathInScope(path, basePath)) return false;
-      if (!leafPaths.has(path)) return false;
+      const annPath = reviewableAnnotationPath(path);
+      if (!leafPaths.has(annPath)) return false;
       if (!entry || !entry.source_lines) return false;
-      if (state.annotations[path]) return false;
-      return getValueAtPath(state.extraction, path) !== undefined;
+      if (state.annotations[annPath]) return false;
+      return getValueAtPath(state.extraction, annPath) !== undefined;
     })
-    .map(([path]) => path);
+    .map(([path]) => reviewableAnnotationPath(path));
 }
 
 function skippedBulkCount(basePath, reviewableCount) {

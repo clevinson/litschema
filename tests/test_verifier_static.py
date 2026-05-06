@@ -77,3 +77,11 @@ def test_verifier_action_column_fits_three_controls() -> None:
 
     assert ".ext-table colgroup .col-status { width: 84px; }" in html
     assert '<col style="width:84px">' in html
+
+
+def test_verifier_bulk_review_normalizes_primitive_array_reasoning() -> None:
+    html = STATIC_HTML.read_text()
+
+    assert "reviewableAnnotationPath" in html
+    assert "isPrimitiveArray(value) && value.length === 1" in html
+    assert "`${path}[0]`" in html
