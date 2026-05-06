@@ -98,3 +98,12 @@ def test_verifier_section_headers_keep_status_and_bulk_action_together() -> None
     assert "tv-toggle" not in html
     assert "tv-heading.collapsed" not in html
     assert "aria-expanded" not in html
+
+
+def test_verifier_normalizes_legacy_reasoning_paths() -> None:
+    html = STATIC_HTML.read_text()
+
+    assert "normalizeReasoningPath" in html
+    assert '.experimental_scale";' in html
+    assert '.trial_type";' in html
+    assert "normalizeReasoningPath(p)" in html
