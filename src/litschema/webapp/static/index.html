@@ -228,7 +228,7 @@
     color: var(--text-dim);
     padding: 0 12px;
     cursor: pointer;
-    transition: all 0.1s;
+    transition: color 0.1s, background-color 0.1s;
   }
 
   .filter-btn:last-child { border-right: none; }
@@ -237,6 +237,20 @@
   .filter-btn.active {
     background: var(--bg-overlay);
     color: var(--text);
+  }
+
+  .filter-count {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-dim);
+    margin-left: 4px;
+  }
+
+  .queue-summary {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-dim);
+    white-space: nowrap;
   }
 
   .confidence-badge {
@@ -1496,8 +1510,12 @@
     <button id="btn-next" disabled>&#9654;</button>
   </div>
   <div class="filter-group">
-    <button class="filter-btn active" data-filter="all">All</button>
+    <button class="filter-btn active" data-filter="all" data-label="All" aria-label="Show all articles">All</button>
+    <button class="filter-btn" data-filter="needs-review" data-label="Needs Review" aria-label="Show articles with fields needing review">Needs Review</button>
+    <button class="filter-btn" data-filter="flagged" data-label="Flagged" aria-label="Show articles with flagged fields">Flagged</button>
+    <button class="filter-btn" data-filter="complete" data-label="Complete" aria-label="Show fully reviewed articles">Complete</button>
   </div>
+  <span class="queue-summary" id="queue-summary" aria-live="polite"></span>
   <div class="toolbar-spacer"></div>
   <input type="text" class="reviewer-input" id="reviewer-id" placeholder="ORCID (e.g., 0000-0002-...)" title="Your ORCID for annotations">
   <span class="save-status" id="save-status" aria-live="polite"></span>
@@ -1625,6 +1643,7 @@ initTheme();
 
 // ── Init ──
 state.filteredArticles = [];
+state.activeFilter = "all";
 
 async function init() {
   const data = await fetchJson("/api/articles");
@@ -1636,6 +1655,7 @@ async function init() {
     btn.addEventListener("click", () => {
       document.querySelectorAll(".filter-btn").forEach(b => b.classList.remove("active"));
       btn.classList.add("active");
+      state.activeFilter = btn.dataset.filter;
       populateDropdown(btn.dataset.filter);
     });
   });
@@ -1645,27 +1665,75 @@ async function init() {
   $("#btn-next").addEventListener("click", () => navigateArticle(1));
 }
 
+function articleMatchesFilter(article, filter) {
+  const fields = article.n_fields || 0;
+  const reviewed = article.n_reviewed || article.n_annotated || 0;
+  const flagged = article.n_flagged || 0;
+  if (filter === "needs-review") return fields === 0 || reviewed < fields;
+  if (filter === "flagged") return flagged > 0;
+  if (filter === "complete") return fields > 0 && reviewed >= fields;
+  return true;
+}
+
+function reviewProgressLabel(article) {
+  const reviewed = article.n_reviewed || article.n_annotated || 0;
+  const fields = article.n_fields;
+  if (fields === undefined || fields === null) return reviewed > 0 ? `\u2713${reviewed}` : "0 reviewed";
+  return `${reviewed}/${fields}`;
+}
+
+function articleOptionLabel(article) {
+  const conf = article.confidence != null ? article.confidence.toFixed(2) : "?";
+  const flags = article.n_flagged > 0 ? ` \u2691${article.n_flagged}` : "";
+  return `${article.article_id}  (${conf}) \u00b7 ${reviewProgressLabel(article)}${flags}`;
+}
+
+function queueSummaryText(filter) {
+  const articles = state.filteredArticles || [];
+  const reviewed = articles.reduce((sum, article) => sum + (article.n_reviewed || article.n_annotated || 0), 0);
+  const fields = articles.reduce((sum, article) => sum + (article.n_fields || 0), 0);
+  const flagged = articles.reduce((sum, article) => sum + (article.n_flagged || 0), 0);
+  let scope = `${articles.length}/${state.articles.length} articles`;
+  if (filter === "needs-review") scope = `${articles.length} need review`;
+  if (filter === "flagged") scope = `${articles.length} with flags`;
+  if (filter === "complete") scope = `${articles.length} complete`;
+  const flagText = flagged > 0 ? ` \u00b7 ${flagged} flagged` : "";
+  return `${scope} \u00b7 ${reviewed}/${fields} fields${flagText}`;
+}
+
+function updateQueueControls() {
+  document.querySelectorAll(".filter-btn").forEach(btn => {
+    const filter = btn.dataset.filter;
+    const label = btn.dataset.label || btn.textContent.trim();
+    const count = state.articles.filter(article => articleMatchesFilter(article, filter)).length;
+    btn.innerHTML = `${label} <span class="filter-count">${count}</span>`;
+  });
+  const summary = $("#queue-summary");
+  if (summary) summary.textContent = queueSummaryText(state.activeFilter || "all");
+}
+
 function populateDropdown(filter) {
   const select = $("#article-select");
   const currentVal = select.value;
   // Remove all except placeholder
   while (select.options.length > 1) select.remove(1);
 
-  state.filteredArticles = [...state.articles];
+  state.filteredArticles = state.articles.filter(article => articleMatchesFilter(article, filter));
 
   for (const a of state.filteredArticles) {
     const opt = document.createElement("option");
     opt.value = a.article_id;
-    const conf = a.confidence != null ? a.confidence.toFixed(2) : "?";
-    const annLabel = a.n_annotated > 0 ? ` \u2713${a.n_annotated}` : "";
-    opt.textContent = `${a.article_id}  (${conf})${annLabel}`;
+    opt.textContent = articleOptionLabel(a);
     select.appendChild(opt);
   }
 
   if (currentVal && state.filteredArticles.some(a => a.article_id === currentVal)) {
     select.value = currentVal;
+  } else if (currentVal) {
+    select.value = "";
   }
 
+  updateQueueControls();
   updateNavState();
 }
 
@@ -3423,6 +3491,28 @@ function updateStats() {
     if (nFlagged > 0) msg += `, ${nFlagged} flagged`;
   }
   $("#stat-citations").textContent = msg;
+  syncCurrentArticleProgress();
+}
+
+function syncCurrentArticleProgress() {
+  if (!state.currentId || !state.extraction) return;
+  const article = state.articles.find(a => a.article_id === state.currentId);
+  if (!article) return;
+  const leafPaths = collectLeafPaths(state.extraction);
+  const reviewedAnnotations = leafPaths
+    .map(path => state.annotations[path])
+    .filter(Boolean);
+  article.n_fields = leafPaths.length;
+  article.n_verified = reviewedAnnotations.filter(a => a.status === "verified").length;
+  article.n_flagged = reviewedAnnotations.filter(a => a.status === "flagged").length;
+  article.n_reviewed = article.n_verified + article.n_flagged;
+  article.n_annotated = article.n_reviewed;
+  article.is_complete = article.n_fields > 0 && article.n_reviewed >= article.n_fields;
+  article.has_flags = article.n_flagged > 0;
+
+  const option = $(`#article-select option[value="${CSS.escape(state.currentId)}"]`);
+  if (option) option.textContent = articleOptionLabel(article);
+  updateQueueControls();
 }
 
 // ── Annotations ──

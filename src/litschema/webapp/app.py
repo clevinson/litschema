@@ -118,6 +118,62 @@ def _current_annotations(article_id: str) -> list[dict]:
     return list(current.values())
 
 
+def _leaf_paths(obj, base_path: str = "") -> list[str]:
+    """Return reviewable extraction leaf paths in verifier path syntax."""
+    if obj is None or not isinstance(obj, (dict, list)):
+        return [base_path] if base_path else []
+    if isinstance(obj, list):
+        paths = []
+        for idx, item in enumerate(obj):
+            paths.extend(_leaf_paths(item, f"{base_path}[{idx}]"))
+        return paths
+
+    paths = []
+    for key, value in obj.items():
+        if not base_path and key in {"article_id", "confidence", "reasoning"}:
+            continue
+        child_path = f"{base_path}.{key}" if base_path else key
+        paths.extend(_leaf_paths(value, child_path))
+    return paths
+
+
+def _normalize_review_path(path: str) -> str:
+    path = path.lstrip(".")
+    legacy_suffix = ".trial_type"
+    if path.endswith(legacy_suffix):
+        return path[: -len(legacy_suffix)] + ".experimental_scale"
+    return path
+
+
+def _review_progress(extraction: dict, annotations: list[dict]) -> dict:
+    """Summarize field-level review progress for article queue filters."""
+    leaf_paths = set(_leaf_paths(extraction))
+    current: dict[str, dict] = {}
+    for annotation in annotations:
+        path = annotation.get("path")
+        status = annotation.get("status")
+        if not path:
+            continue
+        path = _normalize_review_path(path)
+        if status == "cleared":
+            current.pop(path, None)
+        elif path in leaf_paths:
+            current[path] = annotation
+
+    n_verified = sum(1 for ann in current.values() if ann.get("status") == "verified")
+    n_flagged = sum(1 for ann in current.values() if ann.get("status") == "flagged")
+    n_fields = len(leaf_paths)
+    n_reviewed = n_verified + n_flagged
+    return {
+        "n_fields": n_fields,
+        "n_reviewed": n_reviewed,
+        "n_verified": n_verified,
+        "n_flagged": n_flagged,
+        "is_complete": n_fields > 0 and n_reviewed >= n_fields,
+        "has_flags": n_flagged > 0,
+    }
+
+
 @app.get("/", response_class=HTMLResponse)
 async def index():
     return (STATIC_DIR / "index.html").read_text()
@@ -140,7 +196,8 @@ async def list_articles():
 
         setups = data.get("experimental_setups") or []
         # Annotation progress
-        n_annotated = len(_current_annotations(article_id))
+        annotations = _current_annotations(article_id)
+        progress = _review_progress(data, annotations)
         # Look up bibliographic fields from corpus
         bib = _article_meta(article_id)
         articles.append(
@@ -151,7 +208,8 @@ async def list_articles():
                 "focus_areas": data.get("focus_areas", []),
                 "document_type": data.get("document_type"),
                 "n_setups": len(setups),
-                "n_annotated": n_annotated,
+                "n_annotated": progress["n_reviewed"],
+                **progress,
                 "doi": bib.get("doi"),
                 "title": bib.get("title"),
                 "year": bib.get("year"),

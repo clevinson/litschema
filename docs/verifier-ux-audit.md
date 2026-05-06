@@ -29,6 +29,8 @@ useful, but they should not interfere with editing semantics.
 - The former horizontal rendering is still available as **Pivot**, but it is an
   explicit opt-in mode.
 - The JSON tree remains available for raw inspection.
+- The article queue exposes All, Needs Review, Flagged, and Complete filters,
+  with progress counts in the toolbar and article selector.
 - Field review uses explicit Verify, Flag, and Clear actions rather than a
   hidden click cycle.
 - Review mode supports reversible bulk verification at section and article
@@ -50,6 +52,9 @@ useful, but they should not interfere with editing semantics.
 
 - Add keyboard shortcuts for verify, flag, next cited field, and next article.
 - Add a compact “needs review” filter inside the extraction panel.
+- Add a selected-field review bar so row status remains visible while actions
+  are consolidated away from every table row.
+- Show an explicit muted `No citation` state for uncited fields.
 - If section collapse returns, use a left-side disclosure icon that does not
   shift heading text alignment.
 - Consider an explicit side drawer for flag editing if inline dialogs continue

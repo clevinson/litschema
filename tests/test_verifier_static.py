@@ -107,3 +107,14 @@ def test_verifier_normalizes_legacy_reasoning_paths() -> None:
     assert '.experimental_scale";' in html
     assert '.trial_type";' in html
     assert "normalizeReasoningPath(p)" in html
+
+
+def test_verifier_exposes_article_review_queue_filters() -> None:
+    html = STATIC_HTML.read_text()
+
+    assert 'id="queue-summary"' in html
+    assert 'data-filter="needs-review"' in html
+    assert 'data-filter="flagged"' in html
+    assert 'data-filter="complete"' in html
+    assert "articleMatchesFilter" in html
+    assert "reviewProgressLabel" in html
