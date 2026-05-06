@@ -55,7 +55,7 @@ def test_verifier_exposes_bulk_review_actions() -> None:
     html = STATIC_HTML.read_text()
 
     assert 'id="btn-verify-article"' in html
-    assert "Verify remaining article" in html
+    assert "Verify Remaining Article" in html
     assert "bulk-verify-btn" in html
     assert 'data-bulk-scope="section"' in html
     assert "Verify remaining" in html
@@ -109,12 +109,20 @@ def test_verifier_normalizes_legacy_reasoning_paths() -> None:
     assert "normalizeReasoningPath(p)" in html
 
 
-def test_verifier_exposes_article_review_queue_filters() -> None:
+def test_verifier_scopes_review_navigation_to_current_article() -> None:
     html = STATIC_HTML.read_text()
 
-    assert 'id="queue-summary"' in html
-    assert 'data-filter="needs-review"' in html
-    assert 'data-filter="flagged"' in html
-    assert 'data-filter="complete"' in html
-    assert "articleMatchesFilter" in html
+    assert 'id="review-progress"' in html
+    assert 'id="btn-next-unreviewed"' in html
+    assert 'id="btn-next-flagged"' in html
+    assert "selectNextReviewPath" in html
     assert "reviewProgressLabel" in html
+    assert "filter-group" not in html
+    assert "queue-summary" not in html
+
+
+def test_verifier_shows_explicit_no_citation_state() -> None:
+    html = STATIC_HTML.read_text()
+
+    assert "No citation" in html
+    assert "source-missing" in html

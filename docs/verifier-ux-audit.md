@@ -29,8 +29,10 @@ useful, but they should not interfere with editing semantics.
 - The former horizontal rendering is still available as **Pivot**, but it is an
   explicit opt-in mode.
 - The JSON tree remains available for raw inspection.
-- The article queue exposes All, Needs Review, Flagged, and Complete filters,
-  with progress counts in the toolbar and article selector.
+- The article selector shows per-article progress, while review navigation stays
+  scoped to the current article.
+- The extraction header shows current article progress and actions for moving to
+  the next unreviewed or flagged field.
 - Field review uses explicit Verify, Flag, and Clear actions rather than a
   hidden click cycle.
 - Review mode supports reversible bulk verification at section and article
@@ -39,6 +41,8 @@ useful, but they should not interfere with editing semantics.
 - Section headers keep status badges and actionable bulk review controls
   together. Completed sections omit inactive bulk actions so the heading stays
   focused on useful reviewer decisions.
+- Uncited fields show an explicit muted `No citation` source state rather than
+  an empty source cell.
 - Annotation writes surface saving, saved, cleared, and failed states in the
   toolbar. Failed writes preserve the previous visible annotation state.
 - Canceling a flag dialog closes the dialog without mutating the field back to
@@ -51,10 +55,8 @@ useful, but they should not interfere with editing semantics.
 ## Follow-Up Ideas
 
 - Add keyboard shortcuts for verify, flag, next cited field, and next article.
-- Add a compact “needs review” filter inside the extraction panel.
 - Add a selected-field review bar so row status remains visible while actions
   are consolidated away from every table row.
-- Show an explicit muted `No citation` state for uncited fields.
 - If section collapse returns, use a left-side disclosure icon that does not
   shift heading text alignment.
 - Consider an explicit side drawer for flag editing if inline dialogs continue
