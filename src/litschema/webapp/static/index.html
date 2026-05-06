@@ -786,20 +786,6 @@
     box-shadow: inset 3px 0 0 var(--cited);
   }
 
-  .reasoning-tooltip-row td {
-    padding: 0 8px 4px 8px;
-    border-bottom: 1px solid var(--border-subtle);
-  }
-
-  .reasoning-tooltip-row .reasoning-tooltip {
-    margin: 2px 0 4px 0;
-    padding: 6px 10px;
-    font-size: 11px;
-    word-wrap: break-word;
-    white-space: normal;
-    overflow-wrap: anywhere;
-  }
-
   .source-link {
     color: var(--cited);
     text-decoration: underline;
@@ -818,6 +804,21 @@
   .source-missing {
     color: var(--text-dim);
     font-size: 11px;
+  }
+
+  .evidence-badge {
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    white-space: nowrap;
+  }
+
+  .evidence-badge.has-source {
+    color: var(--cited);
+  }
+
+  .evidence-badge.no-source {
+    color: var(--text-dim);
   }
 
   .view-toggle {
@@ -943,9 +944,9 @@
 
   .selected-field-bar {
     display: none;
-    align-items: center;
-    gap: 12px;
-    padding: 8px 16px;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px 16px;
     border-bottom: 1px solid var(--border-subtle);
     background: var(--bg);
     flex-shrink: 0;
@@ -953,6 +954,13 @@
 
   .selected-field-bar.active {
     display: flex;
+  }
+
+  .selected-field-summary {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    width: 100%;
   }
 
   .selected-field-main {
@@ -981,6 +989,74 @@
     align-items: center;
     gap: 6px;
     flex-shrink: 0;
+  }
+
+  .selected-field-source {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+    font-size: 11px;
+  }
+
+  .selected-source-range {
+    color: var(--cited);
+  }
+
+  .selected-field-reasoning {
+    display: none;
+    width: 100%;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 1.45;
+  }
+
+  .selected-field-reasoning.active {
+    display: block;
+  }
+
+  .selected-field-edit-form {
+    display: none;
+    width: 100%;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+  }
+
+  .selected-field-edit-form.active {
+    display: grid;
+  }
+
+  .selected-field-edit-form label {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    color: var(--text-dim);
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+
+  .selected-field-edit-form input,
+  .selected-field-edit-form textarea {
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    padding: 5px 8px;
+  }
+
+  .selected-field-edit-form textarea {
+    font-family: var(--font-sans);
+    resize: vertical;
+  }
+
+  .selected-edit-actions {
+    display: flex;
+    gap: 6px;
   }
 
   .table-ann-btn {
@@ -1153,128 +1229,6 @@
   .save-status[data-status="saving"] { color: var(--text-secondary); }
   .save-status[data-status="saved"] { color: var(--green); }
   .save-status[data-status="error"] { color: var(--red); }
-
-  .flag-dialog-container {
-    position: relative;
-  }
-
-  .flag-dialog {
-    position: absolute;
-    left: 0;
-    right: 0;
-    z-index: 10;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.15);
-    border-radius: 0 0 var(--radius) var(--radius);
-  }
-
-  .flag-form {
-    padding: 10px 12px;
-    background: var(--bg-raised);
-    border-left: 3px solid var(--yellow);
-    border-bottom: 2px solid var(--yellow);
-    font-family: var(--font-sans);
-    font-size: 12px;
-  }
-
-  .flag-form-header {
-    display: flex;
-    gap: 12px;
-    align-items: baseline;
-    margin-bottom: 8px;
-    color: var(--text-secondary);
-  }
-
-  .flag-form-path {
-    font-family: var(--font-mono);
-    font-size: 11px;
-    color: var(--text-dim);
-  }
-
-  .flag-form-current strong {
-    color: var(--val-string);
-  }
-
-  .flag-form-fields {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    margin-bottom: 8px;
-  }
-
-  .flag-form-fields label {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-
-  .flag-form-fields label span {
-    font-size: 10px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: var(--text-dim);
-  }
-
-  .flag-input, .flag-textarea {
-    background: var(--bg-input);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    color: var(--text);
-    font-family: var(--font-mono);
-    font-size: 12px;
-    padding: 5px 8px;
-    width: 100%;
-    box-sizing: border-box;
-  }
-
-  .flag-textarea {
-    font-family: var(--font-sans);
-    resize: vertical;
-  }
-
-  .flag-input:focus, .flag-textarea:focus {
-    outline: none;
-    border-color: var(--yellow);
-  }
-
-  .flag-form-actions {
-    display: flex;
-    gap: 6px;
-  }
-
-  .flag-save, .flag-cancel {
-    font-family: var(--font-sans);
-    font-size: 11px;
-    font-weight: 500;
-    padding: 4px 12px;
-    border-radius: var(--radius);
-    cursor: pointer;
-    border: 1px solid var(--border);
-    transition: all 0.1s;
-  }
-
-  .flag-save {
-    background: var(--yellow);
-    color: #000;
-    border-color: var(--yellow);
-  }
-
-  .flag-save:hover { opacity: 0.9; }
-
-  .flag-cancel {
-    background: none;
-    color: var(--text-secondary);
-  }
-
-  .flag-cancel:hover { border-color: var(--text-dim); }
-
-  .flag-dialog-inline {
-    position: relative;
-    margin: 4px 0 4px 24px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    border-radius: var(--radius);
-    overflow: hidden;
-  }
 
   .flag-note-display {
     font-size: 10px;
@@ -1711,14 +1665,34 @@
       </div>
     </div>
     <div class="selected-field-bar" id="selected-field-bar">
-      <div class="selected-field-main">
-        <div class="selected-field-label" id="selected-field-label">Select a field</div>
-        <div class="selected-field-value" id="selected-field-value"></div>
+      <div class="selected-field-summary">
+        <div class="selected-field-main">
+          <div class="selected-field-label" id="selected-field-label">Select a field</div>
+          <div class="selected-field-value" id="selected-field-value"></div>
+        </div>
+        <div class="selected-field-actions">
+          <button class="review-action-btn" id="btn-selected-verify" data-action="verify" disabled>Verify</button>
+          <button class="review-action-btn" id="btn-selected-edit" data-action="edit" disabled>Edit</button>
+          <button class="review-action-btn" id="btn-selected-clear" data-action="clear" disabled>Clear</button>
+        </div>
       </div>
-      <div class="selected-field-actions">
-        <button class="review-action-btn" id="btn-selected-verify" data-action="verify" disabled>Verify</button>
-        <button class="review-action-btn" id="btn-selected-edit" data-action="edit" disabled>Edit</button>
-        <button class="review-action-btn" id="btn-selected-clear" data-action="clear" disabled>Clear</button>
+      <div class="selected-field-source" id="selected-field-source">
+        <button class="review-action-btn" id="btn-selected-source-prev" disabled>&#9664;</button>
+        <span class="selected-source-range" id="selected-field-source-range">No field selected</span>
+        <button class="review-action-btn" id="btn-selected-source-next" disabled>&#9654;</button>
+      </div>
+      <div class="selected-field-reasoning" id="selected-field-reasoning"></div>
+      <div class="selected-field-edit-form" id="selected-field-edit-form">
+        <label>Corrected value
+          <input type="text" id="selected-edit-correct" placeholder="Enter corrected value, or __remove__">
+        </label>
+        <label>Note
+          <textarea id="selected-edit-note" rows="2" placeholder="Describe the correction or uncertainty"></textarea>
+        </label>
+        <div class="selected-edit-actions">
+          <button class="review-action-btn" id="btn-selected-save-edit">Save Edit</button>
+          <button class="review-action-btn" id="btn-selected-cancel-edit">Cancel</button>
+        </div>
       </div>
     </div>
     <div class="panel-body" id="panel-right"></div>
@@ -1741,6 +1715,8 @@ const state = {
   reasoningByPath: {},
   annotations: {},  // path -> {status, reviewer, timestamp, note}
   selectedPath: null,
+  selectedSourceIndex: 0,
+  inspectorEditMode: false,
   sections: [],
   sectionIndex: 0,
   searchMatches: [],
@@ -1857,6 +1833,7 @@ $("#article-select").addEventListener("change", async (e) => {
   if (!id) return;
   state.currentId = id;
   state.selectedPath = null;
+  state.inspectorEditMode = false;
   updateSelectedFieldBar(null);
 
   // Show panels, hide welcome
@@ -2456,17 +2433,7 @@ function buildHorizontalTable(arr, basePath, key) {
         if (subIndex === 0) {
           // Source column with rowspan
           const rowSources = collectSourceLines(item, itemPath);
-          let sourceHtml = '';
-          if (rowSources.length === 1) {
-            sourceHtml = `<button class="source-link" data-path="${itemPath}" data-source-lines="${escapeHtml(rowSources[0])}">${escapeHtml(rowSources[0])}</button>`;
-          } else if (rowSources.length > 1) {
-            const rangesStr = rowSources.join(", ");
-            sourceHtml = `<span class="source-nav" data-path="${itemPath}" data-ranges="${escapeHtml(rangesStr)}">` +
-              `<button class="source-nav-btn source-prev" aria-label="Previous source">&#9664;</button>` +
-              `<span class="source-counter">1/${rowSources.length}</span>` +
-              `<button class="source-nav-btn source-next" aria-label="Next source">&#9654;</button>` +
-              `</span>`;
-          }
+          const sourceHtml = buildEvidenceBadge(itemPath, rowSources);
           const rowspanAttr = expandCount > 1 ? ` rowspan="${expandCount}"` : "";
           html += `<td${rowspanAttr}>${sourceHtml}</td>`;
 
@@ -2500,17 +2467,7 @@ function buildHorizontalTable(arr, basePath, key) {
 
       // Source column
       const rowSources = collectSourceLines(item, itemPath);
-      let sourceHtml = '';
-      if (rowSources.length === 1) {
-        sourceHtml = `<button class="source-link" data-path="${itemPath}" data-source-lines="${escapeHtml(rowSources[0])}">${escapeHtml(rowSources[0])}</button>`;
-      } else if (rowSources.length > 1) {
-        const rangesStr = rowSources.join(", ");
-        sourceHtml = `<span class="source-nav" data-path="${itemPath}" data-ranges="${escapeHtml(rangesStr)}">` +
-          `<button class="source-nav-btn source-prev" aria-label="Previous source">&#9664;</button>` +
-          `<span class="source-counter">1/${rowSources.length}</span>` +
-          `<button class="source-nav-btn source-next" aria-label="Next source">&#9654;</button>` +
-          `</span>`;
-      }
+      const sourceHtml = buildEvidenceBadge(itemPath, rowSources);
       html += `<td>${sourceHtml}</td>`;
 
       // Status column
@@ -2739,22 +2696,7 @@ function buildValueCells(value, path) {
     displayVal = escapeHtml(String(value));
   }
 
-  let sourceHtml = '';
-  if (entry && entry.source_lines) {
-    const parts = entry.source_lines.split(',').map(s => s.trim());
-    if (parts.length === 1) {
-      sourceHtml = `<button class="source-link" data-path="${path}" aria-label="Source ${escapeHtml(parts[0])}">${escapeHtml(parts[0])}</button>`;
-    } else {
-      // Multiple ranges — show nav arrows with (1/n) counter
-      sourceHtml = `<span class="source-nav" data-path="${path}" data-ranges="${escapeHtml(entry.source_lines)}">` +
-        `<button class="source-nav-btn source-prev" aria-label="Previous source">&#9664;</button>` +
-        `<span class="source-counter">1/${parts.length}</span>` +
-        `<button class="source-nav-btn source-next" aria-label="Next source">&#9654;</button>` +
-        `</span>`;
-    }
-  } else {
-    sourceHtml = '<span class="source-missing">No citation</span>';
-  }
+  const sourceHtml = buildEvidenceBadge(path);
 
   const annStatus = ann ? ann.status : "";
 
@@ -2779,6 +2721,19 @@ function buildFieldStatus(path, status) {
   const icon = status === "verified" ? "&#10003;" : status === "flagged" ? "&#9998;" : "&#9675;";
   const statusClass = status || "empty";
   return `<span class="field-status status-${statusClass}" data-path="${path}" title="${label}" aria-label="${label}">${icon}</span>`;
+}
+
+function sourceSummaryForPath(path, explicitRanges = null) {
+  const ranges = explicitRanges || selectedSourceRanges(path);
+  if (!ranges.length) return "No citation";
+  if (ranges.length === 1) return ranges[0];
+  return `${ranges.length} cites`;
+}
+
+function buildEvidenceBadge(path, explicitRanges = null) {
+  const summary = sourceSummaryForPath(path, explicitRanges);
+  const cls = summary === "No citation" ? "no-source" : "has-source";
+  return `<span class="evidence-badge ${cls}" data-path="${path}">${escapeHtml(summary)}</span>`;
 }
 
 function buildTableRow(key, value, path) {
@@ -2866,7 +2821,6 @@ function renderSourceState(nav) {
   document.querySelectorAll(".md-line.active").forEach(el => el.classList.remove("active"));
   const table = nav.closest("table");
   if (table) table.querySelectorAll(".cell-selected").forEach(el => el.classList.remove("cell-selected"));
-  document.querySelectorAll(".reasoning-tooltip-row").forEach(el => el.remove());
 
   if (activeIndex === null || !sourceMap || sourceMap.length === 0) {
     if (counter) counter.textContent = `1/${sourceMap ? sourceMap.length : 0}`;
@@ -2903,21 +2857,7 @@ function renderSourceState(nav) {
   // 3. Update counter
   if (counter) counter.textContent = `${activeIndex + 1}/${sourceMap.length}`;
 
-  // 4. Show reasoning tooltip
-  if (entry.reasoning) {
-    const rowPath = nav.dataset.path;
-    const firstRow = table ? table.querySelector(`tr.horizontal-row[data-path="${rowPath}"]`) : null;
-    if (firstRow) {
-      const lastRow = findLastRowInGroup(firstRow);
-      const tooltip = document.createElement("tr");
-      tooltip.className = "reasoning-tooltip-row";
-      const totalCols = table ? table.querySelectorAll("thead th").length : 4;
-      tooltip.innerHTML = `<td colspan="${totalCols}"><div class="reasoning-tooltip">${escapeHtml(entry.reasoning)}</div></td>`;
-      lastRow.after(tooltip);
-    }
-  }
-
-  // 5. Update status bar
+  // 4. Update status bar
   $("#stat-citations").textContent = `${entry.path}: ${entry.label} (${activeIndex + 1}/${sourceMap.length})`;
 }
 
@@ -2935,7 +2875,6 @@ function resetAllSourceNavs() {
   document.querySelectorAll(".reasoned-highlight").forEach(el => el.classList.remove("reasoned-highlight"));
   document.querySelectorAll(".md-line.active").forEach(el => el.classList.remove("active"));
   document.querySelectorAll(".cell-selected").forEach(el => el.classList.remove("cell-selected"));
-  document.querySelectorAll(".reasoning-tooltip-row").forEach(el => el.remove());
 }
 
 function displayFieldValue(value) {
@@ -2948,8 +2887,91 @@ function displayFieldValue(value) {
 
 function selectedFieldLabel(path) {
   if (!path) return "Select a field";
-  const last = path.split(".").pop() || path;
-  return humanize(last.replace(/\[\d+\]$/, ""));
+  return path.split(".").map(part =>
+    humanize(part.replace(/\[(\d+)\]/g, (_, idx) => ` #${Number(idx) + 1}`))
+  ).join(" / ");
+}
+
+function selectedSourceRanges(path) {
+  const entry = state.reasoningByPath[path];
+  if (!entry || !entry.source_lines) return [];
+  return entry.source_lines.split(",").map(s => s.trim()).filter(Boolean);
+}
+
+function selectedReasoning(path) {
+  const entry = state.reasoningByPath[path];
+  return entry && entry.reasoning ? entry.reasoning : "";
+}
+
+function setInspectorEditMode(enabled) {
+  state.inspectorEditMode = enabled;
+  const form = $("#selected-field-edit-form");
+  if (!form) return;
+  form.classList.toggle("active", enabled && !!state.selectedPath);
+  if (!enabled || !state.selectedPath) return;
+  const ann = state.annotations[state.selectedPath];
+  $("#selected-edit-correct").value = ann?.correct_value || "";
+  $("#selected-edit-note").value = ann?.note || "";
+  $("#selected-edit-correct").focus();
+}
+
+function updateSelectedSourceDisplay() {
+  const source = $("#selected-field-source");
+  const range = $("#selected-field-source-range");
+  const prev = $("#btn-selected-source-prev");
+  const next = $("#btn-selected-source-next");
+  if (!source || !range) return;
+
+  const ranges = selectedSourceRanges(state.selectedPath);
+  if (!state.selectedPath || ranges.length === 0) {
+    range.textContent = state.selectedPath ? "No citation" : "No field selected";
+    if (prev) prev.disabled = true;
+    if (next) next.disabled = true;
+    return;
+  }
+
+  state.selectedSourceIndex = Math.max(0, Math.min(state.selectedSourceIndex, ranges.length - 1));
+  const current = ranges[state.selectedSourceIndex];
+  range.textContent = ranges.length === 1 ? current : `${current} (${state.selectedSourceIndex + 1}/${ranges.length})`;
+  if (prev) prev.disabled = ranges.length < 2;
+  if (next) next.disabled = ranges.length < 2;
+}
+
+function focusSelectedSource(index = state.selectedSourceIndex) {
+  const ranges = selectedSourceRanges(state.selectedPath);
+  if (!ranges.length) return;
+  state.selectedSourceIndex = (index + ranges.length) % ranges.length;
+  updateSelectedSourceDisplay();
+  renderMarkdown();
+  document.querySelectorAll(".reasoned-highlight").forEach(el => el.classList.remove("reasoned-highlight"));
+  document.querySelectorAll(".md-line.active").forEach(el => el.classList.remove("active"));
+  const selectedRange = parseSourceLines(ranges[state.selectedSourceIndex])[0];
+  if (!selectedRange) return;
+  const [start, end] = selectedRange;
+  let firstLine = null;
+  for (let ln = start; ln <= end; ln++) {
+    const lineEl = document.querySelector(`.md-line[data-line="${ln}"]`);
+    if (lineEl) {
+      lineEl.classList.add("reasoned-highlight");
+      if (!firstLine) firstLine = lineEl;
+    }
+  }
+  if (firstLine) {
+    firstLine.classList.add("active");
+    firstLine.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+}
+
+function saveSelectedFieldEdit() {
+  if (!state.selectedPath) return;
+  const reviewer = $("#reviewer-id").value.trim();
+  if (!reviewer) { alert("Please enter your ORCID in the toolbar before editing."); return; }
+  saveAnnotation(state.selectedPath, "flagged", {
+    correct_value: $("#selected-edit-correct").value.trim(),
+    note: $("#selected-edit-note").value.trim(),
+  }).then(ok => {
+    if (ok) setInspectorEditMode(false);
+  });
 }
 
 function updateSelectedFieldBar(path = state.selectedPath) {
@@ -2957,6 +2979,7 @@ function updateSelectedFieldBar(path = state.selectedPath) {
   if (!bar) return;
   const label = $("#selected-field-label");
   const value = $("#selected-field-value");
+  const reasoning = $("#selected-field-reasoning");
   const buttons = [
     $("#btn-selected-verify"),
     $("#btn-selected-edit"),
@@ -2967,7 +2990,13 @@ function updateSelectedFieldBar(path = state.selectedPath) {
     bar.classList.remove("active");
     label.textContent = "Select a field";
     value.textContent = "";
+    if (reasoning) {
+      reasoning.textContent = "";
+      reasoning.classList.remove("active");
+    }
     buttons.forEach(btn => { if (btn) btn.disabled = true; });
+    setInspectorEditMode(false);
+    updateSelectedSourceDisplay();
     return;
   }
 
@@ -2977,9 +3006,16 @@ function updateSelectedFieldBar(path = state.selectedPath) {
   bar.classList.add("active");
   label.textContent = `${selectedFieldLabel(path)} · ${status}`;
   value.textContent = displayFieldValue(currentValue);
+  if (reasoning) {
+    const text = selectedReasoning(path);
+    reasoning.textContent = text;
+    reasoning.classList.toggle("active", !!text);
+  }
   buttons.forEach(btn => { if (btn) btn.disabled = false; });
   const clearBtn = $("#btn-selected-clear");
   if (clearBtn) clearBtn.disabled = !ann;
+  updateSelectedSourceDisplay();
+  setInspectorEditMode(state.inspectorEditMode);
 }
 
 function wireTableEvents(panel) {
@@ -2998,6 +3034,8 @@ function wireTableEvents(panel) {
       const rowPath = row.dataset.path;
       const selectedPath = row.querySelector(".cell-value")?.dataset.path || rowPath;
       state.selectedPath = selectedPath;
+      state.selectedSourceIndex = 0;
+      state.inspectorEditMode = false;
       updateSelectedFieldBar(selectedPath);
       const nav = findNavForCell(row.querySelector(".cell-value") || row);
       if (nav && nav._sourceMap && nav._sourceMap.length > 0) {
@@ -3127,6 +3165,8 @@ function wireTableEvents(panel) {
       e.stopPropagation();
       const cellPath = cell.dataset.path;
       state.selectedPath = cellPath;
+      state.selectedSourceIndex = 0;
+      state.inspectorEditMode = false;
       updateSelectedFieldBar(cellPath);
       const nav = findNavForCell(cell);
 
@@ -3181,7 +3221,6 @@ function selectTableRow(path, rangeIndex) {
   clearSearchFull();
   document.querySelectorAll("tr.selected").forEach(e => e.classList.remove("selected"));
   document.querySelectorAll(".cell-selected").forEach(e => e.classList.remove("cell-selected"));
-  document.querySelectorAll(".reasoning-tooltip-row").forEach(e => e.remove());
 
   // Highlight the row
   const row = document.querySelector(`tr.clickable[data-path="${path}"]`);
@@ -3190,6 +3229,8 @@ function selectTableRow(path, rangeIndex) {
   renderMarkdown();
 
   state.selectedPath = path;
+  state.selectedSourceIndex = typeof rangeIndex === "number" ? rangeIndex : 0;
+  state.inspectorEditMode = false;
   updateSelectedFieldBar(path);
   state.sections = [];
   state.sectionIndex = 0;
@@ -3220,22 +3261,6 @@ function selectTableRow(path, rangeIndex) {
         label: start === end ? `L${start}` : `L${start}\u2013L${end}`,
       });
     }
-  }
-
-  // Show reasoning tooltip below the row (or after last row in rowspan group)
-  if (entry.reasoning && row) {
-    // Find the correct insertion point — if this row is part of a rowspan group,
-    // insert after the last sibling that lacks a field cell (td:first-child with rowspan)
-    let insertAfter = row;
-    let sibling = row.nextElementSibling;
-    while (sibling && sibling.matches("tr.clickable") && sibling.cells.length < 4) {
-      insertAfter = sibling;
-      sibling = sibling.nextElementSibling;
-    }
-    const tooltip = document.createElement("tr");
-    tooltip.className = "reasoning-tooltip-row";
-    tooltip.innerHTML = `<td colspan="4"><div class="reasoning-tooltip">${escapeHtml(entry.reasoning)}</div></td>`;
-    insertAfter.after(tooltip);
   }
 
   if (state.sections.length > 0) {
@@ -3379,6 +3404,8 @@ function selectLeaf(el) {
   renderMarkdown();
 
   state.selectedPath = path;
+  state.selectedSourceIndex = 0;
+  state.inspectorEditMode = false;
   updateSelectedFieldBar(path);
   state.sections = [];
   state.sectionIndex = 0;
@@ -3802,7 +3829,7 @@ function wireSelectedFieldActions() {
   if (verifyBtn) {
     verifyBtn.addEventListener("click", async () => {
       if (!state.selectedPath || verifyBtn.disabled) return;
-      document.querySelectorAll(".flag-dialog").forEach(el => el.remove());
+      setInspectorEditMode(false);
       await saveAnnotation(state.selectedPath, "verified");
     });
   }
@@ -3810,18 +3837,22 @@ function wireSelectedFieldActions() {
   if (editBtn) {
     editBtn.addEventListener("click", () => {
       if (!state.selectedPath || editBtn.disabled) return;
-      const reviewer = $("#reviewer-id").value.trim();
-      if (!reviewer) { alert("Please enter your ORCID in the toolbar before editing."); return; }
-      showFlagDialog(state.selectedPath, state.annotations[state.selectedPath]);
+      setInspectorEditMode(true);
     });
   }
 
   if (clearBtn) {
     clearBtn.addEventListener("click", async () => {
       if (!state.selectedPath || clearBtn.disabled) return;
+      setInspectorEditMode(false);
       await clearAnnotation(state.selectedPath);
     });
   }
+
+  $("#btn-selected-save-edit").addEventListener("click", saveSelectedFieldEdit);
+  $("#btn-selected-cancel-edit").addEventListener("click", () => setInspectorEditMode(false));
+  $("#btn-selected-source-prev").addEventListener("click", () => focusSelectedSource(state.selectedSourceIndex - 1));
+  $("#btn-selected-source-next").addEventListener("click", () => focusSelectedSource(state.selectedSourceIndex + 1));
 }
 
 function pathInScope(path, basePath) {
@@ -3997,7 +4028,6 @@ async function clearRowAnnotations(rowPath) {
   for (const path of paths) {
     await clearAnnotation(path, { render: false });
   }
-  document.querySelectorAll(".flag-dialog").forEach(el => el.remove());
   renderExtractionPanel();
   updateStats();
 }
@@ -4012,13 +4042,13 @@ function wireAnnotationActions(panel) {
       const isRow = btn.dataset.scope === "row";
 
       if (action === "verify") {
-        document.querySelectorAll(".flag-dialog").forEach(el => el.remove());
         if (isRow) await verifyRowAnnotations(path);
         else await saveAnnotation(path, "verified");
       } else if (action === "flag") {
-        const reviewer = $("#reviewer-id").value.trim();
-        if (!reviewer) { alert("Please enter your ORCID in the toolbar before flagging."); return; }
-        showFlagDialog(path, state.annotations[path]);
+        state.selectedPath = path;
+        state.selectedSourceIndex = 0;
+        updateSelectedFieldBar(path);
+        setInspectorEditMode(true);
       } else if (action === "clear") {
         if (isRow) await clearRowAnnotations(path);
         else await clearAnnotation(path);
@@ -4034,93 +4064,6 @@ function wireBulkReviewActions(panel) {
       if (btn.disabled) return;
       await bulkVerifyScope(btn.dataset.path, "bulk_section");
     });
-  });
-}
-
-function showFlagDialog(path, existing) {
-  // Remove any existing flag dialog
-  document.querySelectorAll(".flag-dialog").forEach(el => el.remove());
-  const previous = existing ? { ...existing } : null;
-
-  // Find the row/element to insert after
-  let anchor = document.querySelector(`[data-path="${path}"]`);
-  if (!anchor) return;
-
-  const currentValue = getValueAtPath(state.extraction, path);
-  const prevCorrect = existing ? (existing.correct_value || "") : "";
-  const prevNote = existing ? (existing.note || "") : "";
-
-  const dialogHtml = `
-    <div class="flag-form">
-      <div class="flag-form-header">
-        <span class="flag-form-path">${path}</span>
-        <span class="flag-form-current">Current: <strong>${escapeHtml(String(currentValue ?? "null"))}</strong></span>
-      </div>
-      <div class="flag-form-fields">
-        <label>
-          <span>Correct value</span>
-          <input type="text" class="flag-input" id="flag-correct" value="${escapeHtml(prevCorrect)}" placeholder="Enter correct value, or &quot;__remove__&quot; if field should not exist">
-        </label>
-        <label>
-          <span>Note</span>
-          <textarea class="flag-textarea" id="flag-note" rows="2" placeholder="Describe the correction or uncertainty...">${escapeHtml(prevNote)}</textarea>
-        </label>
-      </div>
-      <div class="flag-form-actions">
-        <button class="flag-save" id="flag-save-btn">Save Edit</button>
-        <button class="flag-cancel" id="flag-cancel-btn">Cancel</button>
-      </div>
-    </div>`;
-
-  const row = anchor.closest("tr");
-  const treeLeaf = anchor.closest(".tree-leaf");
-  let dialog;
-
-  if (row) {
-    // Table view: overlay positioned below row
-    const section = row.closest(".ext-section") || row.closest(".table-view");
-    if (!section) return;
-    section.style.position = "relative";
-    dialog = document.createElement("div");
-    dialog.className = "flag-dialog";
-    const rowRect = row.getBoundingClientRect();
-    const sectionRect = section.getBoundingClientRect();
-    dialog.style.top = (rowRect.bottom - sectionRect.top) + "px";
-    dialog.innerHTML = dialogHtml;
-    section.appendChild(dialog);
-  } else if (treeLeaf) {
-    // JSON tree view: insert inline after the leaf
-    dialog = document.createElement("div");
-    dialog.className = "flag-dialog flag-dialog-inline";
-    dialog.innerHTML = dialogHtml;
-    treeLeaf.after(dialog);
-  } else {
-    return;
-  }
-
-  // Focus the correct value input
-  dialog.querySelector("#flag-correct").focus();
-
-  dialog.querySelector("#flag-save-btn").addEventListener("click", async () => {
-    const correctValue = dialog.querySelector("#flag-correct").value.trim();
-    const note = dialog.querySelector("#flag-note").value.trim();
-    await saveAnnotation(path, "flagged", {
-      correct_value: correctValue,
-      note,
-    }, { previous });
-  });
-
-  dialog.querySelector("#flag-cancel-btn").addEventListener("click", () => {
-    dialog.remove();
-  });
-
-  // Enter in input saves, Escape cancels
-  dialog.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") { dialog.querySelector("#flag-cancel-btn").click(); }
-    if (e.key === "Enter" && e.target.tagName !== "TEXTAREA") {
-      e.preventDefault();
-      dialog.querySelector("#flag-save-btn").click();
-    }
   });
 }
 

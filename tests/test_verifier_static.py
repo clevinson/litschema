@@ -32,6 +32,11 @@ def test_verifier_uses_selected_field_actions() -> None:
     assert "selected-field-bar" in html
     assert 'id="selected-field-label"' in html
     assert 'id="selected-field-value"' in html
+    assert 'id="selected-field-reasoning"' in html
+    assert 'id="selected-field-source"' in html
+    assert 'id="selected-field-source-range"' in html
+    assert 'id="btn-selected-source-prev"' in html
+    assert 'id="btn-selected-source-next"' in html
     assert 'id="btn-selected-verify"' in html
     assert 'id="btn-selected-edit"' in html
     assert 'id="btn-selected-clear"' in html
@@ -40,6 +45,30 @@ def test_verifier_uses_selected_field_actions() -> None:
     assert 'data-action="clear"' in html
     assert "wireSelectedFieldActions" in html
     assert "Click to verify" not in html
+
+
+def test_verifier_edits_in_selected_field_inspector() -> None:
+    html = STATIC_HTML.read_text()
+
+    assert 'id="selected-field-edit-form"' in html
+    assert 'id="selected-edit-correct"' in html
+    assert 'id="selected-edit-note"' in html
+    assert 'id="btn-selected-save-edit"' in html
+    assert 'id="btn-selected-cancel-edit"' in html
+    assert "setInspectorEditMode" in html
+    assert "saveSelectedFieldEdit" in html
+    assert "showFlagDialog" not in html
+    assert "flag-dialog" not in html
+
+
+def test_verifier_table_uses_compact_evidence_badges() -> None:
+    html = STATIC_HTML.read_text()
+
+    assert "buildEvidenceBadge" in html
+    assert "evidence-badge" in html
+    assert "sourceSummaryForPath" in html
+    assert "selectedSourceRanges" in html
+    assert "reasoning-tooltip-row" not in html
 
 
 def test_verifier_surfaces_annotation_save_feedback() -> None:
