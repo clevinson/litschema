@@ -565,18 +565,22 @@
 
   .tv-heading {
     display: flex;
-    align-items: baseline;
-    cursor: pointer;
-    user-select: none;
+    align-items: center;
+    flex-wrap: wrap;
+    column-gap: 8px;
+    row-gap: 4px;
+    cursor: default;
+    user-select: text;
     font-family: var(--font-sans);
     font-weight: 600;
     color: var(--text);
-    border: none;
-    background: none;
     width: 100%;
     text-align: left;
     padding: 0;
-    gap: 0;
+  }
+
+  .tv-heading-label {
+    flex-shrink: 0;
   }
 
   .tv-heading[data-depth="0"] {
@@ -605,7 +609,7 @@
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    margin-left: 8px;
+    margin-left: 0;
     flex-shrink: 0;
   }
 
@@ -628,25 +632,12 @@
     color: var(--yellow);
   }
 
-  .tv-toggle {
-    font-family: var(--font-mono);
-    font-size: 11px;
-    color: var(--text-dim);
-    flex-shrink: 0;
-    margin-left: auto;
-    opacity: 0.4;
-    transition: opacity 0.15s;
-  }
-  .tv-heading:hover .tv-toggle { opacity: 1; }
-
-  .tv-heading.collapsed + .tv-body { display: none; }
-
   .tv-body { }
 
-  .bulk-section-actions {
-    display: flex;
-    justify-content: flex-end;
-    margin: -2px 0 6px;
+  .tv-heading-actions {
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
   }
 
   .bulk-verify-btn,
@@ -2239,11 +2230,10 @@ function buildHorizontalTable(arr, basePath, key) {
   let html = '';
   // Section heading
   const badges = auditBadgesHtml(arr, basePath);
-  html += `<button class="tv-heading" role="button" aria-expanded="true" data-depth="0" tabindex="0">`;
-  html += `${escapeHtml(label)}${badges}<span class="tv-toggle">\u2212</span>`;
-  html += `</button>`;
+  html += `<div class="tv-heading" data-depth="0">`;
+  html += `<span class="tv-heading-label">${escapeHtml(label)}</span>${badges}${bulkActionHtml(basePath, "section")}`;
+  html += `</div>`;
   html += `<div class="tv-body">`;
-  html += bulkActionHtml(basePath, "section");
 
   html += '<table class="ext-table horizontal-table">';
   html += '<colgroup>';
@@ -2471,22 +2461,21 @@ function auditBadgesHtml(obj, basePath) {
 
 function bulkActionHtml(basePath, scope) {
   const count = collectReviewablePaths(basePath).length;
-  const disabled = count === 0 ? " disabled" : "";
-  const label = count > 0 ? `Verify remaining (${count})` : "Verify remaining";
-  return `<div class="bulk-section-actions">` +
-    `<button class="bulk-verify-btn" data-bulk-scope="section" data-bulk-source="${scope}" data-path="${basePath}"${disabled}>${label}</button>` +
-    `</div>`;
+  if (count === 0) return "";
+  const label = `Verify remaining (${count})`;
+  return `<span class="tv-heading-actions">` +
+    `<button class="bulk-verify-btn" data-bulk-scope="section" data-bulk-source="${scope}" data-path="${basePath}">${label}</button>` +
+    `</span>`;
 }
 
 function buildHeadedSection(label, obj, basePath, depth) {
   const depthAttr = Math.min(depth, 3);
   let html = '';
   const badges = depth <= 1 ? auditBadgesHtml(obj, basePath) : '';
-  html += `<button class="tv-heading" role="button" aria-expanded="true" data-depth="${depthAttr}" tabindex="0">`;
-  html += `${escapeHtml(label)}${badges}<span class="tv-toggle">\u2212</span>`;
-  html += `</button>`;
+  html += `<div class="tv-heading" data-depth="${depthAttr}">`;
+  html += `<span class="tv-heading-label">${escapeHtml(label)}</span>${badges}${bulkActionHtml(basePath, "section")}`;
+  html += `</div>`;
   html += `<div class="tv-body">`;
-  html += bulkActionHtml(basePath, "section");
 
   const indent = depth > 0;
   if (indent) html += '<div class="tv-indent">';
@@ -2782,16 +2771,6 @@ function resetAllSourceNavs() {
 }
 
 function wireTableEvents(panel) {
-  // Heading toggles
-  panel.querySelectorAll(".tv-heading").forEach(heading => {
-    heading.addEventListener("click", () => {
-      const isCollapsed = heading.classList.toggle("collapsed");
-      heading.setAttribute("aria-expanded", String(!isCollapsed));
-      heading.querySelector(".tv-toggle").textContent = isCollapsed ? "+" : "\u2212";
-      if (isCollapsed) resetAllSourceNavs();
-    });
-  });
-
   // Row clicks (non-horizontal rows use selectTableRow)
   panel.querySelectorAll("tr.clickable:not(.horizontal-row)").forEach(row => {
     row.addEventListener("click", () => {

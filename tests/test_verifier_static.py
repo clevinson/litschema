@@ -85,3 +85,16 @@ def test_verifier_bulk_review_normalizes_primitive_array_reasoning() -> None:
     assert "reviewableAnnotationPaths" in html
     assert "value.map((_, idx) => `${path}[${idx}]`)" in html
     assert ".flatMap(([path]) => reviewableAnnotationPaths(path))" in html
+
+
+def test_verifier_section_headers_keep_status_and_bulk_action_together() -> None:
+    html = STATIC_HTML.read_text()
+
+    assert "tv-heading-actions" in html
+    assert "bulkActionHtml(basePath, \"section\")" in html
+    assert 'if (count === 0) return "";' in html
+    assert 'const disabled = count === 0 ? " disabled" : "";' not in html
+    assert "bulk-section-actions" not in html
+    assert "tv-toggle" not in html
+    assert "tv-heading.collapsed" not in html
+    assert "aria-expanded" not in html
