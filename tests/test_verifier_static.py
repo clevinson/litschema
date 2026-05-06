@@ -6,20 +6,16 @@ from pathlib import Path
 STATIC_HTML = Path("src/litschema/webapp/static/index.html")
 
 
-def test_verifier_defaults_to_review_table_not_pivot_table() -> None:
+def test_verifier_defaults_to_review_table_without_pivot_control() -> None:
     html = STATIC_HTML.read_text()
 
     assert 'tableMode: "review"' in html
-    assert 'localStorage.getItem("erw-table-mode") || "review"' in html
-    assert 'state.tableMode === "pivot"' in html
-
-
-def test_verifier_exposes_pivot_as_opt_in_table_mode() -> None:
-    html = STATIC_HTML.read_text()
-
+    assert 'state.tableMode = "review"' in html
     assert 'id="btn-review-table"' in html
-    assert 'id="btn-pivot-view"' in html
-    assert 'Pivot' in html
+    assert 'id="btn-pivot-view"' not in html
+    assert ">Pivot<" not in html
+    assert 'id="btn-advanced"' in html
+    assert 'id="btn-json-view"' in html
 
 
 def test_verifier_has_mobile_stacked_panel_layout() -> None:
@@ -30,14 +26,19 @@ def test_verifier_has_mobile_stacked_panel_layout() -> None:
     assert "min-width: 520px" in html
 
 
-def test_verifier_uses_explicit_annotation_actions() -> None:
+def test_verifier_uses_selected_field_actions() -> None:
     html = STATIC_HTML.read_text()
 
-    assert "annotation-actions" in html
+    assert "selected-field-bar" in html
+    assert 'id="selected-field-label"' in html
+    assert 'id="selected-field-value"' in html
+    assert 'id="btn-selected-verify"' in html
+    assert 'id="btn-selected-edit"' in html
+    assert 'id="btn-selected-clear"' in html
     assert 'data-action="verify"' in html
-    assert 'data-action="flag"' in html
+    assert 'data-action="edit"' in html
     assert 'data-action="clear"' in html
-    assert "wireAnnotationActions" in html
+    assert "wireSelectedFieldActions" in html
     assert "Click to verify" not in html
 
 
@@ -45,6 +46,9 @@ def test_verifier_surfaces_annotation_save_feedback() -> None:
     html = STATIC_HTML.read_text()
 
     assert 'id="save-status"' in html
+    assert 'id="bulk-status"' in html
+    assert "btn-undo-bulk" in html
+    assert '<span class="save-status" id="save-status"' not in html
     assert "setSaveStatus" in html
     assert "saveAnnotation" in html
     assert "clearAnnotation" in html
@@ -55,7 +59,7 @@ def test_verifier_exposes_bulk_review_actions() -> None:
     html = STATIC_HTML.read_text()
 
     assert 'id="btn-verify-article"' in html
-    assert "Verify Remaining Article" in html
+    assert "Verify Remaining" in html
     assert "bulk-verify-btn" in html
     assert 'data-bulk-scope="section"' in html
     assert "Verify remaining" in html
@@ -72,11 +76,14 @@ def test_verifier_bulk_review_is_reversible_and_field_level() -> None:
     assert "batch_id" in html
 
 
-def test_verifier_action_column_fits_three_controls() -> None:
+def test_verifier_action_column_uses_compact_status() -> None:
     html = STATIC_HTML.read_text()
 
     assert ".ext-table colgroup .col-status { width: 84px; }" in html
     assert '<col style="width:84px">' in html
+    assert "buildFieldStatus" in html
+    assert "status-verified" in html
+    assert "status-flagged" in html
 
 
 def test_verifier_bulk_review_normalizes_primitive_array_reasoning() -> None:
@@ -114,11 +121,12 @@ def test_verifier_scopes_review_navigation_to_current_article() -> None:
 
     assert 'id="review-progress"' in html
     assert 'id="btn-next-unreviewed"' in html
-    assert 'id="btn-next-flagged"' in html
+    assert 'id="btn-next-flagged"' not in html
     assert "selectNextReviewPath" in html
     assert "reviewProgressLabel" in html
     assert "filter-group" not in html
     assert "queue-summary" not in html
+    assert 'id="tags-display"' not in html
 
 
 def test_verifier_shows_explicit_no_citation_state() -> None:

@@ -857,6 +857,132 @@
     color: var(--text);
   }
 
+  .advanced-menu {
+    position: relative;
+    flex-shrink: 0;
+  }
+
+  .advanced-menu summary {
+    list-style: none;
+    font-family: var(--font-sans);
+    font-size: 11px;
+    font-weight: 500;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg);
+    color: var(--text-secondary);
+    cursor: pointer;
+    min-height: 24px;
+    padding: 3px 8px;
+    white-space: nowrap;
+  }
+
+  .advanced-menu summary::-webkit-details-marker { display: none; }
+
+  .advanced-menu[open] summary,
+  .advanced-menu summary:hover {
+    border-color: var(--text-dim);
+    color: var(--text);
+  }
+
+  .advanced-menu-panel {
+    position: absolute;
+    right: 0;
+    top: 30px;
+    z-index: 20;
+    min-width: 120px;
+    padding: 4px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-raised);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+  }
+
+  .advanced-menu-panel button {
+    width: 100%;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: var(--font-sans);
+    font-size: 12px;
+    padding: 6px 8px;
+    text-align: left;
+  }
+
+  .advanced-menu-panel button:hover {
+    background: var(--bg-overlay);
+    color: var(--text);
+  }
+
+  .field-status {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    color: var(--text-dim);
+    font-size: 12px;
+  }
+
+  .field-status.status-verified {
+    color: var(--green);
+    background: rgba(22, 163, 74, 0.08);
+  }
+
+  .field-status.status-flagged {
+    color: var(--yellow);
+    background: rgba(202, 138, 4, 0.12);
+  }
+
+  .field-status.status-empty {
+    color: var(--text-dim);
+  }
+
+  .selected-field-bar {
+    display: none;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 16px;
+    border-bottom: 1px solid var(--border-subtle);
+    background: var(--bg);
+    flex-shrink: 0;
+  }
+
+  .selected-field-bar.active {
+    display: flex;
+  }
+
+  .selected-field-main {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .selected-field-label {
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 600;
+    margin-bottom: 2px;
+  }
+
+  .selected-field-value {
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .selected-field-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+
   .table-ann-btn {
     background: none;
     border: none;
@@ -1357,45 +1483,36 @@
 
   .article-bibheader {
     display: flex;
-    align-items: baseline;
-    gap: 12px;
-    padding: 10px 16px;
+    flex-direction: column;
+    gap: 3px;
+    padding: 10px 16px 9px;
     background: var(--bg-raised);
     border-bottom: 1px solid var(--border);
     flex-shrink: 0;
-    min-height: 40px;
+    min-height: 58px;
   }
 
   .article-bibheader .bib-title {
-    font-size: 14px;
+    font-size: 15px;
     font-weight: 600;
     color: var(--text);
     line-height: 1.3;
-    flex: 1 1 auto;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    max-width: 96ch;
   }
 
   .article-bibheader .bib-meta {
-    font-size: 12px;
+    font-size: 11px;
     color: var(--text-secondary);
     display: flex;
+    flex-wrap: wrap;
     gap: 6px;
     align-items: baseline;
-    flex-shrink: 0;
   }
 
   .article-bibheader .bib-authors {
-    font-size: 12px;
+    font-size: 11px;
     color: var(--text-secondary);
     font-style: italic;
-    max-width: 28ch;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    flex-shrink: 1;
   }
 
   .article-bibheader .bib-sep {
@@ -1518,15 +1635,16 @@
   </div>
   <div class="toolbar-spacer"></div>
   <input type="text" class="reviewer-input" id="reviewer-id" placeholder="ORCID (e.g., 0000-0002-...)" title="Your ORCID for annotations">
-  <span class="save-status" id="save-status" aria-live="polite"></span>
   <button class="theme-btn" id="btn-theme" title="Toggle theme">&#9790;</button>
 </div>
 
 <div class="article-bibheader" id="article-bibheader" style="display:none">
   <span class="bib-title" id="bib-title"></span>
-  <span class="bib-authors" id="bib-authors"></span>
-  <span class="bib-meta" id="bib-meta"></span>
-  <a class="bib-doi" id="bib-doi" target="_blank" rel="noopener" style="display:none"></a>
+  <span class="bib-meta">
+    <span class="bib-authors" id="bib-authors"></span>
+    <span id="bib-meta"></span>
+    <a class="bib-doi" id="bib-doi" target="_blank" rel="noopener" style="display:none"></a>
+  </span>
 </div>
 
 <div class="welcome" id="welcome">
@@ -1543,9 +1661,8 @@
   <div class="panel panel-left">
     <div class="panel-header">
       <div class="panel-header-row">
-        <h3>Source Document</h3>
+        <h3>Source</h3>
         <div class="panel-header-right">
-          <div class="tags" id="tags-display"></div>
           <span class="panel-meta" id="panel-left-meta"></span>
         </div>
       </div>
@@ -1574,18 +1691,34 @@
         <div class="review-actions">
           <span class="review-progress" id="review-progress" aria-live="polite"></span>
           <button class="review-action-btn" id="btn-next-unreviewed" disabled>Next Unreviewed</button>
-          <button class="review-action-btn" id="btn-next-flagged" disabled>Next Flagged</button>
-          <button class="bulk-verify-btn article-bulk-verify-btn" id="btn-verify-article">Verify Remaining Article</button>
+          <button class="bulk-verify-btn article-bulk-verify-btn" id="btn-verify-article">&#10003; Verify Remaining</button>
+          <span id="save-status" class="save-status" aria-live="polite"></span>
+          <span id="bulk-status" class="save-status" aria-live="polite"></span>
         </div>
       </div>
       <div class="panel-header-right">
         <div class="view-toggle">
           <button class="active" id="btn-review-table">Review</button>
-          <button id="btn-pivot-view">Pivot</button>
-          <button id="btn-json-view">JSON</button>
         </div>
+        <details class="advanced-menu" id="btn-advanced">
+          <summary>Advanced</summary>
+          <div class="advanced-menu-panel">
+            <button id="btn-json-view" type="button">View JSON</button>
+          </div>
+        </details>
         <span class="confidence-badge" id="confidence-display"></span>
         <span class="panel-meta" id="panel-right-meta"></span>
+      </div>
+    </div>
+    <div class="selected-field-bar" id="selected-field-bar">
+      <div class="selected-field-main">
+        <div class="selected-field-label" id="selected-field-label">Select a field</div>
+        <div class="selected-field-value" id="selected-field-value"></div>
+      </div>
+      <div class="selected-field-actions">
+        <button class="review-action-btn" id="btn-selected-verify" data-action="verify" disabled>Verify</button>
+        <button class="review-action-btn" id="btn-selected-edit" data-action="edit" disabled>Edit</button>
+        <button class="review-action-btn" id="btn-selected-clear" data-action="clear" disabled>Clear</button>
       </div>
     </div>
     <div class="panel-body" id="panel-right"></div>
@@ -1660,7 +1793,7 @@ async function init() {
   $("#btn-prev").addEventListener("click", () => navigateArticle(-1));
   $("#btn-next").addEventListener("click", () => navigateArticle(1));
   $("#btn-next-unreviewed").addEventListener("click", () => selectNextReviewPath("unreviewed"));
-  $("#btn-next-flagged").addEventListener("click", () => selectNextReviewPath("flagged"));
+  wireSelectedFieldActions();
 }
 
 function reviewProgressLabel(article) {
@@ -1724,6 +1857,7 @@ $("#article-select").addEventListener("change", async (e) => {
   if (!id) return;
   state.currentId = id;
   state.selectedPath = null;
+  updateSelectedFieldBar(null);
 
   // Show panels, hide welcome
   $("#welcome").style.display = "none";
@@ -1768,17 +1902,6 @@ $("#article-select").addEventListener("change", async (e) => {
   const meta = state.articles.find(a => a.article_id === id);
   if (meta) {
     $("#confidence-display").innerHTML = `<strong>${meta.confidence}</strong>`;
-    let tagsHtml = "";
-    for (const t of (meta.study_types || [])) {
-      tagsHtml += `<span class="tag study">${t}</span>`;
-    }
-    for (const f of (meta.focus_areas || [])) {
-      tagsHtml += `<span class="tag focus">${f}</span>`;
-    }
-    if (meta.document_type) {
-      tagsHtml += `<span class="tag">${meta.document_type}</span>`;
-    }
-    $("#tags-display").innerHTML = tagsHtml;
     renderBibHeader(meta);
   }
 
@@ -2355,7 +2478,7 @@ function buildHorizontalTable(arr, basePath, key) {
           } else if (rowAnn.flagged > 0) {
             annStatus = "flagged";
           }
-          html += `<td${rowspanAttr}>${buildAnnotationActions(itemPath, annStatus, { row: true })}</td>`;
+          html += `<td${rowspanAttr}>${buildFieldStatus(itemPath, annStatus)}</td>`;
         }
 
         html += '</tr>';
@@ -2398,7 +2521,7 @@ function buildHorizontalTable(arr, basePath, key) {
       } else if (rowAnn.flagged > 0) {
         annStatus = "flagged";
       }
-      html += `<td>${buildAnnotationActions(itemPath, annStatus, { row: true })}</td>`;
+      html += `<td>${buildFieldStatus(itemPath, annStatus)}</td>`;
 
       html += '</tr>';
     }
@@ -2644,7 +2767,18 @@ function buildValueCells(value, path) {
 
   return `<td${valStyle}>${displayVal}${flagDetails}</td>
     <td>${sourceHtml}</td>
-    <td>${buildAnnotationActions(path, annStatus)}</td>`;
+    <td>${buildFieldStatus(path, annStatus)}</td>`;
+}
+
+function buildFieldStatus(path, status) {
+  const label = status === "verified"
+    ? "Verified"
+    : status === "flagged"
+      ? "Edited"
+      : "Not reviewed";
+  const icon = status === "verified" ? "&#10003;" : status === "flagged" ? "&#9998;" : "&#9675;";
+  const statusClass = status || "empty";
+  return `<span class="field-status status-${statusClass}" data-path="${path}" title="${label}" aria-label="${label}">${icon}</span>`;
 }
 
 function buildTableRow(key, value, path) {
@@ -2804,6 +2938,50 @@ function resetAllSourceNavs() {
   document.querySelectorAll(".reasoning-tooltip-row").forEach(el => el.remove());
 }
 
+function displayFieldValue(value) {
+  if (value === null) return "null";
+  if (value === undefined) return "";
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  return JSON.stringify(value);
+}
+
+function selectedFieldLabel(path) {
+  if (!path) return "Select a field";
+  const last = path.split(".").pop() || path;
+  return humanize(last.replace(/\[\d+\]$/, ""));
+}
+
+function updateSelectedFieldBar(path = state.selectedPath) {
+  const bar = $("#selected-field-bar");
+  if (!bar) return;
+  const label = $("#selected-field-label");
+  const value = $("#selected-field-value");
+  const buttons = [
+    $("#btn-selected-verify"),
+    $("#btn-selected-edit"),
+    $("#btn-selected-clear"),
+  ];
+
+  if (!path) {
+    bar.classList.remove("active");
+    label.textContent = "Select a field";
+    value.textContent = "";
+    buttons.forEach(btn => { if (btn) btn.disabled = true; });
+    return;
+  }
+
+  const currentValue = getValueAtPath(state.extraction, path);
+  const ann = state.annotations[path];
+  const status = ann?.status === "verified" ? "Verified" : ann?.status === "flagged" ? "Edited" : "Unreviewed";
+  bar.classList.add("active");
+  label.textContent = `${selectedFieldLabel(path)} · ${status}`;
+  value.textContent = displayFieldValue(currentValue);
+  buttons.forEach(btn => { if (btn) btn.disabled = false; });
+  const clearBtn = $("#btn-selected-clear");
+  if (clearBtn) clearBtn.disabled = !ann;
+}
+
 function wireTableEvents(panel) {
   // Row clicks (non-horizontal rows use selectTableRow)
   panel.querySelectorAll("tr.clickable:not(.horizontal-row)").forEach(row => {
@@ -2818,6 +2996,9 @@ function wireTableEvents(panel) {
       // Don't handle if click was on a cell-value or button (those have their own handlers)
       if (e.target.closest(".cell-value") || e.target.closest("button")) return;
       const rowPath = row.dataset.path;
+      const selectedPath = row.querySelector(".cell-value")?.dataset.path || rowPath;
+      state.selectedPath = selectedPath;
+      updateSelectedFieldBar(selectedPath);
       const nav = findNavForCell(row.querySelector(".cell-value") || row);
       if (nav && nav._sourceMap && nav._sourceMap.length > 0) {
         resetAllSourceNavs();
@@ -2945,6 +3126,8 @@ function wireTableEvents(panel) {
     cell.addEventListener("click", (e) => {
       e.stopPropagation();
       const cellPath = cell.dataset.path;
+      state.selectedPath = cellPath;
+      updateSelectedFieldBar(cellPath);
       const nav = findNavForCell(cell);
 
       if (nav && nav._sourceMap && nav._sourceMap.length > 0) {
@@ -3007,6 +3190,7 @@ function selectTableRow(path, rangeIndex) {
   renderMarkdown();
 
   state.selectedPath = path;
+  updateSelectedFieldBar(path);
   state.sections = [];
   state.sectionIndex = 0;
 
@@ -3195,6 +3379,7 @@ function selectLeaf(el) {
   renderMarkdown();
 
   state.selectedPath = path;
+  updateSelectedFieldBar(path);
   state.sections = [];
   state.sectionIndex = 0;
 
@@ -3486,8 +3671,7 @@ function updateReviewWorkspace() {
 
   const unreviewedBtn = $("#btn-next-unreviewed");
   if (unreviewedBtn) unreviewedBtn.disabled = counts.remaining === 0;
-  const flaggedBtn = $("#btn-next-flagged");
-  if (flaggedBtn) flaggedBtn.disabled = counts.flagged === 0;
+  updateSelectedFieldBar();
 }
 
 function syncCurrentArticleProgress() {
@@ -3527,15 +3711,15 @@ function setSaveStatus(message, status = "") {
 }
 
 function setBulkStatus(message, batchId = null) {
-  const el = $("#save-status");
+  const el = $("#bulk-status");
   if (!el) return;
-  if (saveStatusTimer) clearTimeout(saveStatusTimer);
   el.dataset.status = "saved";
   el.textContent = "";
   el.append(document.createTextNode(message));
   if (batchId) {
     const undo = document.createElement("button");
     undo.type = "button";
+    undo.id = "btn-undo-bulk";
     undo.className = "bulk-undo-btn";
     undo.textContent = "Undo";
     undo.addEventListener("click", () => undoBulkBatch(batchId));
@@ -3607,6 +3791,36 @@ async function clearAnnotation(path, options = {}) {
       renderExtractionPanel();
       updateStats();
     }
+  }
+}
+
+function wireSelectedFieldActions() {
+  const verifyBtn = $("#btn-selected-verify");
+  const editBtn = $("#btn-selected-edit");
+  const clearBtn = $("#btn-selected-clear");
+
+  if (verifyBtn) {
+    verifyBtn.addEventListener("click", async () => {
+      if (!state.selectedPath || verifyBtn.disabled) return;
+      document.querySelectorAll(".flag-dialog").forEach(el => el.remove());
+      await saveAnnotation(state.selectedPath, "verified");
+    });
+  }
+
+  if (editBtn) {
+    editBtn.addEventListener("click", () => {
+      if (!state.selectedPath || editBtn.disabled) return;
+      const reviewer = $("#reviewer-id").value.trim();
+      if (!reviewer) { alert("Please enter your ORCID in the toolbar before editing."); return; }
+      showFlagDialog(state.selectedPath, state.annotations[state.selectedPath]);
+    });
+  }
+
+  if (clearBtn) {
+    clearBtn.addEventListener("click", async () => {
+      if (!state.selectedPath || clearBtn.disabled) return;
+      await clearAnnotation(state.selectedPath);
+    });
   }
 }
 
@@ -3849,11 +4063,11 @@ function showFlagDialog(path, existing) {
         </label>
         <label>
           <span>Note</span>
-          <textarea class="flag-textarea" id="flag-note" rows="2" placeholder="Describe the error or uncertainty...">${escapeHtml(prevNote)}</textarea>
+          <textarea class="flag-textarea" id="flag-note" rows="2" placeholder="Describe the correction or uncertainty...">${escapeHtml(prevNote)}</textarea>
         </label>
       </div>
       <div class="flag-form-actions">
-        <button class="flag-save" id="flag-save-btn">Save Flag</button>
+        <button class="flag-save" id="flag-save-btn">Save Edit</button>
         <button class="flag-cancel" id="flag-cancel-btn">Cancel</button>
       </div>
     </div>`;
@@ -3929,7 +4143,7 @@ $("#reviewer-id").addEventListener("change", () => {
 
 // ── View toggle ──
 state.viewMode = localStorage.getItem("erw-view-mode") || "table";
-state.tableMode = localStorage.getItem("erw-table-mode") || "review";
+state.tableMode = "review";
 
 function renderExtractionPanel() {
   if (state.viewMode === "table") {
@@ -3942,12 +4156,10 @@ function renderExtractionPanel() {
 
 function updateViewToggle() {
   const reviewBtn = document.getElementById("btn-review-table");
-  const pivotBtn = document.getElementById("btn-pivot-view");
   const jsonBtn = document.getElementById("btn-json-view");
   if (reviewBtn) {
     reviewBtn.classList.toggle("active", state.viewMode === "table" && state.tableMode === "review");
-    pivotBtn.classList.toggle("active", state.viewMode === "table" && state.tableMode === "pivot");
-    jsonBtn.classList.toggle("active", state.viewMode === "json");
+    if (jsonBtn) jsonBtn.classList.toggle("active", state.viewMode === "json");
   }
 }
 
@@ -3959,16 +4171,10 @@ document.addEventListener("click", (e) => {
     localStorage.setItem("erw-table-mode", "review");
     resetAllSourceNavs();
     renderExtractionPanel();
-  } else if (e.target.id === "btn-pivot-view") {
-    state.viewMode = "table";
-    state.tableMode = "pivot";
-    localStorage.setItem("erw-view-mode", "table");
-    localStorage.setItem("erw-table-mode", "pivot");
-    resetAllSourceNavs();
-    renderExtractionPanel();
   } else if (e.target.id === "btn-json-view") {
     state.viewMode = "json";
     localStorage.setItem("erw-view-mode", "json");
+    document.getElementById("btn-advanced")?.removeAttribute("open");
     resetAllSourceNavs();
     renderExtractionPanel();
   } else if (e.target.id === "btn-verify-article") {
