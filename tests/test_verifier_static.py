@@ -70,3 +70,10 @@ def test_verifier_bulk_review_is_reversible_and_field_level() -> None:
     assert "bulk_section" in html
     assert "bulk_article" in html
     assert "batch_id" in html
+
+
+def test_verifier_action_column_fits_three_controls() -> None:
+    html = STATIC_HTML.read_text()
+
+    assert ".ext-table colgroup .col-status { width: 84px; }" in html
+    assert '<col style="width:84px">' in html
