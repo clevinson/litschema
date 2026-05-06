@@ -643,6 +643,47 @@
 
   .tv-body { }
 
+  .bulk-section-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin: -2px 0 6px;
+  }
+
+  .bulk-verify-btn,
+  .bulk-undo-btn {
+    font-family: var(--font-sans);
+    font-size: 10px;
+    font-weight: 500;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg);
+    color: var(--text-secondary);
+    cursor: pointer;
+    min-height: 24px;
+    padding: 0 8px;
+    white-space: nowrap;
+  }
+
+  .bulk-verify-btn:hover:not(:disabled),
+  .bulk-undo-btn:hover:not(:disabled) {
+    border-color: var(--text-dim);
+    color: var(--text);
+  }
+
+  .bulk-verify-btn:disabled {
+    cursor: default;
+    opacity: 0.4;
+  }
+
+  .article-bulk-verify-btn {
+    height: 23px;
+    min-height: 23px;
+  }
+
+  .bulk-undo-btn {
+    margin-left: 6px;
+  }
+
   .tv-indent {
     margin-left: 14px;
     padding-left: 14px;
@@ -1526,6 +1567,7 @@
           <button id="btn-pivot-view">Pivot</button>
           <button id="btn-json-view">JSON</button>
         </div>
+        <button class="bulk-verify-btn article-bulk-verify-btn" id="btn-verify-article">Verify remaining article</button>
         <span class="confidence-badge" id="confidence-display"></span>
         <span class="panel-meta" id="panel-right-meta"></span>
       </div>
@@ -2201,6 +2243,7 @@ function buildHorizontalTable(arr, basePath, key) {
   html += `${escapeHtml(label)}${badges}<span class="tv-toggle">\u2212</span>`;
   html += `</button>`;
   html += `<div class="tv-body">`;
+  html += bulkActionHtml(basePath, "section");
 
   html += '<table class="ext-table horizontal-table">';
   html += '<colgroup>';
@@ -2426,6 +2469,15 @@ function auditBadgesHtml(obj, basePath) {
   return html;
 }
 
+function bulkActionHtml(basePath, scope) {
+  const count = collectReviewablePaths(basePath).length;
+  const disabled = count === 0 ? " disabled" : "";
+  const label = count > 0 ? `Verify remaining (${count})` : "Verify remaining";
+  return `<div class="bulk-section-actions">` +
+    `<button class="bulk-verify-btn" data-bulk-scope="section" data-bulk-source="${scope}" data-path="${basePath}"${disabled}>${label}</button>` +
+    `</div>`;
+}
+
 function buildHeadedSection(label, obj, basePath, depth) {
   const depthAttr = Math.min(depth, 3);
   let html = '';
@@ -2434,6 +2486,7 @@ function buildHeadedSection(label, obj, basePath, depth) {
   html += `${escapeHtml(label)}${badges}<span class="tv-toggle">\u2212</span>`;
   html += `</button>`;
   html += `<div class="tv-body">`;
+  html += bulkActionHtml(basePath, "section");
 
   const indent = depth > 0;
   if (indent) html += '<div class="tv-indent">';
@@ -2923,6 +2976,7 @@ function wireTableEvents(panel) {
   });
 
   wireAnnotationActions(panel);
+  wireBulkReviewActions(panel);
 }
 
 function selectTableRow(path, rangeIndex) {
@@ -3393,6 +3447,7 @@ function updateStats() {
 
 // ── Annotations ──
 let saveStatusTimer = null;
+state.lastBulkBatch = null;
 
 function setSaveStatus(message, status = "") {
   const el = $("#save-status");
@@ -3408,11 +3463,31 @@ function setSaveStatus(message, status = "") {
   }
 }
 
+function setBulkStatus(message, batchId = null) {
+  const el = $("#save-status");
+  if (!el) return;
+  if (saveStatusTimer) clearTimeout(saveStatusTimer);
+  el.dataset.status = "saved";
+  el.textContent = "";
+  el.append(document.createTextNode(message));
+  if (batchId) {
+    const undo = document.createElement("button");
+    undo.type = "button";
+    undo.className = "bulk-undo-btn";
+    undo.textContent = "Undo";
+    undo.addEventListener("click", () => undoBulkBatch(batchId));
+    el.append(undo);
+  }
+}
+
 function annotationEntry(path, status, extra = {}) {
   const reviewer = $("#reviewer-id").value.trim();
   const entry = { path: "." + path, status, reviewer };
-  if (extra.correct_value) entry.correct_value = extra.correct_value;
-  if (extra.note) entry.note = extra.note;
+  for (const [key, value] of Object.entries(extra)) {
+    if (value !== undefined && value !== null && value !== "") {
+      entry[key] = value;
+    }
+  }
   return entry;
 }
 
@@ -3432,17 +3507,19 @@ async function saveAnnotation(path, status, extra = {}, options = {}) {
     });
     if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
     const saved = await response.json();
-    state.annotations[path] = saved;
+    state.annotations[path] = { ...entry, ...saved };
     setSaveStatus("Saved", "saved");
+    return true;
   } catch (err) {
     if (previous) state.annotations[path] = previous;
     else delete state.annotations[path];
     setSaveStatus("Failed to save annotation", "error");
-  }
-
-  if (render) {
-    renderExtractionPanel();
-    updateStats();
+    return false;
+  } finally {
+    if (render) {
+      renderExtractionPanel();
+      updateStats();
+    }
   }
 }
 
@@ -3457,15 +3534,107 @@ async function clearAnnotation(path, options = {}) {
     if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
     delete state.annotations[path];
     setSaveStatus("Cleared", "saved");
+    return true;
   } catch (err) {
     state.annotations[path] = previous;
     setSaveStatus("Failed to save annotation", "error");
+    return false;
+  } finally {
+    if (render) {
+      renderExtractionPanel();
+      updateStats();
+    }
+  }
+}
+
+function pathInScope(path, basePath) {
+  if (!basePath) return true;
+  return path === basePath || path.startsWith(basePath + ".") || path.startsWith(basePath + "[");
+}
+
+function collectLeafPaths(obj, basePath = "") {
+  const paths = [];
+  if (obj === undefined) return paths;
+  if (obj === null || typeof obj !== "object") {
+    if (basePath) paths.push(basePath);
+    return paths;
+  }
+  if (Array.isArray(obj)) {
+    obj.forEach((item, idx) => {
+      paths.push(...collectLeafPaths(item, `${basePath}[${idx}]`));
+    });
+    return paths;
+  }
+  for (const [key, value] of Object.entries(obj)) {
+    if (!basePath && ["article_id", "confidence", "reasoning"].includes(key)) continue;
+    const childPath = basePath ? `${basePath}.${key}` : key;
+    paths.push(...collectLeafPaths(value, childPath));
+  }
+  return paths;
+}
+
+function collectReviewablePaths(basePath = null) {
+  const leafPaths = new Set(collectLeafPaths(state.extraction));
+  return Object.entries(state.reasoningByPath)
+    .filter(([path, entry]) => {
+      if (!pathInScope(path, basePath)) return false;
+      if (!leafPaths.has(path)) return false;
+      if (!entry || !entry.source_lines) return false;
+      if (state.annotations[path]) return false;
+      return getValueAtPath(state.extraction, path) !== undefined;
+    })
+    .map(([path]) => path);
+}
+
+function skippedBulkCount(basePath, reviewableCount) {
+  const allLeafPaths = collectLeafPaths(state.extraction).filter(path => pathInScope(path, basePath));
+  return Math.max(0, allLeafPaths.length - reviewableCount);
+}
+
+async function bulkVerifyScope(basePath, source) {
+  const paths = collectReviewablePaths(basePath);
+  const skipped = skippedBulkCount(basePath, paths.length);
+  await bulkVerifyPaths(paths, source, skipped);
+}
+
+async function bulkVerifyPaths(paths, source, skipped = 0) {
+  if (paths.length === 0) {
+    setBulkStatus(`${skipped} fields skipped`);
+    return;
   }
 
-  if (render) {
-    renderExtractionPanel();
-    updateStats();
+  const batchId = `bulk_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+  const verifiedPaths = [];
+  for (const path of paths) {
+    const ok = await saveAnnotation(path, "verified", {
+      source,
+      batch_id: batchId,
+    }, { render: false });
+    if (ok) verifiedPaths.push(path);
   }
+
+  state.lastBulkBatch = { batch_id: batchId, paths: verifiedPaths };
+  renderExtractionPanel();
+  updateStats();
+  const failed = paths.length - verifiedPaths.length;
+  const skippedText = skipped + failed;
+  setBulkStatus(`${verifiedPaths.length} fields verified · ${skippedText} skipped`, verifiedPaths.length > 0 ? batchId : null);
+}
+
+async function undoBulkBatch(batchId) {
+  const batch = state.lastBulkBatch;
+  if (!batch || batch.batch_id !== batchId) return;
+  let cleared = 0;
+  for (const path of batch.paths) {
+    const ann = state.annotations[path];
+    if (!ann || ann.status !== "verified" || ann.batch_id !== batchId) continue;
+    const ok = await clearAnnotation(path, { render: false });
+    if (ok) cleared++;
+  }
+  renderExtractionPanel();
+  updateStats();
+  state.lastBulkBatch = null;
+  setBulkStatus(`${cleared} bulk verifications undone`);
 }
 
 function rowCellPaths(rowPath) {
@@ -3517,6 +3686,16 @@ function wireAnnotationActions(panel) {
         if (isRow) await clearRowAnnotations(path);
         else await clearAnnotation(path);
       }
+    });
+  });
+}
+
+function wireBulkReviewActions(panel) {
+  panel.querySelectorAll(".bulk-verify-btn[data-bulk-scope='section']").forEach(btn => {
+    btn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      if (btn.disabled) return;
+      await bulkVerifyScope(btn.dataset.path, "bulk_section");
     });
   });
 }
@@ -3669,6 +3848,9 @@ document.addEventListener("click", (e) => {
     localStorage.setItem("erw-view-mode", "json");
     resetAllSourceNavs();
     renderExtractionPanel();
+  } else if (e.target.id === "btn-verify-article") {
+    e.stopPropagation();
+    bulkVerifyScope(null, "bulk_article");
   }
 });
 

@@ -31,6 +31,9 @@ useful, but they should not interfere with editing semantics.
 - The JSON tree remains available for raw inspection.
 - Field review now uses explicit Verify, Flag, and Clear actions rather than a
   hidden click cycle.
+- Review mode now supports reversible bulk verification at section and article
+  scope. Bulk actions still write field-level review events, preserve existing
+  flags, skip uncited fields, and offer an undo action for the latest batch.
 - Annotation writes now surface saving, saved, cleared, and failed states in the
   toolbar. Failed writes preserve the previous visible annotation state.
 - Canceling a flag dialog now closes the dialog without mutating the field back

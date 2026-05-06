@@ -49,3 +49,24 @@ def test_verifier_surfaces_annotation_save_feedback() -> None:
     assert "saveAnnotation" in html
     assert "clearAnnotation" in html
     assert "Failed to save annotation" in html
+
+
+def test_verifier_exposes_bulk_review_actions() -> None:
+    html = STATIC_HTML.read_text()
+
+    assert 'id="btn-verify-article"' in html
+    assert "Verify remaining article" in html
+    assert "bulk-verify-btn" in html
+    assert 'data-bulk-scope="section"' in html
+    assert "Verify remaining" in html
+
+
+def test_verifier_bulk_review_is_reversible_and_field_level() -> None:
+    html = STATIC_HTML.read_text()
+
+    assert "collectReviewablePaths" in html
+    assert "bulkVerifyPaths" in html
+    assert "undoBulkBatch" in html
+    assert "bulk_section" in html
+    assert "bulk_article" in html
+    assert "batch_id" in html
