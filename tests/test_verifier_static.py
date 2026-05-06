@@ -163,3 +163,12 @@ def test_verifier_shows_explicit_no_citation_state() -> None:
 
     assert "No citation" in html
     assert "source-missing" in html
+
+
+def test_verifier_uses_explicit_no_citation_acceptance() -> None:
+    html = STATIC_HTML.read_text()
+
+    assert "selectedFieldHasCitation" in html
+    assert "Accept No Citation" in html
+    assert "accepted_no_citation" in html
+    assert "selectedVerifyExtra" in html

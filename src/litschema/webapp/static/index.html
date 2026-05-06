@@ -2898,6 +2898,14 @@ function selectedSourceRanges(path) {
   return entry.source_lines.split(",").map(s => s.trim()).filter(Boolean);
 }
 
+function selectedFieldHasCitation(path) {
+  return selectedSourceRanges(path).length > 0;
+}
+
+function selectedVerifyExtra(path) {
+  return selectedFieldHasCitation(path) ? {} : { source: "accepted_no_citation" };
+}
+
 function selectedReasoning(path) {
   const entry = state.reasoningByPath[path];
   return entry && entry.reasoning ? entry.reasoning : "";
@@ -2995,6 +3003,8 @@ function updateSelectedFieldBar(path = state.selectedPath) {
       reasoning.classList.remove("active");
     }
     buttons.forEach(btn => { if (btn) btn.disabled = true; });
+    const verifyBtn = $("#btn-selected-verify");
+    if (verifyBtn) verifyBtn.textContent = "Verify";
     setInspectorEditMode(false);
     updateSelectedSourceDisplay();
     return;
@@ -3012,6 +3022,12 @@ function updateSelectedFieldBar(path = state.selectedPath) {
     reasoning.classList.toggle("active", !!text);
   }
   buttons.forEach(btn => { if (btn) btn.disabled = false; });
+  const verifyBtn = $("#btn-selected-verify");
+  if (verifyBtn) {
+    const hasCitation = selectedFieldHasCitation(path);
+    verifyBtn.textContent = hasCitation ? "Verify" : "Accept No Citation";
+    verifyBtn.title = hasCitation ? "Mark this cited value as verified" : "Accept this value even though no source citation was found";
+  }
   const clearBtn = $("#btn-selected-clear");
   if (clearBtn) clearBtn.disabled = !ann;
   updateSelectedSourceDisplay();
@@ -3830,7 +3846,7 @@ function wireSelectedFieldActions() {
     verifyBtn.addEventListener("click", async () => {
       if (!state.selectedPath || verifyBtn.disabled) return;
       setInspectorEditMode(false);
-      await saveAnnotation(state.selectedPath, "verified");
+      await saveAnnotation(state.selectedPath, "verified", selectedVerifyExtra(state.selectedPath));
     });
   }
 
