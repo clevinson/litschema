@@ -229,6 +229,8 @@ async def put_annotation(article_id: str, request: Request):
     reviewer = body.get("reviewer", "")
     note = body.get("note")
     correct_value = body.get("correct_value")  # proposed correction or "__remove__" to delete field
+    source = body.get("source")
+    batch_id = body.get("batch_id")
 
     if not field_path or not status:
         raise HTTPException(400, "path and status are required")
@@ -248,6 +250,10 @@ async def put_annotation(article_id: str, request: Request):
         entry["note"] = note
     if correct_value is not None:
         entry["correct_value"] = correct_value
+    if source:
+        entry["source"] = source
+    if batch_id:
+        entry["batch_id"] = batch_id
 
     files = article_files(_CFG, article_id)
     ann_path = files.reviews_path(for_write=True)

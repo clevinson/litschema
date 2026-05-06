@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ERW Extraction Verifier</title>
+<link rel="icon" href="data:,">
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -564,18 +565,22 @@
 
   .tv-heading {
     display: flex;
-    align-items: baseline;
-    cursor: pointer;
-    user-select: none;
+    align-items: center;
+    flex-wrap: wrap;
+    column-gap: 8px;
+    row-gap: 4px;
+    cursor: default;
+    user-select: text;
     font-family: var(--font-sans);
     font-weight: 600;
     color: var(--text);
-    border: none;
-    background: none;
     width: 100%;
     text-align: left;
     padding: 0;
-    gap: 0;
+  }
+
+  .tv-heading-label {
+    flex-shrink: 0;
   }
 
   .tv-heading[data-depth="0"] {
@@ -604,7 +609,7 @@
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    margin-left: 8px;
+    margin-left: 0;
     flex-shrink: 0;
   }
 
@@ -627,20 +632,48 @@
     color: var(--yellow);
   }
 
-  .tv-toggle {
-    font-family: var(--font-mono);
-    font-size: 11px;
-    color: var(--text-dim);
-    flex-shrink: 0;
-    margin-left: auto;
-    opacity: 0.4;
-    transition: opacity 0.15s;
-  }
-  .tv-heading:hover .tv-toggle { opacity: 1; }
-
-  .tv-heading.collapsed + .tv-body { display: none; }
-
   .tv-body { }
+
+  .tv-heading-actions {
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+  }
+
+  .bulk-verify-btn,
+  .bulk-undo-btn {
+    font-family: var(--font-sans);
+    font-size: 10px;
+    font-weight: 500;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg);
+    color: var(--text-secondary);
+    cursor: pointer;
+    min-height: 24px;
+    padding: 0 8px;
+    white-space: nowrap;
+  }
+
+  .bulk-verify-btn:hover:not(:disabled),
+  .bulk-undo-btn:hover:not(:disabled) {
+    border-color: var(--text-dim);
+    color: var(--text);
+  }
+
+  .bulk-verify-btn:disabled {
+    cursor: default;
+    opacity: 0.4;
+  }
+
+  .article-bulk-verify-btn {
+    height: 23px;
+    min-height: 23px;
+  }
+
+  .bulk-undo-btn {
+    margin-left: 6px;
+  }
 
   .tv-indent {
     margin-left: 14px;
@@ -658,7 +691,7 @@
   .ext-table colgroup .col-field { width: 35%; }
   .ext-table colgroup .col-value { width: auto; }
   .ext-table colgroup .col-source { width: 68px; }
-  .ext-table colgroup .col-status { width: 44px; }
+  .ext-table colgroup .col-status { width: 84px; }
 
   .ext-table th {
     font-size: 9px;
@@ -826,6 +859,49 @@
   .table-ann-btn.ann-verified { color: var(--green); }
   .table-ann-btn.ann-flagged { color: var(--yellow); }
 
+  .annotation-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+  }
+
+  .annotation-action {
+    min-width: 24px;
+    min-height: 24px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: transparent;
+    color: var(--text-dim);
+    cursor: pointer;
+    font-family: var(--font-sans);
+    font-size: 11px;
+    line-height: 1;
+  }
+
+  .annotation-action:hover:not(:disabled) {
+    border-color: var(--text-secondary);
+    color: var(--text);
+  }
+
+  .annotation-action.active[data-action="verify"] {
+    border-color: var(--green);
+    color: var(--green);
+  }
+
+  .annotation-action.active[data-action="flag"] {
+    border-color: var(--yellow);
+    color: var(--yellow);
+  }
+
+  .annotation-action:disabled {
+    cursor: default;
+    opacity: 0.35;
+  }
+
+  .tree-annotation-actions {
+    margin-left: 6px;
+  }
+
   /* ── Extraction Tree ── */
   .tree {
     font-family: var(--font-mono);
@@ -918,6 +994,17 @@
   }
 
   .reviewer-input::placeholder { color: var(--text-dim); }
+
+  .save-status {
+    min-width: 92px;
+    color: var(--text-dim);
+    font-family: var(--font-mono);
+    font-size: 11px;
+  }
+
+  .save-status[data-status="saving"] { color: var(--text-secondary); }
+  .save-status[data-status="saved"] { color: var(--green); }
+  .save-status[data-status="error"] { color: var(--red); }
 
   .flag-dialog-container {
     position: relative;
@@ -1302,6 +1389,99 @@
   }
 
   .article-bibheader .bib-doi:hover { color: var(--accent); }
+
+  @media (max-width: 760px) {
+    body {
+      font-size: 12px;
+    }
+
+    .toolbar {
+      overflow-x: auto;
+      padding: 6px 8px;
+      gap: 8px;
+    }
+
+    #article-select {
+      min-width: 280px;
+    }
+
+    .toolbar-spacer,
+    .filter-group {
+      display: none;
+    }
+
+    .reviewer-input {
+      width: 150px;
+    }
+
+    .article-bibheader {
+      padding: 8px 10px;
+      gap: 8px;
+      overflow-x: auto;
+      min-height: 36px;
+    }
+
+    .article-bibheader .bib-title {
+      min-width: 160px;
+      max-width: 260px;
+    }
+
+    .article-bibheader .bib-authors {
+      display: none !important;
+    }
+
+    .panels {
+      flex-direction: column;
+    }
+
+    .panel {
+      min-height: 0;
+    }
+
+    .panel-left,
+    .panel-right {
+      flex: 1 1 50%;
+    }
+
+    .panel-left {
+      border-right: none;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .panel-header {
+      padding: 6px 10px;
+    }
+
+    .panel-body {
+      padding: 8px 10px;
+    }
+
+    .panel-header-row {
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .search-row {
+      overflow-x: auto;
+    }
+
+    .table-view {
+      overflow-x: auto;
+      padding: 4px 6px 10px;
+    }
+
+    .ext-table {
+      min-width: 520px;
+    }
+
+    .md-line {
+      padding-left: 36px;
+    }
+
+    .md-line .line-num {
+      width: 28px;
+    }
+  }
 </style>
 </head>
 <body>
@@ -1320,6 +1500,7 @@
   </div>
   <div class="toolbar-spacer"></div>
   <input type="text" class="reviewer-input" id="reviewer-id" placeholder="ORCID (e.g., 0000-0002-...)" title="Your ORCID for annotations">
+  <span class="save-status" id="save-status" aria-live="polite"></span>
   <button class="theme-btn" id="btn-theme" title="Toggle theme">&#9790;</button>
 </div>
 
@@ -1373,9 +1554,11 @@
       <h3>Extraction Data</h3>
       <div class="panel-header-right">
         <div class="view-toggle">
-          <button class="active" id="btn-table-view">Table</button>
+          <button class="active" id="btn-review-table">Review</button>
+          <button id="btn-pivot-view">Pivot</button>
           <button id="btn-json-view">JSON</button>
         </div>
+        <button class="bulk-verify-btn article-bulk-verify-btn" id="btn-verify-article">Verify remaining article</button>
         <span class="confidence-badge" id="confidence-display"></span>
         <span class="panel-meta" id="panel-right-meta"></span>
       </div>
@@ -1392,6 +1575,7 @@ const $ = (sel) => document.querySelector(sel);
 const state = {
   articles: [],
   viewMode: "table",
+  tableMode: "review",
   currentId: null,
   markdown: null,
   extraction: null,
@@ -1537,6 +1721,7 @@ $("#article-select").addEventListener("change", async (e) => {
       let p = entry.path;
       if (p.startsWith(".")) p = p.slice(1);
       p = p.replace(/\.(\d+)(?=\.|$)/g, "[$1]");
+      p = normalizeReasoningPath(p);
       state.reasoningByPath[p] = entry;
     }
   }
@@ -1655,46 +1840,7 @@ function renderTree() {
     el.addEventListener("click", () => selectLeaf(el));
   });
 
-  // Annotation buttons (tree view) — ○ → ✓ → ⚑+dialog → ○
-  panel.querySelectorAll(".tree-ann-btn").forEach(el => {
-    el.addEventListener("click", (e) => {
-      e.stopPropagation();
-      const path = el.dataset.path;
-      const current = state.annotations[path];
-      const currentStatus = current ? current.status : "";
-      const hasOpenDialog = document.querySelectorAll(".flag-dialog").length > 0;
-
-      if (hasOpenDialog) {
-        document.querySelectorAll(".flag-dialog").forEach(d => d.remove());
-        delete state.annotations[path];
-        fetch(`/api/annotations/${state.currentId}/${path}`, { method: "DELETE" }).catch(() => {});
-        renderExtractionPanel();
-        updateStats();
-        return;
-      }
-
-      if (!currentStatus) {
-        handleAnnotation(path, "verified");
-      } else if (currentStatus === "verified") {
-        const reviewer = $("#reviewer-id").value.trim();
-        if (!reviewer) { alert("Please enter your ORCID in the toolbar before flagging."); return; }
-        const entry = { path: "." + path, status: "flagged", reviewer };
-        state.annotations[path] = entry;
-        fetch(`/api/annotations/${state.currentId}`, {
-          method: "PUT", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(entry),
-        }).catch(() => {});
-        renderExtractionPanel();
-        updateStats();
-        setTimeout(() => showFlagDialog(path, state.annotations[path]), 50);
-      } else {
-        delete state.annotations[path];
-        fetch(`/api/annotations/${state.currentId}/${path}`, { method: "DELETE" }).catch(() => {});
-        renderExtractionPanel();
-        updateStats();
-      }
-    });
-  });
+  wireAnnotationActions(panel);
 
   // Source link clicks in tree view
   panel.querySelectorAll(".tree .source-link").forEach(link => {
@@ -2085,9 +2231,9 @@ function buildHorizontalTable(arr, basePath, key) {
   let html = '';
   // Section heading
   const badges = auditBadgesHtml(arr, basePath);
-  html += `<button class="tv-heading" role="button" aria-expanded="true" data-depth="0" tabindex="0">`;
-  html += `${escapeHtml(label)}${badges}<span class="tv-toggle">\u2212</span>`;
-  html += `</button>`;
+  html += `<div class="tv-heading" data-depth="0">`;
+  html += `<span class="tv-heading-label">${escapeHtml(label)}</span>${badges}${bulkActionHtml(basePath, "section")}`;
+  html += `</div>`;
   html += `<div class="tv-body">`;
 
   html += '<table class="ext-table horizontal-table">';
@@ -2096,7 +2242,7 @@ function buildHorizontalTable(arr, basePath, key) {
     html += '<col style="width:auto">';
   }
   html += '<col style="width:68px">'; // source
-  html += '<col style="width:44px">'; // status
+  html += '<col style="width:84px">'; // status
   html += '</colgroup>';
 
   // Header row
@@ -2172,13 +2318,13 @@ function buildHorizontalTable(arr, basePath, key) {
 
           // Status column with rowspan
           const rowAnn = getRowAnnotationState(itemPath);
-          let annClass = "", annIcon = "&#9675;", annTitle = "Click to verify";
+          let annStatus = "";
           if (rowAnn.verified > 0 && rowAnn.flagged === 0) {
-            annClass = " ann-verified"; annIcon = "&#10003;"; annTitle = "Verified \u2014 click to flag";
+            annStatus = "verified";
           } else if (rowAnn.flagged > 0) {
-            annClass = " ann-flagged"; annIcon = "&#9873;"; annTitle = "Flagged \u2014 click to clear";
+            annStatus = "flagged";
           }
-          html += `<td${rowspanAttr}><button class="table-ann-btn horizontal-ann-btn${annClass}" data-path="${itemPath}" aria-label="${annTitle}" title="${annTitle}">${annIcon}</button></td>`;
+          html += `<td${rowspanAttr}>${buildAnnotationActions(itemPath, annStatus, { row: true })}</td>`;
         }
 
         html += '</tr>';
@@ -2215,13 +2361,13 @@ function buildHorizontalTable(arr, basePath, key) {
 
       // Status column
       const rowAnn = getRowAnnotationState(itemPath);
-      let annClass = "", annIcon = "&#9675;", annTitle = "Click to verify";
+      let annStatus = "";
       if (rowAnn.verified > 0 && rowAnn.flagged === 0) {
-        annClass = " ann-verified"; annIcon = "&#10003;"; annTitle = "Verified \u2014 click to flag";
+        annStatus = "verified";
       } else if (rowAnn.flagged > 0) {
-        annClass = " ann-flagged"; annIcon = "&#9873;"; annTitle = "Flagged \u2014 click to clear";
+        annStatus = "flagged";
       }
-      html += `<td><button class="table-ann-btn horizontal-ann-btn${annClass}" data-path="${itemPath}" aria-label="${annTitle}" title="${annTitle}">${annIcon}</button></td>`;
+      html += `<td>${buildAnnotationActions(itemPath, annStatus, { row: true })}</td>`;
 
       html += '</tr>';
     }
@@ -2240,8 +2386,9 @@ function renderValue(key, val, basePath, depth) {
     return buildMergedTable([], [{ key, val, path: basePath }]);
   }
 
-  // Uniform array of objects → horizontal table
-  if (Array.isArray(val) && val.length > 0 && isUniformArray(val)) {
+  // Uniform array of objects → optional pivot table.
+  // Default review mode keeps nested rows stable for field-level editing.
+  if (state.tableMode === "pivot" && Array.isArray(val) && val.length > 0 && isUniformArray(val)) {
     return buildHorizontalTable(val, basePath, key);
   }
 
@@ -2313,13 +2460,22 @@ function auditBadgesHtml(obj, basePath) {
   return html;
 }
 
+function bulkActionHtml(basePath, scope) {
+  const count = collectReviewablePaths(basePath).length;
+  if (count === 0) return "";
+  const label = `Verify remaining (${count})`;
+  return `<span class="tv-heading-actions">` +
+    `<button class="bulk-verify-btn" data-bulk-scope="section" data-bulk-source="${scope}" data-path="${basePath}">${label}</button>` +
+    `</span>`;
+}
+
 function buildHeadedSection(label, obj, basePath, depth) {
   const depthAttr = Math.min(depth, 3);
   let html = '';
   const badges = depth <= 1 ? auditBadgesHtml(obj, basePath) : '';
-  html += `<button class="tv-heading" role="button" aria-expanded="true" data-depth="${depthAttr}" tabindex="0">`;
-  html += `${escapeHtml(label)}${badges}<span class="tv-toggle">\u2212</span>`;
-  html += `</button>`;
+  html += `<div class="tv-heading" data-depth="${depthAttr}">`;
+  html += `<span class="tv-heading-label">${escapeHtml(label)}</span>${badges}${bulkActionHtml(basePath, "section")}`;
+  html += `</div>`;
   html += `<div class="tv-body">`;
 
   const indent = depth > 0;
@@ -2445,9 +2601,6 @@ function buildValueCells(value, path) {
   }
 
   const annStatus = ann ? ann.status : "";
-  let annClass = "", annIcon = "&#9675;", annTitle = "Click to verify";
-  if (annStatus === "verified") { annClass = " ann-verified"; annIcon = "&#10003;"; annTitle = "Verified — click to flag"; }
-  else if (annStatus === "flagged") { annClass = " ann-flagged"; annIcon = "&#9873;"; annTitle = "Flagged — click to clear"; }
 
   // Show correction and note for flagged fields
   let flagDetails = "";
@@ -2458,7 +2611,7 @@ function buildValueCells(value, path) {
 
   return `<td${valStyle}>${displayVal}${flagDetails}</td>
     <td>${sourceHtml}</td>
-    <td><button class="table-ann-btn${annClass}" data-path="${path}" aria-label="${annTitle}" title="${annTitle}">${annIcon}</button></td>`;
+    <td>${buildAnnotationActions(path, annStatus)}</td>`;
 }
 
 function buildTableRow(key, value, path) {
@@ -2619,16 +2772,6 @@ function resetAllSourceNavs() {
 }
 
 function wireTableEvents(panel) {
-  // Heading toggles
-  panel.querySelectorAll(".tv-heading").forEach(heading => {
-    heading.addEventListener("click", () => {
-      const isCollapsed = heading.classList.toggle("collapsed");
-      heading.setAttribute("aria-expanded", String(!isCollapsed));
-      heading.querySelector(".tv-toggle").textContent = isCollapsed ? "+" : "\u2212";
-      if (isCollapsed) resetAllSourceNavs();
-    });
-  });
-
   // Row clicks (non-horizontal rows use selectTableRow)
   panel.querySelectorAll("tr.clickable:not(.horizontal-row)").forEach(row => {
     row.addEventListener("click", () => {
@@ -2764,51 +2907,6 @@ function wireTableEvents(panel) {
     });
   });
 
-  // Annotation buttons (non-horizontal) — cycle: ○ → ✓ → ⚑+dialog → ○
-  panel.querySelectorAll(".table-ann-btn:not(.horizontal-ann-btn)").forEach(btn => {
-    btn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      const path = btn.dataset.path;
-      const current = state.annotations[path];
-      const currentStatus = current ? current.status : "";
-      const hasOpenDialog = document.querySelectorAll(".flag-dialog").length > 0;
-
-      // If dialog is open, any click on an annotation button closes it and clears
-      if (hasOpenDialog) {
-        document.querySelectorAll(".flag-dialog").forEach(el => el.remove());
-        delete state.annotations[path];
-        fetch(`/api/annotations/${state.currentId}/${path}`, { method: "DELETE" }).catch(() => {});
-        renderExtractionPanel();
-        updateStats();
-        return;
-      }
-
-      if (!currentStatus) {
-        handleAnnotation(path, "verified");
-      } else if (currentStatus === "verified") {
-        // Immediately set to flagged, then open dialog
-        const reviewer = $("#reviewer-id").value.trim();
-        if (!reviewer) { alert("Please enter your ORCID in the toolbar before flagging."); return; }
-        const entry = { path: "." + path, status: "flagged", reviewer };
-        state.annotations[path] = entry;
-        fetch(`/api/annotations/${state.currentId}`, {
-          method: "PUT", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(entry),
-        }).catch(() => {});
-        renderExtractionPanel();
-        updateStats();
-        // Open dialog after re-render so the ⚑ is visible
-        setTimeout(() => showFlagDialog(path, state.annotations[path]), 50);
-      } else {
-        // Flagged → clear
-        delete state.annotations[path];
-        fetch(`/api/annotations/${state.currentId}/${path}`, { method: "DELETE" }).catch(() => {});
-        renderExtractionPanel();
-        updateStats();
-      }
-    });
-  });
-
   // ── Horizontal table: cell clicks ──
   panel.querySelectorAll(".horizontal-table .cell-value").forEach(cell => {
     cell.addEventListener("click", (e) => {
@@ -2857,56 +2955,8 @@ function wireTableEvents(panel) {
     });
   });
 
-  // ── Horizontal table: row-level annotation (applies to ALL leaf fields under that row) ──
-  panel.querySelectorAll(".horizontal-ann-btn").forEach(btn => {
-    btn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      const rowPath = btn.dataset.path;
-      const rowAnn = getRowAnnotationState(rowPath);
-
-      // Determine current aggregate status and next status
-      let currentStatus = "";
-      if (rowAnn.verified > 0 && rowAnn.flagged === 0) currentStatus = "verified";
-      else if (rowAnn.flagged > 0) currentStatus = "flagged";
-
-      // Find the row element to get all cell paths
-      const row = btn.closest("tr.horizontal-row");
-      if (!row) return;
-      const cellPaths = [];
-      row.querySelectorAll(".cell-value[data-path]").forEach(c => {
-        cellPaths.push(c.dataset.path);
-      });
-
-      if (!currentStatus) {
-        // Empty → verified (all cells)
-        for (const cp of cellPaths) {
-          const ann = { path: "." + cp, status: "verified", reviewer: $("#reviewer-id").value.trim() };
-          state.annotations[cp] = ann;
-          fetch(`/api/annotations/${state.currentId}`, {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(ann),
-          }).catch(() => {});
-        }
-        renderExtractionPanel();
-        updateStats();
-      } else if (currentStatus === "verified") {
-        // Verified → flag dialog for row path
-        const reviewer = $("#reviewer-id").value.trim();
-        if (!reviewer) { alert("Please enter your ORCID in the toolbar before flagging."); return; }
-        showFlagDialog(rowPath, state.annotations[rowPath]);
-      } else {
-        // Flagged → clear all child annotations
-        for (const cp of cellPaths) {
-          delete state.annotations[cp];
-          fetch(`/api/annotations/${state.currentId}/${cp}`, { method: "DELETE" }).catch(() => {});
-        }
-        document.querySelectorAll(".flag-dialog").forEach(el => el.remove());
-        renderExtractionPanel();
-        updateStats();
-      }
-    });
-  });
+  wireAnnotationActions(panel);
+  wireBulkReviewActions(panel);
 }
 
 function selectTableRow(path, rangeIndex) {
@@ -3046,11 +3096,7 @@ function buildLeafHtml(key, value, path) {
     sourceHtml = `<span class="match-nav source-link" data-path="${path}">${entry.source_lines}</span>`;
   }
 
-  // Single cycling annotation button (matches table view: ○ → ✓ → ⚑ → ○)
-  let annClass = "", annIcon = "&#9675;", annTitle = "Click to verify";
-  if (annStatus === "verified") { annClass = " ann-verified"; annIcon = "&#10003;"; annTitle = "Verified — click to flag"; }
-  else if (annStatus === "flagged") { annClass = " ann-flagged"; annIcon = "&#9873;"; annTitle = "Flagged — click to clear"; }
-  const annBtn = `<span class="ann-btn tree-ann-btn${annClass}" data-path="${path}" title="${annTitle}">${annIcon}</span>`;
+  const annControls = buildAnnotationActions(path, annStatus, { tree: true });
 
   // Indicator dot
   let indicatorClass = "uncited";
@@ -3076,8 +3122,24 @@ function buildLeafHtml(key, value, path) {
     <span class="tree-key">${key}:</span>
     <span class="tree-value ${valClass}">${escapeHtml(displayVal)}</span>
     ${sourceHtml}
-    ${annBtn}
+    ${annControls}
   </div>${flagDetails}`;
+}
+
+function buildAnnotationActions(path, status, options = {}) {
+  const classes = ["annotation-actions"];
+  if (options.tree) classes.push("tree-annotation-actions");
+  if (options.row) classes.push("row-annotation-actions");
+  const scopeAttr = options.row ? ' data-scope="row"' : "";
+  const verifyActive = status === "verified" ? " active" : "";
+  const flagActive = status === "flagged" ? " active" : "";
+  const clearDisabled = status ? "" : " disabled";
+
+  return `<span class="${classes.join(" ")}" data-path="${path}"${scopeAttr}>` +
+    `<button class="annotation-action${verifyActive}" data-action="verify" data-path="${path}"${scopeAttr} aria-pressed="${status === "verified"}" title="Mark verified">&#10003;</button>` +
+    `<button class="annotation-action${flagActive}" data-action="flag" data-path="${path}"${scopeAttr} aria-pressed="${status === "flagged"}" title="Flag for correction">&#9873;</button>` +
+    `<button class="annotation-action" data-action="clear" data-path="${path}"${scopeAttr}${clearDisabled} title="Clear review status">&#10005;</button>` +
+    `</span>`;
 }
 
 function escapeHtml(str) {
@@ -3364,46 +3426,291 @@ function updateStats() {
 }
 
 // ── Annotations ──
-async function handleAnnotation(path, status) {
-  const reviewer = $("#reviewer-id").value.trim();
-  const existing = state.annotations[path];
+let saveStatusTimer = null;
+state.lastBulkBatch = null;
 
-  // Toggle off if clicking same status
-  if (existing && existing.status === status) {
-    delete state.annotations[path];
-    await fetch(`/api/annotations/${state.currentId}/${path}`, { method: "DELETE" }).catch(() => {});
-    renderExtractionPanel();
-    updateStats();
-    return;
+function setSaveStatus(message, status = "") {
+  const el = $("#save-status");
+  if (!el) return;
+  if (saveStatusTimer) clearTimeout(saveStatusTimer);
+  el.textContent = message;
+  el.dataset.status = status;
+  if (status === "saved") {
+    saveStatusTimer = setTimeout(() => {
+      el.textContent = "";
+      el.dataset.status = "";
+    }, 1800);
   }
+}
 
-  // Verified: save immediately (no dialog)
-  if (status === "verified") {
-    const entry = { path: "." + path, status, reviewer };
-    state.annotations[path] = entry;
-    await fetch(`/api/annotations/${state.currentId}`, {
+function setBulkStatus(message, batchId = null) {
+  const el = $("#save-status");
+  if (!el) return;
+  if (saveStatusTimer) clearTimeout(saveStatusTimer);
+  el.dataset.status = "saved";
+  el.textContent = "";
+  el.append(document.createTextNode(message));
+  if (batchId) {
+    const undo = document.createElement("button");
+    undo.type = "button";
+    undo.className = "bulk-undo-btn";
+    undo.textContent = "Undo";
+    undo.addEventListener("click", () => undoBulkBatch(batchId));
+    el.append(undo);
+  }
+}
+
+function annotationEntry(path, status, extra = {}) {
+  const reviewer = $("#reviewer-id").value.trim();
+  const entry = { path: "." + path, status, reviewer };
+  for (const [key, value] of Object.entries(extra)) {
+    if (value !== undefined && value !== null && value !== "") {
+      entry[key] = value;
+    }
+  }
+  return entry;
+}
+
+async function saveAnnotation(path, status, extra = {}, options = {}) {
+  const previous = Object.prototype.hasOwnProperty.call(options, "previous")
+    ? options.previous
+    : state.annotations[path];
+  const render = options.render !== false;
+  const entry = annotationEntry(path, status, extra);
+  setSaveStatus("Saving...", "saving");
+
+  try {
+    const response = await fetch(`/api/annotations/${state.currentId}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(entry),
-    }).catch(() => {});
-    renderExtractionPanel();
-    updateStats();
+    });
+    if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+    const saved = await response.json();
+    state.annotations[path] = { ...entry, ...saved };
+    setSaveStatus("Saved", "saved");
+    return true;
+  } catch (err) {
+    if (previous) state.annotations[path] = previous;
+    else delete state.annotations[path];
+    setSaveStatus("Failed to save annotation", "error");
+    return false;
+  } finally {
+    if (render) {
+      renderExtractionPanel();
+      updateStats();
+    }
+  }
+}
+
+async function clearAnnotation(path, options = {}) {
+  const previous = state.annotations[path];
+  if (!previous) return;
+  const render = options.render !== false;
+  setSaveStatus("Clearing...", "saving");
+
+  try {
+    const response = await fetch(`/api/annotations/${state.currentId}/${path}`, { method: "DELETE" });
+    if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+    delete state.annotations[path];
+    setSaveStatus("Cleared", "saved");
+    return true;
+  } catch (err) {
+    state.annotations[path] = previous;
+    setSaveStatus("Failed to save annotation", "error");
+    return false;
+  } finally {
+    if (render) {
+      renderExtractionPanel();
+      updateStats();
+    }
+  }
+}
+
+function pathInScope(path, basePath) {
+  if (!basePath) return true;
+  return path === basePath || path.startsWith(basePath + ".") || path.startsWith(basePath + "[");
+}
+
+function normalizeReasoningPath(path) {
+  const legacySuffix = ".trial_type";
+  const currentSuffix = ".experimental_scale";
+  if (!path.endsWith(legacySuffix)) return path;
+
+  const currentPath = path.slice(0, -legacySuffix.length) + currentSuffix;
+  if (getValueAtPath(state.extraction, path) === undefined && getValueAtPath(state.extraction, currentPath) !== undefined) {
+    return currentPath;
+  }
+  return path;
+}
+
+function collectLeafPaths(obj, basePath = "") {
+  const paths = [];
+  if (obj === undefined) return paths;
+  if (obj === null || typeof obj !== "object") {
+    if (basePath) paths.push(basePath);
+    return paths;
+  }
+  if (Array.isArray(obj)) {
+    obj.forEach((item, idx) => {
+      paths.push(...collectLeafPaths(item, `${basePath}[${idx}]`));
+    });
+    return paths;
+  }
+  for (const [key, value] of Object.entries(obj)) {
+    if (!basePath && ["article_id", "confidence", "reasoning"].includes(key)) continue;
+    const childPath = basePath ? `${basePath}.${key}` : key;
+    paths.push(...collectLeafPaths(value, childPath));
+  }
+  return paths;
+}
+
+function reviewableAnnotationPaths(path) {
+  const value = getValueAtPath(state.extraction, path);
+  if (isPrimitiveArray(value)) {
+    return value.map((_, idx) => `${path}[${idx}]`);
+  }
+  return [path];
+}
+
+function collectReviewablePaths(basePath = null) {
+  const leafPaths = new Set(collectLeafPaths(state.extraction));
+  return Object.entries(state.reasoningByPath)
+    .filter(([path, entry]) => {
+      if (!pathInScope(path, basePath)) return false;
+      if (!entry || !entry.source_lines) return false;
+      return reviewableAnnotationPaths(path).some(annPath =>
+        leafPaths.has(annPath) &&
+        !state.annotations[annPath] &&
+        getValueAtPath(state.extraction, annPath) !== undefined
+      );
+    })
+    .flatMap(([path]) => reviewableAnnotationPaths(path))
+    .filter(path =>
+      leafPaths.has(path) &&
+      !state.annotations[path] &&
+      getValueAtPath(state.extraction, path) !== undefined
+    );
+}
+
+function skippedBulkCount(basePath, reviewableCount) {
+  const allLeafPaths = collectLeafPaths(state.extraction).filter(path => pathInScope(path, basePath));
+  return Math.max(0, allLeafPaths.length - reviewableCount);
+}
+
+async function bulkVerifyScope(basePath, source) {
+  const paths = collectReviewablePaths(basePath);
+  const skipped = skippedBulkCount(basePath, paths.length);
+  await bulkVerifyPaths(paths, source, skipped);
+}
+
+async function bulkVerifyPaths(paths, source, skipped = 0) {
+  if (paths.length === 0) {
+    setBulkStatus(`${skipped} fields skipped`);
     return;
   }
 
-  // Flagged: show inline dialog for correct_value + note
-  if (status === "flagged") {
-    if (!reviewer) {
-      alert("Please enter your ORCID in the toolbar before flagging.");
-      return;
-    }
-    showFlagDialog(path, existing);
+  const batchId = `bulk_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+  const verifiedPaths = [];
+  for (const path of paths) {
+    const ok = await saveAnnotation(path, "verified", {
+      source,
+      batch_id: batchId,
+    }, { render: false });
+    if (ok) verifiedPaths.push(path);
   }
+
+  state.lastBulkBatch = { batch_id: batchId, paths: verifiedPaths };
+  renderExtractionPanel();
+  updateStats();
+  const failed = paths.length - verifiedPaths.length;
+  const skippedText = skipped + failed;
+  setBulkStatus(`${verifiedPaths.length} fields verified · ${skippedText} skipped`, verifiedPaths.length > 0 ? batchId : null);
+}
+
+async function undoBulkBatch(batchId) {
+  const batch = state.lastBulkBatch;
+  if (!batch || batch.batch_id !== batchId) return;
+  let cleared = 0;
+  for (const path of batch.paths) {
+    const ann = state.annotations[path];
+    if (!ann || ann.status !== "verified" || ann.batch_id !== batchId) continue;
+    const ok = await clearAnnotation(path, { render: false });
+    if (ok) cleared++;
+  }
+  renderExtractionPanel();
+  updateStats();
+  state.lastBulkBatch = null;
+  setBulkStatus(`${cleared} bulk verifications undone`);
+}
+
+function rowCellPaths(rowPath) {
+  const paths = [];
+  document.querySelectorAll("tr.horizontal-row").forEach(row => {
+    if (row.dataset.path !== rowPath) return;
+    row.querySelectorAll(".cell-value[data-path]").forEach(cell => paths.push(cell.dataset.path));
+  });
+  return [...new Set(paths)];
+}
+
+async function verifyRowAnnotations(rowPath) {
+  const paths = rowCellPaths(rowPath);
+  for (const path of paths) {
+    await saveAnnotation(path, "verified", {}, { render: false });
+  }
+  renderExtractionPanel();
+  updateStats();
+}
+
+async function clearRowAnnotations(rowPath) {
+  const paths = rowCellPaths(rowPath).filter(path => state.annotations[path]);
+  for (const path of paths) {
+    await clearAnnotation(path, { render: false });
+  }
+  document.querySelectorAll(".flag-dialog").forEach(el => el.remove());
+  renderExtractionPanel();
+  updateStats();
+}
+
+function wireAnnotationActions(panel) {
+  panel.querySelectorAll(".annotation-action").forEach(btn => {
+    btn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      if (btn.disabled) return;
+      const path = btn.dataset.path;
+      const action = btn.dataset.action;
+      const isRow = btn.dataset.scope === "row";
+
+      if (action === "verify") {
+        document.querySelectorAll(".flag-dialog").forEach(el => el.remove());
+        if (isRow) await verifyRowAnnotations(path);
+        else await saveAnnotation(path, "verified");
+      } else if (action === "flag") {
+        const reviewer = $("#reviewer-id").value.trim();
+        if (!reviewer) { alert("Please enter your ORCID in the toolbar before flagging."); return; }
+        showFlagDialog(path, state.annotations[path]);
+      } else if (action === "clear") {
+        if (isRow) await clearRowAnnotations(path);
+        else await clearAnnotation(path);
+      }
+    });
+  });
+}
+
+function wireBulkReviewActions(panel) {
+  panel.querySelectorAll(".bulk-verify-btn[data-bulk-scope='section']").forEach(btn => {
+    btn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      if (btn.disabled) return;
+      await bulkVerifyScope(btn.dataset.path, "bulk_section");
+    });
+  });
 }
 
 function showFlagDialog(path, existing) {
   // Remove any existing flag dialog
   document.querySelectorAll(".flag-dialog").forEach(el => el.remove());
+  const previous = existing ? { ...existing } : null;
 
   // Find the row/element to insert after
   let anchor = document.querySelector(`[data-path="${path}"]`);
@@ -3467,36 +3774,14 @@ function showFlagDialog(path, existing) {
   dialog.querySelector("#flag-save-btn").addEventListener("click", async () => {
     const correctValue = dialog.querySelector("#flag-correct").value.trim();
     const note = dialog.querySelector("#flag-note").value.trim();
-    const reviewer = $("#reviewer-id").value.trim();
-
-    const entry = { path: "." + path, status: "flagged", reviewer };
-    if (correctValue) entry.correct_value = correctValue;
-    if (note) entry.note = note;
-
-    state.annotations[path] = entry;
-    await fetch(`/api/annotations/${state.currentId}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(entry),
-    }).catch(() => {});
-
-    dialog.remove();
-    renderExtractionPanel();
-    updateStats();
+    await saveAnnotation(path, "flagged", {
+      correct_value: correctValue,
+      note,
+    }, { previous });
   });
 
   dialog.querySelector("#flag-cancel-btn").addEventListener("click", () => {
-    // Revert to verified (since we set flagged before opening)
-    const reviewer = $("#reviewer-id").value.trim();
-    const revertEntry = { path: "." + path, status: "verified", reviewer };
-    state.annotations[path] = revertEntry;
-    fetch(`/api/annotations/${state.currentId}`, {
-      method: "PUT", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(revertEntry),
-    }).catch(() => {});
     dialog.remove();
-    renderExtractionPanel();
-    updateStats();
   });
 
   // Enter in input saves, Escape cancels
@@ -3528,6 +3813,7 @@ $("#reviewer-id").addEventListener("change", () => {
 
 // ── View toggle ──
 state.viewMode = localStorage.getItem("erw-view-mode") || "table";
+state.tableMode = localStorage.getItem("erw-table-mode") || "review";
 
 function renderExtractionPanel() {
   if (state.viewMode === "table") {
@@ -3539,18 +3825,29 @@ function renderExtractionPanel() {
 }
 
 function updateViewToggle() {
-  const tableBtn = document.getElementById("btn-table-view");
+  const reviewBtn = document.getElementById("btn-review-table");
+  const pivotBtn = document.getElementById("btn-pivot-view");
   const jsonBtn = document.getElementById("btn-json-view");
-  if (tableBtn) {
-    tableBtn.classList.toggle("active", state.viewMode === "table");
+  if (reviewBtn) {
+    reviewBtn.classList.toggle("active", state.viewMode === "table" && state.tableMode === "review");
+    pivotBtn.classList.toggle("active", state.viewMode === "table" && state.tableMode === "pivot");
     jsonBtn.classList.toggle("active", state.viewMode === "json");
   }
 }
 
 document.addEventListener("click", (e) => {
-  if (e.target.id === "btn-table-view") {
+  if (e.target.id === "btn-review-table") {
     state.viewMode = "table";
+    state.tableMode = "review";
     localStorage.setItem("erw-view-mode", "table");
+    localStorage.setItem("erw-table-mode", "review");
+    resetAllSourceNavs();
+    renderExtractionPanel();
+  } else if (e.target.id === "btn-pivot-view") {
+    state.viewMode = "table";
+    state.tableMode = "pivot";
+    localStorage.setItem("erw-view-mode", "table");
+    localStorage.setItem("erw-table-mode", "pivot");
     resetAllSourceNavs();
     renderExtractionPanel();
   } else if (e.target.id === "btn-json-view") {
@@ -3558,6 +3855,9 @@ document.addEventListener("click", (e) => {
     localStorage.setItem("erw-view-mode", "json");
     resetAllSourceNavs();
     renderExtractionPanel();
+  } else if (e.target.id === "btn-verify-article") {
+    e.stopPropagation();
+    bulkVerifyScope(null, "bulk_article");
   }
 });
 
