@@ -61,23 +61,24 @@ def test_verifier_uses_source_overlay_without_selected_field_box() -> None:
     assert "Click to verify" not in html
 
 
-def test_verifier_edits_in_source_pane_modal() -> None:
+def test_verifier_edits_inline_in_value_cell() -> None:
     html = STATIC_HTML.read_text()
 
-    assert 'class="panel panel-right"' in html
-    assert 'class="panel panel-right"' in html and html.index('class="panel panel-right"') < html.index('id="source-edit-overlay"')
-    assert 'id="source-edit-overlay"' in html
-    assert 'id="source-edit-correct"' in html
-    assert 'id="source-edit-note"' in html
-    assert 'id="btn-source-edit-save"' in html
-    assert ">Save<" in html
-    assert ">Save Edit<" not in html
-    assert "openFieldEditModal" in html
-    assert "closeFieldEditModal" in html
-    assert "displayOriginalFieldValueForEdit" in html
-    assert "Extracted value" in html
+    assert 'id="source-edit-overlay"' not in html
+    assert 'id="source-edit-correct"' not in html
+    assert 'id="source-edit-note"' not in html
+    assert 'id="btn-source-edit-save"' not in html
+    assert "openInlineEdit" in html
+    assert "cancelInlineEdit" in html
+    assert "saveInlineEdit" in html
+    assert "inline-edit-input" in html
+    assert "inline-edit-save" in html
+    assert "inline-edit-cancel" in html
+    assert "displayOriginalFieldValueForEdit" not in html
+    assert "Corrected value" not in html
+    assert "Extracted value" not in html
     assert "AI value" not in html
-    assert "saveSelectedFieldEdit" in html
+    assert "saveSelectedFieldEdit" not in html
     assert "selected-field-edit-form" not in html
     assert "showFlagDialog" not in html
     assert "flag-dialog" not in html
@@ -177,6 +178,8 @@ def test_verifier_action_column_uses_compact_status() -> None:
     assert "status-icon-hover" in html
     assert "row-edit-action" in html
     assert "row-clear-edit-action" in html
+    assert "Revert edited value" in html
+    assert "&#8634;" in html
     assert "grid-template-columns: 22px 18px" in html
     assert ".ext-table tr:hover .row-clear-edit-action" in html
     assert "displayFieldValueForPath" in html
@@ -251,11 +254,13 @@ def test_verifier_uses_explicit_no_citation_acceptance() -> None:
     assert "selectedVerifyExtra" in html
 
 
-def test_verifier_docks_field_editor_over_review_table() -> None:
+def test_verifier_edits_values_in_review_table_without_docked_modal() -> None:
     html = STATIC_HTML.read_text()
 
     assert 'id="panel-right"' in html
-    assert html.index('id="panel-right"') < html.index('id="source-edit-overlay"')
+    assert 'id="source-edit-overlay"' not in html
+    assert "inline-edit-form" in html
+    assert "editing-value-cell" in html
     assert ".selected-field-bar" not in html
     assert ".panel-right" in html
     assert "position: relative" in html

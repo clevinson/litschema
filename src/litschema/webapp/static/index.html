@@ -949,68 +949,15 @@
     color: var(--cited);
   }
 
-  .source-edit-overlay {
-    display: none;
-    position: absolute;
-    left: 16px;
-    right: 16px;
-    bottom: 16px;
-    z-index: 6;
-    max-height: 44vh;
-    overflow: auto;
-    padding: 12px;
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    background: color-mix(in srgb, var(--bg-raised) 97%, transparent);
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.14);
-  }
-
-  .source-edit-overlay.active {
+  .inline-edit-form {
     display: grid;
-    gap: 10px;
+    grid-template-columns: minmax(120px, 1fr) 22px 22px;
+    align-items: center;
+    gap: 5px;
+    width: 100%;
   }
 
-  .source-edit-title {
-    color: var(--text);
-    font-size: 12px;
-    font-weight: 600;
-  }
-
-  .source-edit-current {
-    display: grid;
-    gap: 4px;
-    padding: 8px;
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--radius);
-    background: var(--bg-overlay);
-  }
-
-  .source-edit-current-label {
-    color: var(--text-dim);
-    font-family: var(--font-sans);
-    font-size: 10px;
-    font-weight: 600;
-    text-transform: uppercase;
-  }
-
-  .source-edit-current-value {
-    font-family: var(--font-mono);
-    font-size: 12px;
-    line-height: 1.4;
-  }
-
-  .source-edit-overlay label {
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-    color: var(--text-dim);
-    font-size: 10px;
-    font-weight: 600;
-    text-transform: uppercase;
-  }
-
-  .source-edit-overlay input,
-  .source-edit-overlay textarea {
+  .inline-edit-input {
     background: var(--bg-input);
     border: 1px solid var(--border);
     border-radius: var(--radius);
@@ -1018,29 +965,33 @@
     font-family: var(--font-mono);
     font-size: 12px;
     padding: 5px 8px;
+    min-width: 0;
   }
 
-  .source-edit-overlay textarea {
-    font-family: var(--font-sans);
-    resize: vertical;
+  .inline-edit-save,
+  .inline-edit-cancel {
+    appearance: none;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--text-dim);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
   }
 
-  .selected-edit-actions {
-    display: flex;
-    gap: 6px;
-    justify-content: flex-end;
+  .inline-edit-save:hover,
+  .inline-edit-save:focus-visible {
+    color: var(--green);
   }
 
-  .review-action-btn.primary {
-    background: var(--accent);
-    border-color: var(--accent);
-    color: #fff;
-  }
-
-  .review-action-btn.primary:hover:not(:disabled) {
-    background: color-mix(in srgb, var(--accent) 88%, #000);
-    border-color: color-mix(in srgb, var(--accent) 88%, #000);
-    color: #fff;
+  .inline-edit-cancel:hover,
+  .inline-edit-cancel:focus-visible {
+    color: var(--text);
   }
 
   .table-ann-btn {
@@ -1784,20 +1735,6 @@
       </div>
     </div>
     <div class="panel-body" id="panel-right"></div>
-    <div class="source-edit-overlay" id="source-edit-overlay" aria-live="polite">
-      <div class="source-edit-title" id="source-edit-title">Edit field</div>
-      <div class="source-edit-current" id="source-edit-current"></div>
-      <label>Corrected value
-        <input type="text" id="source-edit-correct" placeholder="Enter corrected value, or __remove__">
-      </label>
-      <label>Note
-        <textarea id="source-edit-note" rows="3" placeholder="Describe the correction or uncertainty"></textarea>
-      </label>
-      <div class="selected-edit-actions">
-        <button class="review-action-btn" id="btn-source-edit-cancel">Cancel</button>
-        <button class="review-action-btn primary" id="btn-source-edit-save">Save</button>
-      </div>
-    </div>
   </div>
 </div>
 
@@ -1819,7 +1756,6 @@ const state = {
   selectedPath: null,
   editingPath: null,
   selectedSourceIndex: 0,
-  inspectorEditMode: false,
   sections: [],
   sectionIndex: 0,
   searchMatches: [],
@@ -1934,8 +1870,6 @@ $("#article-select").addEventListener("change", async (e) => {
   state.currentId = id;
   state.selectedPath = null;
   state.editingPath = null;
-  state.inspectorEditMode = false;
-  $("#source-edit-overlay")?.classList.remove("active");
   updateSelectedFieldBar(null);
 
   // Show panels, hide welcome
@@ -2793,13 +2727,31 @@ function buildValueCells(value, path) {
   const sourceHtml = buildEvidenceBadge(path);
 
   const annStatus = ann ? ann.status : "";
-  const display = displayFieldValueForPath(path, value);
-  const valueClass = annStatus === "flagged" ? "value-cell edited-value-cell" : "value-cell";
-  const valueAttrs = ` class="${valueClass}"${display.style}`;
+  const isEditing = state.editingPath === path;
+  const display = isEditing ? null : displayFieldValueForPath(path, value);
+  const valueClass = [
+    "value-cell",
+    annStatus === "flagged" ? "edited-value-cell" : "",
+    isEditing ? "editing-value-cell" : "",
+  ].filter(Boolean).join(" ");
+  const valueAttrs = ` class="${valueClass}"${isEditing ? "" : display.style}`;
+  const valueHtml = isEditing ? buildInlineEditForm(path, value) : display.html;
 
-  return `<td${valueAttrs}>${display.html}</td>
+  return `<td${valueAttrs}>${valueHtml}</td>
     <td class="source-cell">${sourceHtml}</td>
     <td class="status-cell">${buildStatusActions(path, annStatus)}</td>`;
+}
+
+function buildInlineEditForm(path, value = getValueAtPath(state.extraction, path)) {
+  const ann = state.annotations[path];
+  const current = ann?.status === "flagged" && ann.correct_value !== undefined
+    ? ann.correct_value
+    : value;
+  return `<span class="inline-edit-form" data-path="${path}">` +
+    `<input class="inline-edit-input" data-path="${path}" value="${escapeHtml(displayFieldValue(current))}" aria-label="Edit value">` +
+    `<button type="button" class="inline-edit-save" data-path="${path}" aria-label="Save edit" title="Save edit">&#10003;</button>` +
+    `<button type="button" class="inline-edit-cancel" data-path="${path}" aria-label="Cancel edit" title="Cancel edit">&#10005;</button>` +
+    `</span>`;
 }
 
 function displayFieldValueForPath(path, value = getValueAtPath(state.extraction, path)) {
@@ -2835,7 +2787,7 @@ function buildFieldStatus(path, status) {
 
 function buildRowEditAction(path, status) {
   if (status === "flagged") {
-    return `<button type="button" class="row-clear-edit-action" data-path="${path}" aria-label="Clear edited value" title="Clear edited value">&#10005;</button>`;
+    return `<button type="button" class="row-clear-edit-action" data-path="${path}" aria-label="Revert edited value" title="Revert edited value">&#8634;</button>`;
   }
   return `<button type="button" class="row-edit-action" data-path="${path}" aria-label="Edit field" title="Edit field">&#9998;</button>`;
 }
@@ -3006,22 +2958,6 @@ function displayFieldValue(value) {
   return JSON.stringify(value);
 }
 
-function displayOriginalFieldValueForEdit(value) {
-  if (value === null || value === undefined) {
-    return '<span style="color:var(--text-dim)">null</span>';
-  }
-  if (typeof value === "number") {
-    return `<span style="color:var(--val-number)">${String(value)}</span>`;
-  }
-  if (typeof value === "string") {
-    return `<span style="color:var(--val-string)">${escapeHtml(value)}</span>`;
-  }
-  if (typeof value === "boolean") {
-    return `<span>${String(value)}</span>`;
-  }
-  return escapeHtml(JSON.stringify(value));
-}
-
 function selectedFieldLabel(path) {
   if (!path) return "Select a field";
   return path.split(".").map(part =>
@@ -3048,37 +2984,43 @@ function selectedReasoning(path) {
   return entry && entry.reasoning ? entry.reasoning : "";
 }
 
-function openFieldEditModal(path) {
+function openInlineEdit(path) {
   if (!path) return;
   state.selectedPath = path;
   state.editingPath = path;
   state.selectedSourceIndex = 0;
-  state.inspectorEditMode = true;
-  updateSelectedFieldBar(path);
+  renderExtractionPanel();
   updateSourceEvidenceOverlay();
-
-  const overlay = $("#source-edit-overlay");
-  const title = $("#source-edit-title");
-  const current = $("#source-edit-current");
-  const correct = $("#source-edit-correct");
-  const note = $("#source-edit-note");
-  const ann = state.annotations[path];
-  if (!overlay || !correct || !note) return;
-  title.textContent = selectedFieldLabel(path);
-  current.innerHTML = `<span class="source-edit-current-label">Extracted value</span>` +
-    `<span class="source-edit-current-value">${displayOriginalFieldValueForEdit(getValueAtPath(state.extraction, path))}</span>`;
-  correct.value = ann?.correct_value || "";
-  note.value = ann?.note || "";
-  overlay.classList.add("active");
-  $("#source-evidence-overlay")?.classList.remove("active");
-  correct.focus();
+  requestAnimationFrame(() => {
+    const input = document.querySelector(`.inline-edit-input[data-path="${CSS.escape(path)}"]`);
+    if (input) {
+      input.focus();
+      input.select();
+    }
+  });
 }
 
-function closeFieldEditModal() {
+function cancelInlineEdit() {
+  if (!state.editingPath) return;
   state.editingPath = null;
-  state.inspectorEditMode = false;
-  $("#source-edit-overlay")?.classList.remove("active");
+  renderExtractionPanel();
   updateSourceEvidenceOverlay();
+}
+
+async function saveInlineEdit(path) {
+  if (!path) return;
+  const input = document.querySelector(`.inline-edit-input[data-path="${CSS.escape(path)}"]`);
+  const reviewer = $("#reviewer-id").value.trim();
+  if (!reviewer) { alert("Please connect ORCID before editing."); return; }
+  const correctValue = input ? input.value.trim() : "";
+  state.editingPath = null;
+  const ok = await saveAnnotation(path, "flagged", {
+    correct_value: correctValue,
+  });
+  if (!ok) {
+    state.editingPath = path;
+    renderExtractionPanel();
+  }
 }
 
 function updateSourceEvidenceOverlay() {
@@ -3090,11 +3032,6 @@ function updateSourceEvidenceOverlay() {
   const next = $("#btn-source-evidence-next");
   const reasoning = $("#source-evidence-reasoning");
   if (!overlay || !indexEl || !lines) return;
-  if (state.editingPath) {
-    overlay.classList.remove("active");
-    return;
-  }
-
   const ranges = selectedSourceRanges(state.selectedPath);
   if (!state.selectedPath) {
     overlay.classList.remove("active");
@@ -3153,22 +3090,8 @@ function focusSelectedSource(index = state.selectedSourceIndex) {
   }
 }
 
-function saveSelectedFieldEdit() {
-  const path = state.editingPath || state.selectedPath;
-  if (!path) return;
-  const reviewer = $("#reviewer-id").value.trim();
-  if (!reviewer) { alert("Please enter your ORCID in the toolbar before editing."); return; }
-  saveAnnotation(path, "flagged", {
-    correct_value: $("#source-edit-correct").value.trim(),
-    note: $("#source-edit-note").value.trim(),
-  }).then(ok => {
-    if (ok) closeFieldEditModal();
-  });
-}
-
 function updateSelectedFieldBar(path = state.selectedPath) {
   if (!path) {
-    if (!state.editingPath) closeFieldEditModal();
     updateSourceEvidenceOverlay();
     return;
   }
@@ -3192,7 +3115,34 @@ function wireTableEvents(panel) {
   panel.querySelectorAll(".row-edit-action[data-path]").forEach(btn => {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
-      openFieldEditModal(btn.dataset.path);
+      openInlineEdit(btn.dataset.path);
+    });
+  });
+
+  panel.querySelectorAll(".inline-edit-save[data-path]").forEach(btn => {
+    btn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      await saveInlineEdit(btn.dataset.path);
+    });
+  });
+
+  panel.querySelectorAll(".inline-edit-cancel[data-path]").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      cancelInlineEdit();
+    });
+  });
+
+  panel.querySelectorAll(".inline-edit-input[data-path]").forEach(input => {
+    input.addEventListener("click", (e) => e.stopPropagation());
+    input.addEventListener("keydown", async (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        await saveInlineEdit(input.dataset.path);
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        cancelInlineEdit();
+      }
     });
   });
 
@@ -3219,7 +3169,6 @@ function wireTableEvents(panel) {
       const selectedPath = row.querySelector(".cell-value")?.dataset.path || rowPath;
       state.selectedPath = selectedPath;
       state.selectedSourceIndex = 0;
-      state.inspectorEditMode = false;
       updateSelectedFieldBar(selectedPath);
       const nav = findNavForCell(row.querySelector(".cell-value") || row);
       if (nav && nav._sourceMap && nav._sourceMap.length > 0) {
@@ -3348,11 +3297,16 @@ function wireTableEvents(panel) {
     cell.addEventListener("click", (e) => {
       e.stopPropagation();
       const cellPath = cell.dataset.path;
+      let activeCell = cell;
+      if (state.editingPath && state.editingPath !== cellPath) {
+        state.editingPath = null;
+        renderExtractionPanel();
+        activeCell = document.querySelector(`.horizontal-table .cell-value[data-path="${CSS.escape(cellPath)}"]`) || cell;
+      }
       state.selectedPath = cellPath;
       state.selectedSourceIndex = 0;
-      state.inspectorEditMode = false;
       updateSelectedFieldBar(cellPath);
-      const nav = findNavForCell(cell);
+      const nav = findNavForCell(activeCell);
 
       if (nav && nav._sourceMap && nav._sourceMap.length > 0) {
         // Find indices in sourceMap that match this cell
@@ -3374,7 +3328,7 @@ function wireTableEvents(panel) {
       } else {
         // No multi-source nav (single source link or no source) — look up reasoning directly
         resetAllSourceNavs();
-        cell.classList.add("cell-selected");
+        activeCell.classList.add("cell-selected");
         const entry = state.reasoningByPath[cellPath];
         if (entry && entry.source_lines) {
           renderMarkdown();
@@ -3400,6 +3354,10 @@ function wireTableEvents(panel) {
 }
 
 function selectTableRow(path, rangeIndex) {
+  if (state.editingPath && state.editingPath !== path) {
+    state.editingPath = null;
+    renderExtractionPanel();
+  }
   // Clear previous highlights including any horizontal table nav state
   resetAllSourceNavs();
   clearSearchFull();
@@ -3414,7 +3372,6 @@ function selectTableRow(path, rangeIndex) {
 
   state.selectedPath = path;
   state.selectedSourceIndex = typeof rangeIndex === "number" ? rangeIndex : 0;
-  state.inspectorEditMode = false;
   updateSelectedFieldBar(path);
   state.sections = [];
   state.sectionIndex = 0;
@@ -3589,7 +3546,6 @@ function selectLeaf(el) {
 
   state.selectedPath = path;
   state.selectedSourceIndex = 0;
-  state.inspectorEditMode = false;
   updateSelectedFieldBar(path);
   state.sections = [];
   state.sectionIndex = 0;
@@ -4002,7 +3958,6 @@ async function toggleFieldVerification(path) {
   if (!ann) {
     state.selectedPath = path;
     state.selectedSourceIndex = 0;
-    state.inspectorEditMode = false;
     state.suppressClearHoverPaths.add(path);
     await saveAnnotation(path, "verified", selectedVerifyExtra(path));
     return;
@@ -4011,20 +3966,17 @@ async function toggleFieldVerification(path) {
     if (state.suppressClearHoverPaths.has(path)) return;
     state.selectedPath = path;
     state.selectedSourceIndex = 0;
-    state.inspectorEditMode = false;
     await clearAnnotation(path);
     return;
   }
   if (ann.status === "flagged") {
-    openFieldEditModal(path);
+    openInlineEdit(path);
     return;
   }
   selectTableRow(path);
 }
 
 function wireSelectedFieldActions() {
-  $("#btn-source-edit-save").addEventListener("click", saveSelectedFieldEdit);
-  $("#btn-source-edit-cancel").addEventListener("click", closeFieldEditModal);
   $("#btn-source-evidence-prev").addEventListener("click", () => focusSelectedSource(state.selectedSourceIndex - 1));
   $("#btn-source-evidence-next").addEventListener("click", () => focusSelectedSource(state.selectedSourceIndex + 1));
 }
@@ -4237,7 +4189,7 @@ function wireAnnotationActions(panel) {
         if (isRow) await verifyRowAnnotations(path);
         else await saveAnnotation(path, "verified");
       } else if (action === "flag") {
-        openFieldEditModal(path);
+        openInlineEdit(path);
       } else if (action === "clear") {
         if (isRow) await clearRowAnnotations(path);
         else await clearAnnotation(path);
