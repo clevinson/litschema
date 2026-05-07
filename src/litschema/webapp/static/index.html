@@ -445,9 +445,8 @@
   }
 
   .review-title-group {
-    display: inline-flex;
-    align-items: baseline;
-    gap: 12px;
+    display: grid;
+    gap: 3px;
     min-width: 0;
   }
 
@@ -461,7 +460,7 @@
 
   .review-progress {
     font-family: var(--font-sans);
-    font-size: 12px;
+    font-size: 11px;
     color: var(--text-secondary);
     white-space: nowrap;
   }
@@ -472,8 +471,10 @@
   }
 
   .review-queue-actions {
+    display: flex;
+    gap: 8px;
     justify-content: flex-start;
-    margin-top: 4px;
+    margin-top: 6px;
   }
 
   .overview-mode-toggle {
@@ -1307,15 +1308,20 @@
 
   .orcid-connect-btn,
   .orcid-profile-btn {
-    height: 32px;
-    padding: 0 10px;
+    min-width: 112px;
+    height: 28px;
+    padding: 0 12px;
     border: 1px solid var(--border);
     border-radius: var(--radius);
     background: var(--bg-input);
     color: var(--text-secondary);
     font-family: var(--font-sans);
     font-size: 12px;
+    line-height: 1;
     cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
   }
 
   .orcid-connect-btn:hover,
@@ -1809,7 +1815,7 @@
   </div>
   <div class="toolbar-spacer"></div>
   <div class="view-mode-toggle" aria-label="Extraction view mode">
-    <button class="view-mode-btn active" id="view-mode-review" data-view-mode="review" type="button">Review</button>
+    <button class="view-mode-btn active" id="view-mode-review" data-view-mode="review" type="button">Audit</button>
     <button class="view-mode-btn" id="view-mode-overview" data-view-mode="overview" type="button">Overview</button>
   </div>
   <button class="theme-btn" id="btn-theme" title="Toggle theme">&#9790;</button>
@@ -1903,8 +1909,8 @@
         </div>
       </div>
       <div class="panel-header-row review-queue-actions" id="review-queue-actions">
-        <button class="review-action-btn" id="btn-prev-unreviewed" disabled>Previous Field</button>
-        <button class="review-action-btn" id="btn-next-unreviewed" disabled>Next Field</button>
+        <button class="review-action-btn" id="btn-prev-unreviewed" disabled>Previous</button>
+        <button class="review-action-btn" id="btn-next-unreviewed" disabled>Next</button>
       </div>
     </div>
     <div class="panel-body" id="panel-right"></div>
@@ -4358,7 +4364,7 @@ function updateReviewWorkspace() {
   const counts = reviewStateCounts();
   const progress = $("#review-progress");
   if (progress) {
-    progress.innerHTML = `<strong>${counts.reviewed}/${counts.total}</strong> audited`;
+    progress.innerHTML = `<strong>${counts.reviewed}/${counts.total}</strong> fields audited`;
   }
 
   const prevUnreviewedBtn = $("#btn-prev-unreviewed");

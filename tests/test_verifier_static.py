@@ -28,6 +28,7 @@ def test_verifier_defaults_to_review_table_with_mode_switcher() -> None:
     assert 'id="confidence-display"' not in html
     assert 'id="panel-right-meta"' not in html
     assert 'id="view-mode-review"' in html
+    assert ">Audit</button>" in html
     assert 'id="view-mode-overview"' in html
     assert 'data-view-mode="review"' in html
     assert 'data-view-mode="overview"' in html
@@ -82,8 +83,10 @@ def test_verifier_moves_identity_and_queue_controls_into_review_header() -> None
     assert 'id="review-progress"' in html
     assert 'id="btn-prev-unreviewed"' in html
     assert 'id="btn-next-unreviewed"' in html
-    assert ">Previous Field<" in html
-    assert ">Next Field<" in html
+    assert ">Previous<" in html
+    assert ">Next<" in html
+    assert ">Previous Field<" not in html
+    assert ">Next Field<" not in html
     assert ">Next Unreviewed<" not in html
     assert "selectAdjacentReviewPath" in html
     assert "review-queue-actions" in html
@@ -318,7 +321,7 @@ def test_verifier_scopes_review_navigation_to_current_article() -> None:
     assert 'id="btn-next-unreviewed"' in html
     assert 'id="btn-next-flagged"' not in html
     assert "selectNextReviewPath" in html
-    assert '<strong>${counts.reviewed}/${counts.total}</strong> audited' in html
+    assert '<strong>${counts.reviewed}/${counts.total}</strong> fields audited' in html
     assert "tv-badges" not in html
     assert "tv-badge-audit" not in html
     assert "tv-badge-edited" not in html
