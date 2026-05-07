@@ -52,7 +52,6 @@ class LitSchemaConfig:
     references_dir: Path
 
     # Files.
-    corpus_file: Path
     tracking_xlsx: Path
 
     # Stage-numbered subdirectories.
@@ -129,7 +128,6 @@ _PATH_FIELDS: tuple[tuple[str, str, str], ...] = (
     ("data_dir", "data_dir", "data"),
     ("schema_dir", "schema_dir", "schema"),
     ("references_dir", "references_dir", "references"),
-    ("corpus_file", "corpus_file", "corpus.yaml"),
     ("tracking_xlsx", "tracking_xlsx", "paper_download_tracking.xlsx"),
     ("openalex_dir", "openalex_dir", "data/openalex_raw"),
     ("crossref_dir", "crossref_dir", "data/crossref_raw"),

@@ -63,6 +63,41 @@ def test_cli_help_exits_zero() -> None:
     # Help text includes at least a couple of the verbs we expect.
     assert "status" in result.stdout
     assert "validate" in result.stdout
+    assert "extract" in result.stdout
+
+
+def test_extract_command_is_explicitly_unsupported() -> None:
+    """`litschema extract` is discoverable but points users to agent skills for now."""
+    from litschema import cli
+
+    result = CliRunner().invoke(cli.app, ["extract"])
+
+    assert result.exit_code == 2, result.output
+    assert "not yet supported" in result.output
+    assert "litschema skills install" in result.output
+    assert "/extract-article <article-id>" in result.output
+
+
+def test_no_old_aggregate_surface_remains() -> None:
+    """Public litschema code should not carry the old aggregate workflow."""
+    checked_roots = [
+        REPO_ROOT / "README.md",
+        REPO_ROOT / "pyproject.toml",
+        REPO_ROOT / "src",
+        REPO_ROOT / "skills",
+    ]
+    forbidden = "co" + "rpus"
+    offenders = []
+    for root in checked_roots:
+        paths = [root] if root.is_file() else sorted(root.rglob("*"))
+        for path in paths:
+            if not path.is_file() or path.suffix in {".pyc", ".png", ".pdf"}:
+                continue
+            text = path.read_text(errors="ignore").lower()
+            if forbidden in text:
+                offenders.append(path.relative_to(REPO_ROOT))
+
+    assert offenders == []
 
 
 def test_load_config_from_repo_root() -> None:
@@ -106,8 +141,8 @@ def test_cli_status_exits_zero() -> None:
     assert "extracted:" in result.stdout
 
 
-def test_status_treats_missing_corpus_as_optional(tmp_path: Path, monkeypatch) -> None:
-    """Per-article projects should not look broken when corpus.yaml is absent."""
+def test_status_uses_per_article_store(tmp_path: Path, monkeypatch) -> None:
+    """Per-article projects should not need any aggregate artifact."""
     (tmp_path / "schema").mkdir()
     (tmp_path / "schema" / "erw_articles.yaml").write_text("name: test\nclasses: {}\n")
     paper_dir = tmp_path / "data" / "papers" / "smith-2024"
@@ -126,15 +161,14 @@ def test_status_treats_missing_corpus_as_optional(tmp_path: Path, monkeypatch) -
     result = CliRunner().invoke(app, ["status"])
 
     assert result.exit_code == 0, result.output
-    assert "corpus:" not in result.output
     assert "[FAIL]" not in result.output
 
 
-def test_validate_defaults_to_extractions_without_requiring_corpus(
+def test_validate_defaults_to_article_store(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    """`litschema validate` should not require the legacy corpus snapshot."""
+    """`litschema validate` should target per-article extraction files."""
     (tmp_path / "schema").mkdir()
     (tmp_path / "schema" / "erw_articles.yaml").write_text("name: test\nclasses: {}\n")
     paper_dir = tmp_path / "data" / "papers" / "smith-2024"
@@ -163,4 +197,3 @@ def test_validate_defaults_to_extractions_without_requiring_corpus(
     assert result.exit_code == 0, result.output
     assert len(calls) == 1
     assert calls[0][-1] == str(tmp_path / "data" / "papers")
-    assert "corpus" not in result.output.lower()

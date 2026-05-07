@@ -6,7 +6,7 @@ from pathlib import Path
 from litschema import analysis
 from litschema.webapp import app as webapp
 from litschema.config import LitSchemaConfig
-from litschema.ingest import assemble_corpus, pdf_to_markdown
+from litschema.ingest import pdf_to_markdown
 
 
 def _cfg(project: Path) -> LitSchemaConfig:
@@ -16,7 +16,6 @@ def _cfg(project: Path) -> LitSchemaConfig:
         data_dir=project / "data",
         schema_dir=project / "schema",
         references_dir=project / "references",
-        corpus_file=project / "corpus.yaml",
         tracking_xlsx=project / "paper_download_tracking.xlsx",
         openalex_dir=project / "data" / "openalex_raw",
         crossref_dir=project / "data" / "crossref_raw",
@@ -29,29 +28,6 @@ def _cfg(project: Path) -> LitSchemaConfig:
         article_store_dir=project / "data" / "papers",
         raw={},
     )
-
-
-def test_assemble_corpus_loads_extraction_from_article_folder(
-    tmp_path: Path,
-    monkeypatch,
-) -> None:
-    cfg = _cfg(tmp_path)
-    article_dir = cfg.article_store_dir / "smith-2024"
-    article_dir.mkdir(parents=True)
-    (article_dir / "agent-extraction.json").write_text(
-        json.dumps({"article_id": "smith-2024", "confidence": 0.85})
-    )
-    legacy_dir = cfg.llm_extractions_dir
-    legacy_dir.mkdir(parents=True)
-    (legacy_dir / "smith-2024.json").write_text(
-        json.dumps({"article_id": "smith-2024", "confidence": 0.1})
-    )
-    monkeypatch.setattr(assemble_corpus, "_CFG", cfg)
-
-    extraction = assemble_corpus.load_llm_extraction("smith-2024")
-
-    assert extraction is not None
-    assert extraction["confidence"] == 0.85
 
 
 def test_pdf_conversion_defaults_to_article_folder(
@@ -75,7 +51,6 @@ def test_pdf_conversion_defaults_to_article_folder(
     monkeypatch.setattr(pdf_to_markdown, "convert_pdf", fake_convert_pdf)
 
     stats = pdf_to_markdown.run(
-        corpus_path=None,
         papers_dir=cfg.papers_dir,
         output_dir=None,
     )
@@ -124,10 +99,7 @@ def test_webapp_reads_bibliography_and_pdf_filename_from_article_metadata(
         )
     )
     monkeypatch.setattr(webapp, "_CFG", cfg)
-    monkeypatch.setattr(webapp, "CORPUS_PATH", cfg.corpus_file)
-    monkeypatch.setattr(webapp, "_corpus_cache", None)
-    monkeypatch.setattr(webapp, "_article_index", None)
-    monkeypatch.setattr(webapp, "_author_index", None)
+    monkeypatch.setattr(webapp, "_author_file_index", None)
 
     assert webapp._article_meta("smith-2024") == {
         "title": "Smith example",

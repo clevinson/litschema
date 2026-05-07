@@ -134,69 +134,31 @@ def convert(ctx: typer.Context):
 
 @app.command(
     context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
-    help="Legacy: export corpus.yaml from extractions + bibliographic data.",
-    hidden=True,
+    help="Extract structured article data. Currently run extraction via bundled agent skills.",
 )
-def assemble(ctx: typer.Context):
-    _require_config()
-    _delegate("litschema.ingest.assemble_corpus", ctx.args)
+def extract(ctx: typer.Context):
+    # Stub for future provider-native structured-output extraction.
+    _ = ctx
+    typer.secho("`litschema extract` is not yet supported.", fg=typer.colors.YELLOW)
+    typer.echo(
+        "\nFor now, install the bundled agent skills with "
+        "`litschema skills install`, then run `/extract-article <article-id>` "
+        "inside an agent CLI from your configured project directory."
+    )
+    raise typer.Exit(code=2)
 
 
 @app.command(
     context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
-    help="Validate extractions (and the corpus) against the LinkML schema.",
+    help="Validate per-article extractions against the LinkML schema.",
 )
-def validate(
-    ctx: typer.Context,
-    extractions_only: bool = typer.Option(
-        False, "--extractions-only", help="Skip corpus validation"
-    ),
-    corpus: bool = typer.Option(
-        False, "--corpus", help="Also validate legacy corpus.yaml against the schema"
-    ),
-    corpus_only: bool = typer.Option(
-        False, "--corpus-only", help="Skip per-article extraction validation"
-    ),
-):
+def validate(ctx: typer.Context):
     cfg = _require_config()
-    had_failures = False
 
-    if not corpus_only:
-        typer.echo(f"{DIM}→ validating extractions against extraction schema{RESET}")
-        target = ctx.args if ctx.args else [str(cfg.article_store_dir)]
-        result = subprocess.run(
-            [sys.executable, "-m", "litschema.ingest.validate_extraction", *target]
-        )
-        had_failures = had_failures or result.returncode != 0
-
-    validate_corpus = corpus or corpus_only
-
-    if validate_corpus and not extractions_only:
-        schema_root = _schema_root_path(cfg)
-        corpus_file = cfg.corpus_file
-        if not schema_root.exists():
-            typer.secho(
-                f"{CROSS} required for corpus validation: {schema_root} not found. "
-                f"Re-run with --extractions-only to skip, or set a valid "
-                f"`schema_root` in litschema.yaml.",
-                fg=typer.colors.RED,
-            )
-            had_failures = True
-        elif not corpus_file.exists():
-            typer.secho(
-                f"{CROSS} required for corpus validation: {corpus_file} not found. "
-                f"Run `litschema assemble` first, or omit --corpus.",
-                fg=typer.colors.RED,
-            )
-            had_failures = True
-        else:
-            typer.echo(f"{DIM}→ validating corpus against {schema_root.name}{RESET}")
-            result = subprocess.run(
-                ["uv", "run", "linkml-validate", "-s", str(schema_root), str(corpus_file)]
-            )
-            had_failures = had_failures or result.returncode != 0
-
-    raise typer.Exit(code=1 if had_failures else 0)
+    typer.echo(f"{DIM}→ validating extractions against extraction schema{RESET}")
+    target = ctx.args if ctx.args else [str(cfg.article_store_dir)]
+    result = subprocess.run([sys.executable, "-m", "litschema.ingest.validate_extraction", *target])
+    raise typer.Exit(code=result.returncode)
 
 
 @app.command(

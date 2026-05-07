@@ -1,5 +1,5 @@
 ---
-name: validate-corpus
+name: validate-articles
 description: "Validate ERW article metadata, extractions, and reasoning against project schemas. Run after extraction to catch errors."
 ---
 

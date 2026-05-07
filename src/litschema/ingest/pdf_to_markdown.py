@@ -14,8 +14,6 @@ import json
 import logging
 from pathlib import Path
 
-import yaml
-
 from ..articles import article_files, iter_metadata_paths
 from ..config import load_config
 
@@ -23,7 +21,6 @@ logger = logging.getLogger(__name__)
 
 _CFG = load_config()
 PROJECT_ROOT = _CFG.project_root
-CORPUS_PATH = _CFG.corpus_file
 PAPERS_DIR = _CFG.papers_dir
 FULLTEXT_DIR = _CFG.fulltext_md_dir
 
@@ -41,26 +38,16 @@ def convert_pdf(pdf_path: Path, out_path: Path) -> int:
     return len(md_text)
 
 
-def _load_articles(corpus_path: Path | None = None) -> list[dict]:
-    if corpus_path is not None:
-        with open(corpus_path) as f:
-            return (yaml.safe_load(f) or {}).get("articles", [])
-
+def _load_articles() -> list[dict]:
     articles = []
     for path in iter_metadata_paths(_CFG):
         data = json.loads(path.read_text())
         data.setdefault("id", path.parent.name)
         articles.append(data)
-    if articles:
-        return sorted(articles, key=lambda article: article.get("id", ""))
-
-    if CORPUS_PATH.exists():
-        return _load_articles(CORPUS_PATH)
-    return []
+    return sorted(articles, key=lambda article: article.get("id", ""))
 
 
 def run(
-    corpus_path: Path | None = None,
     papers_dir: Path = PAPERS_DIR,
     output_dir: Path | None = None,
     force: bool = False,
@@ -69,7 +56,7 @@ def run(
     if output_dir is not None:
         output_dir.mkdir(parents=True, exist_ok=True)
 
-    articles = _load_articles(corpus_path)
+    articles = _load_articles()
     stats = {"total": 0, "converted": 0, "skipped": 0, "empty": 0, "missing": 0, "errors": 0}
 
     for article in articles:
@@ -126,12 +113,6 @@ def main():
     parser.add_argument("--force", action="store_true", help="Re-convert existing files")
     parser.add_argument("--papers-dir", type=Path, default=PAPERS_DIR)
     parser.add_argument(
-        "--corpus",
-        type=Path,
-        default=None,
-        help="Legacy corpus.yaml input. Defaults to data/papers/*/article-metadata.json",
-    )
-    parser.add_argument(
         "--output-dir",
         type=Path,
         default=None,
@@ -141,7 +122,6 @@ def main():
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     stats = run(
-        corpus_path=args.corpus,
         papers_dir=args.papers_dir,
         output_dir=args.output_dir,
         force=args.force,
