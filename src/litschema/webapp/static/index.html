@@ -1696,11 +1696,68 @@
   .source-evidence-nav {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
     color: var(--text-secondary);
     font-family: var(--font-mono);
     font-size: 11px;
     flex-shrink: 0;
+  }
+
+  .source-evidence-lines {
+    min-width: 80px;
+    max-width: 132px;
+    text-align: right;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .source-cycle-control {
+    display: inline-flex;
+    align-items: center;
+    height: 24px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg);
+    color: var(--text-secondary);
+    overflow: hidden;
+  }
+
+  .source-cycle-btn {
+    appearance: none;
+    width: 24px;
+    height: 100%;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--text-dim);
+    cursor: pointer;
+    font-family: var(--font-sans);
+    font-size: 13px;
+    line-height: 1;
+  }
+
+  .source-cycle-btn:hover:not(:disabled) {
+    color: var(--text);
+    background: var(--bg-overlay);
+  }
+
+  .source-cycle-btn:disabled {
+    cursor: default;
+    opacity: 0.35;
+  }
+
+  .source-cycle-counter {
+    min-width: 36px;
+    height: 100%;
+    padding: 0 6px;
+    border-left: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-secondary);
   }
 
   .source-evidence-reasoning {
@@ -1877,10 +1934,12 @@
       <div class="source-evidence-top">
         <div class="source-evidence-label" id="source-evidence-label">No field selected</div>
         <div class="source-evidence-nav">
-          <button class="review-action-btn" id="btn-source-evidence-prev" aria-label="Previous source" disabled>&lsaquo;</button>
-          <span class="selected-source-range" id="source-evidence-index">0/0</span>
-          <button class="review-action-btn" id="btn-source-evidence-next" aria-label="Next source" disabled>&rsaquo;</button>
-          <span class="selected-source-range" id="source-evidence-lines">No field selected</span>
+          <span class="source-evidence-lines" id="source-evidence-lines">No field selected</span>
+          <span class="source-cycle-control" id="source-cycle-control">
+            <button class="source-cycle-btn" id="btn-source-evidence-prev" aria-label="Previous source" disabled>&lsaquo;</button>
+            <span class="source-cycle-counter" id="source-evidence-index">0/0</span>
+            <button class="source-cycle-btn" id="btn-source-evidence-next" aria-label="Next source" disabled>&rsaquo;</button>
+          </span>
         </div>
       </div>
       <div class="source-evidence-reasoning" id="source-evidence-reasoning"></div>
@@ -3542,6 +3601,7 @@ function updateSourceEvidenceOverlay() {
   const label = $("#source-evidence-label");
   const indexEl = $("#source-evidence-index");
   const lines = $("#source-evidence-lines");
+  const cycle = $("#source-cycle-control");
   const prev = $("#btn-source-evidence-prev");
   const next = $("#btn-source-evidence-next");
   const reasoning = $("#source-evidence-reasoning");
@@ -3553,6 +3613,7 @@ function updateSourceEvidenceOverlay() {
     if (reasoning) reasoning.textContent = "";
     indexEl.textContent = "0/0";
     lines.textContent = "No field selected";
+    if (cycle) cycle.style.display = "none";
     if (prev) prev.disabled = true;
     if (next) next.disabled = true;
     return;
@@ -3566,6 +3627,7 @@ function updateSourceEvidenceOverlay() {
   if (ranges.length === 0) {
     indexEl.textContent = "0/0";
     lines.textContent = state.selectedPath ? "No citation" : "No field selected";
+    if (cycle) cycle.style.display = "none";
     if (prev) prev.disabled = true;
     if (next) next.disabled = true;
     return;
@@ -3573,6 +3635,7 @@ function updateSourceEvidenceOverlay() {
 
   state.selectedSourceIndex = Math.max(0, Math.min(state.selectedSourceIndex, ranges.length - 1));
   const current = ranges[state.selectedSourceIndex];
+  if (cycle) cycle.style.display = ranges.length < 2 ? "none" : "inline-flex";
   indexEl.textContent = `${state.selectedSourceIndex + 1}/${ranges.length}`;
   lines.textContent = current;
   if (prev) prev.disabled = ranges.length < 2;

@@ -372,5 +372,12 @@ def test_verifier_moves_source_reasoning_to_left_overlay() -> None:
     assert "updateSourceEvidenceOverlay" in html
     assert "focusSelectedSource" in html
     assert "selectedReasoning" in html
+    assert "source-cycle-control" in html
+    assert "source-cycle-counter" in html
+    assert "source-cycle-btn" in html
+    assert "source-evidence-lines" in html
+    assert 'cycle.style.display = ranges.length < 2 ? "none" : "inline-flex";' in html
     assert 'id="selected-field-reasoning"' not in html
     assert 'id="selected-field-source"' not in html
+    assert 'class="review-action-btn" id="btn-source-evidence-prev"' not in html
+    assert 'class="review-action-btn" id="btn-source-evidence-next"' not in html
