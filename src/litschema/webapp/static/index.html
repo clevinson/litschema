@@ -464,6 +464,10 @@
     position: relative;
   }
 
+  .panel-right {
+    position: relative;
+  }
+
   .panel-body {
     flex: 1;
     overflow-y: auto;
@@ -926,11 +930,8 @@
     opacity: 0;
   }
 
-  .row-clear-edit-action {
-    opacity: 1;
-  }
-
   .ext-table tr:hover .row-edit-action,
+  .ext-table tr:hover .row-clear-edit-action,
   .row-edit-action:focus-visible,
   .row-clear-edit-action:hover,
   .row-clear-edit-action:focus-visible {
@@ -940,69 +941,6 @@
 
   .edited-value-cell {
     color: var(--yellow) !important;
-  }
-
-  .selected-field-bar {
-    display: none;
-    flex-direction: column;
-    gap: 8px;
-    padding: 10px 16px;
-    border-top: 1px solid var(--border);
-    background: var(--bg-raised);
-    flex-shrink: 0;
-    max-height: 38vh;
-    overflow: auto;
-  }
-
-  .selected-field-bar.active {
-    display: flex;
-  }
-
-  .selected-field-summary {
-    display: flex;
-    align-items: flex-start;
-    gap: 12px;
-    width: 100%;
-  }
-
-  .selected-field-main {
-    min-width: 0;
-    flex: 1;
-  }
-
-  .selected-field-label {
-    color: var(--text-secondary);
-    font-size: 11px;
-    font-weight: 600;
-    margin-bottom: 2px;
-  }
-
-  .selected-field-value {
-    color: var(--text);
-    font-family: var(--font-mono);
-    font-size: 12px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .selected-field-actions {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    flex-shrink: 0;
-  }
-
-  .selected-field-actions .review-action-btn {
-    width: 28px;
-    min-width: 28px;
-    height: 28px;
-    min-height: 28px;
-    padding: 0;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 13px;
   }
 
   .selected-source-range {
@@ -1072,6 +1010,19 @@
   .selected-edit-actions {
     display: flex;
     gap: 6px;
+    justify-content: flex-end;
+  }
+
+  .review-action-btn.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+
+  .review-action-btn.primary:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--accent) 88%, #000);
+    border-color: color-mix(in srgb, var(--accent) 88%, #000);
+    color: #fff;
   }
 
   .table-ann-btn {
@@ -1729,7 +1680,7 @@
   </div>
   <div class="toolbar-spacer"></div>
   <input type="hidden" class="reviewer-input" id="reviewer-id">
-  <button class="orcid-connect-btn" id="btn-orcid-connect">Connect ORCID</button>
+  <button class="orcid-connect-btn" id="btn-orcid-connect" title="Connect ORCID">ORCID</button>
   <button class="orcid-profile-btn" id="btn-orcid-profile" style="display:none" title="Disconnect ORCID">
     <span class="orcid-name-label" id="orcid-profile-name"></span>
     <span class="orcid-disconnect-label">Disconnect</span>
@@ -1743,11 +1694,10 @@
     <label>ORCID iD
       <input type="text" id="orcid-input" placeholder="0000-0002-1825-0097">
     </label>
-    <div class="orcid-result" id="orcid-result">Enter an ORCID iD to look up the public profile.</div>
+    <div class="orcid-result" id="orcid-result">Enter an ORCID iD to connect your reviewer identity.</div>
     <div class="selected-edit-actions">
-      <button class="review-action-btn" id="btn-orcid-lookup">Look Up</button>
-      <button class="review-action-btn" id="btn-orcid-save" disabled>Save</button>
       <button class="review-action-btn" id="btn-orcid-cancel">Cancel</button>
+      <button class="review-action-btn primary" id="btn-orcid-save">Save</button>
     </div>
   </div>
 </div>
@@ -1802,20 +1752,6 @@
       </div>
       <div class="source-evidence-reasoning" id="source-evidence-reasoning"></div>
     </div>
-    <div class="source-edit-overlay" id="source-edit-overlay" aria-live="polite">
-      <div class="source-edit-title" id="source-edit-title">Edit field</div>
-      <div class="source-edit-current" id="source-edit-current"></div>
-      <label>Corrected value
-        <input type="text" id="source-edit-correct" placeholder="Enter corrected value, or __remove__">
-      </label>
-      <label>Note
-        <textarea id="source-edit-note" rows="3" placeholder="Describe the correction or uncertainty"></textarea>
-      </label>
-      <div class="selected-edit-actions">
-        <button class="review-action-btn" id="btn-source-edit-save">Save</button>
-        <button class="review-action-btn" id="btn-source-edit-cancel">Cancel</button>
-      </div>
-    </div>
   </div>
   <div class="panel panel-right">
     <div class="panel-header">
@@ -1830,16 +1766,18 @@
       </div>
     </div>
     <div class="panel-body" id="panel-right"></div>
-    <div class="selected-field-bar" id="selected-field-bar">
-      <div class="selected-field-summary">
-        <div class="selected-field-main">
-          <div class="selected-field-label" id="selected-field-label">Select a field</div>
-          <div class="selected-field-value" id="selected-field-value"></div>
-        </div>
-        <div class="selected-field-actions">
-          <button class="review-action-btn" id="btn-selected-verify" data-action="verify" aria-label="Verify selected field" title="Verify selected field" disabled>&#10003;</button>
-          <button class="review-action-btn" id="btn-selected-clear" data-action="clear" aria-label="Clear selected field review" title="Clear selected field review" disabled>&#10005;</button>
-        </div>
+    <div class="source-edit-overlay" id="source-edit-overlay" aria-live="polite">
+      <div class="source-edit-title" id="source-edit-title">Edit field</div>
+      <div class="source-edit-current" id="source-edit-current"></div>
+      <label>Corrected value
+        <input type="text" id="source-edit-correct" placeholder="Enter corrected value, or __remove__">
+      </label>
+      <label>Note
+        <textarea id="source-edit-note" rows="3" placeholder="Describe the correction or uncertainty"></textarea>
+      </label>
+      <div class="selected-edit-actions">
+        <button class="review-action-btn" id="btn-source-edit-cancel">Cancel</button>
+        <button class="review-action-btn primary" id="btn-source-edit-save">Save</button>
       </div>
     </div>
   </div>
@@ -3050,6 +2988,22 @@ function displayFieldValue(value) {
   return JSON.stringify(value);
 }
 
+function displayOriginalFieldValueForEdit(value) {
+  if (value === null || value === undefined) {
+    return '<span style="color:var(--text-dim)">null</span>';
+  }
+  if (typeof value === "number") {
+    return `<span style="color:var(--val-number)">${String(value)}</span>`;
+  }
+  if (typeof value === "string") {
+    return `<span style="color:var(--val-string)">${escapeHtml(value)}</span>`;
+  }
+  if (typeof value === "boolean") {
+    return `<span>${String(value)}</span>`;
+  }
+  return escapeHtml(JSON.stringify(value));
+}
+
 function selectedFieldLabel(path) {
   if (!path) return "Select a field";
   return path.split(".").map(part =>
@@ -3093,7 +3047,7 @@ function openFieldEditModal(path) {
   const ann = state.annotations[path];
   if (!overlay || !correct || !note) return;
   title.textContent = selectedFieldLabel(path);
-  current.textContent = displayFieldValue(getValueAtPath(state.extraction, path));
+  current.innerHTML = `AI value: ${displayOriginalFieldValueForEdit(getValueAtPath(state.extraction, path))}`;
   correct.value = ann?.correct_value || "";
   note.value = ann?.note || "";
   overlay.classList.add("active");
@@ -3194,44 +3148,12 @@ function saveSelectedFieldEdit() {
 }
 
 function updateSelectedFieldBar(path = state.selectedPath) {
-  const bar = $("#selected-field-bar");
-  if (!bar) return;
-  const label = $("#selected-field-label");
-  const value = $("#selected-field-value");
-  const buttons = [
-    $("#btn-selected-verify"),
-    $("#btn-selected-clear"),
-  ];
-
   if (!path) {
-    bar.classList.remove("active");
-    label.textContent = "Select a field";
-    value.textContent = "";
-    buttons.forEach(btn => { if (btn) btn.disabled = true; });
-    const verifyBtn = $("#btn-selected-verify");
-    if (verifyBtn) verifyBtn.title = "Verify selected field";
     if (!state.editingPath) closeFieldEditModal();
     updateSourceEvidenceOverlay();
     return;
   }
 
-  const currentValue = getValueAtPath(state.extraction, path);
-  const ann = state.annotations[path];
-  const status = ann?.status === "verified" ? "Verified" : ann?.status === "flagged" ? "Edited" : "Unreviewed";
-  bar.classList.add("active");
-  label.textContent = `${selectedFieldLabel(path)} · ${status}`;
-  value.textContent = ann?.status === "flagged" && ann.correct_value
-    ? ann.correct_value
-    : displayFieldValue(currentValue);
-  buttons.forEach(btn => { if (btn) btn.disabled = false; });
-  const verifyBtn = $("#btn-selected-verify");
-  if (verifyBtn) {
-    const hasCitation = selectedFieldHasCitation(path);
-    verifyBtn.title = hasCitation ? "Verify selected field" : "Accept selected value without a source citation";
-    verifyBtn.setAttribute("aria-label", verifyBtn.title);
-  }
-  const clearBtn = $("#btn-selected-clear");
-  if (clearBtn) clearBtn.disabled = !ann;
   updateSourceEvidenceOverlay();
 }
 
@@ -4082,26 +4004,6 @@ async function toggleFieldVerification(path) {
 }
 
 function wireSelectedFieldActions() {
-  const verifyBtn = $("#btn-selected-verify");
-  const clearBtn = $("#btn-selected-clear");
-
-  if (verifyBtn) {
-    verifyBtn.addEventListener("click", async () => {
-      if (!state.selectedPath || verifyBtn.disabled) return;
-      closeFieldEditModal();
-      state.suppressClearHoverPaths.add(state.selectedPath);
-      await saveAnnotation(state.selectedPath, "verified", selectedVerifyExtra(state.selectedPath));
-    });
-  }
-
-  if (clearBtn) {
-    clearBtn.addEventListener("click", async () => {
-      if (!state.selectedPath || clearBtn.disabled) return;
-      closeFieldEditModal();
-      await clearAnnotation(state.selectedPath);
-    });
-  }
-
   $("#btn-source-edit-save").addEventListener("click", saveSelectedFieldEdit);
   $("#btn-source-edit-cancel").addEventListener("click", closeFieldEditModal);
   $("#btn-source-evidence-prev").addEventListener("click", () => focusSelectedSource(state.selectedSourceIndex - 1));
@@ -4355,9 +4257,6 @@ function getValueAtPath(obj, path) {
   return current;
 }
 
-// Reviewer identity persistence
-let pendingOrcidProfile = null;
-
 function normalizeOrcidInput(value) {
   return value.trim()
     .replace(/^https?:\/\/orcid\.org\//i, "")
@@ -4386,10 +4285,9 @@ function setReviewerIdentity(profile) {
 }
 
 function openOrcidModal() {
-  pendingOrcidProfile = null;
   $("#orcid-input").value = $("#reviewer-id").value || "";
-  $("#orcid-result").textContent = "Enter an ORCID iD to look up the public profile.";
-  $("#btn-orcid-save").disabled = true;
+  $("#orcid-result").textContent = "Enter an ORCID iD to connect your reviewer identity.";
+  $("#btn-orcid-save").disabled = false;
   $("#orcid-modal").classList.add("active");
   $("#orcid-input").focus();
 }
@@ -4398,25 +4296,25 @@ function closeOrcidModal() {
   $("#orcid-modal").classList.remove("active");
 }
 
-async function lookupOrcidProfile() {
+async function saveOrcidProfile() {
   const value = normalizeOrcidInput($("#orcid-input").value);
   const result = $("#orcid-result");
   const save = $("#btn-orcid-save");
-  pendingOrcidProfile = null;
-  save.disabled = true;
   if (!/^\d{4}-\d{4}-\d{4}-\d{3}[0-9X]$/.test(value)) {
     result.textContent = "Enter a valid ORCID iD.";
     return;
   }
-  result.textContent = "Looking up ORCID profile...";
+  result.textContent = "Checking ORCID profile...";
+  save.disabled = true;
   try {
     const response = await fetch(`/api/orcid/${encodeURIComponent(value)}`);
     if (!response.ok) throw new Error("not found");
-    pendingOrcidProfile = await response.json();
-    result.textContent = `${pendingOrcidProfile.name} · ${pendingOrcidProfile.orcid}`;
-    save.disabled = false;
+    const profile = await response.json();
+    setReviewerIdentity(profile);
+    closeOrcidModal();
   } catch (err) {
     result.textContent = "User not found.";
+    save.disabled = false;
   }
 }
 
@@ -4440,15 +4338,10 @@ function initReviewerIdentity() {
 
 $("#btn-orcid-connect").addEventListener("click", openOrcidModal);
 $("#btn-orcid-profile").addEventListener("click", () => setReviewerIdentity(null));
-$("#btn-orcid-lookup").addEventListener("click", lookupOrcidProfile);
 $("#orcid-input").addEventListener("keydown", (e) => {
-  if (e.key === "Enter") lookupOrcidProfile();
+  if (e.key === "Enter") saveOrcidProfile();
 });
-$("#btn-orcid-save").addEventListener("click", () => {
-  if (!pendingOrcidProfile) return;
-  setReviewerIdentity(pendingOrcidProfile);
-  closeOrcidModal();
-});
+$("#btn-orcid-save").addEventListener("click", saveOrcidProfile);
 $("#btn-orcid-cancel").addEventListener("click", closeOrcidModal);
 initReviewerIdentity();
 

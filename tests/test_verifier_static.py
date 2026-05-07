@@ -28,12 +28,12 @@ def test_verifier_has_mobile_stacked_panel_layout() -> None:
     assert "min-width: 520px" in html
 
 
-def test_verifier_uses_selected_field_actions() -> None:
+def test_verifier_uses_source_overlay_without_selected_field_box() -> None:
     html = STATIC_HTML.read_text()
 
-    assert "selected-field-bar" in html
-    assert 'id="selected-field-label"' in html
-    assert 'id="selected-field-value"' in html
+    assert "selected-field-bar" not in html
+    assert 'id="selected-field-label"' not in html
+    assert 'id="selected-field-value"' not in html
     assert 'id="btn-selected-edit"' not in html
     assert 'data-action="edit"' not in html
     assert 'id="source-evidence-overlay"' in html
@@ -42,10 +42,10 @@ def test_verifier_uses_selected_field_actions() -> None:
     assert 'id="source-evidence-lines"' in html
     assert 'id="btn-source-evidence-prev"' in html
     assert 'id="btn-source-evidence-next"' in html
-    assert 'id="btn-selected-verify"' in html
-    assert 'id="btn-selected-clear"' in html
-    assert 'aria-label="Verify selected field"' in html
-    assert 'aria-label="Clear selected field review"' in html
+    assert 'id="btn-selected-verify"' not in html
+    assert 'id="btn-selected-clear"' not in html
+    assert 'aria-label="Verify selected field"' not in html
+    assert 'aria-label="Clear selected field review"' not in html
     assert 'data-action="verify"' in html
     assert 'data-action="clear"' in html
     assert "wireSelectedFieldActions" in html
@@ -55,6 +55,8 @@ def test_verifier_uses_selected_field_actions() -> None:
 def test_verifier_edits_in_source_pane_modal() -> None:
     html = STATIC_HTML.read_text()
 
+    assert 'class="panel panel-right"' in html
+    assert 'class="panel panel-right"' in html and html.index('class="panel panel-right"') < html.index('id="source-edit-overlay"')
     assert 'id="source-edit-overlay"' in html
     assert 'id="source-edit-correct"' in html
     assert 'id="source-edit-note"' in html
@@ -63,6 +65,7 @@ def test_verifier_edits_in_source_pane_modal() -> None:
     assert ">Save Edit<" not in html
     assert "openFieldEditModal" in html
     assert "closeFieldEditModal" in html
+    assert "displayOriginalFieldValueForEdit" in html
     assert "saveSelectedFieldEdit" in html
     assert "selected-field-edit-form" not in html
     assert "showFlagDialog" not in html
@@ -107,14 +110,16 @@ def test_verifier_uses_orcid_connect_flow() -> None:
     assert 'id="reviewer-id"' in html
     assert 'type="hidden"' in html
     assert 'id="btn-orcid-connect"' in html
-    assert "Connect ORCID" in html
+    assert ">ORCID</button>" in html
     assert 'id="orcid-modal"' in html
     assert 'id="orcid-input"' in html
-    assert 'id="btn-orcid-lookup"' in html
+    assert 'id="btn-orcid-lookup"' not in html
     assert 'id="btn-orcid-save"' in html
-    assert "lookupOrcidProfile" in html
+    assert "saveOrcidProfile" in html
+    assert "lookupOrcidProfile" not in html
     assert "/api/orcid/" in html
     assert "Disconnect" in html
+    assert html.index('id="btn-orcid-cancel"') < html.index('id="btn-orcid-save"')
 
 
 def test_verifier_exposes_bulk_review_actions() -> None:
@@ -160,6 +165,7 @@ def test_verifier_action_column_uses_compact_status() -> None:
     assert "status-icon-hover" in html
     assert "row-edit-action" in html
     assert "row-clear-edit-action" in html
+    assert ".ext-table tr:hover .row-clear-edit-action" in html
     assert "displayFieldValueForPath" in html
     assert "toggleFieldVerification" in html
 
@@ -228,18 +234,18 @@ def test_verifier_uses_explicit_no_citation_acceptance() -> None:
     html = STATIC_HTML.read_text()
 
     assert "selectedFieldHasCitation" in html
-    assert "Accept selected value without a source citation" in html
     assert "accepted_no_citation" in html
     assert "selectedVerifyExtra" in html
 
 
-def test_verifier_docks_selected_field_editor_below_review_table() -> None:
+def test_verifier_docks_field_editor_over_review_table() -> None:
     html = STATIC_HTML.read_text()
 
     assert 'id="panel-right"' in html
-    assert html.index('id="panel-right"') < html.index('id="selected-field-bar"')
-    assert ".selected-field-bar" in html
-    assert "max-height: 38vh" in html
+    assert html.index('id="panel-right"') < html.index('id="source-edit-overlay"')
+    assert ".selected-field-bar" not in html
+    assert ".panel-right" in html
+    assert "position: relative" in html
 
 
 def test_verifier_moves_source_reasoning_to_left_overlay() -> None:
