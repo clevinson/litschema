@@ -76,6 +76,9 @@ def test_verifier_edits_inline_in_value_cell() -> None:
     assert "buildEnumEditSelect" in html
     assert "schemaFieldForPath" in html
     assert 'fetchJson("/api/schema/fields")' in html
+    assert ".inline-edit-select {" in html
+    assert "padding-right: 28px" in html
+    assert "text-overflow: ellipsis" in html
     assert "inline-edit-save" in html
     assert "inline-edit-cancel" in html
     assert "displayOriginalFieldValueForEdit" not in html
