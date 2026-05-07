@@ -4,7 +4,7 @@ Schema-driven extraction and verification for scientific literature.
 
 `litschema` is a local-first toolkit for turning papers into structured,
 schema-valid JSON with source-linked reasoning and human review. It is built
-around LinkML schemas, agent-readable extraction skills, a verification webapp,
+around [LinkML](https://linkml.io) schemas, agent-readable extraction skills, a verification webapp,
 and a DuckDB/MCP exploration layer.
 
 The source of truth is an article store on disk:
