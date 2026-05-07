@@ -40,6 +40,7 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 _corpus_cache: dict | None = None
 _article_index: dict[str, dict] | None = None
 _author_index: dict[str, dict] | None = None
+_author_file_index: dict[str, dict] | None = None
 
 
 def _load_corpus() -> dict:
@@ -57,14 +58,19 @@ def _load_corpus() -> dict:
 
 
 def _load_author_index() -> dict[str, dict]:
+    global _author_file_index
     _load_corpus()
     if _author_index:
         return _author_index
+    if _author_file_index is not None:
+        return _author_file_index
     authors_path = _CFG.data_dir / "authors.yaml"
     if not authors_path.exists():
+        _author_file_index = {}
         return {}
     authors = yaml.safe_load(authors_path.read_text()) or []
-    return {a.get("id"): a for a in authors if a.get("id")}
+    _author_file_index = {a.get("id"): a for a in authors if a.get("id")}
+    return _author_file_index
 
 
 def _article_meta(article_id: str) -> dict:

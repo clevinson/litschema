@@ -34,14 +34,17 @@ def test_verifier_uses_selected_field_actions() -> None:
     assert "selected-field-bar" in html
     assert 'id="selected-field-label"' in html
     assert 'id="selected-field-value"' in html
-    assert 'id="selected-field-reasoning"' in html
-    assert 'id="selected-field-source"' in html
-    assert 'id="selected-field-source-range"' in html
-    assert 'id="btn-selected-source-prev"' in html
-    assert 'id="btn-selected-source-next"' in html
+    assert 'id="source-evidence-overlay"' in html
+    assert 'id="source-evidence-reasoning"' in html
+    assert 'id="source-evidence-range"' in html
+    assert 'id="btn-source-evidence-prev"' in html
+    assert 'id="btn-source-evidence-next"' in html
     assert 'id="btn-selected-verify"' in html
     assert 'id="btn-selected-edit"' in html
     assert 'id="btn-selected-clear"' in html
+    assert 'aria-label="Verify selected field"' in html
+    assert 'aria-label="Edit selected field"' in html
+    assert 'aria-label="Clear selected field review"' in html
     assert 'data-action="verify"' in html
     assert 'data-action="edit"' in html
     assert 'data-action="clear"' in html
@@ -90,10 +93,12 @@ def test_verifier_exposes_bulk_review_actions() -> None:
     html = STATIC_HTML.read_text()
 
     assert 'id="btn-verify-article"' in html
-    assert "Verify Remaining" in html
+    assert 'aria-label="Verify all unreviewed cited fields"' in html
     assert "bulk-verify-btn" in html
     assert 'data-bulk-scope="section"' in html
-    assert "Verify remaining" in html
+    assert 'aria-label="Verify unreviewed cited fields in this section"' in html
+    assert "Verify remaining" not in html
+    assert "Verify Remaining" not in html
 
 
 def test_verifier_bulk_review_is_reversible_and_field_level() -> None:
@@ -115,6 +120,8 @@ def test_verifier_action_column_uses_compact_status() -> None:
     assert "buildFieldStatus" in html
     assert "status-verified" in html
     assert "status-flagged" in html
+    assert "status-cell" in html
+    assert "toggleFieldVerification" in html
 
 
 def test_verifier_bulk_review_normalizes_primitive_array_reasoning() -> None:
@@ -130,7 +137,9 @@ def test_verifier_section_headers_keep_status_and_bulk_action_together() -> None
 
     assert "tv-heading-actions" in html
     assert "bulkActionHtml(basePath, \"section\")" in html
-    assert 'if (count === 0) return "";' in html
+    assert 'if (count === 0 && verifiedCount === 0) return "";' in html
+    assert "verifiedPathsInScope" in html
+    assert "clearVerifiedScope" in html
     assert 'const disabled = count === 0 ? " disabled" : "";' not in html
     assert "bulk-section-actions" not in html
     assert "tv-toggle" not in html
@@ -154,7 +163,8 @@ def test_verifier_scopes_review_navigation_to_current_article() -> None:
     assert 'id="btn-next-unreviewed"' in html
     assert 'id="btn-next-flagged"' not in html
     assert "selectNextReviewPath" in html
-    assert "reviewProgressLabel" in html
+    assert "articleOptionLabel" in html
+    assert "article.confidence" not in html
     assert "filter-group" not in html
     assert "queue-summary" not in html
     assert 'id="tags-display"' not in html
@@ -171,6 +181,26 @@ def test_verifier_uses_explicit_no_citation_acceptance() -> None:
     html = STATIC_HTML.read_text()
 
     assert "selectedFieldHasCitation" in html
-    assert "Accept No Citation" in html
+    assert "Accept selected value without a source citation" in html
     assert "accepted_no_citation" in html
     assert "selectedVerifyExtra" in html
+
+
+def test_verifier_docks_selected_field_editor_below_review_table() -> None:
+    html = STATIC_HTML.read_text()
+
+    assert 'id="panel-right"' in html
+    assert html.index('id="panel-right"') < html.index('id="selected-field-bar"')
+    assert ".selected-field-bar" in html
+    assert "max-height: 38vh" in html
+
+
+def test_verifier_moves_source_reasoning_to_left_overlay() -> None:
+    html = STATIC_HTML.read_text()
+
+    assert "source-evidence-overlay" in html
+    assert "updateSourceEvidenceOverlay" in html
+    assert "focusSelectedSource" in html
+    assert "selectedReasoning" in html
+    assert 'id="selected-field-reasoning"' not in html
+    assert 'id="selected-field-source"' not in html

@@ -205,24 +205,6 @@
     justify-content: center;
   }
 
-  .confidence-badge {
-    font-family: var(--font-mono);
-    font-size: 10px;
-    font-weight: 500;
-    color: var(--text-secondary);
-    background: var(--bg);
-    border: 1px solid var(--border);
-    padding: 3px 7px;
-    border-radius: 3px;
-    letter-spacing: 0.03em;
-    white-space: nowrap;
-  }
-
-  .confidence-badge strong {
-    color: var(--accent);
-    font-weight: 500;
-  }
-
   .tags {
     display: flex;
     gap: 3px;
@@ -479,6 +461,7 @@
 
   .panel-left {
     border-right: 1px solid var(--border);
+    position: relative;
   }
 
   .panel-body {
@@ -658,7 +641,8 @@
   }
 
   .bulk-verify-btn,
-  .bulk-undo-btn {
+  .bulk-undo-btn,
+  .bulk-clear-btn {
     font-family: var(--font-sans);
     font-size: 10px;
     font-weight: 500;
@@ -673,7 +657,8 @@
   }
 
   .bulk-verify-btn:hover:not(:disabled),
-  .bulk-undo-btn:hover:not(:disabled) {
+  .bulk-undo-btn:hover:not(:disabled),
+  .bulk-clear-btn:hover:not(:disabled) {
     border-color: var(--text-dim);
     color: var(--text);
   }
@@ -681,6 +666,10 @@
   .bulk-verify-btn:disabled {
     cursor: default;
     opacity: 0.4;
+  }
+
+  .bulk-clear-btn {
+    color: var(--text-dim);
   }
 
   .article-bulk-verify-btn {
@@ -772,6 +761,12 @@
     text-align: center;
   }
 
+  .ext-table .status-cell {
+    white-space: nowrap;
+    text-align: center;
+    vertical-align: middle;
+  }
+
   .ext-table tr.clickable {
     cursor: pointer;
     transition: background 0.1s;
@@ -832,6 +827,18 @@
     font-size: 12px;
   }
 
+  button.field-status {
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    padding: 0;
+  }
+
+  button.field-status:hover {
+    background: var(--bg-overlay);
+    color: var(--text);
+  }
+
   .field-status.status-verified {
     color: var(--green);
     background: rgba(22, 163, 74, 0.08);
@@ -851,9 +858,11 @@
     flex-direction: column;
     gap: 8px;
     padding: 10px 16px;
-    border-bottom: 1px solid var(--border-subtle);
-    background: var(--bg);
+    border-top: 1px solid var(--border);
+    background: var(--bg-raised);
     flex-shrink: 0;
+    max-height: 38vh;
+    overflow: auto;
   }
 
   .selected-field-bar.active {
@@ -895,30 +904,31 @@
     flex-shrink: 0;
   }
 
-  .selected-field-source {
-    display: flex;
+  .selected-field-actions .review-action-btn {
+    width: 28px;
+    min-width: 28px;
+    height: 28px;
+    min-height: 28px;
+    padding: 0;
+    display: inline-flex;
     align-items: center;
-    gap: 6px;
-    width: 100%;
-    color: var(--text-secondary);
-    font-family: var(--font-mono);
-    font-size: 11px;
+    justify-content: center;
+    font-size: 13px;
+  }
+
+  .icon-svg {
+    width: 14px;
+    height: 14px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    pointer-events: none;
   }
 
   .selected-source-range {
     color: var(--cited);
-  }
-
-  .selected-field-reasoning {
-    display: none;
-    width: 100%;
-    color: var(--text-secondary);
-    font-size: 12px;
-    line-height: 1.45;
-  }
-
-  .selected-field-reasoning.active {
-    display: block;
   }
 
   .selected-field-edit-form {
@@ -1343,11 +1353,10 @@
     display: flex;
     flex-direction: column;
     gap: 3px;
-    padding: 10px 16px 9px;
-    background: var(--bg-raised);
-    border-bottom: 1px solid var(--border);
+    padding: 0 0 7px;
+    background: transparent;
+    border-bottom: 1px solid var(--border-subtle);
     flex-shrink: 0;
-    min-height: 58px;
   }
 
   .article-bibheader .bib-title {
@@ -1355,7 +1364,8 @@
     font-weight: 600;
     color: var(--text);
     line-height: 1.3;
-    max-width: 96ch;
+    max-width: 100%;
+    text-wrap: balance;
   }
 
   .article-bibheader .bib-meta {
@@ -1386,6 +1396,60 @@
   }
 
   .article-bibheader .bib-doi:hover { color: var(--accent); }
+
+  .source-evidence-overlay {
+    display: none;
+    position: absolute;
+    left: 16px;
+    right: 16px;
+    bottom: 16px;
+    z-index: 5;
+    max-height: 32vh;
+    overflow: auto;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: color-mix(in srgb, var(--bg-raised) 94%, transparent);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+  }
+
+  .source-evidence-overlay.active {
+    display: block;
+  }
+
+  .source-evidence-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+
+  .source-evidence-label {
+    min-width: 0;
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .source-evidence-nav {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    flex-shrink: 0;
+  }
+
+  .source-evidence-reasoning {
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 1.45;
+  }
 
   @media (max-width: 760px) {
     body {
@@ -1496,15 +1560,6 @@
   <button class="theme-btn" id="btn-theme" title="Toggle theme">&#9790;</button>
 </div>
 
-<div class="article-bibheader" id="article-bibheader" style="display:none">
-  <span class="bib-title" id="bib-title"></span>
-  <span class="bib-meta">
-    <span class="bib-authors" id="bib-authors"></span>
-    <span id="bib-meta"></span>
-    <a class="bib-doi" id="bib-doi" target="_blank" rel="noopener" style="display:none"></a>
-  </span>
-</div>
-
 <div class="welcome" id="welcome">
   <div class="welcome-content">
     <h1>ERW Extraction Verifier</h1>
@@ -1518,11 +1573,13 @@
 <div class="panels" id="panels" style="display:none">
   <div class="panel panel-left">
     <div class="panel-header">
-      <div class="panel-header-row">
-        <h3>Source</h3>
-        <div class="panel-header-right">
-          <span class="panel-meta" id="panel-left-meta"></span>
-        </div>
+      <div class="article-bibheader" id="article-bibheader" style="display:none">
+        <span class="bib-title" id="bib-title"></span>
+        <span class="bib-meta">
+          <span class="bib-authors" id="bib-authors"></span>
+          <span id="bib-meta"></span>
+          <a class="bib-doi" id="bib-doi" target="_blank" rel="noopener" style="display:none"></a>
+        </span>
       </div>
       <div class="panel-header-row search-row" id="search-row" style="display:none">
         <div class="search-container">
@@ -1541,6 +1598,17 @@
       </div>
     </div>
     <div class="panel-body" id="panel-left"></div>
+    <div class="source-evidence-overlay" id="source-evidence-overlay" aria-live="polite">
+      <div class="source-evidence-top">
+        <div class="source-evidence-label" id="source-evidence-label">No field selected</div>
+        <div class="source-evidence-nav">
+          <button class="review-action-btn" id="btn-source-evidence-prev" aria-label="Previous source" disabled>&#9664;</button>
+          <span class="selected-source-range" id="source-evidence-range">No field selected</span>
+          <button class="review-action-btn" id="btn-source-evidence-next" aria-label="Next source" disabled>&#9654;</button>
+        </div>
+      </div>
+      <div class="source-evidence-reasoning" id="source-evidence-reasoning"></div>
+    </div>
   </div>
   <div class="panel panel-right">
     <div class="panel-header">
@@ -1549,12 +1617,14 @@
         <div class="review-actions">
           <span class="review-progress" id="review-progress" aria-live="polite"></span>
           <button class="review-action-btn" id="btn-next-unreviewed" disabled>Next Unreviewed</button>
-          <button class="bulk-verify-btn article-bulk-verify-btn" id="btn-verify-article">&#10003; Verify Remaining</button>
+          <button class="bulk-verify-btn article-bulk-verify-btn" id="btn-verify-article" aria-label="Verify all unreviewed cited fields" title="Verify all unreviewed cited fields">&#10003;</button>
+          <button class="bulk-clear-btn article-bulk-verify-btn" id="btn-clear-article" aria-label="Clear verified fields" title="Clear verified fields">&#10005;</button>
           <span id="save-status" class="save-status" aria-live="polite"></span>
           <span id="bulk-status" class="save-status" aria-live="polite"></span>
         </div>
       </div>
     </div>
+    <div class="panel-body" id="panel-right"></div>
     <div class="selected-field-bar" id="selected-field-bar">
       <div class="selected-field-summary">
         <div class="selected-field-main">
@@ -1562,17 +1632,11 @@
           <div class="selected-field-value" id="selected-field-value"></div>
         </div>
         <div class="selected-field-actions">
-          <button class="review-action-btn" id="btn-selected-verify" data-action="verify" disabled>Verify</button>
-          <button class="review-action-btn" id="btn-selected-edit" data-action="edit" disabled>Edit</button>
-          <button class="review-action-btn" id="btn-selected-clear" data-action="clear" disabled>Clear</button>
+          <button class="review-action-btn" id="btn-selected-verify" data-action="verify" aria-label="Verify selected field" title="Verify selected field" disabled>&#10003;</button>
+          <button class="review-action-btn" id="btn-selected-edit" data-action="edit" aria-label="Edit selected field" title="Edit selected field" disabled><svg class="icon-svg edit-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 4 8 16"/><path d="M6 18l2-2 2 2-4 4z"/><path d="m16 4 4 4"/></svg></button>
+          <button class="review-action-btn" id="btn-selected-clear" data-action="clear" aria-label="Clear selected field review" title="Clear selected field review" disabled>&#10005;</button>
         </div>
       </div>
-      <div class="selected-field-source" id="selected-field-source">
-        <button class="review-action-btn" id="btn-selected-source-prev" disabled>&#9664;</button>
-        <span class="selected-source-range" id="selected-field-source-range">No field selected</span>
-        <button class="review-action-btn" id="btn-selected-source-next" disabled>&#9654;</button>
-      </div>
-      <div class="selected-field-reasoning" id="selected-field-reasoning"></div>
       <div class="selected-field-edit-form" id="selected-field-edit-form">
         <label>Corrected value
           <input type="text" id="selected-edit-correct" placeholder="Enter corrected value, or __remove__">
@@ -1586,7 +1650,6 @@
         </div>
       </div>
     </div>
-    <div class="panel-body" id="panel-right"></div>
   </div>
 </div>
 
@@ -1663,17 +1726,12 @@ async function init() {
   wireSelectedFieldActions();
 }
 
-function reviewProgressLabel(article) {
-  const reviewed = article.n_reviewed || article.n_annotated || 0;
-  const fields = article.n_fields;
-  if (fields === undefined || fields === null) return reviewed > 0 ? `\u2713${reviewed}` : "0 reviewed";
-  return `${reviewed}/${fields}`;
-}
-
 function articleOptionLabel(article) {
-  const conf = article.confidence != null ? article.confidence.toFixed(2) : "?";
-  const flags = article.n_flagged > 0 ? ` \u2691${article.n_flagged}` : "";
-  return `${article.article_id}  (${conf}) \u00b7 ${reviewProgressLabel(article)}${flags}`;
+  const authors = formatAuthors(article.authors);
+  const year = article.year ? ` ${article.year}` : "";
+  const citation = authors ? `${authors}${year}` : (article.article_id || "Untitled article");
+  const title = article.title ? `. ${article.title}` : "";
+  return `${citation}${title}`;
 }
 
 function populateDropdown() {
@@ -1772,7 +1830,6 @@ $("#article-select").addEventListener("change", async (e) => {
 
   $("#btn-pdf").style.display = "flex";
   $("#search-row").style.display = "flex";
-  $("#panel-left-meta").textContent = `${state.markdown.split("\n").length} lines`;
   updateNavState();
 
   renderMarkdown();
@@ -2460,10 +2517,11 @@ function auditBadgesHtml(obj, basePath) {
 
 function bulkActionHtml(basePath, scope) {
   const count = collectReviewablePaths(basePath).length;
-  if (count === 0) return "";
-  const label = `Verify remaining (${count})`;
+  const verifiedCount = verifiedPathsInScope(basePath).length;
+  if (count === 0 && verifiedCount === 0) return "";
   return `<span class="tv-heading-actions">` +
-    `<button class="bulk-verify-btn" data-bulk-scope="section" data-bulk-source="${scope}" data-path="${basePath}">${label}</button>` +
+    (count > 0 ? `<button class="bulk-verify-btn" data-bulk-scope="section" data-bulk-source="${scope}" data-path="${basePath}" aria-label="Verify unreviewed cited fields in this section" title="Verify unreviewed cited fields in this section">&#10003;</button>` : "") +
+    (verifiedCount > 0 ? `<button class="bulk-clear-btn" data-clear-scope="section" data-path="${basePath}" aria-label="Clear verified fields in this section" title="Clear verified fields in this section">&#10005;</button>` : "") +
     `</span>`;
 }
 
@@ -2552,7 +2610,7 @@ function buildTableRowWithRowspan(key, value, path, rowspan) {
   const valCells = buildValueCells(value, path);
   const selectedCls = state.selectedPath === path ? " selected" : "";
   return `<tr class="clickable${selectedCls}" data-path="${path}">
-    <td rowspan="${rowspan}" style="vertical-align:top">${humanize(key)}</td>
+    <td class="field-cell" rowspan="${rowspan}" style="vertical-align:top">${humanize(key)}</td>
     ${valCells}
   </tr>`;
 }
@@ -2594,9 +2652,11 @@ function buildValueCells(value, path) {
     if (ann.note) flagDetails += `<div class="flag-note-display">${escapeHtml(ann.note)}</div>`;
   }
 
-  return `<td${valStyle}>${displayVal}${flagDetails}</td>
-    <td>${sourceHtml}</td>
-    <td>${buildFieldStatus(path, annStatus)}</td>`;
+  const valueAttrs = ` class="value-cell"${valStyle}`;
+
+  return `<td${valueAttrs}>${displayVal}${flagDetails}</td>
+    <td class="source-cell">${sourceHtml}</td>
+    <td class="status-cell">${buildFieldStatus(path, annStatus)}</td>`;
 }
 
 function buildFieldStatus(path, status) {
@@ -2607,7 +2667,7 @@ function buildFieldStatus(path, status) {
       : "Not reviewed";
   const icon = status === "verified" ? "&#10003;" : status === "flagged" ? "&#9998;" : "&#9675;";
   const statusClass = status || "empty";
-  return `<span class="field-status status-${statusClass}" data-path="${path}" title="${label}" aria-label="${label}">${icon}</span>`;
+  return `<button type="button" class="field-status status-${statusClass}" data-path="${path}" title="${label}" aria-label="${label}">${icon}</button>`;
 }
 
 function sourceSummaryForPath(path, explicitRanges = null) {
@@ -2627,7 +2687,7 @@ function buildTableRow(key, value, path) {
   const valCells = buildValueCells(value, path);
   const selectedCls = state.selectedPath === path ? " selected" : "";
   return `<tr class="clickable${selectedCls}" data-path="${path}">
-    <td>${humanize(key)}</td>
+    <td class="field-cell">${humanize(key)}</td>
     ${valCells}
   </tr>`;
 }
@@ -2810,15 +2870,32 @@ function setInspectorEditMode(enabled) {
   $("#selected-edit-correct").focus();
 }
 
-function updateSelectedSourceDisplay() {
-  const source = $("#selected-field-source");
-  const range = $("#selected-field-source-range");
-  const prev = $("#btn-selected-source-prev");
-  const next = $("#btn-selected-source-next");
-  if (!source || !range) return;
+function updateSourceEvidenceOverlay() {
+  const overlay = $("#source-evidence-overlay");
+  const label = $("#source-evidence-label");
+  const range = $("#source-evidence-range");
+  const prev = $("#btn-source-evidence-prev");
+  const next = $("#btn-source-evidence-next");
+  const reasoning = $("#source-evidence-reasoning");
+  if (!overlay || !range) return;
 
   const ranges = selectedSourceRanges(state.selectedPath);
-  if (!state.selectedPath || ranges.length === 0) {
+  if (!state.selectedPath) {
+    overlay.classList.remove("active");
+    if (label) label.textContent = "No field selected";
+    if (reasoning) reasoning.textContent = "";
+    range.textContent = "No field selected";
+    if (prev) prev.disabled = true;
+    if (next) next.disabled = true;
+    return;
+  }
+
+  overlay.classList.add("active");
+  if (label) label.textContent = selectedFieldLabel(state.selectedPath);
+  const reasoningText = selectedReasoning(state.selectedPath);
+  if (reasoning) reasoning.textContent = reasoningText || "No reasoning note for this field.";
+
+  if (ranges.length === 0) {
     range.textContent = state.selectedPath ? "No citation" : "No field selected";
     if (prev) prev.disabled = true;
     if (next) next.disabled = true;
@@ -2836,7 +2913,7 @@ function focusSelectedSource(index = state.selectedSourceIndex) {
   const ranges = selectedSourceRanges(state.selectedPath);
   if (!ranges.length) return;
   state.selectedSourceIndex = (index + ranges.length) % ranges.length;
-  updateSelectedSourceDisplay();
+  updateSourceEvidenceOverlay();
   renderMarkdown();
   document.querySelectorAll(".reasoned-highlight").forEach(el => el.classList.remove("reasoned-highlight"));
   document.querySelectorAll(".md-line.active").forEach(el => el.classList.remove("active"));
@@ -2874,7 +2951,6 @@ function updateSelectedFieldBar(path = state.selectedPath) {
   if (!bar) return;
   const label = $("#selected-field-label");
   const value = $("#selected-field-value");
-  const reasoning = $("#selected-field-reasoning");
   const buttons = [
     $("#btn-selected-verify"),
     $("#btn-selected-edit"),
@@ -2885,15 +2961,11 @@ function updateSelectedFieldBar(path = state.selectedPath) {
     bar.classList.remove("active");
     label.textContent = "Select a field";
     value.textContent = "";
-    if (reasoning) {
-      reasoning.textContent = "";
-      reasoning.classList.remove("active");
-    }
     buttons.forEach(btn => { if (btn) btn.disabled = true; });
     const verifyBtn = $("#btn-selected-verify");
-    if (verifyBtn) verifyBtn.textContent = "Verify";
+    if (verifyBtn) verifyBtn.title = "Verify selected field";
     setInspectorEditMode(false);
-    updateSelectedSourceDisplay();
+    updateSourceEvidenceOverlay();
     return;
   }
 
@@ -2903,25 +2975,27 @@ function updateSelectedFieldBar(path = state.selectedPath) {
   bar.classList.add("active");
   label.textContent = `${selectedFieldLabel(path)} · ${status}`;
   value.textContent = displayFieldValue(currentValue);
-  if (reasoning) {
-    const text = selectedReasoning(path);
-    reasoning.textContent = text;
-    reasoning.classList.toggle("active", !!text);
-  }
   buttons.forEach(btn => { if (btn) btn.disabled = false; });
   const verifyBtn = $("#btn-selected-verify");
   if (verifyBtn) {
     const hasCitation = selectedFieldHasCitation(path);
-    verifyBtn.textContent = hasCitation ? "Verify" : "Accept No Citation";
-    verifyBtn.title = hasCitation ? "Mark this cited value as verified" : "Accept this value even though no source citation was found";
+    verifyBtn.title = hasCitation ? "Verify selected field" : "Accept selected value without a source citation";
+    verifyBtn.setAttribute("aria-label", verifyBtn.title);
   }
   const clearBtn = $("#btn-selected-clear");
   if (clearBtn) clearBtn.disabled = !ann;
-  updateSelectedSourceDisplay();
+  updateSourceEvidenceOverlay();
   setInspectorEditMode(state.inspectorEditMode);
 }
 
 function wireTableEvents(panel) {
+  panel.querySelectorAll(".field-status[data-path]").forEach(btn => {
+    btn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      await toggleFieldVerification(btn.dataset.path);
+    });
+  });
+
   // Row clicks (non-horizontal rows use selectTableRow)
   panel.querySelectorAll("tr.clickable:not(.horizontal-row)").forEach(row => {
     row.addEventListener("click", () => {
@@ -3696,6 +3770,7 @@ async function saveAnnotation(path, status, extra = {}, options = {}) {
     if (render) {
       renderExtractionPanel();
       updateStats();
+      updateSelectedFieldBar(state.selectedPath);
     }
   }
 }
@@ -3720,8 +3795,29 @@ async function clearAnnotation(path, options = {}) {
     if (render) {
       renderExtractionPanel();
       updateStats();
+      updateSelectedFieldBar(state.selectedPath);
     }
   }
+}
+
+async function toggleFieldVerification(path) {
+  if (!path) return;
+  const ann = state.annotations[path];
+  if (!ann) {
+    state.selectedPath = path;
+    state.selectedSourceIndex = 0;
+    state.inspectorEditMode = false;
+    await saveAnnotation(path, "verified", selectedVerifyExtra(path));
+    return;
+  }
+  if (ann.status === "verified") {
+    state.selectedPath = path;
+    state.selectedSourceIndex = 0;
+    state.inspectorEditMode = false;
+    await clearAnnotation(path);
+    return;
+  }
+  selectTableRow(path);
 }
 
 function wireSelectedFieldActions() {
@@ -3754,8 +3850,8 @@ function wireSelectedFieldActions() {
 
   $("#btn-selected-save-edit").addEventListener("click", saveSelectedFieldEdit);
   $("#btn-selected-cancel-edit").addEventListener("click", () => setInspectorEditMode(false));
-  $("#btn-selected-source-prev").addEventListener("click", () => focusSelectedSource(state.selectedSourceIndex - 1));
-  $("#btn-selected-source-next").addEventListener("click", () => focusSelectedSource(state.selectedSourceIndex + 1));
+  $("#btn-source-evidence-prev").addEventListener("click", () => focusSelectedSource(state.selectedSourceIndex - 1));
+  $("#btn-source-evidence-next").addEventListener("click", () => focusSelectedSource(state.selectedSourceIndex + 1));
 }
 
 function pathInScope(path, basePath) {
@@ -3824,6 +3920,14 @@ function collectReviewablePaths(basePath = null) {
     );
 }
 
+function verifiedPathsInScope(basePath = null) {
+  return collectLeafPaths(state.extraction).filter(path =>
+    pathInScope(path, basePath) &&
+    state.annotations[path] &&
+    state.annotations[path].status === "verified"
+  );
+}
+
 function skippedBulkCount(basePath, reviewableCount) {
   const allLeafPaths = collectLeafPaths(state.extraction).filter(path => pathInScope(path, basePath));
   return Math.max(0, allLeafPaths.length - reviewableCount);
@@ -3873,6 +3977,18 @@ async function undoBulkBatch(batchId) {
   updateStats();
   state.lastBulkBatch = null;
   setBulkStatus(`${cleared} bulk verifications undone`);
+}
+
+async function clearVerifiedScope(basePath = null) {
+  const paths = verifiedPathsInScope(basePath);
+  let cleared = 0;
+  for (const path of paths) {
+    const ok = await clearAnnotation(path, { render: false });
+    if (ok) cleared++;
+  }
+  renderExtractionPanel();
+  updateStats();
+  setBulkStatus(`${cleared} verified fields cleared`);
 }
 
 function rowCellPaths(rowPath) {
@@ -3968,6 +4084,13 @@ function wireBulkReviewActions(panel) {
       await bulkVerifyScope(btn.dataset.path, "bulk_section");
     });
   });
+  panel.querySelectorAll(".bulk-clear-btn[data-clear-scope='section']").forEach(btn => {
+    btn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      if (btn.disabled) return;
+      await clearVerifiedScope(btn.dataset.path);
+    });
+  });
 }
 
 function getValueAtPath(obj, path) {
@@ -3999,6 +4122,9 @@ document.addEventListener("click", (e) => {
   if (e.target.id === "btn-verify-article") {
     e.stopPropagation();
     bulkVerifyScope(null, "bulk_article");
+  } else if (e.target.id === "btn-clear-article") {
+    e.stopPropagation();
+    clearVerifiedScope(null);
   }
 });
 
