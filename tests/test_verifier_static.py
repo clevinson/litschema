@@ -6,6 +6,15 @@ from pathlib import Path
 STATIC_HTML = Path("src/litschema/webapp/static/index.html")
 
 
+def test_verifier_uses_litschema_verify_branding() -> None:
+    html = STATIC_HTML.read_text()
+
+    assert "<title>litschema verify</title>" in html
+    assert "<h1>litschema verify</h1>" in html
+    assert "brand-script" not in html
+    assert "ERW Extraction Verifier" not in html
+
+
 def test_verifier_defaults_to_review_table_without_extra_header_controls() -> None:
     html = STATIC_HTML.read_text()
 
