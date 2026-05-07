@@ -20,7 +20,6 @@ The user will provide an `article_id` (e.g., `bell-2024`). You must:
 3. Read `.litschema/runtime/extraction_schema.json`
 4. Read `.litschema/runtime/reasoning_schema.json` if it exists
 5. Read the full-text markdown from `data/papers/{article_id}/article.md`
-   - If that does not exist yet, fall back to legacy path `data/fulltext_md/{article_id}.md`
 
 If the markdown file doesn't exist or is < 100 characters, write an error marker:
 ```json
