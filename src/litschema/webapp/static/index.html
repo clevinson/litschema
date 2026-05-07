@@ -821,102 +821,6 @@
     color: var(--text-dim);
   }
 
-  .view-toggle {
-    display: inline-flex;
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    height: 24px;
-    overflow: hidden;
-    flex-shrink: 0;
-    margin-left: 8px;
-  }
-
-  .view-toggle button {
-    font-family: var(--font-sans);
-    font-size: 10px;
-    font-weight: 500;
-    background: none;
-    border: none;
-    border-right: 1px solid var(--border);
-    color: var(--text-dim);
-    padding: 0 10px;
-    cursor: pointer;
-    transition: all 0.1s;
-  }
-
-  .view-toggle button:last-child {
-    border-right: none;
-  }
-
-  .view-toggle button:hover:not(.active) {
-    color: var(--text-secondary);
-  }
-
-  .view-toggle button.active {
-    background: var(--bg-overlay);
-    color: var(--text);
-  }
-
-  .advanced-menu {
-    position: relative;
-    flex-shrink: 0;
-  }
-
-  .advanced-menu summary {
-    list-style: none;
-    font-family: var(--font-sans);
-    font-size: 11px;
-    font-weight: 500;
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    background: var(--bg);
-    color: var(--text-secondary);
-    cursor: pointer;
-    min-height: 24px;
-    padding: 3px 8px;
-    white-space: nowrap;
-  }
-
-  .advanced-menu summary::-webkit-details-marker { display: none; }
-
-  .advanced-menu[open] summary,
-  .advanced-menu summary:hover {
-    border-color: var(--text-dim);
-    color: var(--text);
-  }
-
-  .advanced-menu-panel {
-    position: absolute;
-    right: 0;
-    top: 30px;
-    z-index: 20;
-    min-width: 120px;
-    padding: 4px;
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    background: var(--bg-raised);
-    box-shadow: 0 8px 24px rgba(0,0,0,0.12);
-  }
-
-  .advanced-menu-panel button {
-    width: 100%;
-    border: none;
-    background: transparent;
-    color: var(--text-secondary);
-    border-radius: 4px;
-    cursor: pointer;
-    font-family: var(--font-sans);
-    font-size: 12px;
-    padding: 6px 8px;
-    text-align: left;
-  }
-
-  .advanced-menu-panel button:hover {
-    background: var(--bg-overlay);
-    color: var(--text);
-  }
-
   .field-status {
     display: inline-flex;
     align-items: center;
@@ -1650,19 +1554,6 @@
           <span id="bulk-status" class="save-status" aria-live="polite"></span>
         </div>
       </div>
-      <div class="panel-header-right">
-        <div class="view-toggle">
-          <button class="active" id="btn-review-table">Review</button>
-        </div>
-        <details class="advanced-menu" id="btn-advanced">
-          <summary>Advanced</summary>
-          <div class="advanced-menu-panel">
-            <button id="btn-json-view" type="button">View JSON</button>
-          </div>
-        </details>
-        <span class="confidence-badge" id="confidence-display"></span>
-        <span class="panel-meta" id="panel-right-meta"></span>
-      </div>
     </div>
     <div class="selected-field-bar" id="selected-field-bar">
       <div class="selected-field-summary">
@@ -1877,15 +1768,11 @@ $("#article-select").addEventListener("change", async (e) => {
   }
 
   const meta = state.articles.find(a => a.article_id === id);
-  if (meta) {
-    $("#confidence-display").innerHTML = `<strong>${meta.confidence}</strong>`;
-    renderBibHeader(meta);
-  }
+  if (meta) renderBibHeader(meta);
 
   $("#btn-pdf").style.display = "flex";
   $("#search-row").style.display = "flex";
   $("#panel-left-meta").textContent = `${state.markdown.split("\n").length} lines`;
-  $("#panel-right-meta").textContent = Object.keys(state.reasoningByPath).length + " fields cited";
   updateNavState();
 
   renderMarkdown();
@@ -4100,43 +3987,16 @@ $("#reviewer-id").addEventListener("change", () => {
   localStorage.setItem("erw-reviewer-id", $("#reviewer-id").value.trim());
 });
 
-// ── View toggle ──
-state.viewMode = localStorage.getItem("erw-view-mode") || "table";
+// ── Extraction rendering ──
+state.viewMode = "table";
 state.tableMode = "review";
 
 function renderExtractionPanel() {
-  if (state.viewMode === "table") {
-    renderTableView();
-  } else {
-    renderTree();
-  }
-  updateViewToggle();
-}
-
-function updateViewToggle() {
-  const reviewBtn = document.getElementById("btn-review-table");
-  const jsonBtn = document.getElementById("btn-json-view");
-  if (reviewBtn) {
-    reviewBtn.classList.toggle("active", state.viewMode === "table" && state.tableMode === "review");
-    if (jsonBtn) jsonBtn.classList.toggle("active", state.viewMode === "json");
-  }
+  renderTableView();
 }
 
 document.addEventListener("click", (e) => {
-  if (e.target.id === "btn-review-table") {
-    state.viewMode = "table";
-    state.tableMode = "review";
-    localStorage.setItem("erw-view-mode", "table");
-    localStorage.setItem("erw-table-mode", "review");
-    resetAllSourceNavs();
-    renderExtractionPanel();
-  } else if (e.target.id === "btn-json-view") {
-    state.viewMode = "json";
-    localStorage.setItem("erw-view-mode", "json");
-    document.getElementById("btn-advanced")?.removeAttribute("open");
-    resetAllSourceNavs();
-    renderExtractionPanel();
-  } else if (e.target.id === "btn-verify-article") {
+  if (e.target.id === "btn-verify-article") {
     e.stopPropagation();
     bulkVerifyScope(null, "bulk_article");
   }

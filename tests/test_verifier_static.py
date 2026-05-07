@@ -6,16 +6,18 @@ from pathlib import Path
 STATIC_HTML = Path("src/litschema/webapp/static/index.html")
 
 
-def test_verifier_defaults_to_review_table_without_pivot_control() -> None:
+def test_verifier_defaults_to_review_table_without_extra_header_controls() -> None:
     html = STATIC_HTML.read_text()
 
     assert 'tableMode: "review"' in html
     assert 'state.tableMode = "review"' in html
-    assert 'id="btn-review-table"' in html
+    assert 'id="btn-review-table"' not in html
     assert 'id="btn-pivot-view"' not in html
     assert ">Pivot<" not in html
-    assert 'id="btn-advanced"' in html
-    assert 'id="btn-json-view"' in html
+    assert 'id="btn-advanced"' not in html
+    assert 'id="btn-json-view"' not in html
+    assert 'id="confidence-display"' not in html
+    assert 'id="panel-right-meta"' not in html
 
 
 def test_verifier_has_mobile_stacked_panel_layout() -> None:
