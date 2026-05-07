@@ -76,13 +76,12 @@ def test_verifier_table_uses_compact_evidence_badges() -> None:
     assert "reasoning-tooltip-row" not in html
 
 
-def test_verifier_surfaces_annotation_save_feedback() -> None:
+def test_verifier_keeps_transient_feedback_out_of_review_header() -> None:
     html = STATIC_HTML.read_text()
 
-    assert 'id="save-status"' in html
-    assert 'id="bulk-status"' in html
-    assert "btn-undo-bulk" in html
-    assert '<span class="save-status" id="save-status"' not in html
+    assert 'id="save-status"' not in html
+    assert 'id="bulk-status"' not in html
+    assert "btn-undo-bulk" not in html
     assert "setSaveStatus" in html
     assert "saveAnnotation" in html
     assert "clearAnnotation" in html
@@ -95,8 +94,10 @@ def test_verifier_exposes_bulk_review_actions() -> None:
     assert 'id="btn-verify-article"' in html
     assert 'aria-label="Verify all unreviewed cited fields"' in html
     assert "bulk-verify-btn" in html
-    assert 'data-bulk-scope="section"' in html
-    assert 'aria-label="Verify unreviewed cited fields in this section"' in html
+    assert "section-review-toggle" in html
+    assert 'data-section-action="${action}"' in html
+    assert '"Verify unreviewed cited fields in this section"' in html
+    assert '"Clear verified fields in this section"' in html
     assert "Verify remaining" not in html
     assert "Verify Remaining" not in html
 
@@ -106,7 +107,8 @@ def test_verifier_bulk_review_is_reversible_and_field_level() -> None:
 
     assert "collectReviewablePaths" in html
     assert "bulkVerifyPaths" in html
-    assert "undoBulkBatch" in html
+    assert "clearVerifiedScope" in html
+    assert "undoBulkBatch" not in html
     assert "bulk_section" in html
     assert "bulk_article" in html
     assert "batch_id" in html
@@ -121,6 +123,8 @@ def test_verifier_action_column_uses_compact_status() -> None:
     assert "status-verified" in html
     assert "status-flagged" in html
     assert "status-cell" in html
+    assert "line-height: 1" in html
+    assert "margin: 0 auto" in html
     assert "toggleFieldVerification" in html
 
 
@@ -137,9 +141,10 @@ def test_verifier_section_headers_keep_status_and_bulk_action_together() -> None
 
     assert "tv-heading-actions" in html
     assert "bulkActionHtml(basePath, \"section\")" in html
-    assert 'if (count === 0 && verifiedCount === 0) return "";' in html
-    assert "verifiedPathsInScope" in html
+    assert "sectionReviewState" in html
+    assert "reviewState.complete" in html
     assert "clearVerifiedScope" in html
+    assert "section-toggle-icon-hover" in html
     assert 'const disabled = count === 0 ? " disabled" : "";' not in html
     assert "bulk-section-actions" not in html
     assert "tv-toggle" not in html
