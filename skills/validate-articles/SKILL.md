@@ -15,7 +15,13 @@ Run validation across the ERW pipeline outputs and report issues.
 uv run litschema validate data/papers/
 ```
 
-2. **Validate article metadata files** exist and are parseable:
+2. **Validate all reasoning files** against the runtime reasoning JSON Schema:
+
+```bash
+uv run python -m litschema.agent.validate_reasoning data/papers/
+```
+
+3. **Validate article metadata files** exist and are parseable:
 
 ```bash
 uv run python -c "
@@ -46,9 +52,9 @@ print(f'\nMetadata: {valid} valid, {missing} missing, {invalid} invalid')
 "
 ```
 
-3. **Report summary** of all validation results. If any step fails, list the specific files and errors.
+4. **Report summary** of all validation results. If any step fails, list the specific files and errors.
 
-4. **Check reasoning coverage** — for articles with reasoning files, report what percentage of extraction fields have corresponding reasoning entries:
+5. **Check reasoning coverage** — for articles with reasoning files, report what percentage of extraction fields have corresponding reasoning entries:
 
 ```bash
 uv run python -c "

@@ -17,9 +17,10 @@ The user will provide an `article_id` (e.g., `bell-2024`). You must:
    ```bash
    uv run python -m litschema.agent.prepare_schema_context
    ```
-3. Read `.litschema/runtime/extraction_schema.json`
-4. Read `.litschema/runtime/reasoning_schema.json` if it exists
-5. Read the full-text markdown from `data/papers/{article_id}/article.md`
+3. Read `.litschema/runtime/schema_context.json`
+4. Read `.litschema/runtime/extraction_schema.json`
+5. Read `.litschema/runtime/reasoning_schema.json` if it exists
+6. Read the full-text markdown from `data/papers/{article_id}/article.md`
 
 If the markdown file doesn't exist or is < 100 characters, write an error marker:
 ```json
@@ -30,9 +31,10 @@ to `data/papers/{article_id}/agent-extraction.json`.
 ## How to Extract
 
 1. **Domain context** (`domain_context.md`) tells you what the research domain is and gives domain-specific extraction rules and field guidance. Follow these rules exactly.
-2. **Extraction schema** (`.litschema/runtime/extraction_schema.json`) defines every field, type, enum value, and description. Your output JSON must validate against this schema. The root object is defined in `$defs`. Read the schema carefully; field descriptions and enum `description` values contain important guidance.
-3. **Reasoning schema** (`.litschema/runtime/reasoning_schema.json`) defines the format for your reasoning output when present.
-4. **The article markdown** is your sole data source. Extract ONLY from this text.
+2. **Schema context** (`.litschema/runtime/schema_context.json`) tells you the resolved `extraction_root_class`. Use that class as the root object; do not infer the root from `$defs`.
+3. **Extraction schema** (`.litschema/runtime/extraction_schema.json`) defines every field, type, enum value, and description. Your output JSON must validate against this schema. Read the root class and schema carefully; field descriptions and enum `description` values contain important guidance.
+4. **Reasoning schema** (`.litschema/runtime/reasoning_schema.json`) defines the format for your reasoning output when present.
+5. **The article markdown** is your sole data source. Extract ONLY from this text.
 
 **CRITICAL: Extract ONLY from the markdown file provided. Do NOT use any information from memory files, conversation context, prior knowledge about this paper, or other articles. Every extracted value must come from the text of this specific paper.**
 
@@ -63,25 +65,29 @@ This file documents WHY each value was extracted, with line-number evidence from
 
 ## Validation
 
-After writing both JSON files, validate them:
+After writing both JSON files, run these validation commands. A file is valid only if the corresponding command exits 0.
 
 ```bash
 # Validate extraction against schema
 uv run litschema validate data/papers/{article_id}/agent-extraction.json
+
+# Validate reasoning against schema
+uv run python -m litschema.agent.validate_reasoning data/papers/{article_id}/agent-reasoning.json
 ```
 
-If validation fails, read the errors, fix the JSON, and re-validate. Max 3 attempts. Common errors:
+If either command exits nonzero, read the errors, fix the JSON, and re-run the failed command. Max 3 attempts. Common errors:
 - Invalid enum value: check the runtime JSON Schema for allowed values
 - Extra property: field name not in the schema
 - Wrong type: e.g., string where number expected
+- Missing `fields` or `path`/`source_lines`: every reasoning entry needs these
 
-Do NOT finish until extraction validation passes or you have exhausted retries.
+Do NOT finish until both validation commands exit 0 or you have exhausted retries.
 
 ## Checklist
 
 Before finishing, verify:
 - [ ] `data/papers/{article_id}/agent-extraction.json` exists and passes extraction validation
-- [ ] `data/papers/{article_id}/agent-reasoning.json` exists
+- [ ] `data/papers/{article_id}/agent-reasoning.json` exists and passes reasoning validation
 - [ ] Every non-metadata leaf field in the extraction has a corresponding reasoning entry
 - [ ] All `source_lines` reference real line numbers from the markdown
 - [ ] No data was extracted from the References/Bibliography section
