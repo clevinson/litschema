@@ -9,6 +9,9 @@ Usage:
 from __future__ import annotations
 
 import json
+import re
+import urllib.error
+import urllib.request
 import webbrowser
 from datetime import UTC, datetime
 from pathlib import Path
@@ -41,6 +44,7 @@ _corpus_cache: dict | None = None
 _article_index: dict[str, dict] | None = None
 _author_index: dict[str, dict] | None = None
 _author_file_index: dict[str, dict] | None = None
+ORCID_RE = re.compile(r"^\d{4}-\d{4}-\d{4}-\d{3}[0-9X]$")
 
 
 def _load_corpus() -> dict:
@@ -180,6 +184,27 @@ def _review_progress(extraction: dict, annotations: list[dict]) -> dict:
     }
 
 
+def _normalize_orcid_id(orcid_id: str) -> str:
+    """Return a canonical ORCID iD or raise 400."""
+    value = re.sub(r"^https?://orcid\.org/", "", orcid_id.strip(), flags=re.IGNORECASE).rstrip("/")
+    value = value.upper()
+    if not ORCID_RE.match(value):
+        raise HTTPException(400, "Invalid ORCID iD")
+    return value
+
+
+def _orcid_display_name(person: dict) -> str | None:
+    """Extract a readable public name from an ORCID person payload."""
+    name = (person.get("name") or {}) if isinstance(person, dict) else {}
+    credit = ((name.get("credit-name") or {}).get("value") or "").strip()
+    given = ((name.get("given-names") or {}).get("value") or "").strip()
+    family = ((name.get("family-name") or {}).get("value") or "").strip()
+    if credit:
+        return credit
+    full = " ".join(part for part in [given, family] if part).strip()
+    return full or None
+
+
 @app.get("/", response_class=HTMLResponse)
 async def index():
     return (STATIC_DIR / "index.html").read_text()
@@ -225,6 +250,33 @@ async def list_articles():
         )
 
     return {"articles": articles, "total": len(articles)}
+
+
+@app.get("/api/orcid/{orcid_id}")
+async def get_orcid_profile(orcid_id: str):
+    """Resolve an ORCID iD to a public profile name."""
+    canonical_id = _normalize_orcid_id(orcid_id)
+    request = urllib.request.Request(
+        f"https://pub.orcid.org/v3.0/{canonical_id}/person",
+        headers={
+            "Accept": "application/json",
+            "User-Agent": "litschema-verifier/0.1",
+        },
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=8) as response:
+            person = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        if exc.code == 404:
+            raise HTTPException(404, "User not found") from exc
+        raise HTTPException(502, "ORCID lookup failed") from exc
+    except Exception as exc:
+        raise HTTPException(502, "ORCID lookup failed") from exc
+
+    name = _orcid_display_name(person)
+    if not name:
+        raise HTTPException(404, "User not found")
+    return {"orcid": canonical_id, "name": name, "url": f"https://orcid.org/{canonical_id}"}
 
 
 @app.get("/api/article/{article_id}")

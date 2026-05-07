@@ -34,36 +34,49 @@ def test_verifier_uses_selected_field_actions() -> None:
     assert "selected-field-bar" in html
     assert 'id="selected-field-label"' in html
     assert 'id="selected-field-value"' in html
+    assert 'id="btn-selected-edit"' not in html
+    assert 'data-action="edit"' not in html
     assert 'id="source-evidence-overlay"' in html
     assert 'id="source-evidence-reasoning"' in html
-    assert 'id="source-evidence-range"' in html
+    assert 'id="source-evidence-index"' in html
+    assert 'id="source-evidence-lines"' in html
     assert 'id="btn-source-evidence-prev"' in html
     assert 'id="btn-source-evidence-next"' in html
     assert 'id="btn-selected-verify"' in html
-    assert 'id="btn-selected-edit"' in html
     assert 'id="btn-selected-clear"' in html
     assert 'aria-label="Verify selected field"' in html
-    assert 'aria-label="Edit selected field"' in html
     assert 'aria-label="Clear selected field review"' in html
     assert 'data-action="verify"' in html
-    assert 'data-action="edit"' in html
     assert 'data-action="clear"' in html
     assert "wireSelectedFieldActions" in html
     assert "Click to verify" not in html
 
 
-def test_verifier_edits_in_selected_field_inspector() -> None:
+def test_verifier_edits_in_source_pane_modal() -> None:
     html = STATIC_HTML.read_text()
 
-    assert 'id="selected-field-edit-form"' in html
-    assert 'id="selected-edit-correct"' in html
-    assert 'id="selected-edit-note"' in html
-    assert 'id="btn-selected-save-edit"' in html
-    assert 'id="btn-selected-cancel-edit"' in html
-    assert "setInspectorEditMode" in html
+    assert 'id="source-edit-overlay"' in html
+    assert 'id="source-edit-correct"' in html
+    assert 'id="source-edit-note"' in html
+    assert 'id="btn-source-edit-save"' in html
+    assert ">Save<" in html
+    assert ">Save Edit<" not in html
+    assert "openFieldEditModal" in html
+    assert "closeFieldEditModal" in html
     assert "saveSelectedFieldEdit" in html
+    assert "selected-field-edit-form" not in html
     assert "showFlagDialog" not in html
     assert "flag-dialog" not in html
+
+
+def test_verifier_uses_unicode_pencil_for_edit_actions() -> None:
+    html = STATIC_HTML.read_text()
+
+    assert 'class="icon-svg edit-icon"' not in html
+    assert 'aria-label="Edit selected field"' not in html
+    assert "&#9998;" in html
+    assert "row-edit-action" in html
+    assert 'title="Edit value">&#9998;</button>' in html
 
 
 def test_verifier_table_uses_compact_evidence_badges() -> None:
@@ -86,6 +99,22 @@ def test_verifier_keeps_transient_feedback_out_of_review_header() -> None:
     assert "saveAnnotation" in html
     assert "clearAnnotation" in html
     assert "Failed to save annotation" in html
+
+
+def test_verifier_uses_orcid_connect_flow() -> None:
+    html = STATIC_HTML.read_text()
+
+    assert 'id="reviewer-id"' in html
+    assert 'type="hidden"' in html
+    assert 'id="btn-orcid-connect"' in html
+    assert "Connect ORCID" in html
+    assert 'id="orcid-modal"' in html
+    assert 'id="orcid-input"' in html
+    assert 'id="btn-orcid-lookup"' in html
+    assert 'id="btn-orcid-save"' in html
+    assert "lookupOrcidProfile" in html
+    assert "/api/orcid/" in html
+    assert "Disconnect" in html
 
 
 def test_verifier_exposes_bulk_review_actions() -> None:
@@ -129,6 +158,9 @@ def test_verifier_action_column_uses_compact_status() -> None:
     assert "margin: 0 auto" in html
     assert "suppressClearHoverPaths" in html
     assert "status-icon-hover" in html
+    assert "row-edit-action" in html
+    assert "row-clear-edit-action" in html
+    assert "displayFieldValueForPath" in html
     assert "toggleFieldVerification" in html
 
 
@@ -175,6 +207,9 @@ def test_verifier_scopes_review_navigation_to_current_article() -> None:
     assert "selectNextReviewPath" in html
     assert '<strong>${counts.reviewed}/${counts.total}</strong> audited' in html
     assert "reviewed${flagText}" not in html
+    assert " flagged</span>" not in html.lower()
+    assert " flagged`" not in html.lower()
+    assert "edited" in html.lower()
     assert "articleOptionLabel" in html
     assert "article.confidence" not in html
     assert "filter-group" not in html

@@ -627,7 +627,7 @@
     color: var(--text-dim);
   }
 
-  .tv-badge-flagged {
+  .tv-badge-edited {
     background: rgba(202, 138, 4, 0.15);
     color: var(--yellow);
   }
@@ -893,8 +893,53 @@
     background: rgba(202, 138, 4, 0.12);
   }
 
+  .field-status.status-flagged:hover {
+    color: var(--yellow);
+    background: rgba(202, 138, 4, 0.2);
+  }
+
   .field-status.status-empty {
     color: var(--text-dim);
+  }
+
+  .status-actions {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-width: 54px;
+  }
+
+  .row-edit-action,
+  .row-clear-edit-action {
+    appearance: none;
+    width: 18px;
+    height: 22px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--text-dim);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+  }
+
+  .row-clear-edit-action {
+    opacity: 1;
+  }
+
+  .ext-table tr:hover .row-edit-action,
+  .row-edit-action:focus-visible,
+  .row-clear-edit-action:hover,
+  .row-clear-edit-action:focus-visible {
+    opacity: 1;
+    color: var(--text);
+  }
+
+  .edited-value-cell {
+    color: var(--yellow) !important;
   }
 
   .selected-field-bar {
@@ -960,33 +1005,45 @@
     font-size: 13px;
   }
 
-  .icon-svg {
-    width: 14px;
-    height: 14px;
-    stroke: currentColor;
-    fill: none;
-    stroke-width: 2;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-    pointer-events: none;
-  }
-
   .selected-source-range {
     color: var(--cited);
   }
 
-  .selected-field-edit-form {
+  .source-edit-overlay {
     display: none;
-    width: 100%;
-    grid-template-columns: minmax(0, 1fr);
-    gap: 6px;
+    position: absolute;
+    left: 16px;
+    right: 16px;
+    bottom: 16px;
+    z-index: 6;
+    max-height: 44vh;
+    overflow: auto;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: color-mix(in srgb, var(--bg-raised) 97%, transparent);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.14);
   }
 
-  .selected-field-edit-form.active {
+  .source-edit-overlay.active {
     display: grid;
+    gap: 10px;
   }
 
-  .selected-field-edit-form label {
+  .source-edit-title {
+    color: var(--text);
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  .source-edit-current {
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.4;
+  }
+
+  .source-edit-overlay label {
     display: flex;
     flex-direction: column;
     gap: 3px;
@@ -996,8 +1053,8 @@
     text-transform: uppercase;
   }
 
-  .selected-field-edit-form input,
-  .selected-field-edit-form textarea {
+  .source-edit-overlay input,
+  .source-edit-overlay textarea {
     background: var(--bg-input);
     border: 1px solid var(--border);
     border-radius: var(--radius);
@@ -1007,7 +1064,7 @@
     padding: 5px 8px;
   }
 
-  .selected-field-edit-form textarea {
+  .source-edit-overlay textarea {
     font-family: var(--font-sans);
     resize: vertical;
   }
@@ -1165,17 +1222,99 @@
   .ann-btn.ann-flagged { opacity: 1; color: var(--yellow); border-color: var(--yellow); }
 
   .reviewer-input {
+    display: none;
+  }
+
+  .orcid-connect-btn,
+  .orcid-profile-btn {
+    height: 32px;
+    padding: 0 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-input);
+    color: var(--text-secondary);
+    font-family: var(--font-sans);
+    font-size: 12px;
+    cursor: pointer;
+  }
+
+  .orcid-connect-btn:hover,
+  .orcid-profile-btn:hover {
+    color: var(--text);
+    border-color: var(--text-dim);
+  }
+
+  .orcid-profile-btn {
+    color: var(--green);
+  }
+
+  .orcid-profile-btn .orcid-disconnect-label {
+    display: none;
+    color: var(--text);
+  }
+
+  .orcid-profile-btn:hover .orcid-name-label {
+    display: none;
+  }
+
+  .orcid-profile-btn:hover .orcid-disconnect-label {
+    display: inline;
+  }
+
+  .orcid-modal-backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 20;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.24);
+  }
+
+  .orcid-modal-backdrop.active {
+    display: flex;
+  }
+
+  .orcid-modal {
+    width: min(420px, calc(100vw - 32px));
+    padding: 16px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-raised);
+    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.2);
+    display: grid;
+    gap: 12px;
+  }
+
+  .orcid-modal h3 {
+    margin: 0;
+    font-size: 15px;
+  }
+
+  .orcid-modal label {
+    display: grid;
+    gap: 4px;
+    color: var(--text-dim);
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+
+  .orcid-modal input {
     background: var(--bg-input);
     border: 1px solid var(--border);
     border-radius: var(--radius);
     color: var(--text);
     font-family: var(--font-mono);
-    font-size: 11px;
-    padding: 4px 8px;
-    width: 180px;
+    font-size: 12px;
+    padding: 7px 9px;
   }
 
-  .reviewer-input::placeholder { color: var(--text-dim); }
+  .orcid-result {
+    min-height: 18px;
+    color: var(--text-secondary);
+    font-size: 12px;
+  }
 
   .flag-note-display {
     font-size: 10px;
@@ -1589,8 +1728,28 @@
     <button id="btn-next" disabled>&#9654;</button>
   </div>
   <div class="toolbar-spacer"></div>
-  <input type="text" class="reviewer-input" id="reviewer-id" placeholder="ORCID (e.g., 0000-0002-...)" title="Your ORCID for annotations">
+  <input type="hidden" class="reviewer-input" id="reviewer-id">
+  <button class="orcid-connect-btn" id="btn-orcid-connect">Connect ORCID</button>
+  <button class="orcid-profile-btn" id="btn-orcid-profile" style="display:none" title="Disconnect ORCID">
+    <span class="orcid-name-label" id="orcid-profile-name"></span>
+    <span class="orcid-disconnect-label">Disconnect</span>
+  </button>
   <button class="theme-btn" id="btn-theme" title="Toggle theme">&#9790;</button>
+</div>
+
+<div class="orcid-modal-backdrop" id="orcid-modal" role="dialog" aria-modal="true" aria-labelledby="orcid-modal-title">
+  <div class="orcid-modal">
+    <h3 id="orcid-modal-title">Connect ORCID</h3>
+    <label>ORCID iD
+      <input type="text" id="orcid-input" placeholder="0000-0002-1825-0097">
+    </label>
+    <div class="orcid-result" id="orcid-result">Enter an ORCID iD to look up the public profile.</div>
+    <div class="selected-edit-actions">
+      <button class="review-action-btn" id="btn-orcid-lookup">Look Up</button>
+      <button class="review-action-btn" id="btn-orcid-save" disabled>Save</button>
+      <button class="review-action-btn" id="btn-orcid-cancel">Cancel</button>
+    </div>
+  </div>
 </div>
 
 <div class="welcome" id="welcome">
@@ -1635,12 +1794,27 @@
       <div class="source-evidence-top">
         <div class="source-evidence-label" id="source-evidence-label">No field selected</div>
         <div class="source-evidence-nav">
-          <button class="review-action-btn" id="btn-source-evidence-prev" aria-label="Previous source" disabled>&#9664;</button>
-          <span class="selected-source-range" id="source-evidence-range">No field selected</span>
-          <button class="review-action-btn" id="btn-source-evidence-next" aria-label="Next source" disabled>&#9654;</button>
+          <button class="review-action-btn" id="btn-source-evidence-prev" aria-label="Previous source" disabled>&lsaquo;</button>
+          <span class="selected-source-range" id="source-evidence-index">0/0</span>
+          <button class="review-action-btn" id="btn-source-evidence-next" aria-label="Next source" disabled>&rsaquo;</button>
+          <span class="selected-source-range" id="source-evidence-lines">No field selected</span>
         </div>
       </div>
       <div class="source-evidence-reasoning" id="source-evidence-reasoning"></div>
+    </div>
+    <div class="source-edit-overlay" id="source-edit-overlay" aria-live="polite">
+      <div class="source-edit-title" id="source-edit-title">Edit field</div>
+      <div class="source-edit-current" id="source-edit-current"></div>
+      <label>Corrected value
+        <input type="text" id="source-edit-correct" placeholder="Enter corrected value, or __remove__">
+      </label>
+      <label>Note
+        <textarea id="source-edit-note" rows="3" placeholder="Describe the correction or uncertainty"></textarea>
+      </label>
+      <div class="selected-edit-actions">
+        <button class="review-action-btn" id="btn-source-edit-save">Save</button>
+        <button class="review-action-btn" id="btn-source-edit-cancel">Cancel</button>
+      </div>
     </div>
   </div>
   <div class="panel panel-right">
@@ -1664,20 +1838,7 @@
         </div>
         <div class="selected-field-actions">
           <button class="review-action-btn" id="btn-selected-verify" data-action="verify" aria-label="Verify selected field" title="Verify selected field" disabled>&#10003;</button>
-          <button class="review-action-btn" id="btn-selected-edit" data-action="edit" aria-label="Edit selected field" title="Edit selected field" disabled><svg class="icon-svg edit-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 4 8 16"/><path d="M6 18l2-2 2 2-4 4z"/><path d="m16 4 4 4"/></svg></button>
           <button class="review-action-btn" id="btn-selected-clear" data-action="clear" aria-label="Clear selected field review" title="Clear selected field review" disabled>&#10005;</button>
-        </div>
-      </div>
-      <div class="selected-field-edit-form" id="selected-field-edit-form">
-        <label>Corrected value
-          <input type="text" id="selected-edit-correct" placeholder="Enter corrected value, or __remove__">
-        </label>
-        <label>Note
-          <textarea id="selected-edit-note" rows="2" placeholder="Describe the correction or uncertainty"></textarea>
-        </label>
-        <div class="selected-edit-actions">
-          <button class="review-action-btn" id="btn-selected-save-edit">Save Edit</button>
-          <button class="review-action-btn" id="btn-selected-cancel-edit">Cancel</button>
         </div>
       </div>
     </div>
@@ -1700,6 +1861,7 @@ const state = {
   reasoningByPath: {},
   annotations: {},  // path -> {status, reviewer, timestamp, note}
   selectedPath: null,
+  editingPath: null,
   selectedSourceIndex: 0,
   inspectorEditMode: false,
   sections: [],
@@ -1815,7 +1977,9 @@ $("#article-select").addEventListener("change", async (e) => {
   if (!id) return;
   state.currentId = id;
   state.selectedPath = null;
+  state.editingPath = null;
   state.inspectorEditMode = false;
+  $("#source-edit-overlay")?.classList.remove("active");
   updateSelectedFieldBar(null);
 
   // Show panels, hide welcome
@@ -2424,7 +2588,7 @@ function buildHorizontalTable(arr, basePath, key) {
           } else if (rowAnn.flagged > 0) {
             annStatus = "flagged";
           }
-          html += `<td${rowspanAttr}>${buildFieldStatus(itemPath, annStatus)}</td>`;
+          html += `<td class="status-cell"${rowspanAttr}>${buildStatusActions(itemPath, annStatus)}</td>`;
         }
 
         html += '</tr>';
@@ -2457,7 +2621,7 @@ function buildHorizontalTable(arr, basePath, key) {
       } else if (rowAnn.flagged > 0) {
         annStatus = "flagged";
       }
-      html += `<td>${buildFieldStatus(itemPath, annStatus)}</td>`;
+      html += `<td class="status-cell">${buildStatusActions(itemPath, annStatus)}</td>`;
 
       html += '</tr>';
     }
@@ -2533,18 +2697,18 @@ function auditBadgesHtml(obj, basePath) {
   const total = countFieldsUnderPath(obj, basePath);
   if (total === 0) return '';
 
-  let audited = 0, flagged = 0;
+  let audited = 0, edited = 0;
   for (const [path, ann] of Object.entries(state.annotations)) {
     if (path === basePath || path.startsWith(basePath + ".") || path.startsWith(basePath + "[")) {
       audited++;
-      if (ann.status === "flagged") flagged++;
+      if (ann.status === "flagged") edited++;
     }
   }
 
   let html = '<span class="tv-badges">';
   html += `<span class="tv-badge tv-badge-audit">${audited}/${total} audited</span>`;
-  if (flagged > 0) {
-    html += `<span class="tv-badge tv-badge-flagged">${flagged} flagged</span>`;
+  if (edited > 0) {
+    html += `<span class="tv-badge tv-badge-edited">${edited} edited</span>`;
   }
   html += '</span>';
   return html;
@@ -2670,36 +2834,33 @@ function buildValueCells(value, path) {
   const entry = state.reasoningByPath[path];
   const ann = state.annotations[path];
 
-  let valStyle = "";
-  let displayVal = "";
-  if (typeof value === "number") {
-    valStyle = ' style="color:var(--val-number)"';
-    displayVal = String(value);
-  } else if (typeof value === "string") {
-    valStyle = ' style="color:var(--val-string)"';
-    displayVal = escapeHtml(value);
-  } else if (value === null || value === undefined) {
-    displayVal = '<span style="color:var(--text-dim)">null</span>';
-  } else {
-    displayVal = escapeHtml(String(value));
-  }
-
   const sourceHtml = buildEvidenceBadge(path);
 
   const annStatus = ann ? ann.status : "";
+  const display = displayFieldValueForPath(path, value);
+  const valueClass = annStatus === "flagged" ? "value-cell edited-value-cell" : "value-cell";
+  const valueAttrs = ` class="${valueClass}"${display.style}`;
 
-  // Show correction and note for flagged fields
-  let flagDetails = "";
-  if (annStatus === "flagged" && ann) {
-    if (ann.correct_value) flagDetails += `<div class="flag-correction">→ ${escapeHtml(ann.correct_value)}</div>`;
-    if (ann.note) flagDetails += `<div class="flag-note-display">${escapeHtml(ann.note)}</div>`;
-  }
-
-  const valueAttrs = ` class="value-cell"${valStyle}`;
-
-  return `<td${valueAttrs}>${displayVal}${flagDetails}</td>
+  return `<td${valueAttrs}>${display.html}</td>
     <td class="source-cell">${sourceHtml}</td>
-    <td class="status-cell">${buildFieldStatus(path, annStatus)}</td>`;
+    <td class="status-cell">${buildStatusActions(path, annStatus)}</td>`;
+}
+
+function displayFieldValueForPath(path, value = getValueAtPath(state.extraction, path)) {
+  const ann = state.annotations[path];
+  if (ann && ann.status === "flagged" && ann.correct_value) {
+    return { html: escapeHtml(ann.correct_value), style: "" };
+  }
+  if (typeof value === "number") {
+    return { html: String(value), style: ' style="color:var(--val-number)"' };
+  }
+  if (typeof value === "string") {
+    return { html: escapeHtml(value), style: ' style="color:var(--val-string)"' };
+  }
+  if (value === null || value === undefined) {
+    return { html: '<span style="color:var(--text-dim)">null</span>', style: "" };
+  }
+  return { html: escapeHtml(String(value)), style: "" };
 }
 
 function buildFieldStatus(path, status) {
@@ -2714,6 +2875,17 @@ function buildFieldStatus(path, status) {
   return `<button type="button" class="field-status status-${statusClass}${hoverClass}" data-path="${path}" title="${label}" aria-label="${label}">` +
     `<span class="status-icon-main">${icon}</span><span class="status-icon-hover">&#10005;</span>` +
     `</button>`;
+}
+
+function buildRowEditAction(path, status) {
+  if (status === "flagged") {
+    return `<button type="button" class="row-clear-edit-action" data-path="${path}" aria-label="Clear edited value" title="Clear edited value">&#10005;</button>`;
+  }
+  return `<button type="button" class="row-edit-action" data-path="${path}" aria-label="Edit field" title="Edit field">&#9998;</button>`;
+}
+
+function buildStatusActions(path, status) {
+  return `<span class="status-actions">${buildFieldStatus(path, status)}${buildRowEditAction(path, status)}</span>`;
 }
 
 function sourceSummaryForPath(path, explicitRanges = null) {
@@ -2904,33 +3076,59 @@ function selectedReasoning(path) {
   return entry && entry.reasoning ? entry.reasoning : "";
 }
 
-function setInspectorEditMode(enabled) {
-  state.inspectorEditMode = enabled;
-  const form = $("#selected-field-edit-form");
-  if (!form) return;
-  form.classList.toggle("active", enabled && !!state.selectedPath);
-  if (!enabled || !state.selectedPath) return;
-  const ann = state.annotations[state.selectedPath];
-  $("#selected-edit-correct").value = ann?.correct_value || "";
-  $("#selected-edit-note").value = ann?.note || "";
-  $("#selected-edit-correct").focus();
+function openFieldEditModal(path) {
+  if (!path) return;
+  state.selectedPath = path;
+  state.editingPath = path;
+  state.selectedSourceIndex = 0;
+  state.inspectorEditMode = true;
+  updateSelectedFieldBar(path);
+  updateSourceEvidenceOverlay();
+
+  const overlay = $("#source-edit-overlay");
+  const title = $("#source-edit-title");
+  const current = $("#source-edit-current");
+  const correct = $("#source-edit-correct");
+  const note = $("#source-edit-note");
+  const ann = state.annotations[path];
+  if (!overlay || !correct || !note) return;
+  title.textContent = selectedFieldLabel(path);
+  current.textContent = displayFieldValue(getValueAtPath(state.extraction, path));
+  correct.value = ann?.correct_value || "";
+  note.value = ann?.note || "";
+  overlay.classList.add("active");
+  $("#source-evidence-overlay")?.classList.remove("active");
+  correct.focus();
+}
+
+function closeFieldEditModal() {
+  state.editingPath = null;
+  state.inspectorEditMode = false;
+  $("#source-edit-overlay")?.classList.remove("active");
+  updateSourceEvidenceOverlay();
 }
 
 function updateSourceEvidenceOverlay() {
   const overlay = $("#source-evidence-overlay");
   const label = $("#source-evidence-label");
-  const range = $("#source-evidence-range");
+  const indexEl = $("#source-evidence-index");
+  const lines = $("#source-evidence-lines");
   const prev = $("#btn-source-evidence-prev");
   const next = $("#btn-source-evidence-next");
   const reasoning = $("#source-evidence-reasoning");
-  if (!overlay || !range) return;
+  if (!overlay || !indexEl || !lines) return;
+  if (state.editingPath) {
+    overlay.classList.remove("active");
+    return;
+  }
 
   const ranges = selectedSourceRanges(state.selectedPath);
   if (!state.selectedPath) {
     overlay.classList.remove("active");
     if (label) label.textContent = "No field selected";
     if (reasoning) reasoning.textContent = "";
-    range.textContent = "No field selected";
+    indexEl.textContent = "0/0";
+    lines.textContent = "No field selected";
     if (prev) prev.disabled = true;
     if (next) next.disabled = true;
     return;
@@ -2942,7 +3140,8 @@ function updateSourceEvidenceOverlay() {
   if (reasoning) reasoning.textContent = reasoningText || "No reasoning note for this field.";
 
   if (ranges.length === 0) {
-    range.textContent = state.selectedPath ? "No citation" : "No field selected";
+    indexEl.textContent = "0/0";
+    lines.textContent = state.selectedPath ? "No citation" : "No field selected";
     if (prev) prev.disabled = true;
     if (next) next.disabled = true;
     return;
@@ -2950,7 +3149,8 @@ function updateSourceEvidenceOverlay() {
 
   state.selectedSourceIndex = Math.max(0, Math.min(state.selectedSourceIndex, ranges.length - 1));
   const current = ranges[state.selectedSourceIndex];
-  range.textContent = ranges.length === 1 ? current : `${current} (${state.selectedSourceIndex + 1}/${ranges.length})`;
+  indexEl.textContent = `${state.selectedSourceIndex + 1}/${ranges.length}`;
+  lines.textContent = current;
   if (prev) prev.disabled = ranges.length < 2;
   if (next) next.disabled = ranges.length < 2;
 }
@@ -2981,14 +3181,15 @@ function focusSelectedSource(index = state.selectedSourceIndex) {
 }
 
 function saveSelectedFieldEdit() {
-  if (!state.selectedPath) return;
+  const path = state.editingPath || state.selectedPath;
+  if (!path) return;
   const reviewer = $("#reviewer-id").value.trim();
   if (!reviewer) { alert("Please enter your ORCID in the toolbar before editing."); return; }
-  saveAnnotation(state.selectedPath, "flagged", {
-    correct_value: $("#selected-edit-correct").value.trim(),
-    note: $("#selected-edit-note").value.trim(),
+  saveAnnotation(path, "flagged", {
+    correct_value: $("#source-edit-correct").value.trim(),
+    note: $("#source-edit-note").value.trim(),
   }).then(ok => {
-    if (ok) setInspectorEditMode(false);
+    if (ok) closeFieldEditModal();
   });
 }
 
@@ -2999,7 +3200,6 @@ function updateSelectedFieldBar(path = state.selectedPath) {
   const value = $("#selected-field-value");
   const buttons = [
     $("#btn-selected-verify"),
-    $("#btn-selected-edit"),
     $("#btn-selected-clear"),
   ];
 
@@ -3010,7 +3210,7 @@ function updateSelectedFieldBar(path = state.selectedPath) {
     buttons.forEach(btn => { if (btn) btn.disabled = true; });
     const verifyBtn = $("#btn-selected-verify");
     if (verifyBtn) verifyBtn.title = "Verify selected field";
-    setInspectorEditMode(false);
+    if (!state.editingPath) closeFieldEditModal();
     updateSourceEvidenceOverlay();
     return;
   }
@@ -3020,7 +3220,9 @@ function updateSelectedFieldBar(path = state.selectedPath) {
   const status = ann?.status === "verified" ? "Verified" : ann?.status === "flagged" ? "Edited" : "Unreviewed";
   bar.classList.add("active");
   label.textContent = `${selectedFieldLabel(path)} · ${status}`;
-  value.textContent = displayFieldValue(currentValue);
+  value.textContent = ann?.status === "flagged" && ann.correct_value
+    ? ann.correct_value
+    : displayFieldValue(currentValue);
   buttons.forEach(btn => { if (btn) btn.disabled = false; });
   const verifyBtn = $("#btn-selected-verify");
   if (verifyBtn) {
@@ -3031,7 +3233,6 @@ function updateSelectedFieldBar(path = state.selectedPath) {
   const clearBtn = $("#btn-selected-clear");
   if (clearBtn) clearBtn.disabled = !ann;
   updateSourceEvidenceOverlay();
-  setInspectorEditMode(state.inspectorEditMode);
 }
 
 function wireTableEvents(panel) {
@@ -3044,6 +3245,20 @@ function wireTableEvents(panel) {
     btn.addEventListener("click", async (e) => {
       e.stopPropagation();
       await toggleFieldVerification(btn.dataset.path);
+    });
+  });
+
+  panel.querySelectorAll(".row-edit-action[data-path]").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openFieldEditModal(btn.dataset.path);
+    });
+  });
+
+  panel.querySelectorAll(".row-clear-edit-action[data-path]").forEach(btn => {
+    btn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      await clearAnnotation(btn.dataset.path);
     });
   });
 
@@ -3374,11 +3589,11 @@ function buildLeafHtml(key, value, path) {
   if (annStatus === "verified") indicatorClass = "verified";
   else if (annStatus === "flagged") indicatorClass = "flagged";
 
-  // Flag details
-  let flagDetails = "";
+  // Edit details
+  let editDetails = "";
   if (annStatus === "flagged" && ann) {
-    if (ann.correct_value) flagDetails += `<div class="flag-correction" style="margin-left:24px">→ ${escapeHtml(ann.correct_value)}</div>`;
-    if (ann.note) flagDetails += `<div class="flag-note-display" style="margin-left:24px">${escapeHtml(ann.note)}</div>`;
+    if (ann.correct_value) editDetails += `<div class="flag-correction" style="margin-left:24px">${escapeHtml(ann.correct_value)}</div>`;
+    if (ann.note) editDetails += `<div class="flag-note-display" style="margin-left:24px">${escapeHtml(ann.note)}</div>`;
   }
 
   let valClass = "string";
@@ -3393,7 +3608,7 @@ function buildLeafHtml(key, value, path) {
     <span class="tree-value ${valClass}">${escapeHtml(displayVal)}</span>
     ${sourceHtml}
     ${annControls}
-  </div>${flagDetails}`;
+  </div>${editDetails}`;
 }
 
 function buildAnnotationActions(path, status, options = {}) {
@@ -3407,7 +3622,7 @@ function buildAnnotationActions(path, status, options = {}) {
 
   return `<span class="${classes.join(" ")}" data-path="${path}"${scopeAttr}>` +
     `<button class="annotation-action${verifyActive}" data-action="verify" data-path="${path}"${scopeAttr} aria-pressed="${status === "verified"}" title="Mark verified">&#10003;</button>` +
-    `<button class="annotation-action${flagActive}" data-action="flag" data-path="${path}"${scopeAttr} aria-pressed="${status === "flagged"}" title="Flag for correction">&#9873;</button>` +
+    `<button class="annotation-action${flagActive}" data-action="flag" data-path="${path}"${scopeAttr} aria-pressed="${status === "flagged"}" title="Edit value">&#9998;</button>` +
     `<button class="annotation-action" data-action="clear" data-path="${path}"${scopeAttr}${clearDisabled} title="Clear review status">&#10005;</button>` +
     `</span>`;
 }
@@ -3693,7 +3908,7 @@ function updateStats() {
   let msg = `${reasoned}/${total} cited`;
   if (nVerified > 0 || nFlagged > 0) {
     msg += ` \u00b7 ${nVerified} verified`;
-    if (nFlagged > 0) msg += `, ${nFlagged} flagged`;
+    if (nFlagged > 0) msg += `, ${nFlagged} edited`;
   }
   $("#stat-citations").textContent = msg;
   syncCurrentArticleProgress();
@@ -3822,10 +4037,10 @@ async function clearAnnotation(path, options = {}) {
 
   try {
     const response = await fetch(`/api/annotations/${state.currentId}/${path}`, { method: "DELETE" });
-	    if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
-	    delete state.annotations[path];
-	    state.suppressClearHoverPaths.delete(path);
-	    setSaveStatus("Cleared", "saved");
+    if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+    delete state.annotations[path];
+    state.suppressClearHoverPaths.delete(path);
+    setSaveStatus("Cleared", "saved");
     return true;
   } catch (err) {
     state.annotations[path] = previous;
@@ -3859,40 +4074,36 @@ async function toggleFieldVerification(path) {
     await clearAnnotation(path);
     return;
   }
+  if (ann.status === "flagged") {
+    openFieldEditModal(path);
+    return;
+  }
   selectTableRow(path);
 }
 
 function wireSelectedFieldActions() {
   const verifyBtn = $("#btn-selected-verify");
-  const editBtn = $("#btn-selected-edit");
   const clearBtn = $("#btn-selected-clear");
 
   if (verifyBtn) {
     verifyBtn.addEventListener("click", async () => {
       if (!state.selectedPath || verifyBtn.disabled) return;
-      setInspectorEditMode(false);
+      closeFieldEditModal();
       state.suppressClearHoverPaths.add(state.selectedPath);
       await saveAnnotation(state.selectedPath, "verified", selectedVerifyExtra(state.selectedPath));
-    });
-  }
-
-  if (editBtn) {
-    editBtn.addEventListener("click", () => {
-      if (!state.selectedPath || editBtn.disabled) return;
-      setInspectorEditMode(true);
     });
   }
 
   if (clearBtn) {
     clearBtn.addEventListener("click", async () => {
       if (!state.selectedPath || clearBtn.disabled) return;
-      setInspectorEditMode(false);
+      closeFieldEditModal();
       await clearAnnotation(state.selectedPath);
     });
   }
 
-  $("#btn-selected-save-edit").addEventListener("click", saveSelectedFieldEdit);
-  $("#btn-selected-cancel-edit").addEventListener("click", () => setInspectorEditMode(false));
+  $("#btn-source-edit-save").addEventListener("click", saveSelectedFieldEdit);
+  $("#btn-source-edit-cancel").addEventListener("click", closeFieldEditModal);
   $("#btn-source-evidence-prev").addEventListener("click", () => focusSelectedSource(state.selectedSourceIndex - 1));
   $("#btn-source-evidence-next").addEventListener("click", () => focusSelectedSource(state.selectedSourceIndex + 1));
 }
@@ -4105,10 +4316,7 @@ function wireAnnotationActions(panel) {
         if (isRow) await verifyRowAnnotations(path);
         else await saveAnnotation(path, "verified");
       } else if (action === "flag") {
-        state.selectedPath = path;
-        state.selectedSourceIndex = 0;
-        updateSelectedFieldBar(path);
-        setInspectorEditMode(true);
+        openFieldEditModal(path);
       } else if (action === "clear") {
         if (isRow) await clearRowAnnotations(path);
         else await clearAnnotation(path);
@@ -4147,12 +4355,102 @@ function getValueAtPath(obj, path) {
   return current;
 }
 
-// Reviewer ID persistence
-const savedReviewer = localStorage.getItem("erw-reviewer-id") || "";
-$("#reviewer-id").value = savedReviewer;
-$("#reviewer-id").addEventListener("change", () => {
-  localStorage.setItem("erw-reviewer-id", $("#reviewer-id").value.trim());
+// Reviewer identity persistence
+let pendingOrcidProfile = null;
+
+function normalizeOrcidInput(value) {
+  return value.trim()
+    .replace(/^https?:\/\/orcid\.org\//i, "")
+    .toUpperCase();
+}
+
+function setReviewerIdentity(profile) {
+  const reviewerId = $("#reviewer-id");
+  const connect = $("#btn-orcid-connect");
+  const profileBtn = $("#btn-orcid-profile");
+  const name = $("#orcid-profile-name");
+  if (!profile) {
+    reviewerId.value = "";
+    connect.style.display = "inline-flex";
+    profileBtn.style.display = "none";
+    localStorage.removeItem("erw-reviewer-profile");
+    localStorage.removeItem("erw-reviewer-id");
+    return;
+  }
+  reviewerId.value = profile.orcid;
+  connect.style.display = "none";
+  profileBtn.style.display = "inline-flex";
+  name.textContent = profile.name;
+  localStorage.setItem("erw-reviewer-profile", JSON.stringify(profile));
+  localStorage.setItem("erw-reviewer-id", profile.orcid);
+}
+
+function openOrcidModal() {
+  pendingOrcidProfile = null;
+  $("#orcid-input").value = $("#reviewer-id").value || "";
+  $("#orcid-result").textContent = "Enter an ORCID iD to look up the public profile.";
+  $("#btn-orcid-save").disabled = true;
+  $("#orcid-modal").classList.add("active");
+  $("#orcid-input").focus();
+}
+
+function closeOrcidModal() {
+  $("#orcid-modal").classList.remove("active");
+}
+
+async function lookupOrcidProfile() {
+  const value = normalizeOrcidInput($("#orcid-input").value);
+  const result = $("#orcid-result");
+  const save = $("#btn-orcid-save");
+  pendingOrcidProfile = null;
+  save.disabled = true;
+  if (!/^\d{4}-\d{4}-\d{4}-\d{3}[0-9X]$/.test(value)) {
+    result.textContent = "Enter a valid ORCID iD.";
+    return;
+  }
+  result.textContent = "Looking up ORCID profile...";
+  try {
+    const response = await fetch(`/api/orcid/${encodeURIComponent(value)}`);
+    if (!response.ok) throw new Error("not found");
+    pendingOrcidProfile = await response.json();
+    result.textContent = `${pendingOrcidProfile.name} · ${pendingOrcidProfile.orcid}`;
+    save.disabled = false;
+  } catch (err) {
+    result.textContent = "User not found.";
+  }
+}
+
+function initReviewerIdentity() {
+  const savedProfile = localStorage.getItem("erw-reviewer-profile");
+  if (savedProfile) {
+    try {
+      setReviewerIdentity(JSON.parse(savedProfile));
+      return;
+    } catch (err) {
+      localStorage.removeItem("erw-reviewer-profile");
+    }
+  }
+  const savedReviewer = localStorage.getItem("erw-reviewer-id");
+  if (savedReviewer) {
+    setReviewerIdentity({ orcid: savedReviewer, name: savedReviewer });
+  } else {
+    setReviewerIdentity(null);
+  }
+}
+
+$("#btn-orcid-connect").addEventListener("click", openOrcidModal);
+$("#btn-orcid-profile").addEventListener("click", () => setReviewerIdentity(null));
+$("#btn-orcid-lookup").addEventListener("click", lookupOrcidProfile);
+$("#orcid-input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") lookupOrcidProfile();
 });
+$("#btn-orcid-save").addEventListener("click", () => {
+  if (!pendingOrcidProfile) return;
+  setReviewerIdentity(pendingOrcidProfile);
+  closeOrcidModal();
+});
+$("#btn-orcid-cancel").addEventListener("click", closeOrcidModal);
+initReviewerIdentity();
 
 // ── Extraction rendering ──
 state.viewMode = "table";
