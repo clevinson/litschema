@@ -229,6 +229,50 @@
 
   .toolbar-spacer { flex: 1; }
 
+  .view-mode-toggle {
+    display: inline-flex;
+    align-items: center;
+    height: 32px;
+    padding: 2px;
+    gap: 2px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg);
+    flex-shrink: 0;
+  }
+
+  .view-mode-btn {
+    appearance: none;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-family: var(--font-sans);
+    font-size: 12px;
+    font-weight: 500;
+    height: 26px;
+    padding: 0 10px;
+    white-space: nowrap;
+  }
+
+  .view-mode-btn:hover {
+    color: var(--text);
+    background: var(--bg-overlay);
+  }
+
+  .view-mode-btn.active {
+    color: var(--text);
+    background: var(--bg-raised);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+  }
+
+  .review-identity {
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+  }
+
   .theme-btn {
     background: none;
     border: none;
@@ -565,6 +609,72 @@
     font-family: var(--font-sans);
     font-size: 13px;
     padding: 4px 12px 12px;
+  }
+
+  .overview-view .tv-heading[data-depth="0"] {
+    margin-top: 18px;
+  }
+
+  .overview-table colgroup .overview-col-field { width: 35%; }
+  .overview-table colgroup .overview-col-value { width: auto; }
+
+  .overview-table td.overview-value-cell,
+  .overview-table .cell-value {
+    color: var(--text);
+    font-family: var(--font-mono);
+  }
+
+  .overview-table td:nth-child(3),
+  .overview-table td.status-cell {
+    text-align: left;
+    white-space: normal;
+  }
+
+  .json-view {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.65;
+    padding: 8px 12px 24px;
+    color: var(--text);
+  }
+
+  .json-tree,
+  .json-tree ul {
+    list-style: none;
+  }
+
+  .json-tree ul {
+    margin-left: 18px;
+    padding-left: 14px;
+    border-left: 1px solid var(--border-subtle);
+  }
+
+  .json-tree li {
+    margin: 2px 0;
+  }
+
+  .json-toggle {
+    cursor: pointer;
+    color: var(--text-secondary);
+  }
+
+  .json-toggle:hover {
+    color: var(--text);
+  }
+
+  .json-key {
+    color: var(--text-secondary);
+  }
+
+  .json-leaf {
+    cursor: pointer;
+    border-radius: 3px;
+    padding: 1px 2px;
+  }
+
+  .json-leaf:hover,
+  .json-leaf.selected {
+    background: var(--bg-overlay);
   }
 
   .tv-heading {
@@ -1646,12 +1756,19 @@
     <button id="btn-next" disabled>&#9654;</button>
   </div>
   <div class="toolbar-spacer"></div>
-  <input type="hidden" class="reviewer-input" id="reviewer-id">
-  <button class="orcid-connect-btn" id="btn-orcid-connect" title="Connect ORCID">ORCID</button>
-  <button class="orcid-profile-btn" id="btn-orcid-profile" style="display:none" title="Disconnect ORCID">
-    <span class="orcid-name-label" id="orcid-profile-name"></span>
-    <span class="orcid-disconnect-label">Disconnect</span>
-  </button>
+  <div class="view-mode-toggle" aria-label="Extraction view mode">
+    <button class="view-mode-btn active" id="view-mode-review" data-view-mode="review" type="button">Review</button>
+    <button class="view-mode-btn" id="view-mode-overview" data-view-mode="overview" type="button">Overview</button>
+    <button class="view-mode-btn" id="view-mode-json" data-view-mode="json" type="button">JSON</button>
+  </div>
+  <div class="review-identity" id="review-identity-controls">
+    <input type="hidden" class="reviewer-input" id="reviewer-id">
+    <button class="orcid-connect-btn" id="btn-orcid-connect" title="Connect ORCID">ORCID</button>
+    <button class="orcid-profile-btn" id="btn-orcid-profile" style="display:none" title="Disconnect ORCID">
+      <span class="orcid-name-label" id="orcid-profile-name"></span>
+      <span class="orcid-disconnect-label">Disconnect</span>
+    </button>
+  </div>
   <button class="theme-btn" id="btn-theme" title="Toggle theme">&#9790;</button>
 </div>
 
@@ -1723,8 +1840,8 @@
   <div class="panel panel-right">
     <div class="panel-header">
       <div class="panel-header-row review-panel-top">
-        <h3>Extraction Review</h3>
-        <div class="review-actions">
+        <h3 id="extraction-panel-title">Extraction Review</h3>
+        <div class="review-actions" id="review-actions">
           <span class="review-progress" id="review-progress" aria-live="polite"></span>
           <button class="review-action-btn" id="btn-next-unreviewed" disabled>Next Unreviewed</button>
         </div>
@@ -1741,8 +1858,7 @@
 const $ = (sel) => document.querySelector(sel);
 const state = {
   articles: [],
-  viewMode: "table",
-  tableMode: "review",
+  viewMode: "review",
   currentId: null,
   markdown: null,
   extraction: null,
@@ -1760,6 +1876,49 @@ const state = {
   suppressClearHoverPaths: new Set(),
   suppressClearHoverSections: new Set(),
 };
+
+function initialViewMode() {
+  const mode = new URLSearchParams(window.location.search).get("view");
+  return ["review", "overview", "json"].includes(mode) ? mode : "review";
+}
+
+function setViewMode(mode, options = {}) {
+  if (!["review", "overview", "json"].includes(mode)) return;
+  state.viewMode = mode;
+  state.editingPath = null;
+  syncViewControls();
+  updateReviewIdentityVisibility();
+  if (options.updateUrl !== false) {
+    const url = new URL(window.location.href);
+    if (mode === "review") url.searchParams.delete("view");
+    else url.searchParams.set("view", mode);
+    history.replaceState(null, "", url);
+  }
+  renderExtractionPanel();
+}
+
+function syncViewControls() {
+  document.querySelectorAll(".view-mode-btn[data-view-mode]").forEach(btn => {
+    const active = btn.dataset.viewMode === state.viewMode;
+    btn.classList.toggle("active", active);
+    btn.setAttribute("aria-pressed", active ? "true" : "false");
+  });
+  const title = $("#extraction-panel-title");
+  if (title) {
+    title.textContent = state.viewMode === "overview"
+      ? "Extraction Overview"
+      : state.viewMode === "json"
+        ? "Rendered JSON"
+        : "Extraction Review";
+  }
+  const reviewActions = $("#review-actions");
+  if (reviewActions) reviewActions.style.display = state.viewMode === "review" ? "inline-flex" : "none";
+}
+
+function updateReviewIdentityVisibility() {
+  const controls = $("#review-identity-controls");
+  if (controls) controls.style.display = state.viewMode === "review" ? "inline-flex" : "none";
+}
 
 // ── API helpers ──
 async function fetchJson(url) {
@@ -1805,12 +1964,18 @@ async function init() {
   ]);
   state.articles = data.articles;
   state.schemaFields = schemaData.fields || {};
+  state.viewMode = initialViewMode();
+  syncViewControls();
+  updateReviewIdentityVisibility();
   populateDropdown();
 
   // Prev/next handlers
   $("#btn-prev").addEventListener("click", () => navigateArticle(-1));
   $("#btn-next").addEventListener("click", () => navigateArticle(1));
   $("#btn-next-unreviewed").addEventListener("click", () => selectNextReviewPath("unreviewed"));
+  document.querySelectorAll(".view-mode-btn[data-view-mode]").forEach(btn => {
+    btn.addEventListener("click", () => setViewMode(btn.dataset.viewMode));
+  });
   wireSelectedFieldActions();
 }
 
@@ -2036,7 +2201,7 @@ function isPrimitiveArray(val) {
   return Array.isArray(val) && val.length > 0 && val.every(v => isLeaf(v));
 }
 
-function renderTableView() {
+function renderReviewTable() {
   const panel = $("#panel-right");
   const data = state.extraction;
   if (!data) {
@@ -2530,12 +2695,6 @@ function renderValue(key, val, basePath, depth) {
     return buildMergedTable([], [{ key, val, path: basePath }]);
   }
 
-  // Uniform array of objects → optional pivot table.
-  // Default review mode keeps nested rows stable for field-level editing.
-  if (state.tableMode === "pivot" && Array.isArray(val) && val.length > 0 && isUniformArray(val)) {
-    return buildHorizontalTable(val, basePath, key);
-  }
-
   // Array of objects
   if (Array.isArray(val)) {
     let html = '';
@@ -2801,6 +2960,272 @@ function buildTableRow(key, value, path) {
     <td class="field-cell">${humanize(key)}</td>
     ${valCells}
   </tr>`;
+}
+
+function renderOverviewView(data = effectiveExtraction()) {
+  const panel = $("#panel-right");
+  if (!data) {
+    panel.innerHTML = '<div class="loading">No extraction data</div>';
+    return;
+  }
+
+  const skipKeys = new Set(["article_id", "confidence", "reasoning"]);
+  let html = '<div class="table-view overview-view">';
+  const scalarRows = [];
+  const primitiveArrayKeys = [];
+  const complexKeys = [];
+
+  for (const [key, val] of Object.entries(data)) {
+    if (skipKeys.has(key)) continue;
+    if (isLeaf(val)) scalarRows.push({ key, val, path: key });
+    else if (isPrimitiveArray(val)) primitiveArrayKeys.push(key);
+    else complexKeys.push(key);
+  }
+
+  const primitiveArrayEntries = primitiveArrayKeys.map(key => ({ key, val: data[key], path: key }));
+  if (scalarRows.length > 0 || primitiveArrayEntries.length > 0) {
+    html += buildOverviewMergedTable(scalarRows, primitiveArrayEntries);
+  }
+
+  for (const key of complexKeys) {
+    html += renderOverviewValue(key, data[key], key, 0);
+  }
+
+  html += '</div>';
+  panel.innerHTML = html;
+  wireOverviewEvents(panel);
+}
+
+function renderOverviewValue(key, val, basePath, depth) {
+  if (isLeaf(val)) return "";
+  if (isPrimitiveArray(val)) return buildOverviewMergedTable([], [{ key, val, path: basePath }]);
+  if (Array.isArray(val) && val.length > 0 && isUniformArray(val)) {
+    return buildOverviewHorizontalTable(val, basePath, key);
+  }
+  if (Array.isArray(val)) {
+    let html = "";
+    for (let i = 0; i < val.length; i++) {
+      const item = val[i];
+      const itemPath = `${basePath}[${i}]`;
+      const label = sectionLabel(key, i, val.length);
+      if (isLeaf(item)) {
+        html += buildOverviewMergedTable([{ key: label, val: item, path: itemPath }], []);
+      } else {
+        html += buildOverviewSection(label, item, itemPath, depth);
+      }
+    }
+    return html;
+  }
+  if (typeof val === "object" && val !== null) {
+    return buildOverviewSection(humanize(key.replace(/\[\d+\]$/, "")), val, basePath, depth);
+  }
+  return "";
+}
+
+function buildOverviewSection(label, obj, basePath, depth) {
+  const depthAttr = Math.min(depth, 3);
+  let html = `<div class="tv-heading" data-depth="${depthAttr}">`;
+  html += `<span class="tv-heading-label">${escapeHtml(label)}</span>`;
+  html += `</div><div class="tv-body">`;
+  const indent = depth > 0;
+  if (indent) html += '<div class="tv-indent">';
+
+  const leafRows = [];
+  const primitiveArrayEntries = [];
+  const complexEntries = [];
+  for (const [k, v] of Object.entries(obj)) {
+    const childPath = `${basePath}.${k}`;
+    if (isLeaf(v)) leafRows.push({ key: k, val: v, path: childPath });
+    else if (isPrimitiveArray(v)) primitiveArrayEntries.push({ key: k, val: v, path: childPath });
+    else complexEntries.push({ key: k, val: v, path: childPath });
+  }
+
+  if (leafRows.length > 0 || primitiveArrayEntries.length > 0) {
+    html += buildOverviewMergedTable(leafRows, primitiveArrayEntries);
+  }
+  for (const entry of complexEntries) {
+    html += renderOverviewValue(entry.key, entry.val, entry.path, depth + 1);
+  }
+
+  if (indent) html += '</div>';
+  html += '</div>';
+  return html;
+}
+
+function buildOverviewMergedTable(scalarRows, primitiveArrayEntries) {
+  let html = '<table class="ext-table overview-table">';
+  html += '<colgroup><col class="overview-col-field"><col class="overview-col-value"></colgroup>';
+  html += '<thead><tr><th>Field</th><th>Value</th></tr></thead><tbody>';
+  for (const row of scalarRows) {
+    html += buildOverviewTableRow(row.key, row.val, row.path);
+  }
+  for (const entry of primitiveArrayEntries) {
+    const arr = entry.val;
+    if (arr.length === 1) {
+      html += buildOverviewTableRow(entry.key, arr[0], `${entry.path}[0]`);
+    } else {
+      for (let i = 0; i < arr.length; i++) {
+        const itemPath = `${entry.path}[${i}]`;
+        const fieldCell = i === 0
+          ? `<td class="field-cell" rowspan="${arr.length}" style="vertical-align:top">${humanize(entry.key)}</td>`
+          : "";
+        const selectedCls = state.selectedPath === itemPath ? " selected" : "";
+        html += `<tr class="clickable${selectedCls}" data-path="${itemPath}">${fieldCell}${buildOverviewValueCell(arr[i], itemPath)}</tr>`;
+      }
+    }
+  }
+  html += '</tbody></table>';
+  return html;
+}
+
+function buildOverviewTableRow(key, value, path) {
+  const selectedCls = state.selectedPath === path ? " selected" : "";
+  return `<tr class="clickable${selectedCls}" data-path="${path}">` +
+    `<td class="field-cell">${humanize(key)}</td>${buildOverviewValueCell(value, path)}</tr>`;
+}
+
+function buildOverviewValueCell(value, path) {
+  return `<td class="cell-value overview-value-cell" data-path="${path}">${overviewDisplayValue(value)}</td>`;
+}
+
+function overviewDisplayValue(value) {
+  if (value === null || value === undefined || value === "") {
+    return '<span style="color:var(--text-dim)">\u2014</span>';
+  }
+  if (Array.isArray(value)) return escapeHtml(value.map(displayFieldValue).join(", "));
+  if (typeof value === "object") return escapeHtml(JSON.stringify(value));
+  return escapeHtml(String(value));
+}
+
+function buildOverviewHorizontalTable(arr, basePath, key) {
+  const columns = getUniformColumns(arr);
+  const label = humanize(key);
+  const hasExpandedCols = columns.some(c => c.isExpanded);
+  let html = `<div class="tv-heading" data-depth="0"><span class="tv-heading-label">${escapeHtml(label)}</span></div>`;
+  html += '<div class="tv-body"><table class="ext-table horizontal-table overview-table"><colgroup>';
+  for (let c = 0; c < columns.length; c++) html += '<col style="width:auto">';
+  html += '</colgroup><thead><tr>';
+  for (const col of columns) html += `<th>${escapeHtml(col.header)}</th>`;
+  html += '</tr></thead><tbody>';
+
+  for (let i = 0; i < arr.length; i++) {
+    const item = arr[i];
+    const itemPath = `${basePath}[${i}]`;
+    if (hasExpandedCols) {
+      let expandCount = 1;
+      for (const col of columns) {
+        if (col.isExpanded && col.expandCount) expandCount = Math.max(expandCount, col.expandCount(item));
+      }
+      for (let subIndex = 0; subIndex < expandCount; subIndex++) {
+        const borderClass = subIndex > 0 ? " sub-row" : "";
+        html += `<tr class="clickable horizontal-row${borderClass}" data-path="${itemPath}">`;
+        for (const col of columns) {
+          if (col.isExpanded) {
+            const { value, path } = col.getter(item, itemPath, subIndex);
+            html += `<td${value != null && value !== "" ? ` class="cell-value overview-value-cell" data-path="${path}"` : ""}>${overviewDisplayValue(value)}</td>`;
+          } else if (subIndex === 0) {
+            const { value, path } = col.getter(item, itemPath);
+            const rowspanAttr = expandCount > 1 ? ` rowspan="${expandCount}"` : "";
+            html += `<td class="cell-value overview-value-cell" data-path="${path}"${rowspanAttr}>${overviewDisplayValue(value)}</td>`;
+          }
+        }
+        html += '</tr>';
+      }
+    } else {
+      html += `<tr class="clickable horizontal-row" data-path="${itemPath}">`;
+      for (const col of columns) {
+        const { value, path } = col.getter(item, itemPath);
+        html += `<td${value != null && value !== "" ? ` class="cell-value overview-value-cell" data-path="${path}"` : ""}>${overviewDisplayValue(value)}</td>`;
+      }
+      html += '</tr>';
+    }
+  }
+  html += '</tbody></table></div>';
+  return html;
+}
+
+function wireOverviewEvents(panel) {
+  wireTableEvents(panel);
+}
+
+function wireJsonEvents(panel) {
+  panel.querySelectorAll(".json-leaf[data-path]").forEach(leaf => {
+    leaf.addEventListener("click", (e) => {
+      e.stopPropagation();
+      selectEvidencePath(leaf.dataset.path);
+    });
+  });
+}
+
+function effectiveExtraction() {
+  if (!state.extraction) return null;
+  const data = JSON.parse(JSON.stringify(state.extraction));
+  for (const [path, ann] of Object.entries(state.annotations)) {
+    if (ann.status === "flagged" && ann.correct_value !== undefined) {
+      applyCorrectedValue(data, path, ann.correct_value);
+    }
+  }
+  return data;
+}
+
+function applyCorrectedValue(obj, path, value) {
+  const parts = pathToParts(path);
+  if (parts.length === 0) return;
+  let current = obj;
+  for (let i = 0; i < parts.length - 1; i++) {
+    current = current?.[parts[i]];
+    if (current === null || current === undefined) return;
+  }
+  current[parts[parts.length - 1]] = value;
+}
+
+function pathToParts(path) {
+  if (!path) return [];
+  return path.replace(/\[(\d+)\]/g, '.$1').split('.').filter(Boolean);
+}
+
+function renderJsonView(data = effectiveExtraction()) {
+  const panel = $("#panel-right");
+  if (!data) {
+    panel.innerHTML = '<div class="loading">No extraction data</div>';
+    return;
+  }
+  panel.innerHTML = `<div class="json-view">${renderJsonTree(data)}</div>`;
+  wireJsonEvents(panel);
+}
+
+function renderJsonTree(value, path = "", key = null, depth = 0) {
+  const keyHtml = key === null ? "" : `<span class="json-key">${escapeHtml(JSON.stringify(key))}</span>: `;
+  if (value === null || typeof value !== "object") {
+    const pathAttr = path ? ` data-path="${path}"` : "";
+    const selectedCls = state.selectedPath === path ? " selected" : "";
+    return `<span class="json-leaf${selectedCls}"${pathAttr}>${keyHtml}${jsonScalarHtml(value)}</span>`;
+  }
+
+  const isArray = Array.isArray(value);
+  const entries = isArray ? value.map((v, i) => [i, v]) : Object.entries(value);
+  const open = depth < 2 ? " open" : "";
+  const openChar = isArray ? "[" : "{";
+  const closeChar = isArray ? "]" : "}";
+  if (entries.length === 0) {
+    return `<span>${keyHtml}${openChar}${closeChar}</span>`;
+  }
+
+  let html = `<details class="json-node"${open}><summary class="json-toggle">${keyHtml}${openChar}</summary><ul class="json-tree">`;
+  for (const [childKey, childValue] of entries) {
+    const childPath = path
+      ? (isArray ? `${path}[${childKey}]` : `${path}.${childKey}`)
+      : String(childKey);
+    html += `<li>${renderJsonTree(childValue, childPath, childKey, depth + 1)}</li>`;
+  }
+  html += `</ul></details><span class="json-brace">${closeChar}</span>`;
+  return html;
+}
+
+function jsonScalarHtml(value) {
+  if (typeof value === "string") return escapeHtml(JSON.stringify(value));
+  if (value === undefined) return "null";
+  return escapeHtml(JSON.stringify(value));
 }
 
 // ── Source Navigation (spec: docs/specs/source-nav-interaction.md) ──
@@ -3082,6 +3507,18 @@ function updateSelectedFieldBar(path = state.selectedPath) {
   }
 
   updateSourceEvidenceOverlay();
+}
+
+function selectEvidencePath(path) {
+  if (!path) return;
+  state.selectedPath = path;
+  state.selectedSourceIndex = 0;
+  document.querySelectorAll(".json-leaf.selected").forEach(el => el.classList.remove("selected"));
+  const jsonLeaf = document.querySelector(`.json-leaf[data-path="${path}"]`);
+  if (jsonLeaf) jsonLeaf.classList.add("selected");
+  updateSelectedFieldBar(path);
+  if (selectedSourceRanges(path).length) focusSelectedSource(0);
+  else renderMarkdown();
 }
 
 function renderReviewState(path = state.selectedPath) {
@@ -4310,11 +4747,16 @@ $("#btn-orcid-cancel").addEventListener("click", closeOrcidModal);
 initReviewerIdentity();
 
 // ── Extraction rendering ──
-state.viewMode = "table";
-state.tableMode = "review";
-
 function renderExtractionPanel() {
-  renderTableView();
+  syncViewControls();
+  updateReviewIdentityVisibility();
+  if (state.viewMode === "overview") {
+    renderOverviewView(effectiveExtraction());
+  } else if (state.viewMode === "json") {
+    renderJsonView(effectiveExtraction());
+  } else {
+    renderReviewTable();
+  }
 }
 
 // ── Boot ──

@@ -15,11 +15,10 @@ def test_verifier_uses_litschema_verify_branding() -> None:
     assert "ERW Extraction Verifier" not in html
 
 
-def test_verifier_defaults_to_review_table_without_extra_header_controls() -> None:
+def test_verifier_defaults_to_review_table_with_mode_switcher() -> None:
     html = STATIC_HTML.read_text()
 
-    assert 'tableMode: "review"' in html
-    assert 'state.tableMode = "review"' in html
+    assert 'viewMode: "review"' in html
     assert 'id="btn-review-table"' not in html
     assert 'id="btn-pivot-view"' not in html
     assert ">Pivot<" not in html
@@ -27,6 +26,43 @@ def test_verifier_defaults_to_review_table_without_extra_header_controls() -> No
     assert 'id="btn-json-view"' not in html
     assert 'id="confidence-display"' not in html
     assert 'id="panel-right-meta"' not in html
+    assert 'id="view-mode-review"' in html
+    assert 'id="view-mode-overview"' in html
+    assert 'id="view-mode-json"' in html
+    assert 'data-view-mode="review"' in html
+    assert 'data-view-mode="overview"' in html
+    assert 'data-view-mode="json"' in html
+    assert "setViewMode" in html
+    assert "initialViewMode" in html
+    assert "syncViewControls" in html
+    assert "updateReviewIdentityVisibility" in html
+
+
+def test_verifier_restores_read_only_overview_and_json_modes() -> None:
+    html = STATIC_HTML.read_text()
+
+    assert "renderReviewTable" in html
+    assert "renderOverviewView" in html
+    assert "renderJsonView" in html
+    assert "renderExtractionPanel" in html
+    assert "state.viewMode === \"overview\"" in html
+    assert "state.viewMode === \"json\"" in html
+    assert "buildOverviewHorizontalTable" in html
+    assert "buildOverviewValueCell" in html
+    assert "json-tree" in html
+    assert "json-toggle" in html
+    assert "Overview" in html
+    assert "JSON" in html
+
+
+def test_verifier_overview_and_json_use_effective_post_edit_values() -> None:
+    html = STATIC_HTML.read_text()
+
+    assert "effectiveExtraction" in html
+    assert "applyCorrectedValue" in html
+    assert 'ann.status === "flagged" && ann.correct_value !== undefined' in html
+    assert "renderOverviewView(effectiveExtraction())" in html
+    assert "renderJsonView(effectiveExtraction())" in html
 
 
 def test_verifier_has_mobile_stacked_panel_layout() -> None:
