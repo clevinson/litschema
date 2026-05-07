@@ -673,37 +673,44 @@
   }
 
   .section-review-toggle {
-    min-width: 24px;
-    width: 24px;
-    height: 24px;
+    appearance: none;
+    min-width: 22px;
+    width: 22px;
+    height: 22px;
     padding: 0;
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
     color: var(--text-dim);
+    line-height: 1;
   }
 
   .section-review-toggle.section-complete {
     color: var(--green);
     background: rgba(22, 163, 74, 0.08);
-    border-color: rgba(22, 163, 74, 0.2);
   }
 
-  .section-review-toggle.section-complete:hover:not(:disabled) {
-    color: var(--red);
-    background: rgba(220, 38, 38, 0.08);
-    border-color: rgba(220, 38, 38, 0.22);
+  .section-review-toggle.section-complete.hover-clear-ready:hover:not(:disabled),
+  .field-status.status-verified.hover-clear-ready:hover {
+    color: var(--text);
+    background: transparent;
   }
 
-  .section-review-toggle .section-toggle-icon-hover {
+  .section-review-toggle .section-toggle-icon-hover,
+  .field-status .status-icon-hover {
     display: none;
   }
 
-  .section-review-toggle.section-complete:hover .section-toggle-icon {
+  .section-review-toggle.section-complete.hover-clear-ready:hover .section-toggle-icon,
+  .field-status.status-verified.hover-clear-ready:hover .status-icon-main {
     display: none;
   }
 
-  .section-review-toggle.section-complete:hover .section-toggle-icon-hover {
+  .section-review-toggle.section-complete.hover-clear-ready:hover .section-toggle-icon-hover,
+  .field-status.status-verified.hover-clear-ready:hover .status-icon-hover {
     display: inline;
   }
 
@@ -1699,6 +1706,8 @@ const state = {
   sectionIndex: 0,
   searchMatches: [],
   searchIndex: 0,
+  suppressClearHoverPaths: new Set(),
+  suppressClearHoverSections: new Set(),
 };
 
 // ── API helpers ──
@@ -1815,6 +1824,8 @@ $("#article-select").addEventListener("change", async (e) => {
 
   // Clear search state
   clearSearchFull();
+  state.suppressClearHoverPaths.clear();
+  state.suppressClearHoverSections.clear();
 
   $("#panel-left").innerHTML = '<div class="loading">Loading...</div>';
   $("#panel-right").innerHTML = '<div class="loading">Loading...</div>';
@@ -2546,11 +2557,12 @@ function bulkActionHtml(basePath, scope) {
   const disabled = count === 0 && !reviewState.complete ? " disabled" : "";
   const action = reviewState.complete ? "clear" : "verify";
   const completeClass = reviewState.complete ? " section-complete" : "";
+  const hoverClass = reviewState.complete && !state.suppressClearHoverSections.has(basePath) ? " hover-clear-ready" : "";
   const label = reviewState.complete
     ? "Clear verified fields in this section"
     : "Verify unreviewed cited fields in this section";
   return `<span class="tv-heading-actions">` +
-    `<button class="section-review-toggle${completeClass}" data-section-action="${action}" data-bulk-source="${scope}" data-path="${basePath}" aria-label="${label}" title="${label}"${disabled}>` +
+    `<button class="section-review-toggle${completeClass}${hoverClass}" data-section-action="${action}" data-bulk-source="${scope}" data-path="${basePath}" aria-label="${label}" title="${label}"${disabled}>` +
     `<span class="section-toggle-icon">&#10003;</span><span class="section-toggle-icon-hover">&#10005;</span>` +
     `</button>` +
     `</span>`;
@@ -2698,7 +2710,10 @@ function buildFieldStatus(path, status) {
       : "Not reviewed";
   const icon = status === "verified" ? "&#10003;" : status === "flagged" ? "&#9998;" : "&#9675;";
   const statusClass = status || "empty";
-  return `<button type="button" class="field-status status-${statusClass}" data-path="${path}" title="${label}" aria-label="${label}">${icon}</button>`;
+  const hoverClass = status === "verified" && !state.suppressClearHoverPaths.has(path) ? " hover-clear-ready" : "";
+  return `<button type="button" class="field-status status-${statusClass}${hoverClass}" data-path="${path}" title="${label}" aria-label="${label}">` +
+    `<span class="status-icon-main">${icon}</span><span class="status-icon-hover">&#10005;</span>` +
+    `</button>`;
 }
 
 function sourceSummaryForPath(path, explicitRanges = null) {
@@ -3021,6 +3036,11 @@ function updateSelectedFieldBar(path = state.selectedPath) {
 
 function wireTableEvents(panel) {
   panel.querySelectorAll(".field-status[data-path]").forEach(btn => {
+    btn.addEventListener("pointerleave", () => {
+      if (!btn.dataset.path) return;
+      state.suppressClearHoverPaths.delete(btn.dataset.path);
+      btn.classList.toggle("hover-clear-ready", btn.classList.contains("status-verified"));
+    });
     btn.addEventListener("click", async (e) => {
       e.stopPropagation();
       await toggleFieldVerification(btn.dataset.path);
@@ -3700,8 +3720,7 @@ function updateReviewWorkspace() {
   const counts = reviewStateCounts();
   const progress = $("#review-progress");
   if (progress) {
-    const flagText = counts.flagged > 0 ? ` \u00b7 ${counts.flagged} flagged` : "";
-    progress.innerHTML = `<strong>${counts.reviewed}/${counts.total}</strong> reviewed${flagText} \u00b7 ${counts.remaining} remaining`;
+    progress.innerHTML = `<strong>${counts.reviewed}/${counts.total}</strong> audited`;
   }
 
   const unreviewedBtn = $("#btn-next-unreviewed");
@@ -3803,9 +3822,10 @@ async function clearAnnotation(path, options = {}) {
 
   try {
     const response = await fetch(`/api/annotations/${state.currentId}/${path}`, { method: "DELETE" });
-    if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
-    delete state.annotations[path];
-    setSaveStatus("Cleared", "saved");
+	    if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+	    delete state.annotations[path];
+	    state.suppressClearHoverPaths.delete(path);
+	    setSaveStatus("Cleared", "saved");
     return true;
   } catch (err) {
     state.annotations[path] = previous;
@@ -3827,10 +3847,12 @@ async function toggleFieldVerification(path) {
     state.selectedPath = path;
     state.selectedSourceIndex = 0;
     state.inspectorEditMode = false;
+    state.suppressClearHoverPaths.add(path);
     await saveAnnotation(path, "verified", selectedVerifyExtra(path));
     return;
   }
   if (ann.status === "verified") {
+    if (state.suppressClearHoverPaths.has(path)) return;
     state.selectedPath = path;
     state.selectedSourceIndex = 0;
     state.inspectorEditMode = false;
@@ -3849,6 +3871,7 @@ function wireSelectedFieldActions() {
     verifyBtn.addEventListener("click", async () => {
       if (!state.selectedPath || verifyBtn.disabled) return;
       setInspectorEditMode(false);
+      state.suppressClearHoverPaths.add(state.selectedPath);
       await saveAnnotation(state.selectedPath, "verified", selectedVerifyExtra(state.selectedPath));
     });
   }
@@ -3970,6 +3993,7 @@ function skippedBulkCount(basePath, reviewableCount) {
 async function bulkVerifyScope(basePath, source) {
   const paths = collectReviewablePaths(basePath);
   const skipped = skippedBulkCount(basePath, paths.length);
+  if (basePath && paths.length > 0) state.suppressClearHoverSections.add(basePath);
   await bulkVerifyPaths(paths, source, skipped);
 }
 
@@ -4095,10 +4119,16 @@ function wireAnnotationActions(panel) {
 
 function wireBulkReviewActions(panel) {
   panel.querySelectorAll(".section-review-toggle[data-section-action]").forEach(btn => {
+    btn.addEventListener("pointerleave", () => {
+      if (!btn.dataset.path) return;
+      state.suppressClearHoverSections.delete(btn.dataset.path);
+      btn.classList.toggle("hover-clear-ready", btn.classList.contains("section-complete"));
+    });
     btn.addEventListener("click", async (e) => {
       e.stopPropagation();
       if (btn.disabled) return;
       if (btn.dataset.sectionAction === "clear") {
+        if (state.suppressClearHoverSections.has(btn.dataset.path)) return;
         await clearVerifiedScope(btn.dataset.path);
       } else {
         await bulkVerifyScope(btn.dataset.path, "bulk_section");

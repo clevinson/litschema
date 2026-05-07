@@ -98,6 +98,8 @@ def test_verifier_exposes_bulk_review_actions() -> None:
     assert 'data-section-action="${action}"' in html
     assert '"Verify unreviewed cited fields in this section"' in html
     assert '"Clear verified fields in this section"' in html
+    assert "hover-clear-ready" in html
+    assert "suppressClearHoverSections" in html
     assert "Verify remaining" not in html
     assert "Verify Remaining" not in html
 
@@ -125,6 +127,8 @@ def test_verifier_action_column_uses_compact_status() -> None:
     assert "status-cell" in html
     assert "line-height: 1" in html
     assert "margin: 0 auto" in html
+    assert "suppressClearHoverPaths" in html
+    assert "status-icon-hover" in html
     assert "toggleFieldVerification" in html
 
 
@@ -145,6 +149,7 @@ def test_verifier_section_headers_keep_status_and_bulk_action_together() -> None
     assert "reviewState.complete" in html
     assert "clearVerifiedScope" in html
     assert "section-toggle-icon-hover" in html
+    assert "section-complete.hover-clear-ready:hover" in html
     assert 'const disabled = count === 0 ? " disabled" : "";' not in html
     assert "bulk-section-actions" not in html
     assert "tv-toggle" not in html
@@ -168,6 +173,8 @@ def test_verifier_scopes_review_navigation_to_current_article() -> None:
     assert 'id="btn-next-unreviewed"' in html
     assert 'id="btn-next-flagged"' not in html
     assert "selectNextReviewPath" in html
+    assert '<strong>${counts.reviewed}/${counts.total}</strong> audited' in html
+    assert "reviewed${flagText}" not in html
     assert "articleOptionLabel" in html
     assert "article.confidence" not in html
     assert "filter-group" not in html
