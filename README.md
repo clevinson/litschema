@@ -18,10 +18,6 @@ data/papers/<article-id>/
   reviews.jsonl
 ```
 
-`corpus.yaml` is no longer part of the default workflow. If you need it for an
-older downstream tool, use the hidden legacy export path; new workflows should
-read the per-article files or generated DuckDB views.
-
 ## Local Install
 
 From this repo:

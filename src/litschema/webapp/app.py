@@ -34,42 +34,20 @@ from .search import strip_references
 
 _CFG = load_config()
 PROJECT_ROOT = _CFG.project_root
-CORPUS_PATH = _CFG.corpus_file
 PAPERS_DIR = _CFG.papers_dir
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 app = FastAPI(title="ERW Extraction Verifier")
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
-# Cache corpus on startup
-_corpus_cache: dict | None = None
-_article_index: dict[str, dict] | None = None
-_author_index: dict[str, dict] | None = None
 _author_file_index: dict[str, dict] | None = None
 _schema_fields_cache: dict | None = None
 ORCID_RE = re.compile(r"^\d{4}-\d{4}-\d{4}-\d{3}[0-9X]$")
 DEFAULT_EXTRACTION_SCHEMA = "extraction.yaml"
 
 
-def _load_corpus() -> dict:
-    global _corpus_cache, _article_index, _author_index
-    if _corpus_cache is None and CORPUS_PATH.exists():
-        with open(CORPUS_PATH) as f:
-            _corpus_cache = yaml.safe_load(f)
-        _article_index = {
-            a.get("id"): a for a in (_corpus_cache or {}).get("articles", []) if a.get("id")
-        }
-        _author_index = {
-            a.get("id"): a for a in (_corpus_cache or {}).get("authors", []) if a.get("id")
-        }
-    return _corpus_cache or {}
-
-
 def _load_author_index() -> dict[str, dict]:
     global _author_file_index
-    _load_corpus()
-    if _author_index:
-        return _author_index
     if _author_file_index is not None:
         return _author_file_index
     authors_path = _CFG.data_dir / "authors.yaml"
@@ -83,10 +61,7 @@ def _load_author_index() -> dict[str, dict]:
 
 def _article_meta(article_id: str) -> dict:
     """Return a compact bibliographic dict for an article id."""
-    _load_corpus()
     a = read_article_metadata(article_files(_CFG, article_id))
-    if not a:
-        a = (_article_index or {}).get(article_id)
     if not a:
         return {}
     authors = []
@@ -108,11 +83,8 @@ def _article_meta(article_id: str) -> dict:
 
 
 def _article_pdf_filename(article_id: str) -> str | None:
-    """Look up PDF filename from per-article metadata or legacy corpus.yaml."""
-    _load_corpus()
+    """Look up PDF filename from per-article metadata."""
     a = read_article_metadata(article_files(_CFG, article_id))
-    if not a:
-        a = (_article_index or {}).get(article_id)
     if not a:
         return None
     return a.get("filename") or a.get("standard_filename")
@@ -307,7 +279,7 @@ async def list_articles():
         # Annotation progress
         annotations = _current_annotations(article_id)
         progress = _review_progress(data, annotations)
-        # Look up bibliographic fields from corpus
+        # Look up bibliographic fields from article metadata.
         bib = _article_meta(article_id)
         articles.append(
             {

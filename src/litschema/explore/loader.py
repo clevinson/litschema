@@ -181,9 +181,8 @@ def _find_tree_root_class(sv: SchemaView) -> str | None:
 
     Only inspects classes declared directly in the entry-point schema file
     — imported schemas may have their own tree_root for their own purposes
-    (e.g. our `Corpus` in erw_articles.yaml is the corpus tree_root, but
-    extraction.yaml imports it and defines its own tree_root,
-    `ExtractionArtifact`). Errors if the entry file declares multiple.
+    imported schemas may have their own tree roots for their own purposes.
+    Errors if the entry file declares multiple.
     """
     local_classes = sv.schema.classes or {}
     roots = [name for name, cls in local_classes.items() if getattr(cls, "tree_root", False)]

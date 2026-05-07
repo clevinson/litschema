@@ -30,7 +30,6 @@ litschema = "litschema.cli:app"
 litschema-harvest-openalex = "litschema.ingest.openalex_harvest:main"
 litschema-harvest-crossref = "litschema.ingest.crossref_harvest:main"
 litschema-resolve = "litschema.ingest.resolve_entities:main"
-litschema-assemble = "litschema.ingest.assemble_corpus:main"
 litschema-verify = "litschema.webapp.app:main"
 
 [build-system]

@@ -279,7 +279,6 @@ def test_imported_tree_root_is_filtered_out(tmp_path: Path) -> None:
         'data_dir: "data"\n'
         'llm_extractions_dir: "data/llm_extractions"\n'
         'annotations_dir: "data/reviews"\n'
-        'corpus_file: "corpus.yaml"\n'
         'papers_dir: "papers"\n'
         'fulltext_md_dir: "data/fulltext_md"\n'
         'extraction_reasoning_dir: "data/extraction_reasoning"\n'

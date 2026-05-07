@@ -1,6 +1,6 @@
 ---
 name: extract-article
-description: "Extract structured metadata and per-field reasoning from a research paper using schema and domain context. Use when asked to extract, process, or analyze an article for the corpus."
+description: "Extract structured metadata and per-field reasoning from a research paper using schema and domain context. Use when asked to extract, process, or analyze an article for a litschema project."
 context: fork
 allowed-tools: Read, Write, Bash, Glob, Grep
 ---
