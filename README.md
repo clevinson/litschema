@@ -48,9 +48,11 @@ litschema mcp                    # expose DuckDB-backed exploration tools
 litschema skills install         # install agent slash-command skills
 ```
 
-Extraction is intentionally agent-mediated. Install the bundled skill, then run
+Extraction is intentionally agent-mediated. Install the bundled skills into the
+current project's `.claude/skills/`, then run
 `/extract-article <article-id-or-doi>` inside an agent CLI from a configured
-project directory.
+project directory. If the project has its own `skills/` directory, those skills
+override bundled skills with the same name.
 
 ## Project Layout
 

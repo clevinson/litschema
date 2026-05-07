@@ -11,6 +11,7 @@ import os
 import shutil
 import subprocess
 import sys
+from importlib import resources
 from pathlib import Path
 
 import typer
@@ -88,6 +89,28 @@ def _schema_root_path(cfg: LitSchemaConfig) -> Path:
     """Resolve the domain's root schema file from config (with sensible default)."""
     raw = cfg.raw.get("schema_root", "erw_articles.yaml")
     return cfg.schema_dir / raw
+
+
+def _valid_skill_dirs(skills_dir: Path) -> list[Path]:
+    if not skills_dir.is_dir():
+        return []
+    return sorted(
+        path for path in skills_dir.iterdir() if path.is_dir() and (path / "SKILL.md").exists()
+    )
+
+
+def _bundled_skills_dir() -> Path:
+    packaged = resources.files("litschema") / "_bundled_skills"
+    if packaged.is_dir():
+        return Path(str(packaged))
+    return Path(__file__).resolve().parents[2] / "skills"
+
+
+def _skill_sources(cfg: LitSchemaConfig) -> list[Path]:
+    """Return installable skills, with project-local skills overriding bundled defaults."""
+    by_name = {path.name: path for path in _valid_skill_dirs(_bundled_skills_dir())}
+    by_name.update({path.name: path for path in _valid_skill_dirs(cfg.project_root / "skills")})
+    return [by_name[name] for name in sorted(by_name)]
 
 
 # ── Pipeline verbs (delegate to existing module mains) ─────────────────────
@@ -246,9 +269,9 @@ def skills_install(
     force: bool = typer.Option(False, "--force", help="Overwrite existing"),
 ):
     cfg = _require_config()
-    skills_src = cfg.project_root / "skills"
-    if not skills_src.is_dir():
-        typer.secho(f"{CROSS} no skills/ directory at {skills_src}", fg=typer.colors.RED)
+    skill_sources = _skill_sources(cfg)
+    if not skill_sources:
+        typer.secho("no bundled or project-local skills found", fg=typer.colors.RED)
         raise typer.Exit(code=2)
 
     # If --dest is relative, anchor it to the project root so running from
@@ -259,9 +282,7 @@ def skills_install(
     dest.mkdir(parents=True, exist_ok=True)
 
     installed = 0
-    for skill_dir in sorted(skills_src.iterdir()):
-        if not skill_dir.is_dir() or not (skill_dir / "SKILL.md").exists():
-            continue
+    for skill_dir in skill_sources:
         target = dest / skill_dir.name
         if target.exists() or target.is_symlink():
             if not force:
@@ -283,9 +304,8 @@ def skills_install(
         typer.echo("No skills installed.")
     else:
         typer.echo("\nAvailable as slash-commands in agents that read .claude/skills/:")
-        for skill_dir in sorted(skills_src.iterdir()):
-            if (skill_dir / "SKILL.md").exists():
-                typer.echo(f"  /{skill_dir.name}")
+        for skill_dir in skill_sources:
+            typer.echo(f"  /{skill_dir.name}")
 
 
 # ── Status + doctor (new) ──────────────────────────────────────────────────
