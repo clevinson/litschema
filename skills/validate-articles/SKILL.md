@@ -9,41 +9,13 @@ Run validation across the ERW pipeline outputs and report issues.
 
 ## Steps
 
-1. **Validate all extractions** against the ExtractionArtifact JSON Schema:
+1. **Validate all extractions** against the configured LinkML extraction schema:
 
 ```bash
-uv run python -m litschema.ingest.validate_extraction data/papers/
+uv run litschema validate data/papers/
 ```
 
-2. **Validate all reasoning files** against the ExtractionReasoning JSON Schema:
-
-```bash
-uv run python -c "
-import json
-from pathlib import Path
-from jsonschema import Draft202012Validator
-
-schema = json.load(open('reasoning_schema.json'))
-validator = Draft202012Validator(schema)
-valid = invalid = 0
-paths = sorted(Path('data/papers').glob('*/agent-reasoning.json'))
-if not paths:
-    paths = sorted(Path('data/extraction_reasoning').glob('*.json'))
-for f in paths:
-    errors = list(validator.iter_errors(json.loads(f.read_text())))
-    if errors:
-        invalid += 1
-        print(f'INVALID: {f.stem}')
-        for e in errors[:3]:
-            path = '.'.join(str(p) for p in e.absolute_path)
-            print(f'  {path}: {e.message[:100]}')
-    else:
-        valid += 1
-print(f'\nReasoning: {valid}/{valid+invalid} valid')
-"
-```
-
-3. **Validate article metadata files** exist and are parseable:
+2. **Validate article metadata files** exist and are parseable:
 
 ```bash
 uv run python -c "
@@ -74,9 +46,9 @@ print(f'\nMetadata: {valid} valid, {missing} missing, {invalid} invalid')
 "
 ```
 
-4. **Report summary** of all validation results. If any step fails, list the specific files and errors.
+3. **Report summary** of all validation results. If any step fails, list the specific files and errors.
 
-5. **Check reasoning coverage** — for articles with reasoning files, report what percentage of extraction fields have corresponding reasoning entries:
+4. **Check reasoning coverage** — for articles with reasoning files, report what percentage of extraction fields have corresponding reasoning entries:
 
 ```bash
 uv run python -c "

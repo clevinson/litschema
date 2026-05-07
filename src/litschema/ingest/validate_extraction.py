@@ -1,7 +1,4 @@
-"""Validate LLM extraction output against the ExtractionArtifact JSON Schema.
-
-Uses gen-json-schema with --top-class ExtractionArtifact to generate the
-validation schema directly from extraction.yaml.
+"""Validate LLM extraction output against the configured extraction schema.
 
 Usage:
     # Validate a single extraction
@@ -24,16 +21,19 @@ from pathlib import Path
 from jsonschema import Draft202012Validator
 
 from ..articles import iter_extraction_paths
+from ..config import LitSchemaConfig
 from ..config import load_config as _load_config
+from ..schema_resolution import resolve_extraction_schema
 
 _CFG = _load_config()
-EXTRACTION_SCHEMA_PATH = _CFG.schema_dir / "extraction.yaml"
 
 
-def generate_extraction_schema(schema_path: Path = EXTRACTION_SCHEMA_PATH) -> dict:
-    """Generate JSON Schema from extraction.yaml with ExtractionArtifact as root."""
+def generate_extraction_schema(cfg: LitSchemaConfig | None = None) -> dict:
+    """Generate JSON Schema from the configured LinkML extraction schema."""
+    cfg = cfg or _load_config()
+    schema_path, root_class = resolve_extraction_schema(cfg)
     result = subprocess.run(
-        ["uv", "run", "gen-json-schema", "--top-class", "ExtractionArtifact", str(schema_path)],
+        ["uv", "run", "gen-json-schema", "--top-class", root_class, str(schema_path)],
         capture_output=True,
         text=True,
         cwd=schema_path.parent,
@@ -67,9 +67,10 @@ def validate_file(filepath: Path, schema: dict) -> tuple[bool, list[str]]:
 
 def main():
     args = sys.argv[1:]
+    cfg = _load_config()
 
     if "--dump-schema" in args:
-        schema = generate_extraction_schema()
+        schema = generate_extraction_schema(cfg)
         print(json.dumps(schema, indent=2))
         return
 
@@ -78,12 +79,13 @@ def main():
         sys.exit(1)
 
     target = Path(args[0])
-    schema = generate_extraction_schema()
+    schema = generate_extraction_schema(cfg)
 
-    if target.is_dir():
+    if not target.exists():
+        files = list(iter_extraction_paths(cfg))
+    elif target.is_dir():
         files = sorted(target.glob("*.json"))
         if not files:
-            cfg = _load_config()
             files = list(iter_extraction_paths(cfg))
     else:
         files = [target]

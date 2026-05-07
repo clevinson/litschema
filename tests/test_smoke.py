@@ -100,6 +100,18 @@ def test_no_old_aggregate_surface_remains() -> None:
     assert offenders == []
 
 
+def test_bundled_skills_use_runtime_schema_context() -> None:
+    """Agent skills should use runtime JSON Schemas, not root-level artifacts."""
+    extract_skill = (REPO_ROOT / "skills" / "extract-article" / "SKILL.md").read_text()
+    validate_skill = (REPO_ROOT / "skills" / "validate-articles" / "SKILL.md").read_text()
+    combined = extract_skill + "\n" + validate_skill
+
+    assert "uv run python -m litschema.agent.prepare_schema_context" in extract_skill
+    assert ".litschema/runtime/extraction_schema.json" in extract_skill
+    assert "`extraction_schema.json`" not in combined
+    assert "`reasoning_schema.json`" not in combined
+
+
 def test_load_config_from_repo_root() -> None:
     """load_config() walks up to the repo's litschema.yaml."""
     from litschema.config import load_config

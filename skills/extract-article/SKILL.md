@@ -13,9 +13,13 @@ You are extracting structured research metadata from a paper for a systematic re
 
 The user will provide an `article_id` (e.g., `bell-2024`). You must:
 1. Read the domain context from `domain_context.md`
-2. Read the extraction schema from `extraction_schema.json`
-3. Read the reasoning schema from `reasoning_schema.json`
-4. Read the full-text markdown from `data/papers/{article_id}/article.md`
+2. Generate runtime schema context:
+   ```bash
+   uv run python -m litschema.agent.prepare_schema_context
+   ```
+3. Read `.litschema/runtime/extraction_schema.json`
+4. Read `.litschema/runtime/reasoning_schema.json` if it exists
+5. Read the full-text markdown from `data/papers/{article_id}/article.md`
    - If that does not exist yet, fall back to legacy path `data/fulltext_md/{article_id}.md`
 
 If the markdown file doesn't exist or is < 100 characters, write an error marker:
@@ -27,8 +31,8 @@ to `data/papers/{article_id}/agent-extraction.json`.
 ## How to Extract
 
 1. **Domain context** (`domain_context.md`) tells you what the research domain is and gives domain-specific extraction rules and field guidance. Follow these rules exactly.
-2. **Extraction schema** (`extraction_schema.json`) defines every field, type, enum value, and description. Your output JSON must validate against this schema. The root object is defined in `$defs`. Read the schema carefully — field descriptions and enum `description` values contain important guidance.
-3. **Reasoning schema** (`reasoning_schema.json`) defines the format for your reasoning output.
+2. **Extraction schema** (`.litschema/runtime/extraction_schema.json`) defines every field, type, enum value, and description. Your output JSON must validate against this schema. The root object is defined in `$defs`. Read the schema carefully; field descriptions and enum `description` values contain important guidance.
+3. **Reasoning schema** (`.litschema/runtime/reasoning_schema.json`) defines the format for your reasoning output when present.
 4. **The article markdown** is your sole data source. Extract ONLY from this text.
 
 **CRITICAL: Extract ONLY from the markdown file provided. Do NOT use any information from memory files, conversation context, prior knowledge about this paper, or other articles. Every extracted value must come from the text of this specific paper.**
@@ -64,37 +68,21 @@ After writing both JSON files, validate them:
 
 ```bash
 # Validate extraction against schema
-uv run python -m litschema.ingest.validate_extraction data/papers/{article_id}/agent-extraction.json
-
-# Validate reasoning against schema
-uv run python -c "
-import json
-from jsonschema import Draft202012Validator
-schema = json.load(open('reasoning_schema.json'))
-data = json.load(open('data/papers/{article_id}/agent-reasoning.json'))
-errors = list(Draft202012Validator(schema).iter_errors(data))
-if errors:
-    for e in errors:
-        path = '.'.join(str(p) for p in e.absolute_path)
-        print(f'INVALID {path}: {e.message}')
-    exit(1)
-print('Reasoning valid')
-"
+uv run litschema validate data/papers/{article_id}/agent-extraction.json
 ```
 
 If validation fails, read the errors, fix the JSON, and re-validate. Max 3 attempts. Common errors:
-- Invalid enum value: check the JSON Schema for allowed values
+- Invalid enum value: check the runtime JSON Schema for allowed values
 - Extra property: field name not in the schema
 - Wrong type: e.g., string where number expected
-- Missing `fields` or `path`/`source_lines`: every entry needs these
 
-Do NOT finish until both validations pass or you have exhausted retries.
+Do NOT finish until extraction validation passes or you have exhausted retries.
 
 ## Checklist
 
 Before finishing, verify:
 - [ ] `data/papers/{article_id}/agent-extraction.json` exists and passes extraction validation
-- [ ] `data/papers/{article_id}/agent-reasoning.json` exists and passes reasoning validation
+- [ ] `data/papers/{article_id}/agent-reasoning.json` exists
 - [ ] Every non-metadata leaf field in the extraction has a corresponding reasoning entry
 - [ ] All `source_lines` reference real line numbers from the markdown
 - [ ] No data was extracted from the References/Bibliography section

@@ -1,9 +1,8 @@
-"""litschema CLI — single entry point for the pipeline.
+"""litschema CLI - single entry point for the pipeline.
 
 Verbs: harvest / convert / extract / validate / verify / mcp / status /
-doctor / skills install / schema compile / init. The pipeline verbs delegate
-to ingest-module mains; status/doctor/skills/schema/mcp have first-class
-implementations here.
+doctor / skills install / init. The pipeline verbs delegate to ingest-module
+mains; status/doctor/skills/mcp have first-class implementations here.
 """
 
 from __future__ import annotations
@@ -225,77 +224,6 @@ def mcp(
             fg=typer.colors.RED,
         )
         raise typer.Exit(code=2)
-
-
-# ── Schema subcommands ─────────────────────────────────────────────────────
-
-schema_app = typer.Typer(help="Schema compilation and documentation.", no_args_is_help=True)
-app.add_typer(schema_app, name="schema")
-
-
-@schema_app.command("compile", help="Regenerate JSON Schemas from LinkML sources.")
-def schema_compile():
-    cfg = _require_config()
-    schema_dir = cfg.schema_dir
-    root = cfg.project_root
-
-    extraction = schema_dir / "extraction.yaml"
-    reasoning = schema_dir / "reasoning.yaml"
-    schema_root = _schema_root_path(cfg)
-
-    if not extraction.exists():
-        typer.secho(f"{CROSS} {extraction} not found", fg=typer.colors.RED)
-        raise typer.Exit(code=2)
-
-    typer.echo(f"{DIM}→ compiling extraction schema{RESET}")
-    with open(root / "extraction_schema.json", "w") as f:
-        subprocess.run(
-            ["uv", "run", "gen-json-schema", "--top-class", "ExtractionArtifact", str(extraction)],
-            stdout=f,
-            check=True,
-        )
-
-    if reasoning.exists():
-        typer.echo(f"{DIM}→ compiling reasoning schema{RESET}")
-        with open(root / "reasoning_schema.json", "w") as f:
-            subprocess.run(
-                [
-                    "uv",
-                    "run",
-                    "gen-json-schema",
-                    "--top-class",
-                    "ExtractionReasoning",
-                    str(reasoning),
-                ],
-                stdout=f,
-                check=True,
-            )
-
-    if schema_root.exists():
-        typer.echo(f"{DIM}→ regenerating docs/schema/ from {schema_root.name}{RESET}")
-        docs_schema = root / "docs" / "schema"
-        if docs_schema.exists():
-            shutil.rmtree(docs_schema)
-        subprocess.run(
-            [
-                "uv",
-                "run",
-                "gen-doc",
-                "-d",
-                str(docs_schema),
-                "--diagram-type",
-                "mermaid_class_diagram",
-                str(schema_root),
-            ],
-            check=True,
-        )
-    else:
-        typer.secho(
-            f"{WARN} schema_root ({schema_root.name}) not found; skipping docs regeneration.",
-            fg=typer.colors.YELLOW,
-        )
-
-    typer.echo(f"{CHECK} schema compiled")
 
 
 # Docs serving is intentionally *not* a `litschema` CLI command — it's a
