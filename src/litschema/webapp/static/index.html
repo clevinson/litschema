@@ -609,33 +609,6 @@
     color: var(--text-dim);
   }
 
-  .tv-badges {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    margin-left: 0;
-    flex-shrink: 0;
-  }
-
-  .tv-badge {
-    font-family: var(--font-mono);
-    font-size: 9px;
-    font-weight: 500;
-    padding: 1px 6px;
-    border-radius: 8px;
-    white-space: nowrap;
-  }
-
-  .tv-badge-audit {
-    background: var(--bg-overlay);
-    color: var(--text-dim);
-  }
-
-  .tv-badge-edited {
-    background: rgba(202, 138, 4, 0.15);
-    color: var(--yellow);
-  }
-
   .tv-body { }
 
   .tv-heading-actions {
@@ -716,11 +689,6 @@
   .section-review-toggle.section-complete.hover-clear-ready:hover .section-toggle-icon-hover,
   .field-status.status-verified.hover-clear-ready:hover .status-icon-hover {
     display: inline;
-  }
-
-  .article-bulk-verify-btn {
-    height: 23px;
-    min-height: 23px;
   }
 
   .tv-indent {
@@ -1759,8 +1727,6 @@
         <div class="review-actions">
           <span class="review-progress" id="review-progress" aria-live="polite"></span>
           <button class="review-action-btn" id="btn-next-unreviewed" disabled>Next Unreviewed</button>
-          <button class="bulk-verify-btn article-bulk-verify-btn" id="btn-verify-article" aria-label="Verify all unreviewed cited fields" title="Verify all unreviewed cited fields">&#10003;</button>
-          <button class="bulk-clear-btn article-bulk-verify-btn" id="btn-clear-article" aria-label="Clear verified fields" title="Clear verified fields">&#10005;</button>
         </div>
       </div>
     </div>
@@ -2429,9 +2395,8 @@ function buildHorizontalTable(arr, basePath, key) {
 
   let html = '';
   // Section heading
-  const badges = auditBadgesHtml(arr, basePath);
   html += `<div class="tv-heading" data-depth="0">`;
-  html += `<span class="tv-heading-label">${escapeHtml(label)}</span>${badges}${bulkActionHtml(basePath, "section")}`;
+  html += `<span class="tv-heading-label">${escapeHtml(label)}</span>${bulkActionHtml(basePath, "section")}`;
   html += `</div>`;
   html += `<div class="tv-body">`;
 
@@ -2597,48 +2562,6 @@ function renderValue(key, val, basePath, depth) {
   return '';
 }
 
-function countFieldsUnderPath(obj, basePath) {
-  let total = 0;
-  if (obj === null || obj === undefined) return 0;
-  if (typeof obj !== "object") return 1;
-  if (Array.isArray(obj)) {
-    for (let i = 0; i < obj.length; i++) {
-      total += countFieldsUnderPath(obj[i], `${basePath}[${i}]`);
-    }
-  } else {
-    for (const [k, v] of Object.entries(obj)) {
-      const cp = `${basePath}.${k}`;
-      if (v !== null && typeof v === "object") {
-        total += countFieldsUnderPath(v, cp);
-      } else {
-        total++;
-      }
-    }
-  }
-  return total;
-}
-
-function auditBadgesHtml(obj, basePath) {
-  const total = countFieldsUnderPath(obj, basePath);
-  if (total === 0) return '';
-
-  let audited = 0, edited = 0;
-  for (const [path, ann] of Object.entries(state.annotations)) {
-    if (path === basePath || path.startsWith(basePath + ".") || path.startsWith(basePath + "[")) {
-      audited++;
-      if (ann.status === "flagged") edited++;
-    }
-  }
-
-  let html = '<span class="tv-badges">';
-  html += `<span class="tv-badge tv-badge-audit">${audited}/${total} audited</span>`;
-  if (edited > 0) {
-    html += `<span class="tv-badge tv-badge-edited">${edited} edited</span>`;
-  }
-  html += '</span>';
-  return html;
-}
-
 function bulkActionHtml(basePath, scope) {
   const reviewState = sectionReviewState(basePath);
   if (reviewState.total === 0) return "";
@@ -2660,9 +2583,8 @@ function bulkActionHtml(basePath, scope) {
 function buildHeadedSection(label, obj, basePath, depth) {
   const depthAttr = Math.min(depth, 3);
   let html = '';
-  const badges = depth <= 1 ? auditBadgesHtml(obj, basePath) : '';
   html += `<div class="tv-heading" data-depth="${depthAttr}">`;
-  html += `<span class="tv-heading-label">${escapeHtml(label)}</span>${badges}${bulkActionHtml(basePath, "section")}`;
+  html += `<span class="tv-heading-label">${escapeHtml(label)}</span>${bulkActionHtml(basePath, "section")}`;
   html += `</div>`;
   html += `<div class="tv-body">`;
 
@@ -4394,16 +4316,6 @@ state.tableMode = "review";
 function renderExtractionPanel() {
   renderTableView();
 }
-
-document.addEventListener("click", (e) => {
-  if (e.target.id === "btn-verify-article") {
-    e.stopPropagation();
-    bulkVerifyScope(null, "bulk_article");
-  } else if (e.target.id === "btn-clear-article") {
-    e.stopPropagation();
-    clearVerifiedScope(null);
-  }
-});
 
 // ── Boot ──
 init();

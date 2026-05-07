@@ -146,8 +146,10 @@ def test_verifier_uses_orcid_connect_flow() -> None:
 def test_verifier_exposes_bulk_review_actions() -> None:
     html = STATIC_HTML.read_text()
 
-    assert 'id="btn-verify-article"' in html
-    assert 'aria-label="Verify all unreviewed cited fields"' in html
+    assert 'id="btn-verify-article"' not in html
+    assert 'id="btn-clear-article"' not in html
+    assert 'aria-label="Verify all unreviewed cited fields"' not in html
+    assert 'aria-label="Clear verified fields"' not in html
     assert "bulk-verify-btn" in html
     assert "section-review-toggle" in html
     assert 'data-section-action="${action}"' in html
@@ -167,7 +169,7 @@ def test_verifier_bulk_review_is_reversible_and_field_level() -> None:
     assert "clearVerifiedScope" in html
     assert "undoBulkBatch" not in html
     assert "bulk_section" in html
-    assert "bulk_article" in html
+    assert "bulk_article" not in html
     assert "batch_id" in html
 
 
@@ -243,6 +245,11 @@ def test_verifier_scopes_review_navigation_to_current_article() -> None:
     assert 'id="btn-next-flagged"' not in html
     assert "selectNextReviewPath" in html
     assert '<strong>${counts.reviewed}/${counts.total}</strong> audited' in html
+    assert "tv-badges" not in html
+    assert "tv-badge-audit" not in html
+    assert "tv-badge-edited" not in html
+    assert "auditBadgesHtml" not in html
+    assert "countFieldsUnderPath" not in html
     assert "reviewed${flagText}" not in html
     assert " flagged</span>" not in html.lower()
     assert " flagged`" not in html.lower()
