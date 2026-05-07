@@ -4,6 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from litschema.config import load_config
 import litschema.webapp.app as webapp
 
 
@@ -62,3 +63,27 @@ def test_orcid_display_name_falls_back_to_given_and_family() -> None:
     person = {"name": {"given-names": {"value": "Given"}, "family-name": {"value": "Family"}}}
 
     assert webapp._orcid_display_name(person) == "Given Family"
+
+
+def test_schema_field_metadata_exposes_top_level_enums() -> None:
+    cfg = load_config("tests/fixtures/projects/custom_clinical/litschema.yaml", reload=True)
+
+    metadata = webapp._schema_field_metadata(cfg)
+
+    assert metadata["fields"]["blinding"]["range"] == "BlindingEnum"
+    assert [v["value"] for v in metadata["fields"]["blinding"]["permissible_values"]] == [
+        "open_label",
+        "single_blind",
+        "double_blind",
+        "triple_blind",
+    ]
+    assert "primary_endpoint" not in metadata["fields"]
+
+
+def test_schema_field_metadata_uses_array_path_patterns_for_nested_enums() -> None:
+    cfg = load_config("tests/fixtures/projects/agriculture_demo/litschema.yaml", reload=True)
+
+    metadata = webapp._schema_field_metadata(cfg)
+
+    assert metadata["fields"]["study_type"]["range"] == "StudyTypeEnum"
+    assert metadata["fields"]["experiments[].treatments[].type"]["range"] == "TreatmentTypeEnum"

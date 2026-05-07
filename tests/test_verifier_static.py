@@ -72,6 +72,10 @@ def test_verifier_edits_inline_in_value_cell() -> None:
     assert "cancelInlineEdit" in html
     assert "saveInlineEdit" in html
     assert "inline-edit-input" in html
+    assert "inline-edit-select" in html
+    assert "buildEnumEditSelect" in html
+    assert "schemaFieldForPath" in html
+    assert 'fetchJson("/api/schema/fields")' in html
     assert "inline-edit-save" in html
     assert "inline-edit-cancel" in html
     assert "displayOriginalFieldValueForEdit" not in html
@@ -170,6 +174,12 @@ def test_verifier_action_column_uses_compact_status() -> None:
     assert "buildFieldStatus" in html
     assert "status-verified" in html
     assert "status-flagged" in html
+    assert ".field-status.status-empty:hover .status-icon-main" in html
+    assert ".field-status.status-empty:hover .status-icon-hover" in html
+    assert ".field-status.status-verified:hover" in html
+    assert 'const hoverIcon = status === "verified" ? "&#10005;" : "&#10003;"' in html
+    assert "state.annotations[path] = entry" in html
+    assert "renderReviewState()" in html
     assert "status-cell" in html
     assert ".ext-table td.status-cell" in html
     assert "line-height: 1" in html

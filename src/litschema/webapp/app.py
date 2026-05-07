@@ -20,6 +20,7 @@ import yaml
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
+from linkml_runtime.utils.schemaview import SchemaView
 
 from ..articles import (
     article_files,
@@ -28,6 +29,7 @@ from ..articles import (
     read_review_events,
 )
 from ..config import load_config
+from ..config import LitSchemaConfig
 from .search import strip_references
 
 _CFG = load_config()
@@ -44,7 +46,9 @@ _corpus_cache: dict | None = None
 _article_index: dict[str, dict] | None = None
 _author_index: dict[str, dict] | None = None
 _author_file_index: dict[str, dict] | None = None
+_schema_fields_cache: dict | None = None
 ORCID_RE = re.compile(r"^\d{4}-\d{4}-\d{4}-\d{3}[0-9X]$")
+DEFAULT_EXTRACTION_SCHEMA = "extraction.yaml"
 
 
 def _load_corpus() -> dict:
@@ -184,6 +188,80 @@ def _review_progress(extraction: dict, annotations: list[dict]) -> dict:
     }
 
 
+def _extraction_schema_path(cfg: LitSchemaConfig) -> Path:
+    """Resolve the LinkML extraction schema used by the verifier."""
+    schema_file = cfg.raw.get("extraction_schema_file", DEFAULT_EXTRACTION_SCHEMA)
+    path = cfg.schema_dir / schema_file
+    if path.exists():
+        return path
+    root_file = cfg.raw.get("schema_root")
+    if root_file:
+        fallback = cfg.schema_dir / root_file
+        if fallback.exists():
+            return fallback
+    raise FileNotFoundError(f"extraction schema not found at {path}")
+
+
+def _find_tree_root_class(sv: SchemaView) -> str:
+    """Return the tree_root class declared in the entry-point schema file."""
+    local_classes = sv.schema.classes or {}
+    roots = [name for name, cls in local_classes.items() if getattr(cls, "tree_root", False)]
+    if len(roots) == 1:
+        return roots[0]
+    if len(roots) > 1:
+        raise ValueError(f"multiple tree_root classes found: {roots}")
+    raise ValueError("no tree_root class found in extraction schema")
+
+
+def _enum_permissible_values(sv: SchemaView, enum_name: str) -> list[dict]:
+    enum = sv.get_enum(enum_name)
+    if not enum:
+        return []
+    values = []
+    for value, pv in (enum.permissible_values or {}).items():
+        values.append(
+            {
+                "value": value,
+                "description": getattr(pv, "description", None) or "",
+            }
+        )
+    return values
+
+
+def _schema_field_metadata(cfg: LitSchemaConfig | None = None) -> dict:
+    """Return enum metadata keyed by verifier path pattern.
+
+    Multivalued path components use [] so the frontend can normalize
+    concrete paths such as experiments[0].treatments[1].type.
+    """
+    cfg = cfg or _CFG
+    schema_path = _extraction_schema_path(cfg)
+    sv = SchemaView(str(schema_path))
+    root_class = cfg.raw.get("extraction_class") or _find_tree_root_class(sv)
+    classes = set(sv.all_classes())
+    enums = set(sv.all_enums())
+    fields: dict[str, dict] = {}
+
+    def walk(class_name: str, base_path: str = "", stack: tuple[str, ...] = ()) -> None:
+        if class_name in stack:
+            return
+        for slot in sv.class_induced_slots(class_name):
+            slot_path = f"{base_path}.{slot.name}" if base_path else slot.name
+            path_pattern = f"{slot_path}[]" if slot.multivalued else slot_path
+            slot_range = slot.range
+            if slot_range in enums:
+                fields[path_pattern] = {
+                    "range": slot_range,
+                    "multivalued": bool(slot.multivalued),
+                    "permissible_values": _enum_permissible_values(sv, slot_range),
+                }
+            elif slot_range in classes:
+                walk(slot_range, path_pattern if slot.multivalued else slot_path, (*stack, class_name))
+
+    walk(root_class)
+    return {"root_class": root_class, "fields": fields}
+
+
 def _normalize_orcid_id(orcid_id: str) -> str:
     """Return a canonical ORCID iD or raise 400."""
     value = re.sub(r"^https?://orcid\.org/", "", orcid_id.strip(), flags=re.IGNORECASE).rstrip("/")
@@ -250,6 +328,18 @@ async def list_articles():
         )
 
     return {"articles": articles, "total": len(articles)}
+
+
+@app.get("/api/schema/fields")
+async def get_schema_fields():
+    """Return schema-driven field editor metadata for the verifier."""
+    global _schema_fields_cache
+    if _schema_fields_cache is None:
+        try:
+            _schema_fields_cache = _schema_field_metadata(_CFG)
+        except Exception as exc:
+            raise HTTPException(404, "schema metadata unavailable") from exc
+    return _schema_fields_cache
 
 
 @app.get("/api/orcid/{orcid_id}")

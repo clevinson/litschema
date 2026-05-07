@@ -890,6 +890,13 @@
   .field-status.status-verified {
     color: var(--green);
     background: rgba(22, 163, 74, 0.08);
+    box-shadow: inset 0 0 0 1px rgba(22, 163, 74, 0.28);
+  }
+
+  .field-status.status-verified:hover {
+    color: var(--green);
+    background: rgba(22, 163, 74, 0.08);
+    box-shadow: inset 0 0 0 1px rgba(22, 163, 74, 0.28);
   }
 
   .field-status.status-flagged {
@@ -904,6 +911,14 @@
 
   .field-status.status-empty {
     color: var(--text-dim);
+  }
+
+  .field-status.status-empty:hover .status-icon-main {
+    display: none;
+  }
+
+  .field-status.status-empty:hover .status-icon-hover {
+    display: inline;
   }
 
   .status-actions {
@@ -957,7 +972,8 @@
     width: 100%;
   }
 
-  .inline-edit-input {
+  .inline-edit-input,
+  .inline-edit-select {
     background: var(--bg-input);
     border: 1px solid var(--border);
     border-radius: var(--radius);
@@ -1752,6 +1768,7 @@ const state = {
   extraction: null,
   reasoning: null,
   reasoningByPath: {},
+  schemaFields: {},
   annotations: {},  // path -> {status, reviewer, timestamp, note}
   selectedPath: null,
   editingPath: null,
@@ -1802,8 +1819,12 @@ initTheme();
 state.filteredArticles = [];
 
 async function init() {
-  const data = await fetchJson("/api/articles");
+  const [data, schemaData] = await Promise.all([
+    fetchJson("/api/articles"),
+    fetchJson("/api/schema/fields").catch(() => ({ fields: {} })),
+  ]);
   state.articles = data.articles;
+  state.schemaFields = schemaData.fields || {};
   populateDropdown();
 
   // Prev/next handlers
@@ -2747,11 +2768,38 @@ function buildInlineEditForm(path, value = getValueAtPath(state.extraction, path
   const current = ann?.status === "flagged" && ann.correct_value !== undefined
     ? ann.correct_value
     : value;
+  const schemaField = schemaFieldForPath(path);
+  const controlHtml = schemaField
+    ? buildEnumEditSelect(path, current, schemaField)
+    : `<input class="inline-edit-input" data-path="${path}" value="${escapeHtml(displayFieldValue(current))}" aria-label="Edit value">`;
   return `<span class="inline-edit-form" data-path="${path}">` +
-    `<input class="inline-edit-input" data-path="${path}" value="${escapeHtml(displayFieldValue(current))}" aria-label="Edit value">` +
+    controlHtml +
     `<button type="button" class="inline-edit-save" data-path="${path}" aria-label="Save edit" title="Save edit">&#10003;</button>` +
     `<button type="button" class="inline-edit-cancel" data-path="${path}" aria-label="Cancel edit" title="Cancel edit">&#10005;</button>` +
     `</span>`;
+}
+
+function schemaPathPattern(path) {
+  return path.replace(/\[\d+\]/g, "[]");
+}
+
+function schemaFieldForPath(path) {
+  return state.schemaFields[schemaPathPattern(path)] || null;
+}
+
+function buildEnumEditSelect(path, current, schemaField) {
+  const currentValue = displayFieldValue(current);
+  const values = schemaField.permissible_values || [];
+  let html = `<select class="inline-edit-select" data-path="${path}" aria-label="Edit value">`;
+  html += `<option value="">Choose...</option>`;
+  for (const item of values) {
+    const value = item.value;
+    const selected = String(value) === currentValue ? " selected" : "";
+    const title = item.description ? ` title="${escapeHtml(item.description)}"` : "";
+    html += `<option value="${escapeHtml(value)}"${selected}${title}>${escapeHtml(value)}</option>`;
+  }
+  html += `</select>`;
+  return html;
 }
 
 function displayFieldValueForPath(path, value = getValueAtPath(state.extraction, path)) {
@@ -2778,10 +2826,11 @@ function buildFieldStatus(path, status) {
       ? "Edited"
       : "Not reviewed";
   const icon = status === "verified" ? "&#10003;" : status === "flagged" ? "&#9998;" : "&#9675;";
+  const hoverIcon = status === "verified" ? "&#10005;" : "&#10003;";
   const statusClass = status || "empty";
   const hoverClass = status === "verified" && !state.suppressClearHoverPaths.has(path) ? " hover-clear-ready" : "";
   return `<button type="button" class="field-status status-${statusClass}${hoverClass}" data-path="${path}" title="${label}" aria-label="${label}">` +
-    `<span class="status-icon-main">${icon}</span><span class="status-icon-hover">&#10005;</span>` +
+    `<span class="status-icon-main">${icon}</span><span class="status-icon-hover">${hoverIcon}</span>` +
     `</button>`;
 }
 
@@ -2992,10 +3041,10 @@ function openInlineEdit(path) {
   renderExtractionPanel();
   updateSourceEvidenceOverlay();
   requestAnimationFrame(() => {
-    const input = document.querySelector(`.inline-edit-input[data-path="${CSS.escape(path)}"]`);
+    const input = document.querySelector(`.inline-edit-input[data-path=${CSS.escape(path)}], .inline-edit-select[data-path=${CSS.escape(path)}]`);
     if (input) {
       input.focus();
-      input.select();
+      if (input.select) input.select();
     }
   });
 }
@@ -3009,10 +3058,10 @@ function cancelInlineEdit() {
 
 async function saveInlineEdit(path) {
   if (!path) return;
-  const input = document.querySelector(`.inline-edit-input[data-path="${CSS.escape(path)}"]`);
+  const control = document.querySelector(`.inline-edit-input[data-path=${CSS.escape(path)}], .inline-edit-select[data-path=${CSS.escape(path)}]`);
   const reviewer = $("#reviewer-id").value.trim();
   if (!reviewer) { alert("Please connect ORCID before editing."); return; }
-  const correctValue = input ? input.value.trim() : "";
+  const correctValue = control ? control.value.trim() : "";
   state.editingPath = null;
   const ok = await saveAnnotation(path, "flagged", {
     correct_value: correctValue,
@@ -3099,6 +3148,12 @@ function updateSelectedFieldBar(path = state.selectedPath) {
   updateSourceEvidenceOverlay();
 }
 
+function renderReviewState(path = state.selectedPath) {
+  renderExtractionPanel();
+  updateStats();
+  updateSelectedFieldBar(path);
+}
+
 function wireTableEvents(panel) {
   panel.querySelectorAll(".field-status[data-path]").forEach(btn => {
     btn.addEventListener("pointerleave", () => {
@@ -3133,7 +3188,7 @@ function wireTableEvents(panel) {
     });
   });
 
-  panel.querySelectorAll(".inline-edit-input[data-path]").forEach(input => {
+  panel.querySelectorAll(".inline-edit-input[data-path], .inline-edit-select[data-path]").forEach(input => {
     input.addEventListener("click", (e) => e.stopPropagation());
     input.addEventListener("keydown", async (e) => {
       if (e.key === "Enter") {
@@ -3301,7 +3356,7 @@ function wireTableEvents(panel) {
       if (state.editingPath && state.editingPath !== cellPath) {
         state.editingPath = null;
         renderExtractionPanel();
-        activeCell = document.querySelector(`.horizontal-table .cell-value[data-path="${CSS.escape(cellPath)}"]`) || cell;
+        activeCell = document.querySelector(`.horizontal-table .cell-value[data-path=${CSS.escape(cellPath)}]`) || cell;
       }
       state.selectedPath = cellPath;
       state.selectedSourceIndex = 0;
@@ -3900,6 +3955,10 @@ async function saveAnnotation(path, status, extra = {}, options = {}) {
   const render = options.render !== false;
   const entry = annotationEntry(path, status, extra);
   setSaveStatus("Saving...", "saving");
+  if (render) {
+    state.annotations[path] = entry;
+    renderReviewState();
+  }
 
   try {
     const response = await fetch(`/api/annotations/${state.currentId}`, {
@@ -3919,9 +3978,7 @@ async function saveAnnotation(path, status, extra = {}, options = {}) {
     return false;
   } finally {
     if (render) {
-      renderExtractionPanel();
-      updateStats();
-      updateSelectedFieldBar(state.selectedPath);
+      renderReviewState();
     }
   }
 }
