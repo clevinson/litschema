@@ -19,6 +19,7 @@ def test_verifier_defaults_to_review_table_with_mode_switcher() -> None:
     html = STATIC_HTML.read_text()
 
     assert 'viewMode: "review"' in html
+    assert 'overviewMode: "table"' in html
     assert 'id="btn-review-table"' not in html
     assert 'id="btn-pivot-view"' not in html
     assert ">Pivot<" not in html
@@ -28,14 +29,19 @@ def test_verifier_defaults_to_review_table_with_mode_switcher() -> None:
     assert 'id="panel-right-meta"' not in html
     assert 'id="view-mode-review"' in html
     assert 'id="view-mode-overview"' in html
-    assert 'id="view-mode-json"' in html
     assert 'data-view-mode="review"' in html
     assert 'data-view-mode="overview"' in html
-    assert 'data-view-mode="json"' in html
+    assert 'data-view-mode="json"' not in html
+    assert 'id="view-mode-json"' not in html
+    assert 'id="overview-mode-table"' in html
+    assert 'id="overview-mode-json"' in html
+    assert 'data-overview-mode="table"' in html
+    assert 'data-overview-mode="json"' in html
     assert "setViewMode" in html
+    assert "setOverviewMode" in html
     assert "initialViewMode" in html
+    assert "initialOverviewMode" in html
     assert "syncViewControls" in html
-    assert "updateReviewIdentityVisibility" in html
 
 
 def test_verifier_restores_read_only_overview_and_json_modes() -> None:
@@ -46,7 +52,7 @@ def test_verifier_restores_read_only_overview_and_json_modes() -> None:
     assert "renderJsonView" in html
     assert "renderExtractionPanel" in html
     assert "state.viewMode === \"overview\"" in html
-    assert "state.viewMode === \"json\"" in html
+    assert "state.overviewMode === \"json\"" in html
     assert "buildOverviewHorizontalTable" in html
     assert "buildOverviewValueCell" in html
     assert "json-tree" in html
@@ -63,6 +69,38 @@ def test_verifier_overview_and_json_use_effective_post_edit_values() -> None:
     assert 'ann.status === "flagged" && ann.correct_value !== undefined' in html
     assert "renderOverviewView(effectiveExtraction())" in html
     assert "renderJsonView(effectiveExtraction())" in html
+
+
+def test_verifier_moves_identity_and_queue_controls_into_review_header() -> None:
+    html = STATIC_HTML.read_text()
+
+    toolbar = html[html.index('<div class="toolbar">'):html.index('<div class="orcid-modal-backdrop"')]
+    assert 'id="review-identity-controls"' not in toolbar
+    assert 'id="view-mode-json"' not in toolbar
+    assert 'id="review-identity-controls"' in html
+    assert html.index('id="extraction-panel-title"') < html.index('id="review-identity-controls"')
+    assert 'id="review-progress"' in html
+    assert 'id="btn-prev-unreviewed"' in html
+    assert 'id="btn-next-unreviewed"' in html
+    assert ">Previous Field<" in html
+    assert ">Next Field<" in html
+    assert ">Next Unreviewed<" not in html
+    assert "selectAdjacentReviewPath" in html
+    assert "review-queue-actions" in html
+
+
+def test_verifier_json_is_overview_submode_with_code_styling() -> None:
+    html = STATIC_HTML.read_text()
+
+    assert "overview-mode-toggle" in html
+    assert "syncOverviewModeControls" in html
+    assert "json-code-view" in html
+    assert "json-token-key" in html
+    assert "json-token-string" in html
+    assert "json-token-number" in html
+    assert "json-token-boolean" in html
+    assert "json-token-null" in html
+    assert 'const open = " open";' in html
 
 
 def test_verifier_has_mobile_stacked_panel_layout() -> None:

@@ -444,6 +444,13 @@
     margin-bottom: 6px;
   }
 
+  .review-title-group {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 12px;
+    min-width: 0;
+  }
+
   .review-actions {
     display: inline-flex;
     align-items: center;
@@ -462,6 +469,27 @@
   .review-progress strong {
     color: var(--text);
     font-weight: 600;
+  }
+
+  .review-queue-actions {
+    justify-content: flex-start;
+    margin-top: 4px;
+  }
+
+  .overview-mode-toggle {
+    display: none;
+  }
+
+  .panel-header.overview-active .overview-mode-toggle {
+    display: inline-flex;
+  }
+
+  .panel-header.overview-active .review-queue-actions {
+    display: none;
+  }
+
+  .panel-header.overview-active .review-identity {
+    display: none !important;
   }
 
   .review-action-btn {
@@ -638,6 +666,10 @@
     color: var(--text);
   }
 
+  .json-code-view {
+    background: var(--bg);
+  }
+
   .json-tree,
   .json-tree ul {
     list-style: none;
@@ -664,6 +696,26 @@
 
   .json-key {
     color: var(--text-secondary);
+  }
+
+  .json-token-key {
+    color: var(--cited);
+  }
+
+  .json-token-string {
+    color: var(--val-string);
+  }
+
+  .json-token-number {
+    color: var(--val-number);
+  }
+
+  .json-token-boolean {
+    color: var(--accent);
+  }
+
+  .json-token-null {
+    color: var(--text-dim);
   }
 
   .json-leaf {
@@ -1759,15 +1811,6 @@
   <div class="view-mode-toggle" aria-label="Extraction view mode">
     <button class="view-mode-btn active" id="view-mode-review" data-view-mode="review" type="button">Review</button>
     <button class="view-mode-btn" id="view-mode-overview" data-view-mode="overview" type="button">Overview</button>
-    <button class="view-mode-btn" id="view-mode-json" data-view-mode="json" type="button">JSON</button>
-  </div>
-  <div class="review-identity" id="review-identity-controls">
-    <input type="hidden" class="reviewer-input" id="reviewer-id">
-    <button class="orcid-connect-btn" id="btn-orcid-connect" title="Connect ORCID">ORCID</button>
-    <button class="orcid-profile-btn" id="btn-orcid-profile" style="display:none" title="Disconnect ORCID">
-      <span class="orcid-name-label" id="orcid-profile-name"></span>
-      <span class="orcid-disconnect-label">Disconnect</span>
-    </button>
   </div>
   <button class="theme-btn" id="btn-theme" title="Toggle theme">&#9790;</button>
 </div>
@@ -1838,13 +1881,30 @@
     </div>
   </div>
   <div class="panel panel-right">
-    <div class="panel-header">
+    <div class="panel-header" id="extraction-panel-header">
       <div class="panel-header-row review-panel-top">
-        <h3 id="extraction-panel-title">Extraction Review</h3>
-        <div class="review-actions" id="review-actions">
+        <div class="review-title-group">
+          <h3 id="extraction-panel-title">Extraction Review</h3>
           <span class="review-progress" id="review-progress" aria-live="polite"></span>
-          <button class="review-action-btn" id="btn-next-unreviewed" disabled>Next Unreviewed</button>
         </div>
+        <div class="review-actions" id="review-actions">
+          <div class="view-mode-toggle overview-mode-toggle" aria-label="Overview display mode">
+            <button class="view-mode-btn active" id="overview-mode-table" data-overview-mode="table" type="button">Table</button>
+            <button class="view-mode-btn" id="overview-mode-json" data-overview-mode="json" type="button">JSON</button>
+          </div>
+          <div class="review-identity" id="review-identity-controls">
+            <input type="hidden" class="reviewer-input" id="reviewer-id">
+            <button class="orcid-connect-btn" id="btn-orcid-connect" title="Connect ORCID">ORCID</button>
+            <button class="orcid-profile-btn" id="btn-orcid-profile" style="display:none" title="Disconnect ORCID">
+              <span class="orcid-name-label" id="orcid-profile-name"></span>
+              <span class="orcid-disconnect-label">Disconnect</span>
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="panel-header-row review-queue-actions" id="review-queue-actions">
+        <button class="review-action-btn" id="btn-prev-unreviewed" disabled>Previous Field</button>
+        <button class="review-action-btn" id="btn-next-unreviewed" disabled>Next Field</button>
       </div>
     </div>
     <div class="panel-body" id="panel-right"></div>
@@ -1859,6 +1919,7 @@ const $ = (sel) => document.querySelector(sel);
 const state = {
   articles: [],
   viewMode: "review",
+  overviewMode: "table",
   currentId: null,
   markdown: null,
   extraction: null,
@@ -1879,19 +1940,46 @@ const state = {
 
 function initialViewMode() {
   const mode = new URLSearchParams(window.location.search).get("view");
-  return ["review", "overview", "json"].includes(mode) ? mode : "review";
+  return ["review", "overview"].includes(mode) || mode === "json" ? "overview" : "review";
+}
+
+function initialOverviewMode() {
+  const params = new URLSearchParams(window.location.search);
+  const mode = params.get("overview");
+  if (["table", "json"].includes(mode)) return mode;
+  return params.get("view") === "json" ? "json" : "table";
 }
 
 function setViewMode(mode, options = {}) {
-  if (!["review", "overview", "json"].includes(mode)) return;
+  if (!["review", "overview"].includes(mode)) return;
   state.viewMode = mode;
   state.editingPath = null;
   syncViewControls();
-  updateReviewIdentityVisibility();
   if (options.updateUrl !== false) {
     const url = new URL(window.location.href);
-    if (mode === "review") url.searchParams.delete("view");
-    else url.searchParams.set("view", mode);
+    if (mode === "review") {
+      url.searchParams.delete("view");
+      url.searchParams.delete("overview");
+    } else {
+      url.searchParams.set("view", "overview");
+      if (state.overviewMode === "json") url.searchParams.set("overview", "json");
+      else url.searchParams.delete("overview");
+    }
+    history.replaceState(null, "", url);
+  }
+  renderExtractionPanel();
+}
+
+function setOverviewMode(mode, options = {}) {
+  if (!["table", "json"].includes(mode)) return;
+  state.overviewMode = mode;
+  syncOverviewModeControls();
+  if (state.viewMode !== "overview") return;
+  if (options.updateUrl !== false) {
+    const url = new URL(window.location.href);
+    url.searchParams.set("view", "overview");
+    if (mode === "json") url.searchParams.set("overview", "json");
+    else url.searchParams.delete("overview");
     history.replaceState(null, "", url);
   }
   renderExtractionPanel();
@@ -1907,17 +1995,21 @@ function syncViewControls() {
   if (title) {
     title.textContent = state.viewMode === "overview"
       ? "Extraction Overview"
-      : state.viewMode === "json"
-        ? "Rendered JSON"
-        : "Extraction Review";
+      : "Extraction Review";
   }
-  const reviewActions = $("#review-actions");
-  if (reviewActions) reviewActions.style.display = state.viewMode === "review" ? "inline-flex" : "none";
+  const header = $("#extraction-panel-header");
+  if (header) header.classList.toggle("overview-active", state.viewMode === "overview");
+  const progress = $("#review-progress");
+  if (progress) progress.style.display = state.viewMode === "review" ? "inline" : "none";
+  syncOverviewModeControls();
 }
 
-function updateReviewIdentityVisibility() {
-  const controls = $("#review-identity-controls");
-  if (controls) controls.style.display = state.viewMode === "review" ? "inline-flex" : "none";
+function syncOverviewModeControls() {
+  document.querySelectorAll(".view-mode-btn[data-overview-mode]").forEach(btn => {
+    const active = btn.dataset.overviewMode === state.overviewMode;
+    btn.classList.toggle("active", active);
+    btn.setAttribute("aria-pressed", active ? "true" : "false");
+  });
 }
 
 // ── API helpers ──
@@ -1965,16 +2057,20 @@ async function init() {
   state.articles = data.articles;
   state.schemaFields = schemaData.fields || {};
   state.viewMode = initialViewMode();
+  state.overviewMode = initialOverviewMode();
   syncViewControls();
-  updateReviewIdentityVisibility();
   populateDropdown();
 
   // Prev/next handlers
   $("#btn-prev").addEventListener("click", () => navigateArticle(-1));
   $("#btn-next").addEventListener("click", () => navigateArticle(1));
-  $("#btn-next-unreviewed").addEventListener("click", () => selectNextReviewPath("unreviewed"));
+  $("#btn-prev-unreviewed").addEventListener("click", () => selectAdjacentReviewPath(-1));
+  $("#btn-next-unreviewed").addEventListener("click", () => selectAdjacentReviewPath(1));
   document.querySelectorAll(".view-mode-btn[data-view-mode]").forEach(btn => {
     btn.addEventListener("click", () => setViewMode(btn.dataset.viewMode));
+  });
+  document.querySelectorAll(".view-mode-btn[data-overview-mode]").forEach(btn => {
+    btn.addEventListener("click", () => setOverviewMode(btn.dataset.overviewMode));
   });
   wireSelectedFieldActions();
 }
@@ -3190,12 +3286,12 @@ function renderJsonView(data = effectiveExtraction()) {
     panel.innerHTML = '<div class="loading">No extraction data</div>';
     return;
   }
-  panel.innerHTML = `<div class="json-view">${renderJsonTree(data)}</div>`;
+  panel.innerHTML = `<div class="json-view json-code-view">${renderJsonTree(data)}</div>`;
   wireJsonEvents(panel);
 }
 
 function renderJsonTree(value, path = "", key = null, depth = 0) {
-  const keyHtml = key === null ? "" : `<span class="json-key">${escapeHtml(JSON.stringify(key))}</span>: `;
+  const keyHtml = key === null ? "" : `<span class="json-key json-token-key">${escapeHtml(JSON.stringify(key))}</span>: `;
   if (value === null || typeof value !== "object") {
     const pathAttr = path ? ` data-path="${path}"` : "";
     const selectedCls = state.selectedPath === path ? " selected" : "";
@@ -3204,7 +3300,7 @@ function renderJsonTree(value, path = "", key = null, depth = 0) {
 
   const isArray = Array.isArray(value);
   const entries = isArray ? value.map((v, i) => [i, v]) : Object.entries(value);
-  const open = depth < 2 ? " open" : "";
+  const open = " open";
   const openChar = isArray ? "[" : "{";
   const closeChar = isArray ? "]" : "}";
   if (entries.length === 0) {
@@ -3223,8 +3319,10 @@ function renderJsonTree(value, path = "", key = null, depth = 0) {
 }
 
 function jsonScalarHtml(value) {
-  if (typeof value === "string") return escapeHtml(JSON.stringify(value));
-  if (value === undefined) return "null";
+  if (typeof value === "string") return `<span class="json-token-string">${escapeHtml(JSON.stringify(value))}</span>`;
+  if (typeof value === "number") return `<span class="json-token-number">${escapeHtml(JSON.stringify(value))}</span>`;
+  if (typeof value === "boolean") return `<span class="json-token-boolean">${String(value)}</span>`;
+  if (value === null || value === undefined) return '<span class="json-token-null">null</span>';
   return escapeHtml(JSON.stringify(value));
 }
 
@@ -4263,8 +4361,10 @@ function updateReviewWorkspace() {
     progress.innerHTML = `<strong>${counts.reviewed}/${counts.total}</strong> audited`;
   }
 
-  const unreviewedBtn = $("#btn-next-unreviewed");
-  if (unreviewedBtn) unreviewedBtn.disabled = counts.remaining === 0;
+  const prevUnreviewedBtn = $("#btn-prev-unreviewed");
+  const nextUnreviewedBtn = $("#btn-next-unreviewed");
+  if (prevUnreviewedBtn) prevUnreviewedBtn.disabled = counts.remaining === 0;
+  if (nextUnreviewedBtn) nextUnreviewedBtn.disabled = counts.remaining === 0;
   updateSelectedFieldBar();
 }
 
@@ -4588,6 +4688,23 @@ function selectNextReviewPath(kind) {
   selectTableRow(nextPath);
 }
 
+function selectAdjacentReviewPath(direction) {
+  const paths = orderedReviewPaths().filter(path => !state.annotations[path]);
+  if (paths.length === 0) return;
+  const currentIndex = state.selectedPath ? paths.indexOf(state.selectedPath) : -1;
+  let nextIndex;
+  if (currentIndex === -1) {
+    nextIndex = direction < 0 ? paths.length - 1 : 0;
+  } else {
+    nextIndex = (currentIndex + direction + paths.length) % paths.length;
+  }
+  const nextPath = paths[nextIndex];
+  const row = document.querySelector(`tr.clickable[data-path="${CSS.escape(nextPath)}"]`)
+    || document.querySelector(`.cell-value[data-path="${CSS.escape(nextPath)}"]`)?.closest("tr.clickable");
+  if (row) row.scrollIntoView({ behavior: "smooth", block: "center" });
+  selectTableRow(nextPath);
+}
+
 async function verifyRowAnnotations(rowPath) {
   const paths = rowCellPaths(rowPath);
   for (const path of paths) {
@@ -4749,13 +4866,13 @@ initReviewerIdentity();
 // ── Extraction rendering ──
 function renderExtractionPanel() {
   syncViewControls();
-  updateReviewIdentityVisibility();
-  if (state.viewMode === "overview") {
-    renderOverviewView(effectiveExtraction());
-  } else if (state.viewMode === "json") {
+  if (state.viewMode === "overview" && state.overviewMode === "json") {
     renderJsonView(effectiveExtraction());
+  } else if (state.viewMode === "overview") {
+    renderOverviewView(effectiveExtraction());
   } else {
     renderReviewTable();
+    updateReviewWorkspace();
   }
 }
 
