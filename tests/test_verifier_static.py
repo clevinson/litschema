@@ -124,6 +124,9 @@ def test_verifier_uses_source_overlay_without_selected_field_box() -> None:
     assert 'data-action="edit"' not in html
     assert 'id="source-evidence-overlay"' in html
     assert 'id="source-evidence-reasoning"' in html
+    assert 'id="source-evidence-value"' in html
+    assert 'id="source-evidence-value-label"' in html
+    assert 'id="source-evidence-value-text"' in html
     assert 'id="source-evidence-index"' in html
     assert 'id="source-evidence-lines"' in html
     assert 'id="btn-source-evidence-prev"' in html
@@ -372,6 +375,10 @@ def test_verifier_moves_source_reasoning_to_left_overlay() -> None:
     assert "updateSourceEvidenceOverlay" in html
     assert "focusSelectedSource" in html
     assert "selectedReasoning" in html
+    assert "selectedFieldValueHtml" in html
+    assert "selectedFieldContextLabel" in html
+    assert "selectedFieldValueLabel" in html
+    assert 'valueBox.style.display = "inline-flex"' in html
     assert "source-cycle-control" in html
     assert "source-cycle-counter" in html
     assert "source-cycle-btn" in html

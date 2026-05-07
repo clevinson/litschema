@@ -1760,6 +1760,48 @@
     color: var(--text-secondary);
   }
 
+  .source-evidence-value {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 8px;
+    min-width: 0;
+    width: fit-content;
+    max-width: 100%;
+    margin-bottom: 6px;
+    padding: 5px 7px;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius);
+    background: var(--bg);
+  }
+
+  .source-evidence-value-label {
+    flex-shrink: 0;
+    color: var(--text-dim);
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  .source-evidence-value-slot {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .source-evidence-value-text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text);
+  }
+
+  .source-evidence-value-text.edited {
+    color: var(--yellow);
+  }
+
   .source-evidence-reasoning {
     color: var(--text-secondary);
     font-size: 12px;
@@ -1941,6 +1983,10 @@
             <button class="source-cycle-btn" id="btn-source-evidence-next" aria-label="Next source" disabled>&rsaquo;</button>
           </span>
         </div>
+      </div>
+      <div class="source-evidence-value" id="source-evidence-value" style="display:none">
+        <span class="source-evidence-value-label" id="source-evidence-value-label">Value</span>
+        <span class="source-evidence-value-slot" id="source-evidence-value-text"></span>
       </div>
       <div class="source-evidence-reasoning" id="source-evidence-reasoning"></div>
     </div>
@@ -3075,6 +3121,19 @@ function displayFieldValueForPath(path, value = getValueAtPath(state.extraction,
   return { html: escapeHtml(String(value)), style: "" };
 }
 
+function selectedFieldValueHtml(path) {
+  const ann = state.annotations[path];
+  const display = displayFieldValueForPath(path);
+  const editedClass = ann?.status === "flagged" ? " edited" : "";
+  const rawValue = ann?.status === "flagged" && ann.correct_value !== undefined
+    ? ann.correct_value
+    : getValueAtPath(state.extraction, path);
+  return {
+    html: `<span class="source-evidence-value-text${editedClass}"${display.style}>${display.html}</span>`,
+    title: displayFieldValue(rawValue),
+  };
+}
+
 function buildFieldStatus(path, status) {
   const label = status === "verified"
     ? "Verified"
@@ -3533,9 +3592,25 @@ function displayFieldValue(value) {
 
 function selectedFieldLabel(path) {
   if (!path) return "Select a field";
+  return selectedFieldContextLabel(path);
+}
+
+function pathLabelParts(path) {
   return path.split(".").map(part =>
     humanize(part.replace(/\[(\d+)\]/g, (_, idx) => ` #${Number(idx) + 1}`))
-  ).join(" / ");
+  );
+}
+
+function selectedFieldContextLabel(path) {
+  const parts = pathLabelParts(path);
+  if (parts.length <= 1) return parts[0] || "Select a field";
+  return parts.slice(0, -1).join(" / ");
+}
+
+function selectedFieldValueLabel(path) {
+  const parts = pathLabelParts(path);
+  if (parts.length <= 1) return "Value";
+  return parts[parts.length - 1] || "Value";
 }
 
 function selectedSourceRanges(path) {
@@ -3605,12 +3680,21 @@ function updateSourceEvidenceOverlay() {
   const prev = $("#btn-source-evidence-prev");
   const next = $("#btn-source-evidence-next");
   const reasoning = $("#source-evidence-reasoning");
+  const valueBox = $("#source-evidence-value");
+  const valueLabel = $("#source-evidence-value-label");
+  const valueText = $("#source-evidence-value-text");
   if (!overlay || !indexEl || !lines) return;
   const ranges = selectedSourceRanges(state.selectedPath);
   if (!state.selectedPath) {
     overlay.classList.remove("active");
     if (label) label.textContent = "No field selected";
     if (reasoning) reasoning.textContent = "";
+    if (valueBox) valueBox.style.display = "none";
+    if (valueLabel) valueLabel.textContent = "Value";
+    if (valueText) {
+      valueText.innerHTML = "";
+      valueText.removeAttribute("title");
+    }
     indexEl.textContent = "0/0";
     lines.textContent = "No field selected";
     if (cycle) cycle.style.display = "none";
@@ -3621,6 +3705,13 @@ function updateSourceEvidenceOverlay() {
 
   overlay.classList.add("active");
   if (label) label.textContent = selectedFieldLabel(state.selectedPath);
+  if (valueBox && valueText) {
+    const valueDisplay = selectedFieldValueHtml(state.selectedPath);
+    if (valueLabel) valueLabel.textContent = selectedFieldValueLabel(state.selectedPath);
+    valueText.innerHTML = valueDisplay.html;
+    valueText.title = valueDisplay.title;
+    valueBox.style.display = "inline-flex";
+  }
   const reasoningText = selectedReasoning(state.selectedPath);
   if (reasoning) reasoning.textContent = reasoningText || "No reasoning note for this field.";
 
