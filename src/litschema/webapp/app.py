@@ -9,6 +9,9 @@ Usage:
 from __future__ import annotations
 
 import json
+import re
+import urllib.error
+import urllib.request
 import webbrowser
 from datetime import UTC, datetime
 from pathlib import Path
@@ -17,6 +20,7 @@ import yaml
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
+from linkml_runtime.utils.schemaview import SchemaView
 
 from ..articles import (
     article_files,
@@ -25,6 +29,7 @@ from ..articles import (
     read_review_events,
 )
 from ..config import load_config
+from ..config import LitSchemaConfig
 from .search import strip_references
 
 _CFG = load_config()
@@ -40,6 +45,10 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 _corpus_cache: dict | None = None
 _article_index: dict[str, dict] | None = None
 _author_index: dict[str, dict] | None = None
+_author_file_index: dict[str, dict] | None = None
+_schema_fields_cache: dict | None = None
+ORCID_RE = re.compile(r"^\d{4}-\d{4}-\d{4}-\d{3}[0-9X]$")
+DEFAULT_EXTRACTION_SCHEMA = "extraction.yaml"
 
 
 def _load_corpus() -> dict:
@@ -57,14 +66,19 @@ def _load_corpus() -> dict:
 
 
 def _load_author_index() -> dict[str, dict]:
+    global _author_file_index
     _load_corpus()
     if _author_index:
         return _author_index
+    if _author_file_index is not None:
+        return _author_file_index
     authors_path = _CFG.data_dir / "authors.yaml"
     if not authors_path.exists():
+        _author_file_index = {}
         return {}
     authors = yaml.safe_load(authors_path.read_text()) or []
-    return {a.get("id"): a for a in authors if a.get("id")}
+    _author_file_index = {a.get("id"): a for a in authors if a.get("id")}
+    return _author_file_index
 
 
 def _article_meta(article_id: str) -> dict:
@@ -118,6 +132,157 @@ def _current_annotations(article_id: str) -> list[dict]:
     return list(current.values())
 
 
+def _leaf_paths(obj, base_path: str = "") -> list[str]:
+    """Return reviewable extraction leaf paths in verifier path syntax."""
+    if obj is None or not isinstance(obj, (dict, list)):
+        return [base_path] if base_path else []
+    if isinstance(obj, list):
+        paths = []
+        for idx, item in enumerate(obj):
+            paths.extend(_leaf_paths(item, f"{base_path}[{idx}]"))
+        return paths
+
+    paths = []
+    for key, value in obj.items():
+        if not base_path and key in {"article_id", "confidence", "reasoning"}:
+            continue
+        child_path = f"{base_path}.{key}" if base_path else key
+        paths.extend(_leaf_paths(value, child_path))
+    return paths
+
+
+def _normalize_review_path(path: str) -> str:
+    path = path.lstrip(".")
+    legacy_suffix = ".trial_type"
+    if path.endswith(legacy_suffix):
+        return path[: -len(legacy_suffix)] + ".experimental_scale"
+    return path
+
+
+def _review_progress(extraction: dict, annotations: list[dict]) -> dict:
+    """Summarize field-level review progress for article queue filters."""
+    leaf_paths = set(_leaf_paths(extraction))
+    current: dict[str, dict] = {}
+    for annotation in annotations:
+        path = annotation.get("path")
+        status = annotation.get("status")
+        if not path:
+            continue
+        path = _normalize_review_path(path)
+        if status == "cleared":
+            current.pop(path, None)
+        elif path in leaf_paths:
+            current[path] = annotation
+
+    n_verified = sum(1 for ann in current.values() if ann.get("status") == "verified")
+    n_flagged = sum(1 for ann in current.values() if ann.get("status") == "flagged")
+    n_fields = len(leaf_paths)
+    n_reviewed = n_verified + n_flagged
+    return {
+        "n_fields": n_fields,
+        "n_reviewed": n_reviewed,
+        "n_verified": n_verified,
+        "n_flagged": n_flagged,
+        "is_complete": n_fields > 0 and n_reviewed >= n_fields,
+        "has_flags": n_flagged > 0,
+    }
+
+
+def _extraction_schema_path(cfg: LitSchemaConfig) -> Path:
+    """Resolve the LinkML extraction schema used by the verifier."""
+    schema_file = cfg.raw.get("extraction_schema_file", DEFAULT_EXTRACTION_SCHEMA)
+    path = cfg.schema_dir / schema_file
+    if path.exists():
+        return path
+    root_file = cfg.raw.get("schema_root")
+    if root_file:
+        fallback = cfg.schema_dir / root_file
+        if fallback.exists():
+            return fallback
+    raise FileNotFoundError(f"extraction schema not found at {path}")
+
+
+def _find_tree_root_class(sv: SchemaView) -> str:
+    """Return the tree_root class declared in the entry-point schema file."""
+    local_classes = sv.schema.classes or {}
+    roots = [name for name, cls in local_classes.items() if getattr(cls, "tree_root", False)]
+    if len(roots) == 1:
+        return roots[0]
+    if len(roots) > 1:
+        raise ValueError(f"multiple tree_root classes found: {roots}")
+    raise ValueError("no tree_root class found in extraction schema")
+
+
+def _enum_permissible_values(sv: SchemaView, enum_name: str) -> list[dict]:
+    enum = sv.get_enum(enum_name)
+    if not enum:
+        return []
+    values = []
+    for value, pv in (enum.permissible_values or {}).items():
+        values.append(
+            {
+                "value": value,
+                "description": getattr(pv, "description", None) or "",
+            }
+        )
+    return values
+
+
+def _schema_field_metadata(cfg: LitSchemaConfig | None = None) -> dict:
+    """Return enum metadata keyed by verifier path pattern.
+
+    Multivalued path components use [] so the frontend can normalize
+    concrete paths such as experiments[0].treatments[1].type.
+    """
+    cfg = cfg or _CFG
+    schema_path = _extraction_schema_path(cfg)
+    sv = SchemaView(str(schema_path))
+    root_class = cfg.raw.get("extraction_class") or _find_tree_root_class(sv)
+    classes = set(sv.all_classes())
+    enums = set(sv.all_enums())
+    fields: dict[str, dict] = {}
+
+    def walk(class_name: str, base_path: str = "", stack: tuple[str, ...] = ()) -> None:
+        if class_name in stack:
+            return
+        for slot in sv.class_induced_slots(class_name):
+            slot_path = f"{base_path}.{slot.name}" if base_path else slot.name
+            path_pattern = f"{slot_path}[]" if slot.multivalued else slot_path
+            slot_range = slot.range
+            if slot_range in enums:
+                fields[path_pattern] = {
+                    "range": slot_range,
+                    "multivalued": bool(slot.multivalued),
+                    "permissible_values": _enum_permissible_values(sv, slot_range),
+                }
+            elif slot_range in classes:
+                walk(slot_range, path_pattern if slot.multivalued else slot_path, (*stack, class_name))
+
+    walk(root_class)
+    return {"root_class": root_class, "fields": fields}
+
+
+def _normalize_orcid_id(orcid_id: str) -> str:
+    """Return a canonical ORCID iD or raise 400."""
+    value = re.sub(r"^https?://orcid\.org/", "", orcid_id.strip(), flags=re.IGNORECASE).rstrip("/")
+    value = value.upper()
+    if not ORCID_RE.match(value):
+        raise HTTPException(400, "Invalid ORCID iD")
+    return value
+
+
+def _orcid_display_name(person: dict) -> str | None:
+    """Extract a readable public name from an ORCID person payload."""
+    name = (person.get("name") or {}) if isinstance(person, dict) else {}
+    credit = ((name.get("credit-name") or {}).get("value") or "").strip()
+    given = ((name.get("given-names") or {}).get("value") or "").strip()
+    family = ((name.get("family-name") or {}).get("value") or "").strip()
+    if credit:
+        return credit
+    full = " ".join(part for part in [given, family] if part).strip()
+    return full or None
+
+
 @app.get("/", response_class=HTMLResponse)
 async def index():
     return (STATIC_DIR / "index.html").read_text()
@@ -140,7 +305,8 @@ async def list_articles():
 
         setups = data.get("experimental_setups") or []
         # Annotation progress
-        n_annotated = len(_current_annotations(article_id))
+        annotations = _current_annotations(article_id)
+        progress = _review_progress(data, annotations)
         # Look up bibliographic fields from corpus
         bib = _article_meta(article_id)
         articles.append(
@@ -151,7 +317,8 @@ async def list_articles():
                 "focus_areas": data.get("focus_areas", []),
                 "document_type": data.get("document_type"),
                 "n_setups": len(setups),
-                "n_annotated": n_annotated,
+                "n_annotated": progress["n_reviewed"],
+                **progress,
                 "doi": bib.get("doi"),
                 "title": bib.get("title"),
                 "year": bib.get("year"),
@@ -161,6 +328,45 @@ async def list_articles():
         )
 
     return {"articles": articles, "total": len(articles)}
+
+
+@app.get("/api/schema/fields")
+async def get_schema_fields():
+    """Return schema-driven field editor metadata for the verifier."""
+    global _schema_fields_cache
+    if _schema_fields_cache is None:
+        try:
+            _schema_fields_cache = _schema_field_metadata(_CFG)
+        except Exception as exc:
+            raise HTTPException(404, "schema metadata unavailable") from exc
+    return _schema_fields_cache
+
+
+@app.get("/api/orcid/{orcid_id}")
+async def get_orcid_profile(orcid_id: str):
+    """Resolve an ORCID iD to a public profile name."""
+    canonical_id = _normalize_orcid_id(orcid_id)
+    request = urllib.request.Request(
+        f"https://pub.orcid.org/v3.0/{canonical_id}/person",
+        headers={
+            "Accept": "application/json",
+            "User-Agent": "litschema-verifier/0.1",
+        },
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=8) as response:
+            person = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        if exc.code == 404:
+            raise HTTPException(404, "User not found") from exc
+        raise HTTPException(502, "ORCID lookup failed") from exc
+    except Exception as exc:
+        raise HTTPException(502, "ORCID lookup failed") from exc
+
+    name = _orcid_display_name(person)
+    if not name:
+        raise HTTPException(404, "User not found")
+    return {"orcid": canonical_id, "name": name, "url": f"https://orcid.org/{canonical_id}"}
 
 
 @app.get("/api/article/{article_id}")

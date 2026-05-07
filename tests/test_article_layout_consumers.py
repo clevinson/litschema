@@ -138,3 +138,33 @@ def test_webapp_reads_bibliography_and_pdf_filename_from_article_metadata(
         "authors": [],
     }
     assert webapp._article_pdf_filename("smith-2024") == "smith.pdf"
+
+
+def test_webapp_computes_article_review_progress() -> None:
+    extraction = {
+        "article_id": "smith-2024",
+        "confidence": 0.9,
+        "document_type": "journal_article",
+        "study_types": ["experimental", "modeling"],
+        "experimental_setups": [
+            {
+                "experimental_scale": "field",
+                "soil": {"texture_class": "silt"},
+            }
+        ],
+    }
+    annotations = [
+        {"path": ".document_type", "status": "verified"},
+        {"path": ".study_types[0]", "status": "flagged"},
+        {"path": ".study_types[1]", "status": "cleared"},
+        {"path": ".experimental_setups[0].trial_type", "status": "verified"},
+    ]
+
+    assert webapp._review_progress(extraction, annotations) == {
+        "n_fields": 5,
+        "n_reviewed": 3,
+        "n_verified": 2,
+        "n_flagged": 1,
+        "is_complete": False,
+        "has_flags": True,
+    }

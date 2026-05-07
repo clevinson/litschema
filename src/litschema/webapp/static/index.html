@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ERW Extraction Verifier</title>
+<title>litschema verify</title>
 <link rel="icon" href="data:,">
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -205,58 +205,6 @@
     justify-content: center;
   }
 
-  /* Filter buttons */
-  .filter-group {
-    display: flex;
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    height: 32px;
-    overflow: hidden;
-    flex-shrink: 0;
-  }
-
-  .filter-btn {
-    font-family: var(--font-sans);
-    font-size: 11px;
-    font-weight: 500;
-    letter-spacing: 0.02em;
-    text-transform: uppercase;
-    background: none;
-    border: none;
-    border-right: 1px solid var(--border);
-    color: var(--text-dim);
-    padding: 0 12px;
-    cursor: pointer;
-    transition: all 0.1s;
-  }
-
-  .filter-btn:last-child { border-right: none; }
-  .filter-btn:hover:not(.active) { color: var(--text-secondary); }
-
-  .filter-btn.active {
-    background: var(--bg-overlay);
-    color: var(--text);
-  }
-
-  .confidence-badge {
-    font-family: var(--font-mono);
-    font-size: 10px;
-    font-weight: 500;
-    color: var(--text-secondary);
-    background: var(--bg);
-    border: 1px solid var(--border);
-    padding: 3px 7px;
-    border-radius: 3px;
-    letter-spacing: 0.03em;
-    white-space: nowrap;
-  }
-
-  .confidence-badge strong {
-    color: var(--accent);
-    font-weight: 500;
-  }
-
   .tags {
     display: flex;
     gap: 3px;
@@ -280,6 +228,50 @@
   .tag.focus { color: var(--green); border-color: rgba(74, 222, 128, 0.15); }
 
   .toolbar-spacer { flex: 1; }
+
+  .view-mode-toggle {
+    display: inline-flex;
+    align-items: center;
+    height: 32px;
+    padding: 2px;
+    gap: 2px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg);
+    flex-shrink: 0;
+  }
+
+  .view-mode-btn {
+    appearance: none;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-family: var(--font-sans);
+    font-size: 12px;
+    font-weight: 500;
+    height: 26px;
+    padding: 0 10px;
+    white-space: nowrap;
+  }
+
+  .view-mode-btn:hover {
+    color: var(--text);
+    background: var(--bg-overlay);
+  }
+
+  .view-mode-btn.active {
+    color: var(--text);
+    background: var(--bg-raised);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+  }
+
+  .review-identity {
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+  }
 
   .theme-btn {
     background: none;
@@ -432,11 +424,11 @@
   }
 
   .panel-header h3 {
-    font-size: 10px;
+    font-size: 12px;
     font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--text-dim);
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--text-secondary);
     flex-shrink: 0;
   }
 
@@ -447,9 +439,89 @@
     overflow: hidden;
   }
 
+  .review-panel-top {
+    gap: 10px;
+    margin-bottom: 6px;
+  }
+
+  .review-title-group {
+    display: grid;
+    gap: 3px;
+    min-width: 0;
+  }
+
+  .review-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .review-progress {
+    font-family: var(--font-sans);
+    font-size: 11px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+  }
+
+  .review-progress strong {
+    color: var(--text);
+    font-weight: 600;
+  }
+
+  .review-queue-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-start;
+    margin-top: 6px;
+  }
+
+  .overview-mode-toggle {
+    display: none;
+  }
+
+  .panel-header.overview-active .overview-mode-toggle {
+    display: inline-flex;
+  }
+
+  .panel-header.overview-active .review-queue-actions {
+    display: none;
+  }
+
+  .panel-header.overview-active .review-identity {
+    display: none !important;
+  }
+
+  .review-action-btn {
+    font-family: var(--font-sans);
+    font-size: 11px;
+    font-weight: 500;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg);
+    color: var(--text-secondary);
+    cursor: pointer;
+    min-height: 24px;
+    padding: 0 8px;
+    white-space: nowrap;
+    transition: border-color 0.1s, color 0.1s, background-color 0.1s;
+  }
+
+  .review-action-btn:hover:not(:disabled) {
+    border-color: var(--text-dim);
+    color: var(--text);
+    background: var(--bg-overlay);
+  }
+
+  .review-action-btn:disabled {
+    cursor: default;
+    opacity: 0.4;
+  }
+
   .panel-header .panel-meta {
-    font-family: var(--font-mono);
-    font-size: 10px;
+    font-family: var(--font-sans);
+    font-size: 11px;
     color: var(--text-dim);
     white-space: nowrap;
     flex-shrink: 0;
@@ -462,6 +534,11 @@
 
   .panel-left {
     border-right: 1px solid var(--border);
+    position: relative;
+  }
+
+  .panel-right {
+    position: relative;
   }
 
   .panel-body {
@@ -563,6 +640,96 @@
     padding: 4px 12px 12px;
   }
 
+  .overview-view .tv-heading[data-depth="0"] {
+    margin-top: 18px;
+  }
+
+  .overview-table colgroup .overview-col-field { width: 35%; }
+  .overview-table colgroup .overview-col-value { width: auto; }
+
+  .overview-table td.overview-value-cell,
+  .overview-table .cell-value {
+    color: var(--text);
+    font-family: var(--font-mono);
+  }
+
+  .overview-table td:nth-child(3),
+  .overview-table td.status-cell {
+    text-align: left;
+    white-space: normal;
+  }
+
+  .json-view {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.65;
+    padding: 8px 12px 24px;
+    color: var(--text);
+  }
+
+  .json-code-view {
+    background: var(--bg);
+  }
+
+  .json-tree,
+  .json-tree ul {
+    list-style: none;
+  }
+
+  .json-tree ul {
+    margin-left: 18px;
+    padding-left: 14px;
+    border-left: 1px solid var(--border-subtle);
+  }
+
+  .json-tree li {
+    margin: 2px 0;
+  }
+
+  .json-toggle {
+    cursor: pointer;
+    color: var(--text-secondary);
+  }
+
+  .json-toggle:hover {
+    color: var(--text);
+  }
+
+  .json-key {
+    color: var(--text-secondary);
+  }
+
+  .json-token-key {
+    color: var(--cited);
+  }
+
+  .json-token-string {
+    color: var(--val-string);
+  }
+
+  .json-token-number {
+    color: var(--val-number);
+  }
+
+  .json-token-boolean {
+    color: var(--accent);
+  }
+
+  .json-token-null {
+    color: var(--text-dim);
+  }
+
+  .json-leaf {
+    cursor: pointer;
+    border-radius: 3px;
+    padding: 1px 2px;
+  }
+
+  .json-leaf:hover,
+  .json-leaf.selected {
+    background: var(--bg-overlay);
+  }
+
   .tv-heading {
     display: flex;
     align-items: center;
@@ -605,33 +772,6 @@
     color: var(--text-dim);
   }
 
-  .tv-badges {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    margin-left: 0;
-    flex-shrink: 0;
-  }
-
-  .tv-badge {
-    font-family: var(--font-mono);
-    font-size: 9px;
-    font-weight: 500;
-    padding: 1px 6px;
-    border-radius: 8px;
-    white-space: nowrap;
-  }
-
-  .tv-badge-audit {
-    background: var(--bg-overlay);
-    color: var(--text-dim);
-  }
-
-  .tv-badge-flagged {
-    background: rgba(202, 138, 4, 0.15);
-    color: var(--yellow);
-  }
-
   .tv-body { }
 
   .tv-heading-actions {
@@ -641,7 +781,8 @@
   }
 
   .bulk-verify-btn,
-  .bulk-undo-btn {
+  .bulk-clear-btn,
+  .section-review-toggle {
     font-family: var(--font-sans);
     font-size: 10px;
     font-weight: 500;
@@ -656,7 +797,8 @@
   }
 
   .bulk-verify-btn:hover:not(:disabled),
-  .bulk-undo-btn:hover:not(:disabled) {
+  .bulk-clear-btn:hover:not(:disabled),
+  .section-review-toggle:hover:not(:disabled) {
     border-color: var(--text-dim);
     color: var(--text);
   }
@@ -666,13 +808,50 @@
     opacity: 0.4;
   }
 
-  .article-bulk-verify-btn {
-    height: 23px;
-    min-height: 23px;
+  .bulk-clear-btn {
+    color: var(--text-dim);
   }
 
-  .bulk-undo-btn {
-    margin-left: 6px;
+  .section-review-toggle {
+    appearance: none;
+    min-width: 22px;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--text-dim);
+    line-height: 1;
+  }
+
+  .section-review-toggle.section-complete {
+    color: var(--green);
+    background: rgba(22, 163, 74, 0.08);
+  }
+
+  .section-review-toggle.section-complete.hover-clear-ready:hover:not(:disabled),
+  .field-status.status-verified.hover-clear-ready:hover {
+    color: var(--text);
+    background: transparent;
+  }
+
+  .section-review-toggle .section-toggle-icon-hover,
+  .field-status .status-icon-hover {
+    display: none;
+  }
+
+  .section-review-toggle.section-complete.hover-clear-ready:hover .section-toggle-icon,
+  .field-status.status-verified.hover-clear-ready:hover .status-icon-main {
+    display: none;
+  }
+
+  .section-review-toggle.section-complete.hover-clear-ready:hover .section-toggle-icon-hover,
+  .field-status.status-verified.hover-clear-ready:hover .status-icon-hover {
+    display: inline;
   }
 
   .tv-indent {
@@ -755,6 +934,13 @@
     text-align: center;
   }
 
+  .ext-table td.status-cell {
+    white-space: nowrap;
+    text-align: center;
+    vertical-align: middle;
+    line-height: 1;
+  }
+
   .ext-table tr.clickable {
     cursor: pointer;
     transition: background 0.1s;
@@ -767,20 +953,6 @@
   .ext-table tr.selected {
     background: var(--bg-overlay);
     box-shadow: inset 3px 0 0 var(--cited);
-  }
-
-  .reasoning-tooltip-row td {
-    padding: 0 8px 4px 8px;
-    border-bottom: 1px solid var(--border-subtle);
-  }
-
-  .reasoning-tooltip-row .reasoning-tooltip {
-    margin: 2px 0 4px 0;
-    padding: 6px 10px;
-    font-size: 11px;
-    word-wrap: break-word;
-    white-space: normal;
-    overflow-wrap: anywhere;
   }
 
   .source-link {
@@ -798,40 +970,188 @@
     color: var(--accent);
   }
 
-  .view-toggle {
+  .source-missing {
+    color: var(--text-dim);
+    font-size: 11px;
+  }
+
+  .evidence-badge {
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    white-space: nowrap;
+  }
+
+  .evidence-badge.has-source {
+    color: var(--cited);
+  }
+
+  .evidence-badge.no-source {
+    color: var(--text-dim);
+  }
+
+  .field-status {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    min-width: 22px;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    color: var(--text-dim);
+    font-size: 12px;
+    line-height: 1;
+    margin: 0 auto;
+  }
+
+  button.field-status {
+    appearance: none;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    padding: 0;
+  }
+
+  button.field-status:hover {
+    background: var(--bg-overlay);
+    color: var(--text);
+  }
+
+  .field-status.status-verified {
+    color: var(--green);
+    background: rgba(22, 163, 74, 0.08);
+  }
+
+  .field-status.status-verified:hover {
+    color: var(--green);
+    background: rgba(22, 163, 74, 0.08);
+  }
+
+  .field-status.status-flagged {
+    color: var(--yellow);
+    background: rgba(202, 138, 4, 0.12);
+  }
+
+  .field-status.status-flagged:hover {
+    color: var(--yellow);
+    background: rgba(202, 138, 4, 0.2);
+  }
+
+  .field-status.status-empty {
+    color: var(--text-dim);
+  }
+
+  .field-status.status-empty:hover .status-icon-main {
+    display: none;
+  }
+
+  .field-status.status-empty:hover .status-icon-hover {
+    display: inline;
+  }
+
+  .status-actions {
+    display: inline-grid;
+    align-items: center;
+    justify-content: center;
+    grid-template-columns: 22px 18px;
+    column-gap: 8px;
+    width: 48px;
+    min-width: 48px;
+  }
+
+  .row-edit-action,
+  .row-clear-edit-action {
+    appearance: none;
+    width: 18px;
+    height: 22px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--text-dim);
+    cursor: pointer;
     display: inline-flex;
-    background: var(--bg);
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+  }
+
+  .ext-table tr:hover .row-edit-action,
+  .ext-table tr:hover .row-clear-edit-action,
+  .row-edit-action:focus-visible,
+  .row-clear-edit-action:hover,
+  .row-clear-edit-action:focus-visible {
+    opacity: 1;
+    color: var(--text);
+  }
+
+  .edited-value-cell {
+    color: var(--yellow) !important;
+  }
+
+  .selected-source-range {
+    color: var(--cited);
+  }
+
+  .inline-edit-form {
+    display: grid;
+    grid-template-columns: minmax(120px, 1fr) 22px 22px;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .inline-edit-input,
+  .inline-edit-select {
+    background: var(--bg-input);
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    height: 24px;
-    overflow: hidden;
-    flex-shrink: 0;
-    margin-left: 8px;
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    padding: 5px 8px;
+    min-width: 0;
   }
 
-  .view-toggle button {
-    font-family: var(--font-sans);
-    font-size: 10px;
-    font-weight: 500;
-    background: none;
-    border: none;
-    border-right: 1px solid var(--border);
-    color: var(--text-dim);
-    padding: 0 10px;
+  .inline-edit-select {
+    appearance: none;
+    -webkit-appearance: none;
+    padding: 5px 30px 5px 10px;
+    background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%238b8b92' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    text-overflow: ellipsis;
     cursor: pointer;
-    transition: all 0.1s;
+    outline: none;
   }
 
-  .view-toggle button:last-child {
-    border-right: none;
+  .inline-edit-select:focus {
+    border-color: var(--accent);
   }
 
-  .view-toggle button:hover:not(.active) {
-    color: var(--text-secondary);
+  .inline-edit-save,
+  .inline-edit-cancel {
+    appearance: none;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--text-dim);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
   }
 
-  .view-toggle button.active {
-    background: var(--bg-overlay);
+  .inline-edit-save:hover,
+  .inline-edit-save:focus-visible {
+    color: var(--green);
+  }
+
+  .inline-edit-cancel:hover,
+  .inline-edit-cancel:focus-visible {
     color: var(--text);
   }
 
@@ -983,149 +1303,103 @@
   .ann-btn.ann-flagged { opacity: 1; color: var(--yellow); border-color: var(--yellow); }
 
   .reviewer-input {
-    background: var(--bg-input);
+    display: none;
+  }
+
+  .orcid-connect-btn,
+  .orcid-profile-btn {
+    min-width: 112px;
+    height: 28px;
+    padding: 0 12px;
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    color: var(--text);
-    font-family: var(--font-mono);
-    font-size: 11px;
-    padding: 4px 8px;
-    width: 180px;
-  }
-
-  .reviewer-input::placeholder { color: var(--text-dim); }
-
-  .save-status {
-    min-width: 92px;
-    color: var(--text-dim);
-    font-family: var(--font-mono);
-    font-size: 11px;
-  }
-
-  .save-status[data-status="saving"] { color: var(--text-secondary); }
-  .save-status[data-status="saved"] { color: var(--green); }
-  .save-status[data-status="error"] { color: var(--red); }
-
-  .flag-dialog-container {
-    position: relative;
-  }
-
-  .flag-dialog {
-    position: absolute;
-    left: 0;
-    right: 0;
-    z-index: 10;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.15);
-    border-radius: 0 0 var(--radius) var(--radius);
-  }
-
-  .flag-form {
-    padding: 10px 12px;
-    background: var(--bg-raised);
-    border-left: 3px solid var(--yellow);
-    border-bottom: 2px solid var(--yellow);
+    background: var(--bg-input);
+    color: var(--text-secondary);
     font-family: var(--font-sans);
     font-size: 12px;
+    line-height: 1;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
   }
 
-  .flag-form-header {
+  .orcid-connect-btn:hover,
+  .orcid-profile-btn:hover {
+    color: var(--text);
+    border-color: var(--text-dim);
+  }
+
+  .orcid-profile-btn {
+    color: var(--green);
+  }
+
+  .orcid-profile-btn .orcid-disconnect-label {
+    display: none;
+    color: var(--text);
+  }
+
+  .orcid-profile-btn:hover .orcid-name-label {
+    display: none;
+  }
+
+  .orcid-profile-btn:hover .orcid-disconnect-label {
+    display: inline;
+  }
+
+  .orcid-modal-backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 20;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.24);
+  }
+
+  .orcid-modal-backdrop.active {
     display: flex;
+  }
+
+  .orcid-modal {
+    width: min(420px, calc(100vw - 32px));
+    padding: 16px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-raised);
+    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.2);
+    display: grid;
     gap: 12px;
-    align-items: baseline;
-    margin-bottom: 8px;
-    color: var(--text-secondary);
   }
 
-  .flag-form-path {
-    font-family: var(--font-mono);
-    font-size: 11px;
+  .orcid-modal h3 {
+    margin: 0;
+    font-size: 15px;
+  }
+
+  .orcid-modal label {
+    display: grid;
+    gap: 4px;
     color: var(--text-dim);
-  }
-
-  .flag-form-current strong {
-    color: var(--val-string);
-  }
-
-  .flag-form-fields {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    margin-bottom: 8px;
-  }
-
-  .flag-form-fields label {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-
-  .flag-form-fields label span {
     font-size: 10px;
     font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: var(--text-dim);
   }
 
-  .flag-input, .flag-textarea {
+  .orcid-modal input {
     background: var(--bg-input);
     border: 1px solid var(--border);
     border-radius: var(--radius);
     color: var(--text);
     font-family: var(--font-mono);
     font-size: 12px;
-    padding: 5px 8px;
-    width: 100%;
-    box-sizing: border-box;
+    padding: 7px 9px;
   }
 
-  .flag-textarea {
-    font-family: var(--font-sans);
-    resize: vertical;
-  }
-
-  .flag-input:focus, .flag-textarea:focus {
-    outline: none;
-    border-color: var(--yellow);
-  }
-
-  .flag-form-actions {
-    display: flex;
-    gap: 6px;
-  }
-
-  .flag-save, .flag-cancel {
-    font-family: var(--font-sans);
-    font-size: 11px;
-    font-weight: 500;
-    padding: 4px 12px;
-    border-radius: var(--radius);
-    cursor: pointer;
-    border: 1px solid var(--border);
-    transition: all 0.1s;
-  }
-
-  .flag-save {
-    background: var(--yellow);
-    color: #000;
-    border-color: var(--yellow);
-  }
-
-  .flag-save:hover { opacity: 0.9; }
-
-  .flag-cancel {
-    background: none;
+  .orcid-result {
+    min-height: 18px;
     color: var(--text-secondary);
-  }
-
-  .flag-cancel:hover { border-color: var(--text-dim); }
-
-  .flag-dialog-inline {
-    position: relative;
-    margin: 4px 0 4px 24px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    border-radius: var(--radius);
-    overflow: hidden;
+    font-size: 12px;
   }
 
   .flag-note-display {
@@ -1269,7 +1543,7 @@
     font-weight: 600;
     color: var(--text);
     margin-bottom: 10px;
-    letter-spacing: -0.01em;
+    letter-spacing: 0;
   }
 
   .welcome-content p {
@@ -1335,45 +1609,36 @@
 
   .article-bibheader {
     display: flex;
-    align-items: baseline;
-    gap: 12px;
-    padding: 10px 16px;
-    background: var(--bg-raised);
-    border-bottom: 1px solid var(--border);
+    flex-direction: column;
+    gap: 3px;
+    padding: 0 0 7px;
+    background: transparent;
+    border-bottom: 1px solid var(--border-subtle);
     flex-shrink: 0;
-    min-height: 40px;
   }
 
   .article-bibheader .bib-title {
-    font-size: 14px;
+    font-size: 15px;
     font-weight: 600;
     color: var(--text);
     line-height: 1.3;
-    flex: 1 1 auto;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    max-width: 100%;
+    text-wrap: balance;
   }
 
   .article-bibheader .bib-meta {
-    font-size: 12px;
+    font-size: 11px;
     color: var(--text-secondary);
     display: flex;
+    flex-wrap: wrap;
     gap: 6px;
     align-items: baseline;
-    flex-shrink: 0;
   }
 
   .article-bibheader .bib-authors {
-    font-size: 12px;
+    font-size: 11px;
     color: var(--text-secondary);
     font-style: italic;
-    max-width: 28ch;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    flex-shrink: 1;
   }
 
   .article-bibheader .bib-sep {
@@ -1390,6 +1655,159 @@
 
   .article-bibheader .bib-doi:hover { color: var(--accent); }
 
+  .source-evidence-overlay {
+    display: none;
+    position: absolute;
+    left: 16px;
+    right: 16px;
+    bottom: 16px;
+    z-index: 5;
+    max-height: 32vh;
+    overflow: auto;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: color-mix(in srgb, var(--bg-raised) 94%, transparent);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+  }
+
+  .source-evidence-overlay.active {
+    display: block;
+  }
+
+  .source-evidence-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+
+  .source-evidence-label {
+    min-width: 0;
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .source-evidence-nav {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    flex-shrink: 0;
+  }
+
+  .source-evidence-lines {
+    min-width: 80px;
+    max-width: 132px;
+    text-align: right;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .source-cycle-control {
+    display: inline-flex;
+    align-items: center;
+    height: 24px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg);
+    color: var(--text-secondary);
+    overflow: hidden;
+  }
+
+  .source-cycle-btn {
+    appearance: none;
+    width: 24px;
+    height: 100%;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--text-dim);
+    cursor: pointer;
+    font-family: var(--font-sans);
+    font-size: 13px;
+    line-height: 1;
+  }
+
+  .source-cycle-btn:hover:not(:disabled) {
+    color: var(--text);
+    background: var(--bg-overlay);
+  }
+
+  .source-cycle-btn:disabled {
+    cursor: default;
+    opacity: 0.35;
+  }
+
+  .source-cycle-counter {
+    min-width: 36px;
+    height: 100%;
+    padding: 0 6px;
+    border-left: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-secondary);
+  }
+
+  .source-evidence-value {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 8px;
+    min-width: 0;
+    width: fit-content;
+    max-width: 100%;
+    margin-bottom: 6px;
+    padding: 5px 7px;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius);
+    background: var(--bg);
+  }
+
+  .source-evidence-value-label {
+    flex-shrink: 0;
+    color: var(--text-dim);
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  .source-evidence-value-slot {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .source-evidence-value-text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text);
+  }
+
+  .source-evidence-value-text.edited {
+    color: var(--yellow);
+  }
+
+  .source-evidence-reasoning {
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 1.45;
+  }
+
   @media (max-width: 760px) {
     body {
       font-size: 12px;
@@ -1405,8 +1823,7 @@
       min-width: 280px;
     }
 
-    .toolbar-spacer,
-    .filter-group {
+    .toolbar-spacer {
       display: none;
     }
 
@@ -1495,25 +1912,31 @@
     <span class="nav-counter" id="nav-counter">&mdash;</span>
     <button id="btn-next" disabled>&#9654;</button>
   </div>
-  <div class="filter-group">
-    <button class="filter-btn active" data-filter="all">All</button>
-  </div>
   <div class="toolbar-spacer"></div>
-  <input type="text" class="reviewer-input" id="reviewer-id" placeholder="ORCID (e.g., 0000-0002-...)" title="Your ORCID for annotations">
-  <span class="save-status" id="save-status" aria-live="polite"></span>
+  <div class="view-mode-toggle" aria-label="Extraction view mode">
+    <button class="view-mode-btn active" id="view-mode-review" data-view-mode="review" type="button">Audit</button>
+    <button class="view-mode-btn" id="view-mode-overview" data-view-mode="overview" type="button">Overview</button>
+  </div>
   <button class="theme-btn" id="btn-theme" title="Toggle theme">&#9790;</button>
 </div>
 
-<div class="article-bibheader" id="article-bibheader" style="display:none">
-  <span class="bib-title" id="bib-title"></span>
-  <span class="bib-authors" id="bib-authors"></span>
-  <span class="bib-meta" id="bib-meta"></span>
-  <a class="bib-doi" id="bib-doi" target="_blank" rel="noopener" style="display:none"></a>
+<div class="orcid-modal-backdrop" id="orcid-modal" role="dialog" aria-modal="true" aria-labelledby="orcid-modal-title">
+  <div class="orcid-modal">
+    <h3 id="orcid-modal-title">Connect ORCID</h3>
+    <label>ORCID iD
+      <input type="text" id="orcid-input" placeholder="0000-0002-1825-0097">
+    </label>
+    <div class="orcid-result" id="orcid-result">Enter an ORCID iD to connect your reviewer identity.</div>
+    <div class="selected-edit-actions">
+      <button class="review-action-btn" id="btn-orcid-cancel">Cancel</button>
+      <button class="review-action-btn primary" id="btn-orcid-save">Save</button>
+    </div>
+  </div>
 </div>
 
 <div class="welcome" id="welcome">
   <div class="welcome-content">
-    <h1>ERW Extraction Verifier</h1>
+    <h1>litschema verify</h1>
     <p>Select an article from the dropdown to begin reviewing extractions.</p>
     <div class="welcome-shortcuts">
       <span class="shortcut"><kbd>Cmd</kbd>+<kbd>]</kbd> / <kbd>Cmd</kbd>+<kbd>[</kbd> to cycle articles</span>
@@ -1524,12 +1947,13 @@
 <div class="panels" id="panels" style="display:none">
   <div class="panel panel-left">
     <div class="panel-header">
-      <div class="panel-header-row">
-        <h3>Source Document</h3>
-        <div class="panel-header-right">
-          <div class="tags" id="tags-display"></div>
-          <span class="panel-meta" id="panel-left-meta"></span>
-        </div>
+      <div class="article-bibheader" id="article-bibheader" style="display:none">
+        <span class="bib-title" id="bib-title"></span>
+        <span class="bib-meta">
+          <span class="bib-authors" id="bib-authors"></span>
+          <span id="bib-meta"></span>
+          <a class="bib-doi" id="bib-doi" target="_blank" rel="noopener" style="display:none"></a>
+        </span>
       </div>
       <div class="panel-header-row search-row" id="search-row" style="display:none">
         <div class="search-container">
@@ -1548,19 +1972,50 @@
       </div>
     </div>
     <div class="panel-body" id="panel-left"></div>
+    <div class="source-evidence-overlay" id="source-evidence-overlay" aria-live="polite">
+      <div class="source-evidence-top">
+        <div class="source-evidence-label" id="source-evidence-label">No field selected</div>
+        <div class="source-evidence-nav">
+          <span class="source-evidence-lines" id="source-evidence-lines">No field selected</span>
+          <span class="source-cycle-control" id="source-cycle-control">
+            <button class="source-cycle-btn" id="btn-source-evidence-prev" aria-label="Previous source" disabled>&lsaquo;</button>
+            <span class="source-cycle-counter" id="source-evidence-index">0/0</span>
+            <button class="source-cycle-btn" id="btn-source-evidence-next" aria-label="Next source" disabled>&rsaquo;</button>
+          </span>
+        </div>
+      </div>
+      <div class="source-evidence-value" id="source-evidence-value" style="display:none">
+        <span class="source-evidence-value-label" id="source-evidence-value-label">Value</span>
+        <span class="source-evidence-value-slot" id="source-evidence-value-text"></span>
+      </div>
+      <div class="source-evidence-reasoning" id="source-evidence-reasoning"></div>
+    </div>
   </div>
   <div class="panel panel-right">
-    <div class="panel-header">
-      <h3>Extraction Data</h3>
-      <div class="panel-header-right">
-        <div class="view-toggle">
-          <button class="active" id="btn-review-table">Review</button>
-          <button id="btn-pivot-view">Pivot</button>
-          <button id="btn-json-view">JSON</button>
+    <div class="panel-header" id="extraction-panel-header">
+      <div class="panel-header-row review-panel-top">
+        <div class="review-title-group">
+          <h3 id="extraction-panel-title">Extraction Review</h3>
+          <span class="review-progress" id="review-progress" aria-live="polite"></span>
         </div>
-        <button class="bulk-verify-btn article-bulk-verify-btn" id="btn-verify-article">Verify remaining article</button>
-        <span class="confidence-badge" id="confidence-display"></span>
-        <span class="panel-meta" id="panel-right-meta"></span>
+        <div class="review-actions" id="review-actions">
+          <div class="view-mode-toggle overview-mode-toggle" aria-label="Overview display mode">
+            <button class="view-mode-btn active" id="overview-mode-table" data-overview-mode="table" type="button">Table</button>
+            <button class="view-mode-btn" id="overview-mode-json" data-overview-mode="json" type="button">JSON</button>
+          </div>
+          <div class="review-identity" id="review-identity-controls">
+            <input type="hidden" class="reviewer-input" id="reviewer-id">
+            <button class="orcid-connect-btn" id="btn-orcid-connect" title="Connect ORCID">ORCID</button>
+            <button class="orcid-profile-btn" id="btn-orcid-profile" style="display:none" title="Disconnect ORCID">
+              <span class="orcid-name-label" id="orcid-profile-name"></span>
+              <span class="orcid-disconnect-label">Disconnect</span>
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="panel-header-row review-queue-actions" id="review-queue-actions">
+        <button class="review-action-btn" id="btn-prev-unreviewed" disabled>Previous</button>
+        <button class="review-action-btn" id="btn-next-unreviewed" disabled>Next</button>
       </div>
     </div>
     <div class="panel-body" id="panel-right"></div>
@@ -1574,20 +2029,99 @@
 const $ = (sel) => document.querySelector(sel);
 const state = {
   articles: [],
-  viewMode: "table",
-  tableMode: "review",
+  viewMode: "review",
+  overviewMode: "table",
   currentId: null,
   markdown: null,
   extraction: null,
   reasoning: null,
   reasoningByPath: {},
+  schemaFields: {},
   annotations: {},  // path -> {status, reviewer, timestamp, note}
   selectedPath: null,
+  editingPath: null,
+  selectedSourceIndex: 0,
   sections: [],
   sectionIndex: 0,
   searchMatches: [],
   searchIndex: 0,
+  suppressClearHoverPaths: new Set(),
+  suppressClearHoverSections: new Set(),
 };
+
+function initialViewMode() {
+  const mode = new URLSearchParams(window.location.search).get("view");
+  return ["review", "overview"].includes(mode) || mode === "json" ? "overview" : "review";
+}
+
+function initialOverviewMode() {
+  const params = new URLSearchParams(window.location.search);
+  const mode = params.get("overview");
+  if (["table", "json"].includes(mode)) return mode;
+  return params.get("view") === "json" ? "json" : "table";
+}
+
+function setViewMode(mode, options = {}) {
+  if (!["review", "overview"].includes(mode)) return;
+  state.viewMode = mode;
+  state.editingPath = null;
+  syncViewControls();
+  if (options.updateUrl !== false) {
+    const url = new URL(window.location.href);
+    if (mode === "review") {
+      url.searchParams.delete("view");
+      url.searchParams.delete("overview");
+    } else {
+      url.searchParams.set("view", "overview");
+      if (state.overviewMode === "json") url.searchParams.set("overview", "json");
+      else url.searchParams.delete("overview");
+    }
+    history.replaceState(null, "", url);
+  }
+  renderExtractionPanel();
+}
+
+function setOverviewMode(mode, options = {}) {
+  if (!["table", "json"].includes(mode)) return;
+  state.overviewMode = mode;
+  syncOverviewModeControls();
+  if (state.viewMode !== "overview") return;
+  if (options.updateUrl !== false) {
+    const url = new URL(window.location.href);
+    url.searchParams.set("view", "overview");
+    if (mode === "json") url.searchParams.set("overview", "json");
+    else url.searchParams.delete("overview");
+    history.replaceState(null, "", url);
+  }
+  renderExtractionPanel();
+}
+
+function syncViewControls() {
+  document.querySelectorAll(".view-mode-btn[data-view-mode]").forEach(btn => {
+    const active = btn.dataset.viewMode === state.viewMode;
+    btn.classList.toggle("active", active);
+    btn.setAttribute("aria-pressed", active ? "true" : "false");
+  });
+  const title = $("#extraction-panel-title");
+  if (title) {
+    title.textContent = state.viewMode === "overview"
+      ? "Extraction Overview"
+      : "Extraction Review";
+  }
+  const header = $("#extraction-panel-header");
+  if (header) header.classList.toggle("overview-active", state.viewMode === "overview");
+  const progress = $("#review-progress");
+  if (progress) progress.style.display = state.viewMode === "review" ? "inline" : "none";
+  syncOverviewModeControls();
+}
+
+function syncOverviewModeControls() {
+  document.querySelectorAll(".view-mode-btn[data-overview-mode]").forEach(btn => {
+    const active = btn.dataset.overviewMode === state.overviewMode;
+    btn.classList.toggle("active", active);
+    btn.setAttribute("aria-pressed", active ? "true" : "false");
+  });
+}
 
 // ── API helpers ──
 async function fetchJson(url) {
@@ -1627,25 +2161,40 @@ initTheme();
 state.filteredArticles = [];
 
 async function init() {
-  const data = await fetchJson("/api/articles");
+  const [data, schemaData] = await Promise.all([
+    fetchJson("/api/articles"),
+    fetchJson("/api/schema/fields").catch(() => ({ fields: {} })),
+  ]);
   state.articles = data.articles;
-  populateDropdown("all");
-
-  // Filter handlers
-  document.querySelectorAll(".filter-btn").forEach(btn => {
-    btn.addEventListener("click", () => {
-      document.querySelectorAll(".filter-btn").forEach(b => b.classList.remove("active"));
-      btn.classList.add("active");
-      populateDropdown(btn.dataset.filter);
-    });
-  });
+  state.schemaFields = schemaData.fields || {};
+  state.viewMode = initialViewMode();
+  state.overviewMode = initialOverviewMode();
+  syncViewControls();
+  populateDropdown();
 
   // Prev/next handlers
   $("#btn-prev").addEventListener("click", () => navigateArticle(-1));
   $("#btn-next").addEventListener("click", () => navigateArticle(1));
+  $("#btn-prev-unreviewed").addEventListener("click", () => selectAdjacentReviewPath(-1));
+  $("#btn-next-unreviewed").addEventListener("click", () => selectAdjacentReviewPath(1));
+  document.querySelectorAll(".view-mode-btn[data-view-mode]").forEach(btn => {
+    btn.addEventListener("click", () => setViewMode(btn.dataset.viewMode));
+  });
+  document.querySelectorAll(".view-mode-btn[data-overview-mode]").forEach(btn => {
+    btn.addEventListener("click", () => setOverviewMode(btn.dataset.overviewMode));
+  });
+  wireSelectedFieldActions();
 }
 
-function populateDropdown(filter) {
+function articleOptionLabel(article) {
+  const authors = formatAuthors(article.authors);
+  const year = article.year ? ` ${article.year}` : "";
+  const citation = authors ? `${authors}${year}` : (article.article_id || "Untitled article");
+  const title = article.title ? `. ${article.title}` : "";
+  return `${citation}${title}`;
+}
+
+function populateDropdown() {
   const select = $("#article-select");
   const currentVal = select.value;
   // Remove all except placeholder
@@ -1656,14 +2205,14 @@ function populateDropdown(filter) {
   for (const a of state.filteredArticles) {
     const opt = document.createElement("option");
     opt.value = a.article_id;
-    const conf = a.confidence != null ? a.confidence.toFixed(2) : "?";
-    const annLabel = a.n_annotated > 0 ? ` \u2713${a.n_annotated}` : "";
-    opt.textContent = `${a.article_id}  (${conf})${annLabel}`;
+    opt.textContent = articleOptionLabel(a);
     select.appendChild(opt);
   }
 
   if (currentVal && state.filteredArticles.some(a => a.article_id === currentVal)) {
     select.value = currentVal;
+  } else if (currentVal) {
+    select.value = "";
   }
 
   updateNavState();
@@ -1693,6 +2242,8 @@ $("#article-select").addEventListener("change", async (e) => {
   if (!id) return;
   state.currentId = id;
   state.selectedPath = null;
+  state.editingPath = null;
+  updateSelectedFieldBar(null);
 
   // Show panels, hide welcome
   $("#welcome").style.display = "none";
@@ -1700,6 +2251,8 @@ $("#article-select").addEventListener("change", async (e) => {
 
   // Clear search state
   clearSearchFull();
+  state.suppressClearHoverPaths.clear();
+  state.suppressClearHoverSections.clear();
 
   $("#panel-left").innerHTML = '<div class="loading">Loading...</div>';
   $("#panel-right").innerHTML = '<div class="loading">Loading...</div>';
@@ -1735,26 +2288,10 @@ $("#article-select").addEventListener("change", async (e) => {
   }
 
   const meta = state.articles.find(a => a.article_id === id);
-  if (meta) {
-    $("#confidence-display").innerHTML = `<strong>${meta.confidence}</strong>`;
-    let tagsHtml = "";
-    for (const t of (meta.study_types || [])) {
-      tagsHtml += `<span class="tag study">${t}</span>`;
-    }
-    for (const f of (meta.focus_areas || [])) {
-      tagsHtml += `<span class="tag focus">${f}</span>`;
-    }
-    if (meta.document_type) {
-      tagsHtml += `<span class="tag">${meta.document_type}</span>`;
-    }
-    $("#tags-display").innerHTML = tagsHtml;
-    renderBibHeader(meta);
-  }
+  if (meta) renderBibHeader(meta);
 
   $("#btn-pdf").style.display = "flex";
   $("#search-row").style.display = "flex";
-  $("#panel-left-meta").textContent = `${state.markdown.split("\n").length} lines`;
-  $("#panel-right-meta").textContent = Object.keys(state.reasoningByPath).length + " fields cited";
   updateNavState();
 
   renderMarkdown();
@@ -1871,7 +2408,7 @@ function isPrimitiveArray(val) {
   return Array.isArray(val) && val.length > 0 && val.every(v => isLeaf(v));
 }
 
-function renderTableView() {
+function renderReviewTable() {
   const panel = $("#panel-right");
   const data = state.extraction;
   if (!data) {
@@ -2230,9 +2767,8 @@ function buildHorizontalTable(arr, basePath, key) {
 
   let html = '';
   // Section heading
-  const badges = auditBadgesHtml(arr, basePath);
   html += `<div class="tv-heading" data-depth="0">`;
-  html += `<span class="tv-heading-label">${escapeHtml(label)}</span>${badges}${bulkActionHtml(basePath, "section")}`;
+  html += `<span class="tv-heading-label">${escapeHtml(label)}</span>${bulkActionHtml(basePath, "section")}`;
   html += `</div>`;
   html += `<div class="tv-body">`;
 
@@ -2302,17 +2838,7 @@ function buildHorizontalTable(arr, basePath, key) {
         if (subIndex === 0) {
           // Source column with rowspan
           const rowSources = collectSourceLines(item, itemPath);
-          let sourceHtml = '';
-          if (rowSources.length === 1) {
-            sourceHtml = `<button class="source-link" data-path="${itemPath}" data-source-lines="${escapeHtml(rowSources[0])}">${escapeHtml(rowSources[0])}</button>`;
-          } else if (rowSources.length > 1) {
-            const rangesStr = rowSources.join(", ");
-            sourceHtml = `<span class="source-nav" data-path="${itemPath}" data-ranges="${escapeHtml(rangesStr)}">` +
-              `<button class="source-nav-btn source-prev" aria-label="Previous source">&#9664;</button>` +
-              `<span class="source-counter">1/${rowSources.length}</span>` +
-              `<button class="source-nav-btn source-next" aria-label="Next source">&#9654;</button>` +
-              `</span>`;
-          }
+          const sourceHtml = buildEvidenceBadge(itemPath, rowSources);
           const rowspanAttr = expandCount > 1 ? ` rowspan="${expandCount}"` : "";
           html += `<td${rowspanAttr}>${sourceHtml}</td>`;
 
@@ -2324,7 +2850,7 @@ function buildHorizontalTable(arr, basePath, key) {
           } else if (rowAnn.flagged > 0) {
             annStatus = "flagged";
           }
-          html += `<td${rowspanAttr}>${buildAnnotationActions(itemPath, annStatus, { row: true })}</td>`;
+          html += `<td class="status-cell"${rowspanAttr}>${buildStatusActions(itemPath, annStatus)}</td>`;
         }
 
         html += '</tr>';
@@ -2346,17 +2872,7 @@ function buildHorizontalTable(arr, basePath, key) {
 
       // Source column
       const rowSources = collectSourceLines(item, itemPath);
-      let sourceHtml = '';
-      if (rowSources.length === 1) {
-        sourceHtml = `<button class="source-link" data-path="${itemPath}" data-source-lines="${escapeHtml(rowSources[0])}">${escapeHtml(rowSources[0])}</button>`;
-      } else if (rowSources.length > 1) {
-        const rangesStr = rowSources.join(", ");
-        sourceHtml = `<span class="source-nav" data-path="${itemPath}" data-ranges="${escapeHtml(rangesStr)}">` +
-          `<button class="source-nav-btn source-prev" aria-label="Previous source">&#9664;</button>` +
-          `<span class="source-counter">1/${rowSources.length}</span>` +
-          `<button class="source-nav-btn source-next" aria-label="Next source">&#9654;</button>` +
-          `</span>`;
-      }
+      const sourceHtml = buildEvidenceBadge(itemPath, rowSources);
       html += `<td>${sourceHtml}</td>`;
 
       // Status column
@@ -2367,7 +2883,7 @@ function buildHorizontalTable(arr, basePath, key) {
       } else if (rowAnn.flagged > 0) {
         annStatus = "flagged";
       }
-      html += `<td>${buildAnnotationActions(itemPath, annStatus, { row: true })}</td>`;
+      html += `<td class="status-cell">${buildStatusActions(itemPath, annStatus)}</td>`;
 
       html += '</tr>';
     }
@@ -2384,12 +2900,6 @@ function renderValue(key, val, basePath, depth) {
   // Array of primitives — render merged into parent table (handled by buildMergedTable)
   if (isPrimitiveArray(val)) {
     return buildMergedTable([], [{ key, val, path: basePath }]);
-  }
-
-  // Uniform array of objects → optional pivot table.
-  // Default review mode keeps nested rows stable for field-level editing.
-  if (state.tableMode === "pivot" && Array.isArray(val) && val.length > 0 && isUniformArray(val)) {
-    return buildHorizontalTable(val, basePath, key);
   }
 
   // Array of objects
@@ -2418,63 +2928,29 @@ function renderValue(key, val, basePath, depth) {
   return '';
 }
 
-function countFieldsUnderPath(obj, basePath) {
-  let total = 0;
-  if (obj === null || obj === undefined) return 0;
-  if (typeof obj !== "object") return 1;
-  if (Array.isArray(obj)) {
-    for (let i = 0; i < obj.length; i++) {
-      total += countFieldsUnderPath(obj[i], `${basePath}[${i}]`);
-    }
-  } else {
-    for (const [k, v] of Object.entries(obj)) {
-      const cp = `${basePath}.${k}`;
-      if (v !== null && typeof v === "object") {
-        total += countFieldsUnderPath(v, cp);
-      } else {
-        total++;
-      }
-    }
-  }
-  return total;
-}
-
-function auditBadgesHtml(obj, basePath) {
-  const total = countFieldsUnderPath(obj, basePath);
-  if (total === 0) return '';
-
-  let audited = 0, flagged = 0;
-  for (const [path, ann] of Object.entries(state.annotations)) {
-    if (path === basePath || path.startsWith(basePath + ".") || path.startsWith(basePath + "[")) {
-      audited++;
-      if (ann.status === "flagged") flagged++;
-    }
-  }
-
-  let html = '<span class="tv-badges">';
-  html += `<span class="tv-badge tv-badge-audit">${audited}/${total} audited</span>`;
-  if (flagged > 0) {
-    html += `<span class="tv-badge tv-badge-flagged">${flagged} flagged</span>`;
-  }
-  html += '</span>';
-  return html;
-}
-
 function bulkActionHtml(basePath, scope) {
-  const count = collectReviewablePaths(basePath).length;
-  if (count === 0) return "";
-  const label = `Verify remaining (${count})`;
+  const reviewState = sectionReviewState(basePath);
+  if (reviewState.total === 0) return "";
+  const count = reviewState.reviewable;
+  const disabled = count === 0 && !reviewState.complete ? " disabled" : "";
+  const action = reviewState.complete ? "clear" : "verify";
+  const completeClass = reviewState.complete ? " section-complete" : "";
+  const hoverClass = reviewState.complete && !state.suppressClearHoverSections.has(basePath) ? " hover-clear-ready" : "";
+  const label = reviewState.complete
+    ? "Clear verified fields in this section"
+    : "Verify unreviewed cited fields in this section";
   return `<span class="tv-heading-actions">` +
-    `<button class="bulk-verify-btn" data-bulk-scope="section" data-bulk-source="${scope}" data-path="${basePath}">${label}</button>` +
+    `<button class="section-review-toggle${completeClass}${hoverClass}" data-section-action="${action}" data-bulk-source="${scope}" data-path="${basePath}" aria-label="${label}" title="${label}"${disabled}>` +
+    `<span class="section-toggle-icon">&#10003;</span><span class="section-toggle-icon-hover">&#10005;</span>` +
+    `</button>` +
     `</span>`;
 }
 
 function buildHeadedSection(label, obj, basePath, depth) {
   const depthAttr = Math.min(depth, 3);
   let html = '';
-  const badges = depth <= 1 ? auditBadgesHtml(obj, basePath) : '';
   html += `<div class="tv-heading" data-depth="${depthAttr}">`;
-  html += `<span class="tv-heading-label">${escapeHtml(label)}</span>${badges}${bulkActionHtml(basePath, "section")}`;
+  html += `<span class="tv-heading-label">${escapeHtml(label)}</span>${bulkActionHtml(basePath, "section")}`;
   html += `</div>`;
   html += `<div class="tv-body">`;
 
@@ -2554,7 +3030,7 @@ function buildTableRowWithRowspan(key, value, path, rowspan) {
   const valCells = buildValueCells(value, path);
   const selectedCls = state.selectedPath === path ? " selected" : "";
   return `<tr class="clickable${selectedCls}" data-path="${path}">
-    <td rowspan="${rowspan}" style="vertical-align:top">${humanize(key)}</td>
+    <td class="field-cell" rowspan="${rowspan}" style="vertical-align:top">${humanize(key)}</td>
     ${valCells}
   </tr>`;
 }
@@ -2571,56 +3047,407 @@ function buildValueCells(value, path) {
   const entry = state.reasoningByPath[path];
   const ann = state.annotations[path];
 
-  let valStyle = "";
-  let displayVal = "";
-  if (typeof value === "number") {
-    valStyle = ' style="color:var(--val-number)"';
-    displayVal = String(value);
-  } else if (typeof value === "string") {
-    valStyle = ' style="color:var(--val-string)"';
-    displayVal = escapeHtml(value);
-  } else if (value === null || value === undefined) {
-    displayVal = '<span style="color:var(--text-dim)">null</span>';
-  } else {
-    displayVal = escapeHtml(String(value));
-  }
-
-  let sourceHtml = '';
-  if (entry && entry.source_lines) {
-    const parts = entry.source_lines.split(',').map(s => s.trim());
-    if (parts.length === 1) {
-      sourceHtml = `<button class="source-link" data-path="${path}" aria-label="Source ${escapeHtml(parts[0])}">${escapeHtml(parts[0])}</button>`;
-    } else {
-      // Multiple ranges — show nav arrows with (1/n) counter
-      sourceHtml = `<span class="source-nav" data-path="${path}" data-ranges="${escapeHtml(entry.source_lines)}">` +
-        `<button class="source-nav-btn source-prev" aria-label="Previous source">&#9664;</button>` +
-        `<span class="source-counter">1/${parts.length}</span>` +
-        `<button class="source-nav-btn source-next" aria-label="Next source">&#9654;</button>` +
-        `</span>`;
-    }
-  }
+  const sourceHtml = buildEvidenceBadge(path);
 
   const annStatus = ann ? ann.status : "";
+  const isEditing = state.editingPath === path;
+  const display = isEditing ? null : displayFieldValueForPath(path, value);
+  const valueClass = [
+    "value-cell",
+    annStatus === "flagged" ? "edited-value-cell" : "",
+    isEditing ? "editing-value-cell" : "",
+  ].filter(Boolean).join(" ");
+  const valueAttrs = ` class="${valueClass}"${isEditing ? "" : display.style}`;
+  const valueHtml = isEditing ? buildInlineEditForm(path, value) : display.html;
 
-  // Show correction and note for flagged fields
-  let flagDetails = "";
-  if (annStatus === "flagged" && ann) {
-    if (ann.correct_value) flagDetails += `<div class="flag-correction">→ ${escapeHtml(ann.correct_value)}</div>`;
-    if (ann.note) flagDetails += `<div class="flag-note-display">${escapeHtml(ann.note)}</div>`;
+  return `<td${valueAttrs}>${valueHtml}</td>
+    <td class="source-cell">${sourceHtml}</td>
+    <td class="status-cell">${buildStatusActions(path, annStatus)}</td>`;
+}
+
+function buildInlineEditForm(path, value = getValueAtPath(state.extraction, path)) {
+  const ann = state.annotations[path];
+  const current = ann?.status === "flagged" && ann.correct_value !== undefined
+    ? ann.correct_value
+    : value;
+  const schemaField = schemaFieldForPath(path);
+  const controlHtml = schemaField
+    ? buildEnumEditSelect(path, current, schemaField)
+    : `<input class="inline-edit-input" data-path="${path}" value="${escapeHtml(displayFieldValue(current))}" aria-label="Edit value">`;
+  return `<span class="inline-edit-form" data-path="${path}">` +
+    controlHtml +
+    `<button type="button" class="inline-edit-save" data-path="${path}" aria-label="Save edit" title="Save edit">&#10003;</button>` +
+    `<button type="button" class="inline-edit-cancel" data-path="${path}" aria-label="Cancel edit" title="Cancel edit">&#10005;</button>` +
+    `</span>`;
+}
+
+function schemaPathPattern(path) {
+  return path.replace(/\[\d+\]/g, "[]");
+}
+
+function schemaFieldForPath(path) {
+  return state.schemaFields[schemaPathPattern(path)] || null;
+}
+
+function buildEnumEditSelect(path, current, schemaField) {
+  const currentValue = displayFieldValue(current);
+  const values = schemaField.permissible_values || [];
+  let html = `<select class="inline-edit-select" data-path="${path}" aria-label="Edit value">`;
+  html += `<option value="">Choose...</option>`;
+  for (const item of values) {
+    const value = item.value;
+    const selected = String(value) === currentValue ? " selected" : "";
+    const title = item.description ? ` title="${escapeHtml(item.description)}"` : "";
+    html += `<option value="${escapeHtml(value)}"${selected}${title}>${escapeHtml(value)}</option>`;
   }
+  html += `</select>`;
+  return html;
+}
 
-  return `<td${valStyle}>${displayVal}${flagDetails}</td>
-    <td>${sourceHtml}</td>
-    <td>${buildAnnotationActions(path, annStatus)}</td>`;
+function displayFieldValueForPath(path, value = getValueAtPath(state.extraction, path)) {
+  const ann = state.annotations[path];
+  if (ann && ann.status === "flagged" && ann.correct_value) {
+    return { html: escapeHtml(ann.correct_value), style: "" };
+  }
+  if (typeof value === "number") {
+    return { html: String(value), style: ' style="color:var(--val-number)"' };
+  }
+  if (typeof value === "string") {
+    return { html: escapeHtml(value), style: ' style="color:var(--val-string)"' };
+  }
+  if (value === null || value === undefined) {
+    return { html: '<span style="color:var(--text-dim)">null</span>', style: "" };
+  }
+  return { html: escapeHtml(String(value)), style: "" };
+}
+
+function selectedFieldValueHtml(path) {
+  const ann = state.annotations[path];
+  const display = displayFieldValueForPath(path);
+  const editedClass = ann?.status === "flagged" ? " edited" : "";
+  const rawValue = ann?.status === "flagged" && ann.correct_value !== undefined
+    ? ann.correct_value
+    : getValueAtPath(state.extraction, path);
+  return {
+    html: `<span class="source-evidence-value-text${editedClass}"${display.style}>${display.html}</span>`,
+    title: displayFieldValue(rawValue),
+  };
+}
+
+function buildFieldStatus(path, status) {
+  const label = status === "verified"
+    ? "Verified"
+    : status === "flagged"
+      ? "Edited"
+      : "Not reviewed";
+  const icon = status === "verified" ? "&#10003;" : status === "flagged" ? "&#9998;" : "&#9675;";
+  const hoverIcon = status === "verified" ? "&#10005;" : "&#10003;";
+  const statusClass = status || "empty";
+  const hoverClass = status === "verified" && !state.suppressClearHoverPaths.has(path) ? " hover-clear-ready" : "";
+  return `<button type="button" class="field-status status-${statusClass}${hoverClass}" data-path="${path}" title="${label}" aria-label="${label}">` +
+    `<span class="status-icon-main">${icon}</span><span class="status-icon-hover">${hoverIcon}</span>` +
+    `</button>`;
+}
+
+function buildRowEditAction(path, status) {
+  if (status === "flagged") {
+    return `<button type="button" class="row-clear-edit-action" data-path="${path}" aria-label="Revert edited value" title="Revert edited value">&#8634;</button>`;
+  }
+  return `<button type="button" class="row-edit-action" data-path="${path}" aria-label="Edit field" title="Edit field">&#9998;</button>`;
+}
+
+function buildStatusActions(path, status) {
+  return `<span class="status-actions">${buildFieldStatus(path, status)}${buildRowEditAction(path, status)}</span>`;
+}
+
+function sourceSummaryForPath(path, explicitRanges = null) {
+  const ranges = explicitRanges || selectedSourceRanges(path);
+  if (!ranges.length) return "No citation";
+  if (ranges.length === 1) return ranges[0];
+  return `${ranges.length} cites`;
+}
+
+function buildEvidenceBadge(path, explicitRanges = null) {
+  const summary = sourceSummaryForPath(path, explicitRanges);
+  const cls = summary === "No citation" ? "no-source" : "has-source";
+  return `<span class="evidence-badge ${cls}" data-path="${path}">${escapeHtml(summary)}</span>`;
 }
 
 function buildTableRow(key, value, path) {
   const valCells = buildValueCells(value, path);
   const selectedCls = state.selectedPath === path ? " selected" : "";
   return `<tr class="clickable${selectedCls}" data-path="${path}">
-    <td>${humanize(key)}</td>
+    <td class="field-cell">${humanize(key)}</td>
     ${valCells}
   </tr>`;
+}
+
+function renderOverviewView(data = effectiveExtraction()) {
+  const panel = $("#panel-right");
+  if (!data) {
+    panel.innerHTML = '<div class="loading">No extraction data</div>';
+    return;
+  }
+
+  const skipKeys = new Set(["article_id", "confidence", "reasoning"]);
+  let html = '<div class="table-view overview-view">';
+  const scalarRows = [];
+  const primitiveArrayKeys = [];
+  const complexKeys = [];
+
+  for (const [key, val] of Object.entries(data)) {
+    if (skipKeys.has(key)) continue;
+    if (isLeaf(val)) scalarRows.push({ key, val, path: key });
+    else if (isPrimitiveArray(val)) primitiveArrayKeys.push(key);
+    else complexKeys.push(key);
+  }
+
+  const primitiveArrayEntries = primitiveArrayKeys.map(key => ({ key, val: data[key], path: key }));
+  if (scalarRows.length > 0 || primitiveArrayEntries.length > 0) {
+    html += buildOverviewMergedTable(scalarRows, primitiveArrayEntries);
+  }
+
+  for (const key of complexKeys) {
+    html += renderOverviewValue(key, data[key], key, 0);
+  }
+
+  html += '</div>';
+  panel.innerHTML = html;
+  wireOverviewEvents(panel);
+}
+
+function renderOverviewValue(key, val, basePath, depth) {
+  if (isLeaf(val)) return "";
+  if (isPrimitiveArray(val)) return buildOverviewMergedTable([], [{ key, val, path: basePath }]);
+  if (Array.isArray(val) && val.length > 0 && isUniformArray(val)) {
+    return buildOverviewHorizontalTable(val, basePath, key);
+  }
+  if (Array.isArray(val)) {
+    let html = "";
+    for (let i = 0; i < val.length; i++) {
+      const item = val[i];
+      const itemPath = `${basePath}[${i}]`;
+      const label = sectionLabel(key, i, val.length);
+      if (isLeaf(item)) {
+        html += buildOverviewMergedTable([{ key: label, val: item, path: itemPath }], []);
+      } else {
+        html += buildOverviewSection(label, item, itemPath, depth);
+      }
+    }
+    return html;
+  }
+  if (typeof val === "object" && val !== null) {
+    return buildOverviewSection(humanize(key.replace(/\[\d+\]$/, "")), val, basePath, depth);
+  }
+  return "";
+}
+
+function buildOverviewSection(label, obj, basePath, depth) {
+  const depthAttr = Math.min(depth, 3);
+  let html = `<div class="tv-heading" data-depth="${depthAttr}">`;
+  html += `<span class="tv-heading-label">${escapeHtml(label)}</span>`;
+  html += `</div><div class="tv-body">`;
+  const indent = depth > 0;
+  if (indent) html += '<div class="tv-indent">';
+
+  const leafRows = [];
+  const primitiveArrayEntries = [];
+  const complexEntries = [];
+  for (const [k, v] of Object.entries(obj)) {
+    const childPath = `${basePath}.${k}`;
+    if (isLeaf(v)) leafRows.push({ key: k, val: v, path: childPath });
+    else if (isPrimitiveArray(v)) primitiveArrayEntries.push({ key: k, val: v, path: childPath });
+    else complexEntries.push({ key: k, val: v, path: childPath });
+  }
+
+  if (leafRows.length > 0 || primitiveArrayEntries.length > 0) {
+    html += buildOverviewMergedTable(leafRows, primitiveArrayEntries);
+  }
+  for (const entry of complexEntries) {
+    html += renderOverviewValue(entry.key, entry.val, entry.path, depth + 1);
+  }
+
+  if (indent) html += '</div>';
+  html += '</div>';
+  return html;
+}
+
+function buildOverviewMergedTable(scalarRows, primitiveArrayEntries) {
+  let html = '<table class="ext-table overview-table">';
+  html += '<colgroup><col class="overview-col-field"><col class="overview-col-value"></colgroup>';
+  html += '<thead><tr><th>Field</th><th>Value</th></tr></thead><tbody>';
+  for (const row of scalarRows) {
+    html += buildOverviewTableRow(row.key, row.val, row.path);
+  }
+  for (const entry of primitiveArrayEntries) {
+    const arr = entry.val;
+    if (arr.length === 1) {
+      html += buildOverviewTableRow(entry.key, arr[0], `${entry.path}[0]`);
+    } else {
+      for (let i = 0; i < arr.length; i++) {
+        const itemPath = `${entry.path}[${i}]`;
+        const fieldCell = i === 0
+          ? `<td class="field-cell" rowspan="${arr.length}" style="vertical-align:top">${humanize(entry.key)}</td>`
+          : "";
+        const selectedCls = state.selectedPath === itemPath ? " selected" : "";
+        html += `<tr class="clickable${selectedCls}" data-path="${itemPath}">${fieldCell}${buildOverviewValueCell(arr[i], itemPath)}</tr>`;
+      }
+    }
+  }
+  html += '</tbody></table>';
+  return html;
+}
+
+function buildOverviewTableRow(key, value, path) {
+  const selectedCls = state.selectedPath === path ? " selected" : "";
+  return `<tr class="clickable${selectedCls}" data-path="${path}">` +
+    `<td class="field-cell">${humanize(key)}</td>${buildOverviewValueCell(value, path)}</tr>`;
+}
+
+function buildOverviewValueCell(value, path) {
+  return `<td class="cell-value overview-value-cell" data-path="${path}">${overviewDisplayValue(value)}</td>`;
+}
+
+function overviewDisplayValue(value) {
+  if (value === null || value === undefined || value === "") {
+    return '<span style="color:var(--text-dim)">\u2014</span>';
+  }
+  if (Array.isArray(value)) return escapeHtml(value.map(displayFieldValue).join(", "));
+  if (typeof value === "object") return escapeHtml(JSON.stringify(value));
+  return escapeHtml(String(value));
+}
+
+function buildOverviewHorizontalTable(arr, basePath, key) {
+  const columns = getUniformColumns(arr);
+  const label = humanize(key);
+  const hasExpandedCols = columns.some(c => c.isExpanded);
+  let html = `<div class="tv-heading" data-depth="0"><span class="tv-heading-label">${escapeHtml(label)}</span></div>`;
+  html += '<div class="tv-body"><table class="ext-table horizontal-table overview-table"><colgroup>';
+  for (let c = 0; c < columns.length; c++) html += '<col style="width:auto">';
+  html += '</colgroup><thead><tr>';
+  for (const col of columns) html += `<th>${escapeHtml(col.header)}</th>`;
+  html += '</tr></thead><tbody>';
+
+  for (let i = 0; i < arr.length; i++) {
+    const item = arr[i];
+    const itemPath = `${basePath}[${i}]`;
+    if (hasExpandedCols) {
+      let expandCount = 1;
+      for (const col of columns) {
+        if (col.isExpanded && col.expandCount) expandCount = Math.max(expandCount, col.expandCount(item));
+      }
+      for (let subIndex = 0; subIndex < expandCount; subIndex++) {
+        const borderClass = subIndex > 0 ? " sub-row" : "";
+        html += `<tr class="clickable horizontal-row${borderClass}" data-path="${itemPath}">`;
+        for (const col of columns) {
+          if (col.isExpanded) {
+            const { value, path } = col.getter(item, itemPath, subIndex);
+            html += `<td${value != null && value !== "" ? ` class="cell-value overview-value-cell" data-path="${path}"` : ""}>${overviewDisplayValue(value)}</td>`;
+          } else if (subIndex === 0) {
+            const { value, path } = col.getter(item, itemPath);
+            const rowspanAttr = expandCount > 1 ? ` rowspan="${expandCount}"` : "";
+            html += `<td class="cell-value overview-value-cell" data-path="${path}"${rowspanAttr}>${overviewDisplayValue(value)}</td>`;
+          }
+        }
+        html += '</tr>';
+      }
+    } else {
+      html += `<tr class="clickable horizontal-row" data-path="${itemPath}">`;
+      for (const col of columns) {
+        const { value, path } = col.getter(item, itemPath);
+        html += `<td${value != null && value !== "" ? ` class="cell-value overview-value-cell" data-path="${path}"` : ""}>${overviewDisplayValue(value)}</td>`;
+      }
+      html += '</tr>';
+    }
+  }
+  html += '</tbody></table></div>';
+  return html;
+}
+
+function wireOverviewEvents(panel) {
+  wireTableEvents(panel);
+}
+
+function wireJsonEvents(panel) {
+  panel.querySelectorAll(".json-leaf[data-path]").forEach(leaf => {
+    leaf.addEventListener("click", (e) => {
+      e.stopPropagation();
+      selectEvidencePath(leaf.dataset.path);
+    });
+  });
+}
+
+function effectiveExtraction() {
+  if (!state.extraction) return null;
+  const data = JSON.parse(JSON.stringify(state.extraction));
+  for (const [path, ann] of Object.entries(state.annotations)) {
+    if (ann.status === "flagged" && ann.correct_value !== undefined) {
+      applyCorrectedValue(data, path, ann.correct_value);
+    }
+  }
+  return data;
+}
+
+function applyCorrectedValue(obj, path, value) {
+  const parts = pathToParts(path);
+  if (parts.length === 0) return;
+  let current = obj;
+  for (let i = 0; i < parts.length - 1; i++) {
+    current = current?.[parts[i]];
+    if (current === null || current === undefined) return;
+  }
+  current[parts[parts.length - 1]] = value;
+}
+
+function pathToParts(path) {
+  if (!path) return [];
+  return path.replace(/\[(\d+)\]/g, '.$1').split('.').filter(Boolean);
+}
+
+function renderJsonView(data = effectiveExtraction()) {
+  const panel = $("#panel-right");
+  if (!data) {
+    panel.innerHTML = '<div class="loading">No extraction data</div>';
+    return;
+  }
+  panel.innerHTML = `<div class="json-view json-code-view">${renderJsonTree(data)}</div>`;
+  wireJsonEvents(panel);
+}
+
+function renderJsonTree(value, path = "", key = null, depth = 0) {
+  const keyHtml = key === null ? "" : `<span class="json-key json-token-key">${escapeHtml(JSON.stringify(key))}</span>: `;
+  if (value === null || typeof value !== "object") {
+    const pathAttr = path ? ` data-path="${path}"` : "";
+    const selectedCls = state.selectedPath === path ? " selected" : "";
+    return `<span class="json-leaf${selectedCls}"${pathAttr}>${keyHtml}${jsonScalarHtml(value)}</span>`;
+  }
+
+  const isArray = Array.isArray(value);
+  const entries = isArray ? value.map((v, i) => [i, v]) : Object.entries(value);
+  const open = " open";
+  const openChar = isArray ? "[" : "{";
+  const closeChar = isArray ? "]" : "}";
+  if (entries.length === 0) {
+    return `<span>${keyHtml}${openChar}${closeChar}</span>`;
+  }
+
+  let html = `<details class="json-node"${open}><summary class="json-toggle">${keyHtml}${openChar}</summary><ul class="json-tree">`;
+  for (const [childKey, childValue] of entries) {
+    const childPath = path
+      ? (isArray ? `${path}[${childKey}]` : `${path}.${childKey}`)
+      : String(childKey);
+    html += `<li>${renderJsonTree(childValue, childPath, childKey, depth + 1)}</li>`;
+  }
+  html += `</ul></details><span class="json-brace">${closeChar}</span>`;
+  return html;
+}
+
+function jsonScalarHtml(value) {
+  if (typeof value === "string") return `<span class="json-token-string">${escapeHtml(JSON.stringify(value))}</span>`;
+  if (typeof value === "number") return `<span class="json-token-number">${escapeHtml(JSON.stringify(value))}</span>`;
+  if (typeof value === "boolean") return `<span class="json-token-boolean">${String(value)}</span>`;
+  if (value === null || value === undefined) return '<span class="json-token-null">null</span>';
+  return escapeHtml(JSON.stringify(value));
 }
 
 // ── Source Navigation (spec: docs/specs/source-nav-interaction.md) ──
@@ -2699,7 +3526,6 @@ function renderSourceState(nav) {
   document.querySelectorAll(".md-line.active").forEach(el => el.classList.remove("active"));
   const table = nav.closest("table");
   if (table) table.querySelectorAll(".cell-selected").forEach(el => el.classList.remove("cell-selected"));
-  document.querySelectorAll(".reasoning-tooltip-row").forEach(el => el.remove());
 
   if (activeIndex === null || !sourceMap || sourceMap.length === 0) {
     if (counter) counter.textContent = `1/${sourceMap ? sourceMap.length : 0}`;
@@ -2736,21 +3562,7 @@ function renderSourceState(nav) {
   // 3. Update counter
   if (counter) counter.textContent = `${activeIndex + 1}/${sourceMap.length}`;
 
-  // 4. Show reasoning tooltip
-  if (entry.reasoning) {
-    const rowPath = nav.dataset.path;
-    const firstRow = table ? table.querySelector(`tr.horizontal-row[data-path="${rowPath}"]`) : null;
-    if (firstRow) {
-      const lastRow = findLastRowInGroup(firstRow);
-      const tooltip = document.createElement("tr");
-      tooltip.className = "reasoning-tooltip-row";
-      const totalCols = table ? table.querySelectorAll("thead th").length : 4;
-      tooltip.innerHTML = `<td colspan="${totalCols}"><div class="reasoning-tooltip">${escapeHtml(entry.reasoning)}</div></td>`;
-      lastRow.after(tooltip);
-    }
-  }
-
-  // 5. Update status bar
+  // 4. Update status bar
   $("#stat-citations").textContent = `${entry.path}: ${entry.label} (${activeIndex + 1}/${sourceMap.length})`;
 }
 
@@ -2768,10 +3580,265 @@ function resetAllSourceNavs() {
   document.querySelectorAll(".reasoned-highlight").forEach(el => el.classList.remove("reasoned-highlight"));
   document.querySelectorAll(".md-line.active").forEach(el => el.classList.remove("active"));
   document.querySelectorAll(".cell-selected").forEach(el => el.classList.remove("cell-selected"));
-  document.querySelectorAll(".reasoning-tooltip-row").forEach(el => el.remove());
+}
+
+function displayFieldValue(value) {
+  if (value === null) return "null";
+  if (value === undefined) return "";
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  return JSON.stringify(value);
+}
+
+function selectedFieldLabel(path) {
+  if (!path) return "Select a field";
+  return selectedFieldContextLabel(path);
+}
+
+function pathLabelParts(path) {
+  return path.split(".").map(part =>
+    humanize(part.replace(/\[(\d+)\]/g, (_, idx) => ` #${Number(idx) + 1}`))
+  );
+}
+
+function selectedFieldContextLabel(path) {
+  const parts = pathLabelParts(path);
+  if (parts.length <= 1) return parts[0] || "Select a field";
+  return parts.slice(0, -1).join(" / ");
+}
+
+function selectedFieldValueLabel(path) {
+  const parts = pathLabelParts(path);
+  if (parts.length <= 1) return "Value";
+  return parts[parts.length - 1] || "Value";
+}
+
+function selectedSourceRanges(path) {
+  const entry = state.reasoningByPath[path];
+  if (!entry || !entry.source_lines) return [];
+  return entry.source_lines.split(",").map(s => s.trim()).filter(Boolean);
+}
+
+function selectedFieldHasCitation(path) {
+  return selectedSourceRanges(path).length > 0;
+}
+
+function selectedVerifyExtra(path) {
+  return selectedFieldHasCitation(path) ? {} : { source: "accepted_no_citation" };
+}
+
+function selectedReasoning(path) {
+  const entry = state.reasoningByPath[path];
+  return entry && entry.reasoning ? entry.reasoning : "";
+}
+
+function openInlineEdit(path) {
+  if (!path) return;
+  state.selectedPath = path;
+  state.editingPath = path;
+  state.selectedSourceIndex = 0;
+  renderExtractionPanel();
+  updateSourceEvidenceOverlay();
+  requestAnimationFrame(() => {
+    const input = document.querySelector(`.inline-edit-input[data-path=${CSS.escape(path)}], .inline-edit-select[data-path=${CSS.escape(path)}]`);
+    if (input) {
+      input.focus();
+      if (input.select) input.select();
+    }
+  });
+}
+
+function cancelInlineEdit() {
+  if (!state.editingPath) return;
+  state.editingPath = null;
+  renderExtractionPanel();
+  updateSourceEvidenceOverlay();
+}
+
+async function saveInlineEdit(path) {
+  if (!path) return;
+  const control = document.querySelector(`.inline-edit-input[data-path=${CSS.escape(path)}], .inline-edit-select[data-path=${CSS.escape(path)}]`);
+  const reviewer = $("#reviewer-id").value.trim();
+  if (!reviewer) { alert("Please connect ORCID before editing."); return; }
+  const correctValue = control ? control.value.trim() : "";
+  state.editingPath = null;
+  const ok = await saveAnnotation(path, "flagged", {
+    correct_value: correctValue,
+  });
+  if (!ok) {
+    state.editingPath = path;
+    renderExtractionPanel();
+  }
+}
+
+function updateSourceEvidenceOverlay() {
+  const overlay = $("#source-evidence-overlay");
+  const label = $("#source-evidence-label");
+  const indexEl = $("#source-evidence-index");
+  const lines = $("#source-evidence-lines");
+  const cycle = $("#source-cycle-control");
+  const prev = $("#btn-source-evidence-prev");
+  const next = $("#btn-source-evidence-next");
+  const reasoning = $("#source-evidence-reasoning");
+  const valueBox = $("#source-evidence-value");
+  const valueLabel = $("#source-evidence-value-label");
+  const valueText = $("#source-evidence-value-text");
+  if (!overlay || !indexEl || !lines) return;
+  const ranges = selectedSourceRanges(state.selectedPath);
+  if (!state.selectedPath) {
+    overlay.classList.remove("active");
+    if (label) label.textContent = "No field selected";
+    if (reasoning) reasoning.textContent = "";
+    if (valueBox) valueBox.style.display = "none";
+    if (valueLabel) valueLabel.textContent = "Value";
+    if (valueText) {
+      valueText.innerHTML = "";
+      valueText.removeAttribute("title");
+    }
+    indexEl.textContent = "0/0";
+    lines.textContent = "No field selected";
+    if (cycle) cycle.style.display = "none";
+    if (prev) prev.disabled = true;
+    if (next) next.disabled = true;
+    return;
+  }
+
+  overlay.classList.add("active");
+  if (label) label.textContent = selectedFieldLabel(state.selectedPath);
+  if (valueBox && valueText) {
+    const valueDisplay = selectedFieldValueHtml(state.selectedPath);
+    if (valueLabel) valueLabel.textContent = selectedFieldValueLabel(state.selectedPath);
+    valueText.innerHTML = valueDisplay.html;
+    valueText.title = valueDisplay.title;
+    valueBox.style.display = "inline-flex";
+  }
+  const reasoningText = selectedReasoning(state.selectedPath);
+  if (reasoning) reasoning.textContent = reasoningText || "No reasoning note for this field.";
+
+  if (ranges.length === 0) {
+    indexEl.textContent = "0/0";
+    lines.textContent = state.selectedPath ? "No citation" : "No field selected";
+    if (cycle) cycle.style.display = "none";
+    if (prev) prev.disabled = true;
+    if (next) next.disabled = true;
+    return;
+  }
+
+  state.selectedSourceIndex = Math.max(0, Math.min(state.selectedSourceIndex, ranges.length - 1));
+  const current = ranges[state.selectedSourceIndex];
+  if (cycle) cycle.style.display = ranges.length < 2 ? "none" : "inline-flex";
+  indexEl.textContent = `${state.selectedSourceIndex + 1}/${ranges.length}`;
+  lines.textContent = current;
+  if (prev) prev.disabled = ranges.length < 2;
+  if (next) next.disabled = ranges.length < 2;
+}
+
+function focusSelectedSource(index = state.selectedSourceIndex) {
+  const ranges = selectedSourceRanges(state.selectedPath);
+  if (!ranges.length) return;
+  state.selectedSourceIndex = (index + ranges.length) % ranges.length;
+  updateSourceEvidenceOverlay();
+  renderMarkdown();
+  document.querySelectorAll(".reasoned-highlight").forEach(el => el.classList.remove("reasoned-highlight"));
+  document.querySelectorAll(".md-line.active").forEach(el => el.classList.remove("active"));
+  const selectedRange = parseSourceLines(ranges[state.selectedSourceIndex])[0];
+  if (!selectedRange) return;
+  const [start, end] = selectedRange;
+  let firstLine = null;
+  for (let ln = start; ln <= end; ln++) {
+    const lineEl = document.querySelector(`.md-line[data-line="${ln}"]`);
+    if (lineEl) {
+      lineEl.classList.add("reasoned-highlight");
+      if (!firstLine) firstLine = lineEl;
+    }
+  }
+  if (firstLine) {
+    firstLine.classList.add("active");
+    firstLine.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+}
+
+function updateSelectedFieldBar(path = state.selectedPath) {
+  if (!path) {
+    updateSourceEvidenceOverlay();
+    return;
+  }
+
+  updateSourceEvidenceOverlay();
+}
+
+function selectEvidencePath(path) {
+  if (!path) return;
+  state.selectedPath = path;
+  state.selectedSourceIndex = 0;
+  document.querySelectorAll(".json-leaf.selected").forEach(el => el.classList.remove("selected"));
+  const jsonLeaf = document.querySelector(`.json-leaf[data-path="${path}"]`);
+  if (jsonLeaf) jsonLeaf.classList.add("selected");
+  updateSelectedFieldBar(path);
+  if (selectedSourceRanges(path).length) focusSelectedSource(0);
+  else renderMarkdown();
+}
+
+function renderReviewState(path = state.selectedPath) {
+  renderExtractionPanel();
+  updateStats();
+  updateSelectedFieldBar(path);
 }
 
 function wireTableEvents(panel) {
+  panel.querySelectorAll(".field-status[data-path]").forEach(btn => {
+    btn.addEventListener("pointerleave", () => {
+      if (!btn.dataset.path) return;
+      state.suppressClearHoverPaths.delete(btn.dataset.path);
+      btn.classList.toggle("hover-clear-ready", btn.classList.contains("status-verified"));
+    });
+    btn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      await toggleFieldVerification(btn.dataset.path);
+    });
+  });
+
+  panel.querySelectorAll(".row-edit-action[data-path]").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openInlineEdit(btn.dataset.path);
+    });
+  });
+
+  panel.querySelectorAll(".inline-edit-save[data-path]").forEach(btn => {
+    btn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      await saveInlineEdit(btn.dataset.path);
+    });
+  });
+
+  panel.querySelectorAll(".inline-edit-cancel[data-path]").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      cancelInlineEdit();
+    });
+  });
+
+  panel.querySelectorAll(".inline-edit-input[data-path], .inline-edit-select[data-path]").forEach(input => {
+    input.addEventListener("click", (e) => e.stopPropagation());
+    input.addEventListener("keydown", async (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        await saveInlineEdit(input.dataset.path);
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        cancelInlineEdit();
+      }
+    });
+  });
+
+  panel.querySelectorAll(".row-clear-edit-action[data-path]").forEach(btn => {
+    btn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      await clearAnnotation(btn.dataset.path);
+    });
+  });
+
   // Row clicks (non-horizontal rows use selectTableRow)
   panel.querySelectorAll("tr.clickable:not(.horizontal-row)").forEach(row => {
     row.addEventListener("click", () => {
@@ -2785,6 +3852,10 @@ function wireTableEvents(panel) {
       // Don't handle if click was on a cell-value or button (those have their own handlers)
       if (e.target.closest(".cell-value") || e.target.closest("button")) return;
       const rowPath = row.dataset.path;
+      const selectedPath = row.querySelector(".cell-value")?.dataset.path || rowPath;
+      state.selectedPath = selectedPath;
+      state.selectedSourceIndex = 0;
+      updateSelectedFieldBar(selectedPath);
       const nav = findNavForCell(row.querySelector(".cell-value") || row);
       if (nav && nav._sourceMap && nav._sourceMap.length > 0) {
         resetAllSourceNavs();
@@ -2912,7 +3983,16 @@ function wireTableEvents(panel) {
     cell.addEventListener("click", (e) => {
       e.stopPropagation();
       const cellPath = cell.dataset.path;
-      const nav = findNavForCell(cell);
+      let activeCell = cell;
+      if (state.editingPath && state.editingPath !== cellPath) {
+        state.editingPath = null;
+        renderExtractionPanel();
+        activeCell = document.querySelector(`.horizontal-table .cell-value[data-path=${CSS.escape(cellPath)}]`) || cell;
+      }
+      state.selectedPath = cellPath;
+      state.selectedSourceIndex = 0;
+      updateSelectedFieldBar(cellPath);
+      const nav = findNavForCell(activeCell);
 
       if (nav && nav._sourceMap && nav._sourceMap.length > 0) {
         // Find indices in sourceMap that match this cell
@@ -2934,7 +4014,7 @@ function wireTableEvents(panel) {
       } else {
         // No multi-source nav (single source link or no source) — look up reasoning directly
         resetAllSourceNavs();
-        cell.classList.add("cell-selected");
+        activeCell.classList.add("cell-selected");
         const entry = state.reasoningByPath[cellPath];
         if (entry && entry.source_lines) {
           renderMarkdown();
@@ -2960,12 +4040,15 @@ function wireTableEvents(panel) {
 }
 
 function selectTableRow(path, rangeIndex) {
+  if (state.editingPath && state.editingPath !== path) {
+    state.editingPath = null;
+    renderExtractionPanel();
+  }
   // Clear previous highlights including any horizontal table nav state
   resetAllSourceNavs();
   clearSearchFull();
   document.querySelectorAll("tr.selected").forEach(e => e.classList.remove("selected"));
   document.querySelectorAll(".cell-selected").forEach(e => e.classList.remove("cell-selected"));
-  document.querySelectorAll(".reasoning-tooltip-row").forEach(e => e.remove());
 
   // Highlight the row
   const row = document.querySelector(`tr.clickable[data-path="${path}"]`);
@@ -2974,6 +4057,8 @@ function selectTableRow(path, rangeIndex) {
   renderMarkdown();
 
   state.selectedPath = path;
+  state.selectedSourceIndex = typeof rangeIndex === "number" ? rangeIndex : 0;
+  updateSelectedFieldBar(path);
   state.sections = [];
   state.sectionIndex = 0;
 
@@ -3003,22 +4088,6 @@ function selectTableRow(path, rangeIndex) {
         label: start === end ? `L${start}` : `L${start}\u2013L${end}`,
       });
     }
-  }
-
-  // Show reasoning tooltip below the row (or after last row in rowspan group)
-  if (entry.reasoning && row) {
-    // Find the correct insertion point — if this row is part of a rowspan group,
-    // insert after the last sibling that lacks a field cell (td:first-child with rowspan)
-    let insertAfter = row;
-    let sibling = row.nextElementSibling;
-    while (sibling && sibling.matches("tr.clickable") && sibling.cells.length < 4) {
-      insertAfter = sibling;
-      sibling = sibling.nextElementSibling;
-    }
-    const tooltip = document.createElement("tr");
-    tooltip.className = "reasoning-tooltip-row";
-    tooltip.innerHTML = `<td colspan="4"><div class="reasoning-tooltip">${escapeHtml(entry.reasoning)}</div></td>`;
-    insertAfter.after(tooltip);
   }
 
   if (state.sections.length > 0) {
@@ -3104,11 +4173,11 @@ function buildLeafHtml(key, value, path) {
   if (annStatus === "verified") indicatorClass = "verified";
   else if (annStatus === "flagged") indicatorClass = "flagged";
 
-  // Flag details
-  let flagDetails = "";
+  // Edit details
+  let editDetails = "";
   if (annStatus === "flagged" && ann) {
-    if (ann.correct_value) flagDetails += `<div class="flag-correction" style="margin-left:24px">→ ${escapeHtml(ann.correct_value)}</div>`;
-    if (ann.note) flagDetails += `<div class="flag-note-display" style="margin-left:24px">${escapeHtml(ann.note)}</div>`;
+    if (ann.correct_value) editDetails += `<div class="flag-correction" style="margin-left:24px">${escapeHtml(ann.correct_value)}</div>`;
+    if (ann.note) editDetails += `<div class="flag-note-display" style="margin-left:24px">${escapeHtml(ann.note)}</div>`;
   }
 
   let valClass = "string";
@@ -3123,7 +4192,7 @@ function buildLeafHtml(key, value, path) {
     <span class="tree-value ${valClass}">${escapeHtml(displayVal)}</span>
     ${sourceHtml}
     ${annControls}
-  </div>${flagDetails}`;
+  </div>${editDetails}`;
 }
 
 function buildAnnotationActions(path, status, options = {}) {
@@ -3137,7 +4206,7 @@ function buildAnnotationActions(path, status, options = {}) {
 
   return `<span class="${classes.join(" ")}" data-path="${path}"${scopeAttr}>` +
     `<button class="annotation-action${verifyActive}" data-action="verify" data-path="${path}"${scopeAttr} aria-pressed="${status === "verified"}" title="Mark verified">&#10003;</button>` +
-    `<button class="annotation-action${flagActive}" data-action="flag" data-path="${path}"${scopeAttr} aria-pressed="${status === "flagged"}" title="Flag for correction">&#9873;</button>` +
+    `<button class="annotation-action${flagActive}" data-action="flag" data-path="${path}"${scopeAttr} aria-pressed="${status === "flagged"}" title="Edit value">&#9998;</button>` +
     `<button class="annotation-action" data-action="clear" data-path="${path}"${scopeAttr}${clearDisabled} title="Clear review status">&#10005;</button>` +
     `</span>`;
 }
@@ -3162,6 +4231,8 @@ function selectLeaf(el) {
   renderMarkdown();
 
   state.selectedPath = path;
+  state.selectedSourceIndex = 0;
+  updateSelectedFieldBar(path);
   state.sections = [];
   state.sectionIndex = 0;
 
@@ -3420,14 +4491,63 @@ function updateStats() {
   let msg = `${reasoned}/${total} cited`;
   if (nVerified > 0 || nFlagged > 0) {
     msg += ` \u00b7 ${nVerified} verified`;
-    if (nFlagged > 0) msg += `, ${nFlagged} flagged`;
+    if (nFlagged > 0) msg += `, ${nFlagged} edited`;
   }
   $("#stat-citations").textContent = msg;
+  syncCurrentArticleProgress();
+}
+
+function reviewStateCounts() {
+  if (!state.extraction) {
+    return { total: 0, reviewed: 0, verified: 0, flagged: 0, remaining: 0 };
+  }
+  const leafPaths = collectLeafPaths(state.extraction);
+  const reviewedAnnotations = leafPaths.map(path => state.annotations[path]).filter(Boolean);
+  const verified = reviewedAnnotations.filter(a => a.status === "verified").length;
+  const flagged = reviewedAnnotations.filter(a => a.status === "flagged").length;
+  return {
+    total: leafPaths.length,
+    reviewed: verified + flagged,
+    verified,
+    flagged,
+    remaining: leafPaths.filter(path => !state.annotations[path]).length,
+  };
+}
+
+function updateReviewWorkspace() {
+  const counts = reviewStateCounts();
+  const progress = $("#review-progress");
+  if (progress) {
+    progress.innerHTML = `<strong>${counts.reviewed}/${counts.total}</strong> fields audited`;
+  }
+
+  const prevUnreviewedBtn = $("#btn-prev-unreviewed");
+  const nextUnreviewedBtn = $("#btn-next-unreviewed");
+  if (prevUnreviewedBtn) prevUnreviewedBtn.disabled = counts.remaining === 0;
+  if (nextUnreviewedBtn) nextUnreviewedBtn.disabled = counts.remaining === 0;
+  updateSelectedFieldBar();
+}
+
+function syncCurrentArticleProgress() {
+  if (!state.currentId || !state.extraction) return;
+  const article = state.articles.find(a => a.article_id === state.currentId);
+  if (!article) return;
+  const counts = reviewStateCounts();
+  article.n_fields = counts.total;
+  article.n_verified = counts.verified;
+  article.n_flagged = counts.flagged;
+  article.n_reviewed = counts.reviewed;
+  article.n_annotated = article.n_reviewed;
+  article.is_complete = article.n_fields > 0 && article.n_reviewed >= article.n_fields;
+  article.has_flags = article.n_flagged > 0;
+
+  const option = $(`#article-select option[value="${CSS.escape(state.currentId)}"]`);
+  if (option) option.textContent = articleOptionLabel(article);
+  updateReviewWorkspace();
 }
 
 // ── Annotations ──
 let saveStatusTimer = null;
-state.lastBulkBatch = null;
 
 function setSaveStatus(message, status = "") {
   const el = $("#save-status");
@@ -3444,20 +4564,10 @@ function setSaveStatus(message, status = "") {
 }
 
 function setBulkStatus(message, batchId = null) {
-  const el = $("#save-status");
+  const el = $("#bulk-status");
   if (!el) return;
-  if (saveStatusTimer) clearTimeout(saveStatusTimer);
   el.dataset.status = "saved";
-  el.textContent = "";
-  el.append(document.createTextNode(message));
-  if (batchId) {
-    const undo = document.createElement("button");
-    undo.type = "button";
-    undo.className = "bulk-undo-btn";
-    undo.textContent = "Undo";
-    undo.addEventListener("click", () => undoBulkBatch(batchId));
-    el.append(undo);
-  }
+  el.textContent = message;
 }
 
 function annotationEntry(path, status, extra = {}) {
@@ -3478,6 +4588,10 @@ async function saveAnnotation(path, status, extra = {}, options = {}) {
   const render = options.render !== false;
   const entry = annotationEntry(path, status, extra);
   setSaveStatus("Saving...", "saving");
+  if (render) {
+    state.annotations[path] = entry;
+    renderReviewState();
+  }
 
   try {
     const response = await fetch(`/api/annotations/${state.currentId}`, {
@@ -3497,8 +4611,7 @@ async function saveAnnotation(path, status, extra = {}, options = {}) {
     return false;
   } finally {
     if (render) {
-      renderExtractionPanel();
-      updateStats();
+      renderReviewState();
     }
   }
 }
@@ -3513,6 +4626,7 @@ async function clearAnnotation(path, options = {}) {
     const response = await fetch(`/api/annotations/${state.currentId}/${path}`, { method: "DELETE" });
     if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
     delete state.annotations[path];
+    state.suppressClearHoverPaths.delete(path);
     setSaveStatus("Cleared", "saved");
     return true;
   } catch (err) {
@@ -3523,8 +4637,38 @@ async function clearAnnotation(path, options = {}) {
     if (render) {
       renderExtractionPanel();
       updateStats();
+      updateSelectedFieldBar(state.selectedPath);
     }
   }
+}
+
+async function toggleFieldVerification(path) {
+  if (!path) return;
+  const ann = state.annotations[path];
+  if (!ann) {
+    state.selectedPath = path;
+    state.selectedSourceIndex = 0;
+    state.suppressClearHoverPaths.add(path);
+    await saveAnnotation(path, "verified", selectedVerifyExtra(path));
+    return;
+  }
+  if (ann.status === "verified") {
+    if (state.suppressClearHoverPaths.has(path)) return;
+    state.selectedPath = path;
+    state.selectedSourceIndex = 0;
+    await clearAnnotation(path);
+    return;
+  }
+  if (ann.status === "flagged") {
+    openInlineEdit(path);
+    return;
+  }
+  selectTableRow(path);
+}
+
+function wireSelectedFieldActions() {
+  $("#btn-source-evidence-prev").addEventListener("click", () => focusSelectedSource(state.selectedSourceIndex - 1));
+  $("#btn-source-evidence-next").addEventListener("click", () => focusSelectedSource(state.selectedSourceIndex + 1));
 }
 
 function pathInScope(path, basePath) {
@@ -3593,6 +4737,28 @@ function collectReviewablePaths(basePath = null) {
     );
 }
 
+function verifiedPathsInScope(basePath = null) {
+  return collectLeafPaths(state.extraction).filter(path =>
+    pathInScope(path, basePath) &&
+    state.annotations[path] &&
+    state.annotations[path].status === "verified"
+  );
+}
+
+function sectionReviewState(basePath = null) {
+  const leafPaths = collectLeafPaths(state.extraction).filter(path => pathInScope(path, basePath));
+  const reviewedPaths = leafPaths.filter(path => {
+    const ann = state.annotations[path];
+    return ann && (ann.status === "verified" || ann.status === "flagged");
+  });
+  return {
+    total: leafPaths.length,
+    reviewed: reviewedPaths.length,
+    reviewable: collectReviewablePaths(basePath).length,
+    complete: leafPaths.length > 0 && reviewedPaths.length === leafPaths.length,
+  };
+}
+
 function skippedBulkCount(basePath, reviewableCount) {
   const allLeafPaths = collectLeafPaths(state.extraction).filter(path => pathInScope(path, basePath));
   return Math.max(0, allLeafPaths.length - reviewableCount);
@@ -3601,6 +4767,7 @@ function skippedBulkCount(basePath, reviewableCount) {
 async function bulkVerifyScope(basePath, source) {
   const paths = collectReviewablePaths(basePath);
   const skipped = skippedBulkCount(basePath, paths.length);
+  if (basePath && paths.length > 0) state.suppressClearHoverSections.add(basePath);
   await bulkVerifyPaths(paths, source, skipped);
 }
 
@@ -3620,7 +4787,6 @@ async function bulkVerifyPaths(paths, source, skipped = 0) {
     if (ok) verifiedPaths.push(path);
   }
 
-  state.lastBulkBatch = { batch_id: batchId, paths: verifiedPaths };
   renderExtractionPanel();
   updateStats();
   const failed = paths.length - verifiedPaths.length;
@@ -3628,20 +4794,16 @@ async function bulkVerifyPaths(paths, source, skipped = 0) {
   setBulkStatus(`${verifiedPaths.length} fields verified · ${skippedText} skipped`, verifiedPaths.length > 0 ? batchId : null);
 }
 
-async function undoBulkBatch(batchId) {
-  const batch = state.lastBulkBatch;
-  if (!batch || batch.batch_id !== batchId) return;
+async function clearVerifiedScope(basePath = null) {
+  const paths = verifiedPathsInScope(basePath);
   let cleared = 0;
-  for (const path of batch.paths) {
-    const ann = state.annotations[path];
-    if (!ann || ann.status !== "verified" || ann.batch_id !== batchId) continue;
+  for (const path of paths) {
     const ok = await clearAnnotation(path, { render: false });
     if (ok) cleared++;
   }
   renderExtractionPanel();
   updateStats();
-  state.lastBulkBatch = null;
-  setBulkStatus(`${cleared} bulk verifications undone`);
+  setBulkStatus(`${cleared} verified fields cleared`);
 }
 
 function rowCellPaths(rowPath) {
@@ -3651,6 +4813,56 @@ function rowCellPaths(rowPath) {
     row.querySelectorAll(".cell-value[data-path]").forEach(cell => paths.push(cell.dataset.path));
   });
   return [...new Set(paths)];
+}
+
+function orderedReviewPaths() {
+  if (!state.extraction) return [];
+  const leafPaths = new Set(collectLeafPaths(state.extraction));
+  const ordered = [];
+  document.querySelectorAll("tr.clickable[data-path]").forEach(row => {
+    const rowPath = row.dataset.path;
+    if (leafPaths.has(rowPath)) ordered.push(rowPath);
+    row.querySelectorAll(".cell-value[data-path]").forEach(cell => {
+      if (leafPaths.has(cell.dataset.path)) ordered.push(cell.dataset.path);
+    });
+  });
+  for (const path of leafPaths) {
+    if (!ordered.includes(path)) ordered.push(path);
+  }
+  return [...new Set(ordered)];
+}
+
+function selectNextReviewPath(kind) {
+  const paths = orderedReviewPaths().filter(path => {
+    const ann = state.annotations[path];
+    if (kind === "flagged") return ann && ann.status === "flagged";
+    return !ann;
+  });
+  if (paths.length === 0) return;
+
+  const currentIndex = state.selectedPath ? paths.indexOf(state.selectedPath) : -1;
+  const nextPath = paths[(currentIndex + 1) % paths.length];
+  const row = document.querySelector(`tr.clickable[data-path="${CSS.escape(nextPath)}"]`)
+    || document.querySelector(`.cell-value[data-path="${CSS.escape(nextPath)}"]`)?.closest("tr.clickable");
+  if (row) row.scrollIntoView({ behavior: "smooth", block: "center" });
+  selectTableRow(nextPath);
+}
+
+function selectAdjacentReviewPath(direction) {
+  const paths = orderedReviewPaths().filter(path => !state.annotations[path]);
+  if (paths.length === 0) return;
+  const currentIndex = state.selectedPath ? paths.indexOf(state.selectedPath) : -1;
+  let nextIndex;
+  if (currentIndex === -1) {
+    nextIndex = direction < 0 ? paths.length - 1 : 0;
+  } else {
+    nextIndex = (currentIndex + direction + paths.length) % paths.length;
+  }
+  const nextPath = paths[nextIndex];
+  const row = document.querySelector(`tr.clickable[data-path="${CSS.escape(nextPath)}"]`)
+    || document.querySelector(`.cell-value[data-path="${CSS.escape(nextPath)}"]`)?.closest("tr.clickable");
+  if (row) row.scrollIntoView({ behavior: "smooth", block: "center" });
+  selectTableRow(nextPath);
 }
 
 async function verifyRowAnnotations(rowPath) {
@@ -3667,7 +4879,6 @@ async function clearRowAnnotations(rowPath) {
   for (const path of paths) {
     await clearAnnotation(path, { render: false });
   }
-  document.querySelectorAll(".flag-dialog").forEach(el => el.remove());
   renderExtractionPanel();
   updateStats();
 }
@@ -3682,13 +4893,10 @@ function wireAnnotationActions(panel) {
       const isRow = btn.dataset.scope === "row";
 
       if (action === "verify") {
-        document.querySelectorAll(".flag-dialog").forEach(el => el.remove());
         if (isRow) await verifyRowAnnotations(path);
         else await saveAnnotation(path, "verified");
       } else if (action === "flag") {
-        const reviewer = $("#reviewer-id").value.trim();
-        if (!reviewer) { alert("Please enter your ORCID in the toolbar before flagging."); return; }
-        showFlagDialog(path, state.annotations[path]);
+        openInlineEdit(path);
       } else if (action === "clear") {
         if (isRow) await clearRowAnnotations(path);
         else await clearAnnotation(path);
@@ -3698,99 +4906,22 @@ function wireAnnotationActions(panel) {
 }
 
 function wireBulkReviewActions(panel) {
-  panel.querySelectorAll(".bulk-verify-btn[data-bulk-scope='section']").forEach(btn => {
+  panel.querySelectorAll(".section-review-toggle[data-section-action]").forEach(btn => {
+    btn.addEventListener("pointerleave", () => {
+      if (!btn.dataset.path) return;
+      state.suppressClearHoverSections.delete(btn.dataset.path);
+      btn.classList.toggle("hover-clear-ready", btn.classList.contains("section-complete"));
+    });
     btn.addEventListener("click", async (e) => {
       e.stopPropagation();
       if (btn.disabled) return;
-      await bulkVerifyScope(btn.dataset.path, "bulk_section");
+      if (btn.dataset.sectionAction === "clear") {
+        if (state.suppressClearHoverSections.has(btn.dataset.path)) return;
+        await clearVerifiedScope(btn.dataset.path);
+      } else {
+        await bulkVerifyScope(btn.dataset.path, "bulk_section");
+      }
     });
-  });
-}
-
-function showFlagDialog(path, existing) {
-  // Remove any existing flag dialog
-  document.querySelectorAll(".flag-dialog").forEach(el => el.remove());
-  const previous = existing ? { ...existing } : null;
-
-  // Find the row/element to insert after
-  let anchor = document.querySelector(`[data-path="${path}"]`);
-  if (!anchor) return;
-
-  const currentValue = getValueAtPath(state.extraction, path);
-  const prevCorrect = existing ? (existing.correct_value || "") : "";
-  const prevNote = existing ? (existing.note || "") : "";
-
-  const dialogHtml = `
-    <div class="flag-form">
-      <div class="flag-form-header">
-        <span class="flag-form-path">${path}</span>
-        <span class="flag-form-current">Current: <strong>${escapeHtml(String(currentValue ?? "null"))}</strong></span>
-      </div>
-      <div class="flag-form-fields">
-        <label>
-          <span>Correct value</span>
-          <input type="text" class="flag-input" id="flag-correct" value="${escapeHtml(prevCorrect)}" placeholder="Enter correct value, or &quot;__remove__&quot; if field should not exist">
-        </label>
-        <label>
-          <span>Note</span>
-          <textarea class="flag-textarea" id="flag-note" rows="2" placeholder="Describe the error or uncertainty...">${escapeHtml(prevNote)}</textarea>
-        </label>
-      </div>
-      <div class="flag-form-actions">
-        <button class="flag-save" id="flag-save-btn">Save Flag</button>
-        <button class="flag-cancel" id="flag-cancel-btn">Cancel</button>
-      </div>
-    </div>`;
-
-  const row = anchor.closest("tr");
-  const treeLeaf = anchor.closest(".tree-leaf");
-  let dialog;
-
-  if (row) {
-    // Table view: overlay positioned below row
-    const section = row.closest(".ext-section") || row.closest(".table-view");
-    if (!section) return;
-    section.style.position = "relative";
-    dialog = document.createElement("div");
-    dialog.className = "flag-dialog";
-    const rowRect = row.getBoundingClientRect();
-    const sectionRect = section.getBoundingClientRect();
-    dialog.style.top = (rowRect.bottom - sectionRect.top) + "px";
-    dialog.innerHTML = dialogHtml;
-    section.appendChild(dialog);
-  } else if (treeLeaf) {
-    // JSON tree view: insert inline after the leaf
-    dialog = document.createElement("div");
-    dialog.className = "flag-dialog flag-dialog-inline";
-    dialog.innerHTML = dialogHtml;
-    treeLeaf.after(dialog);
-  } else {
-    return;
-  }
-
-  // Focus the correct value input
-  dialog.querySelector("#flag-correct").focus();
-
-  dialog.querySelector("#flag-save-btn").addEventListener("click", async () => {
-    const correctValue = dialog.querySelector("#flag-correct").value.trim();
-    const note = dialog.querySelector("#flag-note").value.trim();
-    await saveAnnotation(path, "flagged", {
-      correct_value: correctValue,
-      note,
-    }, { previous });
-  });
-
-  dialog.querySelector("#flag-cancel-btn").addEventListener("click", () => {
-    dialog.remove();
-  });
-
-  // Enter in input saves, Escape cancels
-  dialog.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") { dialog.querySelector("#flag-cancel-btn").click(); }
-    if (e.key === "Enter" && e.target.tagName !== "TEXTAREA") {
-      e.preventDefault();
-      dialog.querySelector("#flag-save-btn").click();
-    }
   });
 }
 
@@ -3804,62 +4935,106 @@ function getValueAtPath(obj, path) {
   return current;
 }
 
-// Reviewer ID persistence
-const savedReviewer = localStorage.getItem("erw-reviewer-id") || "";
-$("#reviewer-id").value = savedReviewer;
-$("#reviewer-id").addEventListener("change", () => {
-  localStorage.setItem("erw-reviewer-id", $("#reviewer-id").value.trim());
-});
+function normalizeOrcidInput(value) {
+  return value.trim()
+    .replace(/^https?:\/\/orcid\.org\//i, "")
+    .toUpperCase();
+}
 
-// ── View toggle ──
-state.viewMode = localStorage.getItem("erw-view-mode") || "table";
-state.tableMode = localStorage.getItem("erw-table-mode") || "review";
+function setReviewerIdentity(profile) {
+  const reviewerId = $("#reviewer-id");
+  const connect = $("#btn-orcid-connect");
+  const profileBtn = $("#btn-orcid-profile");
+  const name = $("#orcid-profile-name");
+  if (!profile) {
+    reviewerId.value = "";
+    connect.style.display = "inline-flex";
+    profileBtn.style.display = "none";
+    localStorage.removeItem("erw-reviewer-profile");
+    localStorage.removeItem("erw-reviewer-id");
+    return;
+  }
+  reviewerId.value = profile.orcid;
+  connect.style.display = "none";
+  profileBtn.style.display = "inline-flex";
+  name.textContent = profile.name;
+  localStorage.setItem("erw-reviewer-profile", JSON.stringify(profile));
+  localStorage.setItem("erw-reviewer-id", profile.orcid);
+}
 
-function renderExtractionPanel() {
-  if (state.viewMode === "table") {
-    renderTableView();
+function openOrcidModal() {
+  $("#orcid-input").value = $("#reviewer-id").value || "";
+  $("#orcid-result").textContent = "Enter an ORCID iD to connect your reviewer identity.";
+  $("#btn-orcid-save").disabled = false;
+  $("#orcid-modal").classList.add("active");
+  $("#orcid-input").focus();
+}
+
+function closeOrcidModal() {
+  $("#orcid-modal").classList.remove("active");
+}
+
+async function saveOrcidProfile() {
+  const value = normalizeOrcidInput($("#orcid-input").value);
+  const result = $("#orcid-result");
+  const save = $("#btn-orcid-save");
+  if (!/^\d{4}-\d{4}-\d{4}-\d{3}[0-9X]$/.test(value)) {
+    result.textContent = "Enter a valid ORCID iD.";
+    return;
+  }
+  result.textContent = "Checking ORCID profile...";
+  save.disabled = true;
+  try {
+    const response = await fetch(`/api/orcid/${encodeURIComponent(value)}`);
+    if (!response.ok) throw new Error("not found");
+    const profile = await response.json();
+    setReviewerIdentity(profile);
+    closeOrcidModal();
+  } catch (err) {
+    result.textContent = "User not found.";
+    save.disabled = false;
+  }
+}
+
+function initReviewerIdentity() {
+  const savedProfile = localStorage.getItem("erw-reviewer-profile");
+  if (savedProfile) {
+    try {
+      setReviewerIdentity(JSON.parse(savedProfile));
+      return;
+    } catch (err) {
+      localStorage.removeItem("erw-reviewer-profile");
+    }
+  }
+  const savedReviewer = localStorage.getItem("erw-reviewer-id");
+  if (savedReviewer) {
+    setReviewerIdentity({ orcid: savedReviewer, name: savedReviewer });
   } else {
-    renderTree();
-  }
-  updateViewToggle();
-}
-
-function updateViewToggle() {
-  const reviewBtn = document.getElementById("btn-review-table");
-  const pivotBtn = document.getElementById("btn-pivot-view");
-  const jsonBtn = document.getElementById("btn-json-view");
-  if (reviewBtn) {
-    reviewBtn.classList.toggle("active", state.viewMode === "table" && state.tableMode === "review");
-    pivotBtn.classList.toggle("active", state.viewMode === "table" && state.tableMode === "pivot");
-    jsonBtn.classList.toggle("active", state.viewMode === "json");
+    setReviewerIdentity(null);
   }
 }
 
-document.addEventListener("click", (e) => {
-  if (e.target.id === "btn-review-table") {
-    state.viewMode = "table";
-    state.tableMode = "review";
-    localStorage.setItem("erw-view-mode", "table");
-    localStorage.setItem("erw-table-mode", "review");
-    resetAllSourceNavs();
-    renderExtractionPanel();
-  } else if (e.target.id === "btn-pivot-view") {
-    state.viewMode = "table";
-    state.tableMode = "pivot";
-    localStorage.setItem("erw-view-mode", "table");
-    localStorage.setItem("erw-table-mode", "pivot");
-    resetAllSourceNavs();
-    renderExtractionPanel();
-  } else if (e.target.id === "btn-json-view") {
-    state.viewMode = "json";
-    localStorage.setItem("erw-view-mode", "json");
-    resetAllSourceNavs();
-    renderExtractionPanel();
-  } else if (e.target.id === "btn-verify-article") {
-    e.stopPropagation();
-    bulkVerifyScope(null, "bulk_article");
-  }
+$("#btn-orcid-connect").addEventListener("click", openOrcidModal);
+$("#btn-orcid-profile").addEventListener("click", () => setReviewerIdentity(null));
+$("#orcid-input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") saveOrcidProfile();
 });
+$("#btn-orcid-save").addEventListener("click", saveOrcidProfile);
+$("#btn-orcid-cancel").addEventListener("click", closeOrcidModal);
+initReviewerIdentity();
+
+// ── Extraction rendering ──
+function renderExtractionPanel() {
+  syncViewControls();
+  if (state.viewMode === "overview" && state.overviewMode === "json") {
+    renderJsonView(effectiveExtraction());
+  } else if (state.viewMode === "overview") {
+    renderOverviewView(effectiveExtraction());
+  } else {
+    renderReviewTable();
+    updateReviewWorkspace();
+  }
+}
 
 // ── Boot ──
 init();
