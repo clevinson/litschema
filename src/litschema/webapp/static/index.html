@@ -803,7 +803,7 @@
     text-align: center;
   }
 
-  .ext-table .status-cell {
+  .ext-table td.status-cell {
     white-space: nowrap;
     text-align: center;
     vertical-align: middle;
@@ -907,11 +907,13 @@
   }
 
   .status-actions {
-    display: inline-flex;
+    display: inline-grid;
     align-items: center;
     justify-content: center;
-    gap: 8px;
-    min-width: 54px;
+    grid-template-columns: 22px 18px;
+    column-gap: 8px;
+    width: 48px;
+    min-width: 48px;
   }
 
   .row-edit-action,
@@ -975,7 +977,23 @@
   }
 
   .source-edit-current {
-    color: var(--text-secondary);
+    display: grid;
+    gap: 4px;
+    padding: 8px;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius);
+    background: var(--bg-overlay);
+  }
+
+  .source-edit-current-label {
+    color: var(--text-dim);
+    font-family: var(--font-sans);
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+
+  .source-edit-current-value {
     font-family: var(--font-mono);
     font-size: 12px;
     line-height: 1.4;
@@ -3047,7 +3065,8 @@ function openFieldEditModal(path) {
   const ann = state.annotations[path];
   if (!overlay || !correct || !note) return;
   title.textContent = selectedFieldLabel(path);
-  current.innerHTML = `AI value: ${displayOriginalFieldValueForEdit(getValueAtPath(state.extraction, path))}`;
+  current.innerHTML = `<span class="source-edit-current-label">Extracted value</span>` +
+    `<span class="source-edit-current-value">${displayOriginalFieldValueForEdit(getValueAtPath(state.extraction, path))}</span>`;
   correct.value = ann?.correct_value || "";
   note.value = ann?.note || "";
   overlay.classList.add("active");

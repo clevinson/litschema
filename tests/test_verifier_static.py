@@ -66,6 +66,8 @@ def test_verifier_edits_in_source_pane_modal() -> None:
     assert "openFieldEditModal" in html
     assert "closeFieldEditModal" in html
     assert "displayOriginalFieldValueForEdit" in html
+    assert "Extracted value" in html
+    assert "AI value" not in html
     assert "saveSelectedFieldEdit" in html
     assert "selected-field-edit-form" not in html
     assert "showFlagDialog" not in html
@@ -159,12 +161,14 @@ def test_verifier_action_column_uses_compact_status() -> None:
     assert "status-verified" in html
     assert "status-flagged" in html
     assert "status-cell" in html
+    assert ".ext-table td.status-cell" in html
     assert "line-height: 1" in html
     assert "margin: 0 auto" in html
     assert "suppressClearHoverPaths" in html
     assert "status-icon-hover" in html
     assert "row-edit-action" in html
     assert "row-clear-edit-action" in html
+    assert "grid-template-columns: 22px 18px" in html
     assert ".ext-table tr:hover .row-clear-edit-action" in html
     assert "displayFieldValueForPath" in html
     assert "toggleFieldVerification" in html
