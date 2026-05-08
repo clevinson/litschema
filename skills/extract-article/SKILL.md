@@ -17,10 +17,8 @@ The user will provide an `article_id` (e.g., `bell-2024`). You must:
    ```bash
    uv run python -m litschema.agent.prepare_schema_context
    ```
-3. Read `.litschema/runtime/schema_context.json`
-4. Read `.litschema/runtime/extraction_schema.json`
-5. Read `.litschema/runtime/reasoning_schema.json` if it exists
-6. Read the full-text markdown from `data/papers/{article_id}/article.md`
+3. Read `.litschema/runtime/schema_context.json`, `.litschema/runtime/extraction_schema.json`, and `.litschema/runtime/reasoning_schema.json` if it exists
+4. Read the full-text markdown from `data/papers/{article_id}/article.md`
 
 If the markdown file doesn't exist or is < 100 characters, write an error marker:
 ```json
@@ -31,10 +29,9 @@ to `data/papers/{article_id}/agent-extraction.json`.
 ## How to Extract
 
 1. **Domain context** (`domain_context.md`) tells you what the research domain is and gives domain-specific extraction rules and field guidance. Follow these rules exactly.
-2. **Schema context** (`.litschema/runtime/schema_context.json`) tells you the resolved `extraction_root_class`. Use that class as the root object; do not infer the root from `$defs`.
-3. **Extraction schema** (`.litschema/runtime/extraction_schema.json`) defines every field, type, enum value, and description. Your output JSON must validate against this schema. Read the root class and schema carefully; field descriptions and enum `description` values contain important guidance.
-4. **Reasoning schema** (`.litschema/runtime/reasoning_schema.json`) defines the format for your reasoning output when present.
-5. **The article markdown** is your sole data source. Extract ONLY from this text.
+2. **Runtime schema context** (`.litschema/runtime/schema_context.json`) gives the resolved `extraction_root_class`; use that class as the root object while reading `.litschema/runtime/extraction_schema.json` for fields, types, enums, and descriptions.
+3. **Reasoning schema** (`.litschema/runtime/reasoning_schema.json`) defines the format for your reasoning output when present.
+4. **The article markdown** is your sole data source. Extract ONLY from this text.
 
 **CRITICAL: Extract ONLY from the markdown file provided. Do NOT use any information from memory files, conversation context, prior knowledge about this paper, or other articles. Every extracted value must come from the text of this specific paper.**
 

@@ -24,6 +24,7 @@ from .articles import (
     iter_review_paths,
 )
 from .config import CONFIG_FILENAME, LitSchemaConfig, load_config
+from .ingest import validate_extraction
 
 app = typer.Typer(
     name="litschema",
@@ -178,8 +179,7 @@ def validate(ctx: typer.Context):
     _require_config()
 
     typer.echo(f"{DIM}→ validating extractions against extraction schema{RESET}")
-    result = subprocess.run([sys.executable, "-m", "litschema.ingest.validate_extraction", *ctx.args])
-    raise typer.Exit(code=result.returncode)
+    raise typer.Exit(code=validate_extraction.run(list(ctx.args)))
 
 
 @app.command(

@@ -1,4 +1,4 @@
-"""Validate agent reasoning files against the runtime reasoning JSON Schema."""
+"""Validate agent reasoning files against the configured LinkML reasoning schema."""
 
 from __future__ import annotations
 
@@ -6,22 +6,19 @@ import json
 import sys
 from pathlib import Path
 
-from jsonschema import Draft202012Validator
-
 from ..articles import iter_reasoning_paths
 from ..config import LitSchemaConfig, load_config
-from .prepare_schema_context import prepare_schema_context
+from ..schema_validation import validate_linkml_data
 
 
-def validate_file(filepath: Path, schema: dict) -> tuple[bool, list[str]]:
+def validate_file(
+    filepath: Path,
+    schema_path: Path,
+    root_class: str = "ExtractionReasoning",
+) -> tuple[bool, list[str]]:
     data = json.loads(filepath.read_text())
-    validator = Draft202012Validator(schema)
-    errors = sorted(validator.iter_errors(data), key=lambda error: list(error.absolute_path))
-    messages = []
-    for error in errors:
-        path = ".".join(str(part) for part in error.absolute_path) or "<root>"
-        messages.append(f"{path}: {error.message}")
-    return len(messages) == 0, messages
+    errors = validate_linkml_data(data, schema_path, root_class)
+    return len(errors) == 0, errors
 
 
 def _reasoning_files_for_target(cfg: LitSchemaConfig, target: Path | None) -> list[Path]:
@@ -50,12 +47,11 @@ def main() -> None:
         print(exc)
         sys.exit(1)
 
-    context = prepare_schema_context(cfg)
-    if context.reasoning_schema_path is None:
-        print(f"No reasoning schema found at {cfg.schema_dir / 'reasoning.yaml'}; skipping")
+    schema_path = cfg.schema_dir / "reasoning.yaml"
+    if not schema_path.exists():
+        print(f"No reasoning schema found at {schema_path}; skipping")
         return
 
-    schema = json.loads(context.reasoning_schema_path.read_text())
     if not files:
         print("No reasoning files found")
         sys.exit(1)
@@ -63,7 +59,7 @@ def main() -> None:
     valid_count = 0
     invalid_count = 0
     for filepath in files:
-        ok, errors = validate_file(filepath, schema)
+        ok, errors = validate_file(filepath, schema_path)
         if ok:
             valid_count += 1
             continue

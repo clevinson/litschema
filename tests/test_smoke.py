@@ -14,7 +14,6 @@ import os
 import shutil
 import subprocess
 import sys
-from types import SimpleNamespace
 from pathlib import Path
 
 import pytest
@@ -220,17 +219,21 @@ def test_validate_defaults_to_article_store(
     monkeypatch.setenv("LITSCHEMA_CONFIG", str(tmp_path / "litschema.yaml"))
 
     from litschema import cli
+    from litschema.ingest import validate_extraction
 
     calls = []
 
-    def fake_run(args, **kwargs):
+    def fake_validate(args):
         calls.append(args)
-        return SimpleNamespace(returncode=0)
+        return 0
 
-    monkeypatch.setattr(cli.subprocess, "run", fake_run)
+    def fail_subprocess(*args, **kwargs):
+        raise AssertionError("litschema validate should call the Python validation function")
+
+    monkeypatch.setattr(cli.subprocess, "run", fail_subprocess)
+    monkeypatch.setattr(validate_extraction, "run", fake_validate)
 
     result = CliRunner().invoke(cli.app, ["validate"])
 
     assert result.exit_code == 0, result.output
-    assert len(calls) == 1
-    assert calls[0] == [sys.executable, "-m", "litschema.ingest.validate_extraction"]
+    assert calls == [[]]

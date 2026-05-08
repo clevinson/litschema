@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import json
-import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
 from ..config import LitSchemaConfig, load_config
 from ..schema_resolution import resolve_extraction_schema
+from ..schema_validation import write_json_schema
 
 
 @dataclass(frozen=True)
@@ -18,17 +18,6 @@ class SchemaContext:
     extraction_schema_path: Path
     extraction_root_class: str
     reasoning_schema_path: Path | None
-
-
-def _generate_json_schema(schema_path: Path, top_class: str, output_path: Path) -> None:
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    with output_path.open("w") as fh:
-        subprocess.run(
-            ["uv", "run", "gen-json-schema", "--top-class", top_class, str(schema_path)],
-            stdout=fh,
-            check=True,
-            cwd=schema_path.parent,
-        )
 
 
 def _project_relative(path: Path | None, project_root: Path) -> str | None:
@@ -48,13 +37,13 @@ def prepare_schema_context(cfg: LitSchemaConfig | None = None) -> SchemaContext:
 
     extraction_schema, extraction_class = resolve_extraction_schema(cfg)
     extraction_output = runtime_dir / "extraction_schema.json"
-    _generate_json_schema(extraction_schema, extraction_class, extraction_output)
+    write_json_schema(extraction_schema, extraction_class, extraction_output)
 
     reasoning_schema = cfg.schema_dir / "reasoning.yaml"
     reasoning_output: Path | None = None
     if reasoning_schema.exists():
         reasoning_output = runtime_dir / "reasoning_schema.json"
-        _generate_json_schema(reasoning_schema, "ExtractionReasoning", reasoning_output)
+        write_json_schema(reasoning_schema, "ExtractionReasoning", reasoning_output)
 
     manifest_path.write_text(
         json.dumps(

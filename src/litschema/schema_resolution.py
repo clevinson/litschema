@@ -29,20 +29,24 @@ def _find_tree_root_class(sv: SchemaView) -> str:
         return roots[0]
     if len(roots) > 1:
         raise ValueError(f"multiple locally-defined classes marked `tree_root: true`: {roots}")
-    raise ValueError("no tree_root class found in extraction schema")
+    raise ValueError(
+        "could not determine the root extraction class. "
+        "Mark exactly one locally-defined class with `tree_root: true`."
+    )
+
+
+def resolve_extraction_schema_view(cfg: LitSchemaConfig) -> tuple[SchemaView, str]:
+    if "extraction_class" in cfg.raw:
+        raise ValueError(
+            "`extraction_class` is no longer supported. "
+            "Mark the extraction root class with `tree_root: true` in the LinkML schema."
+        )
+    schema_path = extraction_schema_path(cfg)
+    sv = SchemaView(str(schema_path))
+    return sv, _find_tree_root_class(sv)
 
 
 def resolve_extraction_schema(cfg: LitSchemaConfig) -> tuple[Path, str]:
     schema_path = extraction_schema_path(cfg)
-    sv = SchemaView(str(schema_path))
-
-    explicit = cfg.raw.get("extraction_class")
-    if explicit:
-        if explicit not in sv.all_classes():
-            raise ValueError(
-                f"`extraction_class: {explicit}` not found in {schema_path}. "
-                f"Available classes: {sorted(sv.all_classes().keys())}"
-            )
-        return schema_path, explicit
-
-    return schema_path, _find_tree_root_class(sv)
+    _, root_class = resolve_extraction_schema_view(cfg)
+    return schema_path, root_class

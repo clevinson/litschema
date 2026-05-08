@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 import shutil
-import subprocess
 import sys
-from types import SimpleNamespace
+import subprocess
 
 import pytest
 from typer.testing import CliRunner
@@ -17,22 +16,37 @@ def test_validate_generation_uses_configured_schema_and_tree_root(monkeypatch) -
     from litschema.ingest import validate_extraction
 
     cfg = load_config("tests/fixtures/projects/custom_clinical/litschema.yaml", reload=True)
-    calls = []
 
-    def fake_run(args, **kwargs):
-        calls.append((args, kwargs))
-        return SimpleNamespace(returncode=0, stdout='{"type": "object"}', stderr="")
+    def fail_subprocess(*args, **kwargs):
+        raise AssertionError("schema generation should use LinkML Python APIs")
 
-    monkeypatch.setattr(validate_extraction.subprocess, "run", fake_run)
+    monkeypatch.setattr(subprocess, "run", fail_subprocess)
 
     schema = validate_extraction.generate_extraction_schema(cfg)
 
-    assert schema == {"type": "object"}
-    args, kwargs = calls[0]
-    assert args[:4] == ["uv", "run", "gen-json-schema", "--top-class"]
-    assert args[4] == "ClinicalTrialReport"
-    assert args[5] == str(cfg.schema_dir / "clinical_trial.yaml")
-    assert kwargs["cwd"] == cfg.schema_dir
+    assert "ClinicalTrialReport" in schema["$defs"]
+    assert schema["$defs"]["ClinicalTrialReport"]["required"] == [
+        "article_id",
+        "primary_endpoint",
+    ]
+
+
+def test_validate_file_uses_linkml_schema_directly(tmp_path) -> None:
+    from litschema.ingest.validate_extraction import validate_file
+
+    cfg = load_config("tests/fixtures/projects/custom_clinical/litschema.yaml", reload=True)
+    valid = cfg.llm_extractions_dir / "garcia-2024.json"
+    invalid = tmp_path / "invalid-missing-required.json"
+    invalid.write_text('{"article_id": "invalid"}')
+
+    assert validate_file(valid, cfg.schema_dir / "clinical_trial.yaml", "ClinicalTrialReport") == (
+        True,
+        [],
+    )
+    ok, errors = validate_file(invalid, cfg.schema_dir / "clinical_trial.yaml", "ClinicalTrialReport")
+
+    assert ok is False
+    assert any("primary_endpoint" in error for error in errors)
 
 
 def test_schema_command_is_not_part_of_public_cli() -> None:

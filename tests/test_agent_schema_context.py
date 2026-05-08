@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
-from types import SimpleNamespace
 
 import pytest
 
@@ -31,34 +31,25 @@ def test_prepare_schema_context_writes_runtime_extraction_schema(tmp_path, monke
         'extraction_schema_file: "clinical_trial.yaml"\n'
     )
     cfg = load_config(config_path, reload=True)
-    calls = []
 
-    def fake_run(args, **kwargs):
-        calls.append((args, kwargs))
-        stdout = kwargs.get("stdout")
-        if stdout is not None:
-            stdout.write("{}")
-        return SimpleNamespace(returncode=0)
+    def fail_subprocess(*args, **kwargs):
+        raise AssertionError("prepare_schema_context should use LinkML Python APIs")
 
     generated = tmp_path / ".litschema" / "runtime" / "extraction_schema.json"
-    monkeypatch.setattr(prepare_schema_context.subprocess, "run", fake_run)
+    monkeypatch.setattr(subprocess, "run", fail_subprocess)
 
     context = prepare_schema_context.prepare_schema_context(cfg)
 
     assert context.extraction_schema_path == generated
     assert context.extraction_root_class == "ClinicalTrialReport"
-    assert generated.read_text() == "{}"
+    generated_schema = json.loads(generated.read_text())
+    assert "article_id" in generated_schema["$defs"]["ClinicalTrialReport"]["properties"]
     manifest = json.loads(context.manifest_path.read_text())
     assert manifest == {
         "extraction_schema": ".litschema/runtime/extraction_schema.json",
         "extraction_root_class": "ClinicalTrialReport",
         "reasoning_schema": None,
     }
-    args, kwargs = calls[0]
-    assert args[:4] == ["uv", "run", "gen-json-schema", "--top-class"]
-    assert args[4] == "ClinicalTrialReport"
-    assert args[5] == str(cfg.schema_dir / "clinical_trial.yaml")
-    assert kwargs["cwd"] == cfg.schema_dir
 
 
 def test_prepare_schema_context_writes_optional_reasoning_schema(tmp_path, monkeypatch) -> None:
@@ -91,61 +82,55 @@ def test_prepare_schema_context_writes_optional_reasoning_schema(tmp_path, monke
     config_path = project / "litschema.yaml"
     config_path.write_text('project_root: "."\nschema_dir: "schema"\n')
     cfg = load_config(config_path, reload=True)
-    calls = []
 
-    def fake_run(args, **kwargs):
-        calls.append((args, kwargs))
-        stdout = kwargs.get("stdout")
-        if stdout is not None:
-            stdout.write("{}")
-        return SimpleNamespace(returncode=0)
+    def fail_subprocess(*args, **kwargs):
+        raise AssertionError("prepare_schema_context should use LinkML Python APIs")
 
-    monkeypatch.setattr(prepare_schema_context.subprocess, "run", fake_run)
+    monkeypatch.setattr(subprocess, "run", fail_subprocess)
 
     context = prepare_schema_context.prepare_schema_context(cfg)
 
     assert context.reasoning_schema_path == project / ".litschema" / "runtime" / "reasoning_schema.json"
-    assert context.reasoning_schema_path.read_text() == "{}"
+    reasoning_schema = json.loads(context.reasoning_schema_path.read_text())
+    assert "ExtractionReasoning" in reasoning_schema["$defs"]
     manifest = json.loads((project / ".litschema" / "runtime" / "schema_context.json").read_text())
     assert manifest["extraction_root_class"] == "TestExtraction"
     assert manifest["reasoning_schema"] == ".litschema/runtime/reasoning_schema.json"
-    assert calls[1][0][4] == "ExtractionReasoning"
-    assert calls[1][0][5] == str(schema_dir / "reasoning.yaml")
 
 
 def test_validate_reasoning_file_reports_schema_errors(tmp_path) -> None:
     from litschema.agent.validate_reasoning import validate_file
 
-    schema = {
-        "type": "object",
-        "additionalProperties": False,
-        "required": ["fields"],
-        "properties": {
-            "fields": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "additionalProperties": False,
-                    "required": ["path", "source_lines"],
-                    "properties": {
-                        "path": {"type": "string"},
-                        "source_lines": {"type": "string"},
-                    },
-                },
-            }
-        },
-    }
+    schema_path = tmp_path / "reasoning.yaml"
+    schema_path.write_text(
+        "id: https://example.org/reasoning\n"
+        "name: reasoning\n"
+        "default_range: string\n"
+        "classes:\n"
+        "  ExtractionReasoning:\n"
+        "    tree_root: true\n"
+        "    attributes:\n"
+        "      fields:\n"
+        "        range: ReasoningField\n"
+        "        multivalued: true\n"
+        "  ReasoningField:\n"
+        "    attributes:\n"
+        "      path:\n"
+        "        required: true\n"
+        "      source_lines:\n"
+        "        required: true\n"
+    )
     valid = tmp_path / "valid.json"
     valid.write_text('{"fields": [{"path": ".x", "source_lines": "L1"}]}')
     invalid = tmp_path / "invalid.json"
     invalid.write_text('{"fields": [{"path": ".x"}], "extra": true}')
 
-    assert validate_file(valid, schema) == (True, [])
-    ok, errors = validate_file(invalid, schema)
+    assert validate_file(valid, schema_path) == (True, [])
+    ok, errors = validate_file(invalid, schema_path)
 
     assert ok is False
-    assert any("'source_lines' is a required property" in error for error in errors)
-    assert any("Additional properties are not allowed" in error for error in errors)
+    assert any("source_lines" in error for error in errors)
+    assert any("extra" in error for error in errors)
 
 
 def test_validate_reasoning_skips_when_no_reasoning_schema(
@@ -157,11 +142,6 @@ def test_validate_reasoning_skips_when_no_reasoning_schema(
     schema_dir.mkdir()
     (tmp_path / "litschema.yaml").write_text('project_root: "."\nschema_dir: "schema"\n')
     monkeypatch.setenv("LITSCHEMA_CONFIG", str(tmp_path / "litschema.yaml"))
-    monkeypatch.setattr(
-        validate_reasoning,
-        "prepare_schema_context",
-        lambda cfg: SimpleNamespace(reasoning_schema_path=None),
-    )
     monkeypatch.setattr(sys, "argv", ["validate_reasoning"])
 
     validate_reasoning.main()

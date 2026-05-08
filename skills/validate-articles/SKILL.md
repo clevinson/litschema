@@ -15,7 +15,7 @@ Run validation across the ERW pipeline outputs and report issues.
 uv run litschema validate data/papers/
 ```
 
-2. **Validate all reasoning files** against the runtime reasoning JSON Schema:
+2. **Validate all reasoning files** against the configured LinkML reasoning schema, when present:
 
 ```bash
 uv run python -m litschema.agent.validate_reasoning data/papers/
