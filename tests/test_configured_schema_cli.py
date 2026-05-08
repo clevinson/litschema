@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+import sys
 from types import SimpleNamespace
 
+import pytest
 from typer.testing import CliRunner
 
 from litschema.config import load_config
@@ -56,3 +58,21 @@ def test_validate_cli_runs_against_configured_fixture_projects() -> None:
         )
 
         assert result.returncode == 0, result.stderr
+
+
+def test_validate_extraction_fails_missing_explicit_target(
+    tmp_path, monkeypatch, capsys
+) -> None:
+    from litschema.ingest import validate_extraction
+
+    (tmp_path / "schema").mkdir()
+    (tmp_path / "litschema.yaml").write_text('project_root: "."\nschema_dir: "schema"\n')
+    missing = tmp_path / "data" / "papers" / "missing" / "agent-extraction.json"
+    monkeypatch.setenv("LITSCHEMA_CONFIG", str(tmp_path / "litschema.yaml"))
+    monkeypatch.setattr(sys, "argv", ["validate_extraction", str(missing)])
+
+    with pytest.raises(SystemExit) as exc:
+        validate_extraction.main()
+
+    assert exc.value.code == 1
+    assert f"Missing extraction target: {missing}" in capsys.readouterr().out

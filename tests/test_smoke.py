@@ -233,4 +233,4 @@ def test_validate_defaults_to_article_store(
 
     assert result.exit_code == 0, result.output
     assert len(calls) == 1
-    assert calls[0][-1] == str(tmp_path / "data" / "papers")
+    assert calls[0] == [sys.executable, "-m", "litschema.ingest.validate_extraction"]

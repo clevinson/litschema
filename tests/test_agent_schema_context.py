@@ -4,6 +4,8 @@ import json
 import sys
 from types import SimpleNamespace
 
+import pytest
+
 from litschema.config import load_config
 
 
@@ -165,3 +167,22 @@ def test_validate_reasoning_skips_when_no_reasoning_schema(
     validate_reasoning.main()
 
     assert "No reasoning schema found" in capsys.readouterr().out
+
+
+def test_validate_reasoning_fails_missing_explicit_target(
+    tmp_path, monkeypatch, capsys
+) -> None:
+    from litschema.agent import validate_reasoning
+
+    schema_dir = tmp_path / "schema"
+    schema_dir.mkdir()
+    (tmp_path / "litschema.yaml").write_text('project_root: "."\nschema_dir: "schema"\n')
+    missing = tmp_path / "data" / "papers" / "missing" / "agent-reasoning.json"
+    monkeypatch.setenv("LITSCHEMA_CONFIG", str(tmp_path / "litschema.yaml"))
+    monkeypatch.setattr(sys, "argv", ["validate_reasoning", str(missing)])
+
+    with pytest.raises(SystemExit) as exc:
+        validate_reasoning.main()
+
+    assert exc.value.code == 1
+    assert f"Missing reasoning target: {missing}" in capsys.readouterr().out

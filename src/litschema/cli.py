@@ -175,11 +175,10 @@ def extract(ctx: typer.Context):
     help="Validate per-article extractions against the LinkML schema.",
 )
 def validate(ctx: typer.Context):
-    cfg = _require_config()
+    _require_config()
 
     typer.echo(f"{DIM}→ validating extractions against extraction schema{RESET}")
-    target = ctx.args if ctx.args else [str(cfg.article_store_dir)]
-    result = subprocess.run([sys.executable, "-m", "litschema.ingest.validate_extraction", *target])
+    result = subprocess.run([sys.executable, "-m", "litschema.ingest.validate_extraction", *ctx.args])
     raise typer.Exit(code=result.returncode)
 
 

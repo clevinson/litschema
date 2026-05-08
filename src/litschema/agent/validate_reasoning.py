@@ -24,9 +24,11 @@ def validate_file(filepath: Path, schema: dict) -> tuple[bool, list[str]]:
     return len(messages) == 0, messages
 
 
-def _reasoning_files_for_target(cfg: LitSchemaConfig, target: Path) -> list[Path]:
-    if not target.exists():
+def _reasoning_files_for_target(cfg: LitSchemaConfig, target: Path | None) -> list[Path]:
+    if target is None:
         return list(iter_reasoning_paths(cfg))
+    if not target.exists():
+        raise FileNotFoundError(f"Missing reasoning target: {target}")
     if target.is_dir():
         files = sorted(target.glob("*/agent-reasoning.json"))
         if not files:
@@ -40,7 +42,13 @@ def _reasoning_files_for_target(cfg: LitSchemaConfig, target: Path) -> list[Path
 def main() -> None:
     cfg = load_config()
     args = sys.argv[1:]
-    target = Path(args[0]) if args else cfg.article_store_dir
+    target = Path(args[0]) if args else None
+
+    try:
+        files = _reasoning_files_for_target(cfg, target)
+    except FileNotFoundError as exc:
+        print(exc)
+        sys.exit(1)
 
     context = prepare_schema_context(cfg)
     if context.reasoning_schema_path is None:
@@ -48,7 +56,6 @@ def main() -> None:
         return
 
     schema = json.loads(context.reasoning_schema_path.read_text())
-    files = _reasoning_files_for_target(cfg, target)
     if not files:
         print("No reasoning files found")
         sys.exit(1)

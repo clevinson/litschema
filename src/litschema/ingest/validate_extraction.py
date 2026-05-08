@@ -73,20 +73,20 @@ def main():
         return
 
     if not args:
-        print("Usage: validate_extraction.py [--dump-schema] <file_or_dir>")
-        sys.exit(1)
-
-    target = Path(args[0])
-    schema = generate_extraction_schema(cfg)
-
-    if not target.exists():
         files = list(iter_extraction_paths(cfg))
-    elif target.is_dir():
-        files = sorted(target.glob("*.json"))
-        if not files:
-            files = list(iter_extraction_paths(cfg))
     else:
-        files = [target]
+        target = Path(args[0])
+        if not target.exists():
+            print(f"Missing extraction target: {target}")
+            sys.exit(1)
+        if target.is_dir():
+            files = sorted(target.glob("*.json"))
+            if not files:
+                files = list(iter_extraction_paths(cfg))
+        else:
+            files = [target]
+
+    schema = generate_extraction_schema(cfg)
 
     total = 0
     valid_count = 0
