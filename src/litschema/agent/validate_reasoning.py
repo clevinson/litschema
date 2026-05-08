@@ -44,8 +44,8 @@ def main() -> None:
 
     context = prepare_schema_context(cfg)
     if context.reasoning_schema_path is None:
-        print(f"No reasoning schema found at {cfg.schema_dir / 'reasoning.yaml'}")
-        sys.exit(2)
+        print(f"No reasoning schema found at {cfg.schema_dir / 'reasoning.yaml'}; skipping")
+        return
 
     schema = json.loads(context.reasoning_schema_path.read_text())
     files = _reasoning_files_for_target(cfg, target)

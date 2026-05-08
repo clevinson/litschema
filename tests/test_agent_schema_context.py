@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from types import SimpleNamespace
 
 from litschema.config import load_config
@@ -143,3 +144,24 @@ def test_validate_reasoning_file_reports_schema_errors(tmp_path) -> None:
     assert ok is False
     assert any("'source_lines' is a required property" in error for error in errors)
     assert any("Additional properties are not allowed" in error for error in errors)
+
+
+def test_validate_reasoning_skips_when_no_reasoning_schema(
+    tmp_path, monkeypatch, capsys
+) -> None:
+    from litschema.agent import validate_reasoning
+
+    schema_dir = tmp_path / "schema"
+    schema_dir.mkdir()
+    (tmp_path / "litschema.yaml").write_text('project_root: "."\nschema_dir: "schema"\n')
+    monkeypatch.setenv("LITSCHEMA_CONFIG", str(tmp_path / "litschema.yaml"))
+    monkeypatch.setattr(
+        validate_reasoning,
+        "prepare_schema_context",
+        lambda cfg: SimpleNamespace(reasoning_schema_path=None),
+    )
+    monkeypatch.setattr(sys, "argv", ["validate_reasoning"])
+
+    validate_reasoning.main()
+
+    assert "No reasoning schema found" in capsys.readouterr().out

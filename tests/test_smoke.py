@@ -10,6 +10,7 @@ Run:  uv run pytest tests/
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import sys
@@ -41,6 +42,24 @@ def test_config_module_import() -> None:
     assert ENV_VAR == "LITSCHEMA_CONFIG"
     assert LitSchemaConfig is not None
     assert callable(load_config)
+
+
+def test_validate_extraction_import_does_not_load_project_config(tmp_path: Path) -> None:
+    """Importing validation helpers should not require a discoverable litschema.yaml."""
+    env = os.environ.copy()
+    env.pop("LITSCHEMA_CONFIG", None)
+    env["PYTHONPATH"] = str(REPO_ROOT / "src")
+
+    result = subprocess.run(
+        [sys.executable, "-c", "import litschema.ingest.validate_extraction"],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+
+    assert result.returncode == 0, result.stderr
 
 
 def test_cli_import() -> None:

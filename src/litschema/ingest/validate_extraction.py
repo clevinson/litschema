@@ -25,8 +25,6 @@ from ..config import LitSchemaConfig
 from ..config import load_config as _load_config
 from ..schema_resolution import resolve_extraction_schema
 
-_CFG = _load_config()
-
 
 def generate_extraction_schema(cfg: LitSchemaConfig | None = None) -> dict:
     """Generate JSON Schema from the configured LinkML extraction schema."""
