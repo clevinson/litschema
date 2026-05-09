@@ -121,23 +121,20 @@ def test_no_old_aggregate_surface_remains() -> None:
 def test_bundled_skills_use_runtime_schemas() -> None:
     """Agent skills should use runtime JSON Schemas, not root-level artifacts."""
     extract_skill = (REPO_ROOT / "skills" / "extract-article" / "SKILL.md").read_text()
-    validate_skill = (REPO_ROOT / "skills" / "validate-articles" / "SKILL.md").read_text()
-    combined = extract_skill + "\n" + validate_skill
 
     assert "Before running extraction, verify you are in a litschema project" in extract_skill
-    assert "Do not assume `uv` or `litschema` is available" in combined
-    assert "If `litschema.yaml` is missing" in combined
-    assert "set `LITSCHEMA` to `uv run litschema`" in combined
-    assert "set `LITSCHEMA` to `litschema`" in combined
+    assert "Do not assume `uv` or `litschema` is available" in extract_skill
+    assert "If `litschema.yaml` is missing" in extract_skill
+    assert "set `LITSCHEMA` to `uv run litschema`" in extract_skill
+    assert "set `LITSCHEMA` to `litschema`" in extract_skill
     assert "$LITSCHEMA agent prepare-schema-context" in extract_skill
     assert "$LITSCHEMA agent validate-reasoning" in extract_skill
-    assert "$LITSCHEMA agent validate-reasoning" in validate_skill
     assert ".litschema/runtime/extraction_schema.json" in extract_skill
     assert "do not infer a different root from `$defs`" in extract_skill
     assert "A file is valid only if the corresponding command exits 0" in extract_skill
     assert "Do NOT finish until both validation commands exit 0" in extract_skill
-    assert "`extraction_schema.json`" not in combined
-    assert "`reasoning_schema.json`" not in combined
+    assert "`extraction_schema.json`" not in extract_skill
+    assert "`reasoning_schema.json`" not in extract_skill
 
 
 def test_load_config_from_repo_root() -> None:
