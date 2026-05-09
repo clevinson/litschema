@@ -50,7 +50,7 @@ def run(args: list[str] | None = None, cfg: LitSchemaConfig | None = None) -> in
         print(exc)
         return 1
 
-    schema_path = reasoning_schema_source_path(cfg)
+    schema_path = reasoning_schema_source_path()
     validator = create_linkml_validator(schema_path, "ExtractionReasoning")
 
     if not files:

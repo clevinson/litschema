@@ -51,9 +51,7 @@ def test_prepare_schema_context_writes_runtime_extraction_schema(tmp_path, monke
     assert (tmp_path / ".litschema" / "runtime" / "reasoning_schema.json").is_file()
 
 
-def test_prepare_schema_context_uses_project_reasoning_schema_override(
-    tmp_path, monkeypatch
-) -> None:
+def test_prepare_schema_context_writes_bundled_reasoning_schema(tmp_path, monkeypatch) -> None:
     from litschema.agent import prepare_schema_context
 
     project = tmp_path
@@ -68,17 +66,6 @@ def test_prepare_schema_context_uses_project_reasoning_schema_override(
         "    attributes:\n"
         "      article_id:\n"
         "        range: string\n"
-    )
-    (schema_dir / "reasoning.yaml").write_text(
-        "id: https://example.org/reasoning\n"
-        "name: reasoning\n"
-        "classes:\n"
-        "  ExtractionReasoning:\n"
-        "    tree_root: true\n"
-        "    attributes:\n"
-        "      fields:\n"
-        "        range: string\n"
-        "        multivalued: true\n"
     )
     config_path = project / "litschema.yaml"
     config_path.write_text('project_root: "."\nschema_dir: "schema"\n')
@@ -97,6 +84,7 @@ def test_prepare_schema_context_uses_project_reasoning_schema_override(
     )
     reasoning_schema = json.loads(context.reasoning_schema_path.read_text())
     assert "ExtractionReasoning" in reasoning_schema["$defs"]
+    assert "ReasoningField" in reasoning_schema["$defs"]
     manifest = json.loads((project / ".litschema" / "runtime" / "schema_context.json").read_text())
     assert manifest["extraction_root_class"] == "TestExtraction"
     assert manifest["reasoning_schema"] == ".litschema/runtime/reasoning_schema.json"
@@ -203,8 +191,7 @@ def test_validate_reasoning_uses_bundled_schema_when_project_schema_absent(
 def test_bundled_reasoning_schema_is_packaged() -> None:
     from litschema.agent.reasoning_schema import reasoning_schema_source_path
 
-    cfg = load_config("tests/fixtures/projects/custom_clinical/litschema.yaml", reload=True)
-    schema_path = reasoning_schema_source_path(cfg)
+    schema_path = reasoning_schema_source_path()
 
     assert schema_path.name == "reasoning.yaml"
     assert schema_path.is_file()

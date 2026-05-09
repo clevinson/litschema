@@ -39,7 +39,7 @@ def prepare_schema_context(cfg: LitSchemaConfig | None = None) -> SchemaContext:
     extraction_output = runtime_dir / "extraction_schema.json"
     write_json_schema(extraction_schema, root_class, extraction_output)
 
-    reasoning_schema = reasoning_schema_source_path(cfg)
+    reasoning_schema = reasoning_schema_source_path()
     reasoning_output = runtime_dir / "reasoning_schema.json"
     write_json_schema(reasoning_schema, "ExtractionReasoning", reasoning_output)
 
