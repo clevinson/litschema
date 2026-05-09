@@ -25,3 +25,6 @@ static-site/
 papers/
 data/
 *.pdf
+
+# AI tooling
+.roborev.toml

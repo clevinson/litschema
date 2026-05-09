@@ -6,7 +6,6 @@ import json
 import sys
 from pathlib import Path
 
-from ..config import load_config
 from ..schema_validation import validate_linkml_data
 from .reasoning_schema import reasoning_schema_source_path
 
@@ -55,7 +54,6 @@ def run(args: list[str] | None) -> int:
 
 
 def main() -> None:
-    load_config()
     code = run(sys.argv[1:])
     if code:
         sys.exit(code)

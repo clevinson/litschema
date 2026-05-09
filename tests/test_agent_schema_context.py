@@ -195,10 +195,7 @@ def test_bundled_reasoning_schema_is_packaged() -> None:
 def test_validate_reasoning_requires_explicit_target(tmp_path, monkeypatch, capsys) -> None:
     from litschema.agent import validate_reasoning
 
-    schema_dir = tmp_path / "schema"
-    schema_dir.mkdir()
-    (tmp_path / "litschema.yaml").write_text('project_root: "."\nschema_dir: "schema"\n')
-    monkeypatch.setenv("LITSCHEMA_CONFIG", str(tmp_path / "litschema.yaml"))
+    monkeypatch.delenv("LITSCHEMA_CONFIG", raising=False)
     monkeypatch.setattr(sys, "argv", ["validate_reasoning"])
 
     with pytest.raises(SystemExit) as exc:
@@ -214,11 +211,8 @@ def test_validate_reasoning_requires_explicit_target(tmp_path, monkeypatch, caps
 def test_validate_reasoning_fails_missing_explicit_target(tmp_path, monkeypatch, capsys) -> None:
     from litschema.agent import validate_reasoning
 
-    schema_dir = tmp_path / "schema"
-    schema_dir.mkdir()
-    (tmp_path / "litschema.yaml").write_text('project_root: "."\nschema_dir: "schema"\n')
     missing = tmp_path / "data" / "papers" / "missing" / "agent-reasoning.json"
-    monkeypatch.setenv("LITSCHEMA_CONFIG", str(tmp_path / "litschema.yaml"))
+    monkeypatch.delenv("LITSCHEMA_CONFIG", raising=False)
     monkeypatch.setattr(sys, "argv", ["validate_reasoning", str(missing)])
 
     with pytest.raises(SystemExit) as exc:
@@ -250,10 +244,39 @@ def test_agent_validate_reasoning_cli_command_requires_target(monkeypatch) -> No
 
     from litschema import cli
 
-    cfg_path = "tests/fixtures/projects/custom_clinical/litschema.yaml"
-    monkeypatch.setenv("LITSCHEMA_CONFIG", cfg_path)
+    monkeypatch.delenv("LITSCHEMA_CONFIG", raising=False)
 
     result = CliRunner().invoke(cli.app, ["agent", "validate-reasoning"])
 
     assert result.exit_code == 1, result.output
     assert "Usage: litschema agent validate-reasoning <agent-reasoning.json>" in result.output
+
+
+def test_agent_validate_reasoning_cli_command_does_not_require_project_config(
+    tmp_path, monkeypatch
+) -> None:
+    from typer.testing import CliRunner
+
+    from litschema import cli
+
+    monkeypatch.delenv("LITSCHEMA_CONFIG", raising=False)
+    reasoning = tmp_path / "agent-reasoning.json"
+    reasoning.write_text(
+        json.dumps(
+            {
+                "fields": [
+                    {
+                        "path": ".study_type",
+                        "value": "field trial",
+                        "source_lines": "L12-L14",
+                        "reasoning": "The cited lines describe a field trial.",
+                    }
+                ]
+            }
+        )
+    )
+
+    result = CliRunner().invoke(cli.app, ["agent", "validate-reasoning", str(reasoning)])
+
+    assert result.exit_code == 0, result.output
+    assert f"Reasoning valid: {reasoning}" in result.output

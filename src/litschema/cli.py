@@ -293,7 +293,6 @@ def agent_prepare_schema_context():
     help="Validate an agent reasoning file against the bundled reasoning schema.",
 )
 def agent_validate_reasoning(ctx: typer.Context):
-    _require_config()
     from .agent import validate_reasoning
 
     raise typer.Exit(code=validate_reasoning.run(list(ctx.args)))
