@@ -1,9 +1,8 @@
-"""litschema CLI — single entry point for the pipeline.
+"""litschema CLI - single entry point for the pipeline.
 
 Verbs: harvest / convert / extract / validate / verify / mcp / status /
-doctor / skills install / schema compile / init. The pipeline verbs delegate
-to ingest-module mains; status/doctor/skills/schema/mcp have first-class
-implementations here.
+doctor / skills install / init. The pipeline verbs delegate to ingest-module
+mains; status/doctor/skills/mcp have first-class implementations here.
 """
 
 from __future__ import annotations
@@ -12,6 +11,7 @@ import os
 import shutil
 import subprocess
 import sys
+from importlib import resources
 from pathlib import Path
 
 import typer
@@ -24,6 +24,7 @@ from .articles import (
     iter_review_paths,
 )
 from .config import CONFIG_FILENAME, LitSchemaConfig, load_config
+from .ingest import validate_extraction
 
 app = typer.Typer(
     name="litschema",
@@ -91,6 +92,42 @@ def _schema_root_path(cfg: LitSchemaConfig) -> Path:
     return cfg.schema_dir / raw
 
 
+def _valid_skill_dirs(skills_dir: Path) -> list[Path]:
+    if not skills_dir.is_dir():
+        return []
+    return sorted(
+        path for path in skills_dir.iterdir() if path.is_dir() and (path / "SKILL.md").exists()
+    )
+
+
+def _packaged_skills_dir() -> Path:
+    packaged = resources.files("litschema") / "skills"
+    if packaged.is_dir():
+        return Path(str(packaged))
+    return Path(__file__).resolve().parents[2] / "skills"
+
+
+def _skill_sources() -> list[Path]:
+    """Return installable bundled skills from the litschema package."""
+    return _valid_skill_dirs(_packaged_skills_dir())
+
+
+def _agent_skill_destinations(agent: str) -> list[Path]:
+    home = Path.home()
+    destinations = {
+        "claude": home / ".claude" / "skills",
+        "codex": home / ".codex" / "skills",
+    }
+    agent = agent.lower()
+    if agent == "auto":
+        return [path for name, path in destinations.items() if (home / f".{name}").exists()]
+    if agent == "both":
+        return [destinations["claude"], destinations["codex"]]
+    if agent in destinations:
+        return [destinations[agent]]
+    raise typer.BadParameter("--agent must be one of: auto, claude, codex, both")
+
+
 # ── Pipeline verbs (delegate to existing module mains) ─────────────────────
 
 
@@ -156,9 +193,7 @@ def validate(ctx: typer.Context):
     cfg = _require_config()
 
     typer.echo(f"{DIM}→ validating extractions against extraction schema{RESET}")
-    target = ctx.args if ctx.args else [str(cfg.article_store_dir)]
-    result = subprocess.run([sys.executable, "-m", "litschema.ingest.validate_extraction", *target])
-    raise typer.Exit(code=result.returncode)
+    raise typer.Exit(code=validate_extraction.run(list(ctx.args), cfg))
 
 
 @app.command(
@@ -227,137 +262,98 @@ def mcp(
         raise typer.Exit(code=2)
 
 
-# ── Schema subcommands ─────────────────────────────────────────────────────
-
-schema_app = typer.Typer(help="Schema compilation and documentation.", no_args_is_help=True)
-app.add_typer(schema_app, name="schema")
-
-
-@schema_app.command("compile", help="Regenerate JSON Schemas from LinkML sources.")
-def schema_compile():
-    cfg = _require_config()
-    schema_dir = cfg.schema_dir
-    root = cfg.project_root
-
-    extraction = schema_dir / "extraction.yaml"
-    reasoning = schema_dir / "reasoning.yaml"
-    schema_root = _schema_root_path(cfg)
-
-    if not extraction.exists():
-        typer.secho(f"{CROSS} {extraction} not found", fg=typer.colors.RED)
-        raise typer.Exit(code=2)
-
-    typer.echo(f"{DIM}→ compiling extraction schema{RESET}")
-    with open(root / "extraction_schema.json", "w") as f:
-        subprocess.run(
-            ["uv", "run", "gen-json-schema", "--top-class", "ExtractionArtifact", str(extraction)],
-            stdout=f,
-            check=True,
-        )
-
-    if reasoning.exists():
-        typer.echo(f"{DIM}→ compiling reasoning schema{RESET}")
-        with open(root / "reasoning_schema.json", "w") as f:
-            subprocess.run(
-                [
-                    "uv",
-                    "run",
-                    "gen-json-schema",
-                    "--top-class",
-                    "ExtractionReasoning",
-                    str(reasoning),
-                ],
-                stdout=f,
-                check=True,
-            )
-
-    if schema_root.exists():
-        typer.echo(f"{DIM}→ regenerating docs/schema/ from {schema_root.name}{RESET}")
-        docs_schema = root / "docs" / "schema"
-        if docs_schema.exists():
-            shutil.rmtree(docs_schema)
-        subprocess.run(
-            [
-                "uv",
-                "run",
-                "gen-doc",
-                "-d",
-                str(docs_schema),
-                "--diagram-type",
-                "mermaid_class_diagram",
-                str(schema_root),
-            ],
-            check=True,
-        )
-    else:
-        typer.secho(
-            f"{WARN} schema_root ({schema_root.name}) not found; skipping docs regeneration.",
-            fg=typer.colors.YELLOW,
-        )
-
-    typer.echo(f"{CHECK} schema compiled")
-
-
 # Docs serving is intentionally *not* a `litschema` CLI command — it's a
 # repo-contributor concern, not a pipeline step. Run `make docs` for that.
 
 
 # ── Skills subcommands ─────────────────────────────────────────────────────
 
-skills_app = typer.Typer(help="Agentic skill management (.claude/skills/).", no_args_is_help=True)
+skills_app = typer.Typer(help="Agentic skill management.", no_args_is_help=True)
 app.add_typer(skills_app, name="skills")
+
+agent_app = typer.Typer(
+    help="Agent-facing helper commands used by bundled skills.", no_args_is_help=True
+)
+app.add_typer(agent_app, name="agent")
+
+
+@agent_app.command("prepare-schema-context", help="Write runtime schema context files.")
+def agent_prepare_schema_context():
+    cfg = _require_config()
+    from .agent.prepare_schema_context import prepare_schema_context
+
+    context = prepare_schema_context(cfg)
+    typer.echo(f"extraction_schema={context.extraction_schema_path}")
+    typer.echo(f"reasoning_schema={context.reasoning_schema_path}")
+
+
+@agent_app.command(
+    "validate-reasoning",
+    context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
+    help="Validate an agent reasoning file against the bundled reasoning schema.",
+)
+def agent_validate_reasoning(ctx: typer.Context):
+    from .agent import validate_reasoning
+
+    raise typer.Exit(code=validate_reasoning.run(list(ctx.args)))
 
 
 @skills_app.command(
     "install",
-    help="Install bundled agentic skills into .claude/skills/ (Claude Code compatible).",
+    help="Install bundled agentic skills globally for Claude Code and/or Codex.",
 )
 def skills_install(
-    dest: Path = typer.Option(Path(".claude/skills"), "--dest", help="Destination for skill links"),
-    copy: bool = typer.Option(False, "--copy", help="Copy instead of symlink"),
+    agent: str = typer.Option(
+        "auto", "--agent", help="Agent destination: auto, claude, codex, or both"
+    ),
+    dest: Path | None = typer.Option(None, "--dest", help="Custom destination for skill files"),
+    copy: bool = typer.Option(True, "--copy/--symlink", help="Copy instead of symlink"),
     force: bool = typer.Option(False, "--force", help="Overwrite existing"),
 ):
-    cfg = _require_config()
-    skills_src = cfg.project_root / "skills"
-    if not skills_src.is_dir():
-        typer.secho(f"{CROSS} no skills/ directory at {skills_src}", fg=typer.colors.RED)
+    skill_sources = _skill_sources()
+    if not skill_sources:
+        typer.secho("no bundled skills found", fg=typer.colors.RED)
         raise typer.Exit(code=2)
 
-    # If --dest is relative, anchor it to the project root so running from
-    # a subdirectory still installs into `<project>/.claude/skills/`.
-    if not dest.is_absolute():
-        dest = cfg.project_root / dest
-    dest = dest.resolve()
-    dest.mkdir(parents=True, exist_ok=True)
+    if dest is not None:
+        destinations = [dest.expanduser().resolve()]
+    else:
+        destinations = _agent_skill_destinations(agent)
+        if not destinations:
+            typer.secho(
+                "no Claude Code or Codex config directory found; use "
+                "`--agent claude`, `--agent codex`, `--agent both`, or `--dest <path>`",
+                fg=typer.colors.RED,
+            )
+            raise typer.Exit(code=2)
 
     installed = 0
-    for skill_dir in sorted(skills_src.iterdir()):
-        if not skill_dir.is_dir() or not (skill_dir / "SKILL.md").exists():
-            continue
-        target = dest / skill_dir.name
-        if target.exists() or target.is_symlink():
-            if not force:
-                typer.echo(f"{WARN} {target} already exists (use --force to overwrite)")
-                continue
-            if target.is_symlink() or target.is_file():
-                target.unlink()
+    for destination in destinations:
+        destination.mkdir(parents=True, exist_ok=True)
+        for skill_dir in skill_sources:
+            target = destination / skill_dir.name
+            if target.exists() or target.is_symlink():
+                if not force:
+                    typer.echo(f"{WARN} {target} already exists (use --force to overwrite)")
+                    continue
+                if target.is_symlink() or target.is_file():
+                    target.unlink()
+                else:
+                    shutil.rmtree(target)
+            if copy:
+                shutil.copytree(skill_dir, target)
+                typer.echo(f"{CHECK} copied {skill_dir.name} → {target}")
             else:
-                shutil.rmtree(target)
-        if copy:
-            shutil.copytree(skill_dir, target)
-            typer.echo(f"{CHECK} copied {skill_dir.name} → {target}")
-        else:
-            target.symlink_to(skill_dir.resolve(), target_is_directory=True)
-            typer.echo(f"{CHECK} linked {skill_dir.name} → {target}")
-        installed += 1
+                target.symlink_to(skill_dir.resolve(), target_is_directory=True)
+                typer.echo(f"{CHECK} linked {skill_dir.name} → {target}")
+            installed += 1
 
     if installed == 0:
         typer.echo("No skills installed.")
     else:
-        typer.echo("\nAvailable as slash-commands in agents that read .claude/skills/:")
-        for skill_dir in sorted(skills_src.iterdir()):
-            if (skill_dir / "SKILL.md").exists():
-                typer.echo(f"  /{skill_dir.name}")
+        typer.echo("\nAvailable as slash-commands in agents that read installed skills:")
+        for skill_dir in skill_sources:
+            typer.echo(f"  /{skill_dir.name}")
 
 
 # ── Status + doctor (new) ──────────────────────────────────────────────────
@@ -426,25 +422,24 @@ def doctor():
         issues.append(f"create {cfg.schema_dir}")
 
     # Skills check
-    claude_skills = cfg.project_root / ".claude" / "skills"
-    if claude_skills.is_dir():
-        installed = [p.name for p in claude_skills.iterdir() if (p / "SKILL.md").exists()]
-        if installed:
-            typer.echo(f"{CHECK} Claude Code skills linked: {', '.join(installed)}")
-        else:
-            typer.echo(f"{WARN} .claude/skills/ exists but no SKILL.md files found")
-            issues.append("run `litschema skills install`")
+    skills_dirs = _agent_skill_destinations("auto")
+    installed = []
+    for skills_dir in skills_dirs:
+        if skills_dir.is_dir():
+            installed.extend(p.name for p in skills_dir.iterdir() if (p / "SKILL.md").exists())
+    if installed:
+        typer.echo(f"{CHECK} global agent skills installed: {', '.join(sorted(set(installed)))}")
     else:
-        typer.echo(f"{WARN} Claude Code skills not installed")
-        issues.append("run `litschema skills install`")
+        typer.echo(f"{WARN} global agent skills not installed")
+        issues.append("run `litschema skills install --agent claude` or `--agent codex`")
 
-    if shutil.which("claude"):
-        typer.echo(f"{CHECK} agent CLI on PATH (claude)")
+    agent_cli = shutil.which("claude") or shutil.which("codex")
+    if agent_cli:
+        typer.echo(f"{CHECK} agent CLI on PATH ({Path(agent_cli).name})")
     else:
         typer.echo(f"{WARN} no agent CLI on PATH — bundled skills need one to run")
         issues.append(
-            "install an agentic CLI that reads .claude/skills/ "
-            "(e.g. Claude Code: npm install -g @anthropic-ai/claude-code)"
+            "install an agentic CLI that reads installed skills (e.g. Claude Code or Codex)"
         )
 
     if issues:

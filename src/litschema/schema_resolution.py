@@ -1,0 +1,53 @@
+"""Helpers for resolving a project's configured extraction schema."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from pathlib import Path
+
+from linkml_runtime.utils.schemaview import SchemaView
+
+from .config import LitSchemaConfig
+
+DEFAULT_EXTRACTION_SCHEMA = "extraction.yaml"
+
+
+@dataclass(frozen=True)
+class ResolvedExtractionSchema:
+    path: Path
+    view: SchemaView
+    root_class: str
+
+
+def _extraction_schema_path(cfg: LitSchemaConfig) -> Path:
+    schema_file = cfg.raw.get("extraction_schema_file", DEFAULT_EXTRACTION_SCHEMA)
+    path = cfg.schema_dir / schema_file
+    if path.exists():
+        return path
+    raise FileNotFoundError(
+        f"extraction schema not found at {path}. "
+        "Set `extraction_schema_file` in litschema.yaml or place a file at the default location."
+    )
+
+
+def _find_tree_root_class(sv: SchemaView) -> str:
+    local_classes = sv.schema.classes or {}
+    roots = [name for name, cls in local_classes.items() if getattr(cls, "tree_root", False)]
+    if len(roots) == 1:
+        return roots[0]
+    if len(roots) > 1:
+        raise ValueError(f"multiple locally-defined classes marked `tree_root: true`: {roots}")
+    raise ValueError(
+        "could not determine the root extraction class. "
+        "Mark exactly one locally-defined class with `tree_root: true`."
+    )
+
+
+def resolve_extraction_schema(cfg: LitSchemaConfig) -> ResolvedExtractionSchema:
+    schema_path = _extraction_schema_path(cfg)
+    sv = SchemaView(str(schema_path))
+    return ResolvedExtractionSchema(
+        path=schema_path,
+        view=sv,
+        root_class=_find_tree_root_class(sv),
+    )

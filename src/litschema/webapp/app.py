@@ -28,8 +28,8 @@ from ..articles import (
     read_article_metadata,
     read_review_events,
 )
-from ..config import load_config
-from ..config import LitSchemaConfig
+from ..config import LitSchemaConfig, load_config
+from ..schema_resolution import resolve_extraction_schema
 from .search import strip_references
 
 _CFG = load_config()
@@ -43,7 +43,6 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 _author_file_index: dict[str, dict] | None = None
 _schema_fields_cache: dict | None = None
 ORCID_RE = re.compile(r"^\d{4}-\d{4}-\d{4}-\d{3}[0-9X]$")
-DEFAULT_EXTRACTION_SCHEMA = "extraction.yaml"
 
 
 def _load_author_index() -> dict[str, dict]:
@@ -160,31 +159,6 @@ def _review_progress(extraction: dict, annotations: list[dict]) -> dict:
     }
 
 
-def _extraction_schema_path(cfg: LitSchemaConfig) -> Path:
-    """Resolve the LinkML extraction schema used by the verifier."""
-    schema_file = cfg.raw.get("extraction_schema_file", DEFAULT_EXTRACTION_SCHEMA)
-    path = cfg.schema_dir / schema_file
-    if path.exists():
-        return path
-    root_file = cfg.raw.get("schema_root")
-    if root_file:
-        fallback = cfg.schema_dir / root_file
-        if fallback.exists():
-            return fallback
-    raise FileNotFoundError(f"extraction schema not found at {path}")
-
-
-def _find_tree_root_class(sv: SchemaView) -> str:
-    """Return the tree_root class declared in the entry-point schema file."""
-    local_classes = sv.schema.classes or {}
-    roots = [name for name, cls in local_classes.items() if getattr(cls, "tree_root", False)]
-    if len(roots) == 1:
-        return roots[0]
-    if len(roots) > 1:
-        raise ValueError(f"multiple tree_root classes found: {roots}")
-    raise ValueError("no tree_root class found in extraction schema")
-
-
 def _enum_permissible_values(sv: SchemaView, enum_name: str) -> list[dict]:
     enum = sv.get_enum(enum_name)
     if not enum:
@@ -200,16 +174,15 @@ def _enum_permissible_values(sv: SchemaView, enum_name: str) -> list[dict]:
     return values
 
 
-def _schema_field_metadata(cfg: LitSchemaConfig | None = None) -> dict:
+def _schema_field_metadata(cfg: LitSchemaConfig) -> dict:
     """Return enum metadata keyed by verifier path pattern.
 
     Multivalued path components use [] so the frontend can normalize
     concrete paths such as experiments[0].treatments[1].type.
     """
-    cfg = cfg or _CFG
-    schema_path = _extraction_schema_path(cfg)
-    sv = SchemaView(str(schema_path))
-    root_class = cfg.raw.get("extraction_class") or _find_tree_root_class(sv)
+    extraction_schema = resolve_extraction_schema(cfg)
+    sv = extraction_schema.view
+    root_class = extraction_schema.root_class
     classes = set(sv.all_classes())
     enums = set(sv.all_enums())
     fields: dict[str, dict] = {}
@@ -228,7 +201,11 @@ def _schema_field_metadata(cfg: LitSchemaConfig | None = None) -> dict:
                     "permissible_values": _enum_permissible_values(sv, slot_range),
                 }
             elif slot_range in classes:
-                walk(slot_range, path_pattern if slot.multivalued else slot_path, (*stack, class_name))
+                walk(
+                    slot_range,
+                    path_pattern if slot.multivalued else slot_path,
+                    (*stack, class_name),
+                )
 
     walk(root_class)
     return {"root_class": root_class, "fields": fields}

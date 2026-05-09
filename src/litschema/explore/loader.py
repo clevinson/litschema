@@ -1,8 +1,7 @@
 """LinkML extraction JSON → DuckDB loader for `litschema mcp`.
 
 Schema-driven and domain-agnostic: introspects the project's extraction
-schema (root class detected via `tree_root: true`, or specified
-explicitly via `extraction_class` in litschema.yaml) and generates a
+schema (root class detected via `tree_root: true`) and generates a
 DuckDB `articles` table with one column per top-level slot. Scalar
 slots become typed columns; multivalued or class-ranged slots become
 JSON columns. Every column is queryable directly — LLMs use SQL for
@@ -28,11 +27,7 @@ from ..articles import (
     read_review_events,
 )
 from ..config import LitSchemaConfig
-
-# Sensible default for *file* discovery only — the *class name* is never
-# hardcoded; it's read from the schema's `tree_root: true` marker (or from
-# `extraction_class` in litschema.yaml if a project wants to override).
-_DEFAULT_EXTRACTION_FILENAME = "extraction.yaml"
+from ..schema_resolution import resolve_extraction_schema
 
 
 @dataclass
@@ -174,68 +169,6 @@ def _identifier_slot(sv: SchemaView, class_name: str) -> str | None:
         if slot.identifier:
             return slot.name
     return None
-
-
-def _find_tree_root_class(sv: SchemaView) -> str | None:
-    """Return the name of the locally-defined class with `tree_root: true`.
-
-    Only inspects classes declared directly in the entry-point schema file
-    — imported schemas may have their own tree_root for their own purposes
-    imported schemas may have their own tree roots for their own purposes.
-    Errors if the entry file declares multiple.
-    """
-    local_classes = sv.schema.classes or {}
-    roots = [name for name, cls in local_classes.items() if getattr(cls, "tree_root", False)]
-    if len(roots) > 1:
-        raise ValueError(
-            f"multiple locally-defined classes marked `tree_root: true` ({roots}); "
-            "extraction schemas should declare exactly one root."
-        )
-    return roots[0] if roots else None
-
-
-def _build_schema_view(cfg: LitSchemaConfig) -> tuple[SchemaView, str]:
-    """Build a SchemaView for the project's extraction schema and resolve
-    the root extraction class.
-
-    Class-resolution order:
-      1. `extraction_class` in litschema.yaml (explicit override)
-      2. The class marked `tree_root: true` in the extraction schema
-      3. Error with actionable message
-
-    File-resolution: `extraction_schema_file` in litschema.yaml, defaulting
-    to `<schema_dir>/extraction.yaml` (filename convention, not a class
-    contract).
-    """
-    schema_file = cfg.raw.get("extraction_schema_file", _DEFAULT_EXTRACTION_FILENAME)
-    schema_path = cfg.schema_dir / schema_file
-    if not schema_path.exists():
-        raise FileNotFoundError(
-            f"extraction schema not found at {schema_path}. "
-            f"Set `extraction_schema_file` in litschema.yaml or place a "
-            f"file at the default location."
-        )
-    sv = SchemaView(str(schema_path))
-
-    explicit = cfg.raw.get("extraction_class")
-    if explicit:
-        if explicit not in sv.all_classes():
-            raise ValueError(
-                f"`extraction_class: {explicit}` not found in {schema_path}. "
-                f"Available classes: {sorted(sv.all_classes().keys())}"
-            )
-        return sv, explicit
-
-    detected = _find_tree_root_class(sv)
-    if detected:
-        return sv, detected
-
-    raise ValueError(
-        f"could not determine the root extraction class for {schema_path}. "
-        f"Either:\n"
-        f"  • mark your root class with `tree_root: true` in the schema, or\n"
-        f"  • set `extraction_class: <ClassName>` in litschema.yaml."
-    )
 
 
 # ── Table-creation and inserts ─────────────────────────────────────────────
@@ -385,7 +318,13 @@ def build_store(
         db_path = cfg.project_root / ".litschema" / "explore.duckdb"
     db_path.parent.mkdir(parents=True, exist_ok=True)
 
-    sources = [cfg.article_store_dir, cfg.llm_extractions_dir, reviews_dir, authors_path, institutions_path]
+    sources = [
+        cfg.article_store_dir,
+        cfg.llm_extractions_dir,
+        reviews_dir,
+        authors_path,
+        institutions_path,
+    ]
     if not force_rebuild and not _needs_rebuild(db_path, sources):
         con = duckdb.connect(str(db_path))
         try:
@@ -417,9 +356,9 @@ def build_store(
             )
 
     # Full rebuild: schema introspection drives column shape.
-    sv, class_name = _build_schema_view(cfg)
-    columns = _derive_columns(sv, class_name)
-    id_slot = _identifier_slot(sv, class_name)
+    extraction_schema = resolve_extraction_schema(cfg)
+    columns = _derive_columns(extraction_schema.view, extraction_schema.root_class)
+    id_slot = _identifier_slot(extraction_schema.view, extraction_schema.root_class)
 
     override_map = _build_override_map(cfg)
 

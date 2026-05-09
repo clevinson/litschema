@@ -114,19 +114,6 @@ your subclass `tree_root: true` explicitly. (LinkML treats tree_root as
 a per-class assertion about that specific class's role as a document
 root.)
 
-### C. Override `extraction_class` directly
-
-If you import a class from another schema and want to use it as-is
-without subclassing:
-
-```yaml
-# litschema.yaml
-extraction_class: AgricultureExtraction
-extraction_schema_file: agriculture_extraction.yaml
-```
-
-The explicit config setting takes precedence over `tree_root` autodetection.
-
 ## License
 
 Apache-2.0. Free to fork and adapt.

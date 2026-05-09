@@ -9,14 +9,39 @@ allowed-tools: Read, Write, Bash, Glob, Grep
 
 You are extracting structured research metadata from a paper for a systematic review meta-analysis.
 
+## Setup Gate
+
+Before running extraction, verify you are in a litschema project by checking for `litschema.yaml` in the current directory or a parent directory.
+
+Do not assume `uv` or `litschema` is available just because this skill is installed. Choose the command runner for this project:
+
+```bash
+# Prefer the project's Python environment when uv is available
+uv run litschema --help
+```
+
+If that exits 0, set `LITSCHEMA` to `uv run litschema` for every command below. Otherwise try:
+
+```bash
+litschema --help
+```
+
+If that exits 0, set `LITSCHEMA` to `litschema`.
+
+If `litschema.yaml` is missing, stop and tell the user this skill must be run from a litschema project directory. Ask them to either point you to the folder containing `litschema.yaml`, or start the project onboarding/builder skill. The builder flow should run `litschema init` if needed, then ask for a file containing DOIs, PDFs, or bibliography records to initialize the article set.
+
+If neither command runner works, stop and tell the user litschema is not available in this shell. Ask them whether litschema should be installed globally or run through the project's local `uv` environment.
+
 ## Input
 
 The user will provide an `article_id` (e.g., `bell-2024`). You must:
 1. Read the domain context from `domain_context.md`
-2. Read the extraction schema from `extraction_schema.json`
-3. Read the reasoning schema from `reasoning_schema.json`
+2. Generate runtime schema context:
+   ```bash
+   $LITSCHEMA agent prepare-schema-context
+   ```
+3. Read `.litschema/runtime/extraction_schema.json` and `.litschema/runtime/reasoning_schema.json`
 4. Read the full-text markdown from `data/papers/{article_id}/article.md`
-   - If that does not exist yet, fall back to legacy path `data/fulltext_md/{article_id}.md`
 
 If the markdown file doesn't exist or is < 100 characters, write an error marker:
 ```json
@@ -27,8 +52,8 @@ to `data/papers/{article_id}/agent-extraction.json`.
 ## How to Extract
 
 1. **Domain context** (`domain_context.md`) tells you what the research domain is and gives domain-specific extraction rules and field guidance. Follow these rules exactly.
-2. **Extraction schema** (`extraction_schema.json`) defines every field, type, enum value, and description. Your output JSON must validate against this schema. The root object is defined in `$defs`. Read the schema carefully — field descriptions and enum `description` values contain important guidance.
-3. **Reasoning schema** (`reasoning_schema.json`) defines the format for your reasoning output.
+2. **Extraction schema** (`.litschema/runtime/extraction_schema.json`) is already generated with the correct top-level root object. Read it for fields, types, enums, and descriptions; do not infer a different root from `$defs`.
+3. **Reasoning schema** (`.litschema/runtime/reasoning_schema.json`) defines the format for your reasoning output.
 4. **The article markdown** is your sole data source. Extract ONLY from this text.
 
 **CRITICAL: Extract ONLY from the markdown file provided. Do NOT use any information from memory files, conversation context, prior knowledge about this paper, or other articles. Every extracted value must come from the text of this specific paper.**
@@ -53,42 +78,30 @@ This file documents WHY each value was extracted, with line-number evidence from
 ### Reasoning format rules
 
 - **path**: jq-style dot notation starting with `.` (e.g., `.foo.bar[0].baz`)
-- **value**: the extracted value (for cross-reference with the extraction JSON)
+- **value**: the extracted value rendered as text for cross-reference with the extraction JSON
 - **source_lines**: comma-separated line references from the markdown. Use `L{n}` for single lines, `L{start}-L{end}` for ranges. Example: `L23-L34,L55,L80-L90`
-- **reasoning**: plain text explanation for a human reviewer evaluating the extraction. Set to `null` if the source lines are self-explanatory (the value appears verbatim in the cited lines)
+- **reasoning**: plain text explanation for a human reviewer evaluating the extraction. Omit this key when the source lines are self-explanatory (the value appears verbatim in the cited lines)
 - Skip `article_id`, `confidence`, and `reasoning` (top-level metadata) — only document extracted data fields
 
 ## Validation
 
-After writing both JSON files, validate them:
+After writing both JSON files, run these validation commands. A file is valid only if the corresponding command exits 0.
 
 ```bash
 # Validate extraction against schema
-uv run python -m litschema.ingest.validate_extraction data/papers/{article_id}/agent-extraction.json
+$LITSCHEMA validate data/papers/{article_id}/agent-extraction.json
 
 # Validate reasoning against schema
-uv run python -c "
-import json
-from jsonschema import Draft202012Validator
-schema = json.load(open('reasoning_schema.json'))
-data = json.load(open('data/papers/{article_id}/agent-reasoning.json'))
-errors = list(Draft202012Validator(schema).iter_errors(data))
-if errors:
-    for e in errors:
-        path = '.'.join(str(p) for p in e.absolute_path)
-        print(f'INVALID {path}: {e.message}')
-    exit(1)
-print('Reasoning valid')
-"
+$LITSCHEMA agent validate-reasoning data/papers/{article_id}/agent-reasoning.json
 ```
 
-If validation fails, read the errors, fix the JSON, and re-validate. Max 3 attempts. Common errors:
-- Invalid enum value: check the JSON Schema for allowed values
+If either command exits nonzero, read the errors, fix the JSON, and re-run the failed command. Max 3 attempts. Common errors:
+- Invalid enum value: check the runtime JSON Schema for allowed values
 - Extra property: field name not in the schema
 - Wrong type: e.g., string where number expected
-- Missing `fields` or `path`/`source_lines`: every entry needs these
+- Missing `fields` or `path`/`source_lines`: every reasoning entry needs these
 
-Do NOT finish until both validations pass or you have exhausted retries.
+Do NOT finish until both validation commands exit 0 or you have exhausted retries.
 
 ## Checklist
 

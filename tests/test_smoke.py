@@ -10,10 +10,10 @@ Run:  uv run pytest tests/
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import sys
-from types import SimpleNamespace
 from pathlib import Path
 
 import pytest
@@ -41,6 +41,24 @@ def test_config_module_import() -> None:
     assert ENV_VAR == "LITSCHEMA_CONFIG"
     assert LitSchemaConfig is not None
     assert callable(load_config)
+
+
+def test_validate_extraction_import_does_not_load_project_config(tmp_path: Path) -> None:
+    """Importing validation helpers should not require a discoverable litschema.yaml."""
+    env = os.environ.copy()
+    env.pop("LITSCHEMA_CONFIG", None)
+    env["PYTHONPATH"] = str(REPO_ROOT / "src")
+
+    result = subprocess.run(
+        [sys.executable, "-c", "import litschema.ingest.validate_extraction"],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+
+    assert result.returncode == 0, result.stderr
 
 
 def test_cli_import() -> None:
@@ -98,6 +116,27 @@ def test_no_old_aggregate_surface_remains() -> None:
                 offenders.append(path.relative_to(REPO_ROOT))
 
     assert offenders == []
+
+
+def test_bundled_skills_use_runtime_schemas() -> None:
+    """Agent skills should use runtime JSON Schemas, not root-level artifacts."""
+    extract_skill = (REPO_ROOT / "skills" / "extract-article" / "SKILL.md").read_text()
+
+    assert "Before running extraction, verify you are in a litschema project" in extract_skill
+    assert "Do not assume `uv` or `litschema` is available" in extract_skill
+    assert "If `litschema.yaml` is missing" in extract_skill
+    assert "set `LITSCHEMA` to `uv run litschema`" in extract_skill
+    assert "set `LITSCHEMA` to `litschema`" in extract_skill
+    assert "$LITSCHEMA agent prepare-schema-context" in extract_skill
+    assert "$LITSCHEMA agent validate-reasoning" in extract_skill
+    assert ".litschema/runtime/extraction_schema.json" in extract_skill
+    assert "do not infer a different root from `$defs`" in extract_skill
+    assert "Omit this key when the source lines are self-explanatory" in extract_skill
+    assert "Set to `null`" not in extract_skill
+    assert "A file is valid only if the corresponding command exits 0" in extract_skill
+    assert "Do NOT finish until both validation commands exit 0" in extract_skill
+    assert "`extraction_schema.json`" not in extract_skill
+    assert "`reasoning_schema.json`" not in extract_skill
 
 
 def test_load_config_from_repo_root() -> None:
@@ -183,17 +222,21 @@ def test_validate_defaults_to_article_store(
     monkeypatch.setenv("LITSCHEMA_CONFIG", str(tmp_path / "litschema.yaml"))
 
     from litschema import cli
+    from litschema.ingest import validate_extraction
 
     calls = []
 
-    def fake_run(args, **kwargs):
-        calls.append(args)
-        return SimpleNamespace(returncode=0)
+    def fake_validate(args, cfg):
+        calls.append((args, cfg.config_path))
+        return 0
 
-    monkeypatch.setattr(cli.subprocess, "run", fake_run)
+    def fail_subprocess(*args, **kwargs):
+        raise AssertionError("litschema validate should call the Python validation function")
+
+    monkeypatch.setattr(cli.subprocess, "run", fail_subprocess)
+    monkeypatch.setattr(validate_extraction, "run", fake_validate)
 
     result = CliRunner().invoke(cli.app, ["validate"])
 
     assert result.exit_code == 0, result.output
-    assert len(calls) == 1
-    assert calls[0][-1] == str(tmp_path / "data" / "papers")
+    assert calls == [([], tmp_path / "litschema.yaml")]

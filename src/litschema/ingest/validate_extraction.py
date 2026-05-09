@@ -1,7 +1,4 @@
-"""Validate LLM extraction output against the ExtractionArtifact JSON Schema.
-
-Uses gen-json-schema with --top-class ExtractionArtifact to generate the
-validation schema directly from extraction.yaml.
+"""Validate LLM extraction output against the configured extraction schema.
 
 Usage:
     # Validate a single extraction
@@ -9,51 +6,27 @@ Usage:
 
     # Validate all extractions
     uv run python -m litschema.ingest.validate_extraction data/llm_extractions/
-
-    # Generate the extraction schema (for inspection)
-    uv run python -m litschema.ingest.validate_extraction --dump-schema
 """
 
 from __future__ import annotations
 
 import json
-import subprocess
 import sys
 from pathlib import Path
 
-from jsonschema import Draft202012Validator
-
 from ..articles import iter_extraction_paths
+from ..config import LitSchemaConfig
 from ..config import load_config as _load_config
-
-_CFG = _load_config()
-EXTRACTION_SCHEMA_PATH = _CFG.schema_dir / "extraction.yaml"
-
-
-def generate_extraction_schema(schema_path: Path = EXTRACTION_SCHEMA_PATH) -> dict:
-    """Generate JSON Schema from extraction.yaml with ExtractionArtifact as root."""
-    result = subprocess.run(
-        ["uv", "run", "gen-json-schema", "--top-class", "ExtractionArtifact", str(schema_path)],
-        capture_output=True,
-        text=True,
-        cwd=schema_path.parent,
-    )
-    if result.returncode != 0:
-        raise RuntimeError(f"gen-json-schema failed: {result.stderr}")
-    return json.loads(result.stdout)
+from ..schema_resolution import resolve_extraction_schema
+from ..schema_validation import LinkMLDataValidator, create_linkml_validator
 
 
-def validate_extraction(data: dict, schema: dict) -> list[str]:
-    """Validate extraction data against schema. Returns list of error messages."""
-    validator = Draft202012Validator(schema)
-    errors = []
-    for error in sorted(validator.iter_errors(data), key=lambda e: list(e.path)):
-        path = ".".join(str(p) for p in error.absolute_path) or "(root)"
-        errors.append(f"{path}: {error.message}")
-    return errors
-
-
-def validate_file(filepath: Path, schema: dict) -> tuple[bool, list[str]]:
+def validate_file(
+    filepath: Path,
+    schema_path: Path,
+    root_class: str,
+    validator: LinkMLDataValidator | None = None,
+) -> tuple[bool, list[str]]:
     """Validate a single extraction JSON file. Returns (valid, errors)."""
     data = json.loads(filepath.read_text())
 
@@ -61,32 +34,37 @@ def validate_file(filepath: Path, schema: dict) -> tuple[bool, list[str]]:
     if data.get("error"):
         return True, []
 
-    errors = validate_extraction(data, schema)
+    validator = validator or create_linkml_validator(schema_path, root_class)
+    errors = validator.validate(data)
     return len(errors) == 0, errors
 
 
-def main():
-    args = sys.argv[1:]
-
-    if "--dump-schema" in args:
-        schema = generate_extraction_schema()
-        print(json.dumps(schema, indent=2))
-        return
-
+def _files_for_args(args: list[str], cfg: LitSchemaConfig) -> list[Path]:
     if not args:
-        print("Usage: validate_extraction.py [--dump-schema] <file_or_dir>")
-        sys.exit(1)
+        return list(iter_extraction_paths(cfg))
 
     target = Path(args[0])
-    schema = generate_extraction_schema()
-
+    if not target.exists():
+        raise FileNotFoundError(f"Missing extraction target: {target}")
     if target.is_dir():
         files = sorted(target.glob("*.json"))
         if not files:
-            cfg = _load_config()
             files = list(iter_extraction_paths(cfg))
-    else:
-        files = [target]
+        return files
+    return [target]
+
+
+def run(args: list[str] | None, cfg: LitSchemaConfig) -> int:
+    args = list(args or [])
+
+    try:
+        files = _files_for_args(args, cfg)
+    except FileNotFoundError as exc:
+        print(exc)
+        return 1
+
+    extraction_schema = resolve_extraction_schema(cfg)
+    validator = create_linkml_validator(extraction_schema.path, extraction_schema.root_class)
 
     total = 0
     valid_count = 0
@@ -94,7 +72,12 @@ def main():
 
     for filepath in files:
         total += 1
-        is_valid, errors = validate_file(filepath, schema)
+        is_valid, errors = validate_file(
+            filepath,
+            extraction_schema.path,
+            extraction_schema.root_class,
+            validator=validator,
+        )
         if is_valid:
             valid_count += 1
         else:
@@ -105,7 +88,12 @@ def main():
 
     print(f"\n{valid_count}/{total} valid")
     if error_files:
-        sys.exit(1)
+        return 1
+    return 0
+
+
+def main():
+    sys.exit(run(sys.argv[1:], _load_config()))
 
 
 if __name__ == "__main__":
