@@ -35,9 +35,9 @@ def prepare_schema_context(cfg: LitSchemaConfig | None = None) -> SchemaContext:
     runtime_dir = cfg.project_root / ".litschema" / "runtime"
     manifest_path = runtime_dir / "schema_context.json"
 
-    extraction_schema, extraction_class = resolve_extraction_schema(cfg)
+    extraction_schema, root_class = resolve_extraction_schema(cfg)
     extraction_output = runtime_dir / "extraction_schema.json"
-    write_json_schema(extraction_schema, extraction_class, extraction_output)
+    write_json_schema(extraction_schema, root_class, extraction_output)
 
     reasoning_schema = cfg.schema_dir / "reasoning.yaml"
     reasoning_output: Path | None = None
@@ -49,7 +49,7 @@ def prepare_schema_context(cfg: LitSchemaConfig | None = None) -> SchemaContext:
         json.dumps(
             {
                 "extraction_schema": _project_relative(extraction_output, cfg.project_root),
-                "extraction_root_class": extraction_class,
+                "extraction_root_class": root_class,
                 "reasoning_schema": _project_relative(reasoning_output, cfg.project_root),
             },
             indent=2,
@@ -61,7 +61,7 @@ def prepare_schema_context(cfg: LitSchemaConfig | None = None) -> SchemaContext:
         runtime_dir=runtime_dir,
         manifest_path=manifest_path,
         extraction_schema_path=extraction_output,
-        extraction_root_class=extraction_class,
+        extraction_root_class=root_class,
         reasoning_schema_path=reasoning_output,
     )
 

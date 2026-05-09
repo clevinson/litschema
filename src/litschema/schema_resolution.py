@@ -35,18 +35,17 @@ def _find_tree_root_class(sv: SchemaView) -> str:
     )
 
 
-def resolve_extraction_schema_view(cfg: LitSchemaConfig) -> tuple[SchemaView, str]:
-    if "extraction_class" in cfg.raw:
-        raise ValueError(
-            "`extraction_class` is no longer supported. "
-            "Mark the extraction root class with `tree_root: true` in the LinkML schema."
-        )
+def _resolve_extraction_schema_parts(cfg: LitSchemaConfig) -> tuple[Path, SchemaView, str]:
     schema_path = extraction_schema_path(cfg)
     sv = SchemaView(str(schema_path))
-    return sv, _find_tree_root_class(sv)
+    return schema_path, sv, _find_tree_root_class(sv)
+
+
+def resolve_extraction_schema_view(cfg: LitSchemaConfig) -> tuple[SchemaView, str]:
+    _, sv, root_class = _resolve_extraction_schema_parts(cfg)
+    return sv, root_class
 
 
 def resolve_extraction_schema(cfg: LitSchemaConfig) -> tuple[Path, str]:
-    schema_path = extraction_schema_path(cfg)
-    _, root_class = resolve_extraction_schema_view(cfg)
+    schema_path, _, root_class = _resolve_extraction_schema_parts(cfg)
     return schema_path, root_class

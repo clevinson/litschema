@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import pytest
-
 from litschema.config import load_config
 from litschema import schema_resolution
 
@@ -18,21 +16,19 @@ def test_resolve_extraction_schema_uses_tree_root_only(tmp_path) -> None:
         "    attributes:\n"
         "      article_id:\n"
         "        range: string\n"
-        "  ConfiguredButUnsupported:\n"
+        "  SecondaryClass:\n"
         "    attributes:\n"
         "      article_id:\n"
         "        range: string\n"
     )
     config_path = tmp_path / "litschema.yaml"
-    config_path.write_text(
-        'project_root: "."\n'
-        'schema_dir: "schema"\n'
-        'extraction_class: "ConfiguredButUnsupported"\n'
-    )
+    config_path.write_text('project_root: "."\n' 'schema_dir: "schema"\n')
     cfg = load_config(config_path, reload=True)
 
-    with pytest.raises(ValueError, match="extraction_class.*no longer supported"):
-        schema_resolution.resolve_extraction_schema(cfg)
+    assert schema_resolution.resolve_extraction_schema(cfg) == (
+        schema_dir / "extraction.yaml",
+        "ActualRoot",
+    )
 
 
 def test_resolve_extraction_schema_view_returns_shared_view_and_root() -> None:
