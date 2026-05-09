@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
 from pathlib import Path
 
 from ..config import LitSchemaConfig, load_config
 from ..schema_resolution import resolve_extraction_schema
-from ..schema_validation import write_json_schema
+from ..schema_validation import write_json_file, write_json_schema
+from .reasoning_schema import reasoning_schema_source_path
 
 
 @dataclass(frozen=True)
@@ -17,7 +17,7 @@ class SchemaContext:
     manifest_path: Path
     extraction_schema_path: Path
     extraction_root_class: str
-    reasoning_schema_path: Path | None
+    reasoning_schema_path: Path
 
 
 def _project_relative(path: Path | None, project_root: Path) -> str | None:
@@ -39,22 +39,17 @@ def prepare_schema_context(cfg: LitSchemaConfig | None = None) -> SchemaContext:
     extraction_output = runtime_dir / "extraction_schema.json"
     write_json_schema(extraction_schema, root_class, extraction_output)
 
-    reasoning_schema = cfg.schema_dir / "reasoning.yaml"
-    reasoning_output: Path | None = None
-    if reasoning_schema.exists():
-        reasoning_output = runtime_dir / "reasoning_schema.json"
-        write_json_schema(reasoning_schema, "ExtractionReasoning", reasoning_output)
+    reasoning_schema = reasoning_schema_source_path(cfg)
+    reasoning_output = runtime_dir / "reasoning_schema.json"
+    write_json_schema(reasoning_schema, "ExtractionReasoning", reasoning_output)
 
-    manifest_path.write_text(
-        json.dumps(
-            {
-                "extraction_schema": _project_relative(extraction_output, cfg.project_root),
-                "extraction_root_class": root_class,
-                "reasoning_schema": _project_relative(reasoning_output, cfg.project_root),
-            },
-            indent=2,
-        )
-        + "\n"
+    write_json_file(
+        manifest_path,
+        {
+            "extraction_schema": _project_relative(extraction_output, cfg.project_root),
+            "extraction_root_class": root_class,
+            "reasoning_schema": _project_relative(reasoning_output, cfg.project_root),
+        },
     )
 
     return SchemaContext(
@@ -71,8 +66,7 @@ def main() -> None:
     print(f"schema_context={context.manifest_path}")
     print(f"extraction_root_class={context.extraction_root_class}")
     print(f"extraction_schema={context.extraction_schema_path}")
-    if context.reasoning_schema_path:
-        print(f"reasoning_schema={context.reasoning_schema_path}")
+    print(f"reasoning_schema={context.reasoning_schema_path}")
 
 
 if __name__ == "__main__":

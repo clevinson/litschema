@@ -257,6 +257,35 @@ def mcp(
 skills_app = typer.Typer(help="Agentic skill management (.claude/skills/).", no_args_is_help=True)
 app.add_typer(skills_app, name="skills")
 
+agent_app = typer.Typer(
+    help="Agent-facing helper commands used by bundled skills.", no_args_is_help=True
+)
+app.add_typer(agent_app, name="agent")
+
+
+@agent_app.command("prepare-schema-context", help="Write runtime schema context files.")
+def agent_prepare_schema_context():
+    cfg = _require_config()
+    from .agent.prepare_schema_context import prepare_schema_context
+
+    context = prepare_schema_context(cfg)
+    typer.echo(f"schema_context={context.manifest_path}")
+    typer.echo(f"extraction_root_class={context.extraction_root_class}")
+    typer.echo(f"extraction_schema={context.extraction_schema_path}")
+    typer.echo(f"reasoning_schema={context.reasoning_schema_path}")
+
+
+@agent_app.command(
+    "validate-reasoning",
+    context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
+    help="Validate agent reasoning files against the configured reasoning schema.",
+)
+def agent_validate_reasoning(ctx: typer.Context):
+    cfg = _require_config()
+    from .agent import validate_reasoning
+
+    raise typer.Exit(code=validate_reasoning.run(list(ctx.args), cfg))
+
 
 @skills_app.command(
     "install",

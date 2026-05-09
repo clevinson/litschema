@@ -1,0 +1,28 @@
+id: https://litschema.org/schema/extraction-reasoning
+name: litschema_extraction_reasoning
+default_range: string
+
+classes:
+  ExtractionReasoning:
+    description: Per-field evidence and reasoning for one extraction.
+    tree_root: true
+    attributes:
+      fields:
+        description: Evidence entries for extracted non-metadata leaf fields.
+        range: ReasoningField
+        multivalued: true
+        required: true
+
+  ReasoningField:
+    description: Evidence and explanation for one extracted field value.
+    attributes:
+      path:
+        description: jq-style path to the extracted field, starting with a dot.
+        required: true
+      value:
+        description: Extracted value rendered as text for cross-reference.
+      source_lines:
+        description: Markdown line references such as L23 or L23-L34,L55.
+        required: true
+      reasoning:
+        description: Short explanation of why the cited lines support the value.

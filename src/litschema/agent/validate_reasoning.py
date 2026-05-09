@@ -8,16 +8,19 @@ from pathlib import Path
 
 from ..articles import iter_reasoning_paths
 from ..config import LitSchemaConfig, load_config
-from ..schema_validation import validate_linkml_data
+from ..schema_validation import LinkMLDataValidator, create_linkml_validator
+from .reasoning_schema import reasoning_schema_source_path
 
 
 def validate_file(
     filepath: Path,
     schema_path: Path,
     root_class: str = "ExtractionReasoning",
+    validator: LinkMLDataValidator | None = None,
 ) -> tuple[bool, list[str]]:
     data = json.loads(filepath.read_text())
-    errors = validate_linkml_data(data, schema_path, root_class)
+    validator = validator or create_linkml_validator(schema_path, root_class)
+    errors = validator.validate(data)
     return len(errors) == 0, errors
 
 
@@ -36,30 +39,28 @@ def _reasoning_files_for_target(cfg: LitSchemaConfig, target: Path | None) -> li
     return [target]
 
 
-def main() -> None:
-    cfg = load_config()
-    args = sys.argv[1:]
+def run(args: list[str] | None = None, cfg: LitSchemaConfig | None = None) -> int:
+    cfg = cfg or load_config()
+    args = list(args or [])
     target = Path(args[0]) if args else None
 
     try:
         files = _reasoning_files_for_target(cfg, target)
     except FileNotFoundError as exc:
         print(exc)
-        sys.exit(1)
+        return 1
 
-    schema_path = cfg.schema_dir / "reasoning.yaml"
-    if not schema_path.exists():
-        print(f"No reasoning schema found at {schema_path}; skipping")
-        return
+    schema_path = reasoning_schema_source_path(cfg)
+    validator = create_linkml_validator(schema_path, "ExtractionReasoning")
 
     if not files:
         print("No reasoning files found")
-        sys.exit(1)
+        return 1
 
     valid_count = 0
     invalid_count = 0
     for filepath in files:
-        ok, errors = validate_file(filepath, schema_path)
+        ok, errors = validate_file(filepath, schema_path, validator=validator)
         if ok:
             valid_count += 1
             continue
@@ -70,7 +71,14 @@ def main() -> None:
 
     print(f"\nReasoning: {valid_count}/{valid_count + invalid_count} valid")
     if invalid_count:
-        sys.exit(1)
+        return 1
+    return 0
+
+
+def main() -> None:
+    code = run(sys.argv[1:])
+    if code:
+        sys.exit(code)
 
 
 if __name__ == "__main__":

@@ -21,7 +21,7 @@ from ..articles import iter_extraction_paths
 from ..config import LitSchemaConfig
 from ..config import load_config as _load_config
 from ..schema_resolution import resolve_extraction_schema
-from ..schema_validation import generate_json_schema, validate_linkml_data
+from ..schema_validation import LinkMLDataValidator, create_linkml_validator, generate_json_schema
 
 
 def generate_extraction_schema(cfg: LitSchemaConfig | None = None) -> dict:
@@ -31,12 +31,17 @@ def generate_extraction_schema(cfg: LitSchemaConfig | None = None) -> dict:
     return generate_json_schema(schema_path, root_class)
 
 
-def validate_extraction(data: dict, schema_path: Path, root_class: str) -> list[str]:
+def validate_extraction(data: dict, validator: LinkMLDataValidator) -> list[str]:
     """Validate extraction data against schema. Returns list of error messages."""
-    return validate_linkml_data(data, schema_path, root_class)
+    return validator.validate(data)
 
 
-def validate_file(filepath: Path, schema_path: Path, root_class: str) -> tuple[bool, list[str]]:
+def validate_file(
+    filepath: Path,
+    schema_path: Path,
+    root_class: str,
+    validator: LinkMLDataValidator | None = None,
+) -> tuple[bool, list[str]]:
     """Validate a single extraction JSON file. Returns (valid, errors)."""
     data = json.loads(filepath.read_text())
 
@@ -44,7 +49,8 @@ def validate_file(filepath: Path, schema_path: Path, root_class: str) -> tuple[b
     if data.get("error"):
         return True, []
 
-    errors = validate_extraction(data, schema_path, root_class)
+    validator = validator or create_linkml_validator(schema_path, root_class)
+    errors = validate_extraction(data, validator)
     return len(errors) == 0, errors
 
 
@@ -79,6 +85,7 @@ def run(args: list[str] | None = None, cfg: LitSchemaConfig | None = None) -> in
         return 1
 
     schema_path, root_class = resolve_extraction_schema(cfg)
+    validator = create_linkml_validator(schema_path, root_class)
 
     total = 0
     valid_count = 0
@@ -86,7 +93,7 @@ def run(args: list[str] | None = None, cfg: LitSchemaConfig | None = None) -> in
 
     for filepath in files:
         total += 1
-        is_valid, errors = validate_file(filepath, schema_path, root_class)
+        is_valid, errors = validate_file(filepath, schema_path, root_class, validator=validator)
         if is_valid:
             valid_count += 1
         else:

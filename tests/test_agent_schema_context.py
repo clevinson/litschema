@@ -26,9 +26,7 @@ def test_prepare_schema_context_writes_runtime_extraction_schema(tmp_path, monke
     )
     config_path = tmp_path / "litschema.yaml"
     config_path.write_text(
-        'project_root: "."\n'
-        'schema_dir: "schema"\n'
-        'extraction_schema_file: "clinical_trial.yaml"\n'
+        'project_root: "."\nschema_dir: "schema"\nextraction_schema_file: "clinical_trial.yaml"\n'
     )
     cfg = load_config(config_path, reload=True)
 
@@ -48,11 +46,14 @@ def test_prepare_schema_context_writes_runtime_extraction_schema(tmp_path, monke
     assert manifest == {
         "extraction_schema": ".litschema/runtime/extraction_schema.json",
         "extraction_root_class": "ClinicalTrialReport",
-        "reasoning_schema": None,
+        "reasoning_schema": ".litschema/runtime/reasoning_schema.json",
     }
+    assert (tmp_path / ".litschema" / "runtime" / "reasoning_schema.json").is_file()
 
 
-def test_prepare_schema_context_writes_optional_reasoning_schema(tmp_path, monkeypatch) -> None:
+def test_prepare_schema_context_uses_project_reasoning_schema_override(
+    tmp_path, monkeypatch
+) -> None:
     from litschema.agent import prepare_schema_context
 
     project = tmp_path
@@ -90,12 +91,49 @@ def test_prepare_schema_context_writes_optional_reasoning_schema(tmp_path, monke
 
     context = prepare_schema_context.prepare_schema_context(cfg)
 
-    assert context.reasoning_schema_path == project / ".litschema" / "runtime" / "reasoning_schema.json"
+    assert (
+        context.reasoning_schema_path
+        == project / ".litschema" / "runtime" / "reasoning_schema.json"
+    )
     reasoning_schema = json.loads(context.reasoning_schema_path.read_text())
     assert "ExtractionReasoning" in reasoning_schema["$defs"]
     manifest = json.loads((project / ".litschema" / "runtime" / "schema_context.json").read_text())
     assert manifest["extraction_root_class"] == "TestExtraction"
     assert manifest["reasoning_schema"] == ".litschema/runtime/reasoning_schema.json"
+
+
+def test_runtime_json_schema_writes_are_atomic(tmp_path, monkeypatch) -> None:
+    from pathlib import Path
+
+    from litschema import schema_validation
+
+    monkeypatch.setattr(
+        schema_validation,
+        "generate_json_schema",
+        lambda schema_path, top_class: {"title": top_class},
+    )
+
+    replacements = []
+    original_replace = Path.replace
+
+    def record_replace(self: Path, target: Path) -> Path:
+        replacements.append((self, Path(target), self.exists()))
+        return original_replace(self, target)
+
+    monkeypatch.setattr(Path, "replace", record_replace)
+    output_path = tmp_path / "runtime" / "extraction_schema.json"
+
+    schema_validation.write_json_schema(tmp_path / "schema.yaml", "RootClass", output_path)
+
+    assert json.loads(output_path.read_text()) == {"title": "RootClass"}
+    assert len(replacements) == 1
+    temp_path, replaced_path, temp_existed = replacements[0]
+    assert replaced_path == output_path
+    assert temp_path.parent == output_path.parent
+    assert temp_path.name.startswith(".extraction_schema.json.")
+    assert temp_path.name.endswith(".tmp")
+    assert temp_existed is True
+    assert not list(output_path.parent.glob("*.tmp"))
 
 
 def test_validate_reasoning_file_reports_schema_errors(tmp_path) -> None:
@@ -133,9 +171,47 @@ def test_validate_reasoning_file_reports_schema_errors(tmp_path) -> None:
     assert any("extra" in error for error in errors)
 
 
-def test_validate_reasoning_skips_when_no_reasoning_schema(
-    tmp_path, monkeypatch, capsys
+def test_validate_reasoning_uses_bundled_schema_when_project_schema_absent(
+    tmp_path, capsys
 ) -> None:
+    from litschema.agent import validate_reasoning
+
+    schema_dir = tmp_path / "schema"
+    schema_dir.mkdir()
+    (tmp_path / "litschema.yaml").write_text('project_root: "."\nschema_dir: "schema"\n')
+    cfg = load_config(tmp_path / "litschema.yaml", reload=True)
+    reasoning = tmp_path / "agent-reasoning.json"
+    reasoning.write_text(
+        json.dumps(
+            {
+                "fields": [
+                    {
+                        "path": ".study_type",
+                        "value": "field trial",
+                        "source_lines": "L12-L14",
+                        "reasoning": "The cited lines describe a field trial.",
+                    }
+                ]
+            }
+        )
+    )
+
+    assert validate_reasoning.run([str(reasoning)], cfg) == 0
+    assert "Reasoning: 1/1 valid" in capsys.readouterr().out
+
+
+def test_bundled_reasoning_schema_is_packaged() -> None:
+    from litschema.agent.reasoning_schema import reasoning_schema_source_path
+
+    cfg = load_config("tests/fixtures/projects/custom_clinical/litschema.yaml", reload=True)
+    schema_path = reasoning_schema_source_path(cfg)
+
+    assert schema_path.name == "reasoning.yaml"
+    assert schema_path.is_file()
+    assert "ExtractionReasoning" in schema_path.read_text()
+
+
+def test_validate_reasoning_fails_when_no_reasoning_files(tmp_path, monkeypatch, capsys) -> None:
     from litschema.agent import validate_reasoning
 
     schema_dir = tmp_path / "schema"
@@ -144,14 +220,14 @@ def test_validate_reasoning_skips_when_no_reasoning_schema(
     monkeypatch.setenv("LITSCHEMA_CONFIG", str(tmp_path / "litschema.yaml"))
     monkeypatch.setattr(sys, "argv", ["validate_reasoning"])
 
-    validate_reasoning.main()
+    with pytest.raises(SystemExit) as exc:
+        validate_reasoning.main()
 
-    assert "No reasoning schema found" in capsys.readouterr().out
+    assert exc.value.code == 1
+    assert "No reasoning files found" in capsys.readouterr().out
 
 
-def test_validate_reasoning_fails_missing_explicit_target(
-    tmp_path, monkeypatch, capsys
-) -> None:
+def test_validate_reasoning_fails_missing_explicit_target(tmp_path, monkeypatch, capsys) -> None:
     from litschema.agent import validate_reasoning
 
     schema_dir = tmp_path / "schema"
@@ -166,3 +242,32 @@ def test_validate_reasoning_fails_missing_explicit_target(
 
     assert exc.value.code == 1
     assert f"Missing reasoning target: {missing}" in capsys.readouterr().out
+
+
+def test_agent_prepare_schema_context_cli_command(monkeypatch) -> None:
+    from typer.testing import CliRunner
+
+    from litschema import cli
+
+    cfg_path = "tests/fixtures/projects/custom_clinical/litschema.yaml"
+    monkeypatch.setenv("LITSCHEMA_CONFIG", cfg_path)
+
+    result = CliRunner().invoke(cli.app, ["agent", "prepare-schema-context"])
+
+    assert result.exit_code == 0, result.output
+    assert "schema_context=" in result.output
+    assert "extraction_root_class=ClinicalTrialReport" in result.output
+
+
+def test_agent_validate_reasoning_cli_command_without_reasoning_files(monkeypatch) -> None:
+    from typer.testing import CliRunner
+
+    from litschema import cli
+
+    cfg_path = "tests/fixtures/projects/custom_clinical/litschema.yaml"
+    monkeypatch.setenv("LITSCHEMA_CONFIG", cfg_path)
+
+    result = CliRunner().invoke(cli.app, ["agent", "validate-reasoning"])
+
+    assert result.exit_code == 1, result.output
+    assert "No reasoning files found" in result.output

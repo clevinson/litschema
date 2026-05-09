@@ -9,15 +9,38 @@ allowed-tools: Read, Write, Bash, Glob, Grep
 
 You are extracting structured research metadata from a paper for a systematic review meta-analysis.
 
+## Setup Gate
+
+Before running extraction, verify you are in a litschema project by checking for `litschema.yaml` in the current directory or a parent directory.
+
+Do not assume `uv` or `litschema` is available just because this skill is installed. Choose the command runner for this project:
+
+```bash
+# Prefer project-local installs when uv is available
+uv run litschema --help
+```
+
+If that exits 0, set `LITSCHEMA` to `uv run litschema` for every command below. Otherwise try:
+
+```bash
+litschema --help
+```
+
+If that exits 0, set `LITSCHEMA` to `litschema`.
+
+If `litschema.yaml` is missing, stop and tell the user this skill must be run from a litschema project directory. Ask them to either point you to the folder containing `litschema.yaml`, or start the project onboarding/builder skill. The builder flow should run `litschema init` if needed, then ask for a file containing DOIs, PDFs, or bibliography records to initialize the article set.
+
+If neither command runner works, stop and tell the user litschema is not available in this shell. Ask them whether litschema should be installed globally or run through the project's local `uv` environment.
+
 ## Input
 
 The user will provide an `article_id` (e.g., `bell-2024`). You must:
 1. Read the domain context from `domain_context.md`
 2. Generate runtime schema context:
    ```bash
-   uv run python -m litschema.agent.prepare_schema_context
+   $LITSCHEMA agent prepare-schema-context
    ```
-3. Read `.litschema/runtime/schema_context.json`, `.litschema/runtime/extraction_schema.json`, and `.litschema/runtime/reasoning_schema.json` if it exists
+3. Read `.litschema/runtime/schema_context.json`, `.litschema/runtime/extraction_schema.json`, and `.litschema/runtime/reasoning_schema.json`
 4. Read the full-text markdown from `data/papers/{article_id}/article.md`
 
 If the markdown file doesn't exist or is < 100 characters, write an error marker:
@@ -30,7 +53,7 @@ to `data/papers/{article_id}/agent-extraction.json`.
 
 1. **Domain context** (`domain_context.md`) tells you what the research domain is and gives domain-specific extraction rules and field guidance. Follow these rules exactly.
 2. **Runtime schema context** (`.litschema/runtime/schema_context.json`) gives the resolved `extraction_root_class`; use that class as the root object while reading `.litschema/runtime/extraction_schema.json` for fields, types, enums, and descriptions.
-3. **Reasoning schema** (`.litschema/runtime/reasoning_schema.json`) defines the format for your reasoning output when present.
+3. **Reasoning schema** (`.litschema/runtime/reasoning_schema.json`) defines the format for your reasoning output.
 4. **The article markdown** is your sole data source. Extract ONLY from this text.
 
 **CRITICAL: Extract ONLY from the markdown file provided. Do NOT use any information from memory files, conversation context, prior knowledge about this paper, or other articles. Every extracted value must come from the text of this specific paper.**
@@ -55,7 +78,7 @@ This file documents WHY each value was extracted, with line-number evidence from
 ### Reasoning format rules
 
 - **path**: jq-style dot notation starting with `.` (e.g., `.foo.bar[0].baz`)
-- **value**: the extracted value (for cross-reference with the extraction JSON)
+- **value**: the extracted value rendered as text for cross-reference with the extraction JSON
 - **source_lines**: comma-separated line references from the markdown. Use `L{n}` for single lines, `L{start}-L{end}` for ranges. Example: `L23-L34,L55,L80-L90`
 - **reasoning**: plain text explanation for a human reviewer evaluating the extraction. Set to `null` if the source lines are self-explanatory (the value appears verbatim in the cited lines)
 - Skip `article_id`, `confidence`, and `reasoning` (top-level metadata) — only document extracted data fields
@@ -66,10 +89,10 @@ After writing both JSON files, run these validation commands. A file is valid on
 
 ```bash
 # Validate extraction against schema
-uv run litschema validate data/papers/{article_id}/agent-extraction.json
+$LITSCHEMA validate data/papers/{article_id}/agent-extraction.json
 
 # Validate reasoning against schema
-uv run python -m litschema.agent.validate_reasoning data/papers/{article_id}/agent-reasoning.json
+$LITSCHEMA agent validate-reasoning data/papers/{article_id}/agent-reasoning.json
 ```
 
 If either command exits nonzero, read the errors, fix the JSON, and re-run the failed command. Max 3 attempts. Common errors:

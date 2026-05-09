@@ -7,24 +7,47 @@ description: "Validate ERW article metadata, extractions, and reasoning against 
 
 Run validation across the ERW pipeline outputs and report issues.
 
+## Setup Gate
+
+Before validating, verify you are in a litschema project by checking for `litschema.yaml` in the current directory or a parent directory.
+
+Do not assume `uv` or `litschema` is available just because this skill is installed. Choose the command runner for this project:
+
+```bash
+# Prefer project-local installs when uv is available
+uv run litschema --help
+```
+
+If that exits 0, set `LITSCHEMA` to `uv run litschema` and `PYTHON` to `uv run python` for every command below. Otherwise try:
+
+```bash
+litschema --help
+```
+
+If that exits 0, set `LITSCHEMA` to `litschema` and `PYTHON` to `python3`.
+
+If `litschema.yaml` is missing, stop and tell the user this skill must be run from a litschema project directory. Ask them to either point you to the folder containing `litschema.yaml`, or start the project onboarding/builder skill. The builder flow should run `litschema init` if needed, then ask for a file containing DOIs, PDFs, or bibliography records to initialize the article set.
+
+If neither command runner works, stop and tell the user litschema is not available in this shell. Ask them whether litschema should be installed globally or run through the project's local `uv` environment.
+
 ## Steps
 
 1. **Validate all extractions** against the configured LinkML extraction schema:
 
 ```bash
-uv run litschema validate data/papers/
+$LITSCHEMA validate data/papers/
 ```
 
-2. **Validate all reasoning files** against the configured LinkML reasoning schema, when present:
+2. **Validate all reasoning files** against the configured LinkML reasoning schema:
 
 ```bash
-uv run python -m litschema.agent.validate_reasoning data/papers/
+$LITSCHEMA agent validate-reasoning data/papers/
 ```
 
 3. **Validate article metadata files** exist and are parseable:
 
 ```bash
-uv run python -c "
+$PYTHON -c "
 import json
 from pathlib import Path
 
@@ -57,7 +80,7 @@ print(f'\nMetadata: {valid} valid, {missing} missing, {invalid} invalid')
 5. **Check reasoning coverage** — for articles with reasoning files, report what percentage of extraction fields have corresponding reasoning entries:
 
 ```bash
-uv run python -c "
+$PYTHON -c "
 import json
 from pathlib import Path
 

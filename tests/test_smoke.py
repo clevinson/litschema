@@ -124,9 +124,14 @@ def test_bundled_skills_use_runtime_schema_context() -> None:
     validate_skill = (REPO_ROOT / "skills" / "validate-articles" / "SKILL.md").read_text()
     combined = extract_skill + "\n" + validate_skill
 
-    assert "uv run python -m litschema.agent.prepare_schema_context" in extract_skill
-    assert "uv run python -m litschema.agent.validate_reasoning" in extract_skill
-    assert "uv run python -m litschema.agent.validate_reasoning" in validate_skill
+    assert "Before running extraction, verify you are in a litschema project" in extract_skill
+    assert "Do not assume `uv` or `litschema` is available" in combined
+    assert "If `litschema.yaml` is missing" in combined
+    assert "set `LITSCHEMA` to `uv run litschema`" in combined
+    assert "set `LITSCHEMA` to `litschema`" in combined
+    assert "$LITSCHEMA agent prepare-schema-context" in extract_skill
+    assert "$LITSCHEMA agent validate-reasoning" in extract_skill
+    assert "$LITSCHEMA agent validate-reasoning" in validate_skill
     assert ".litschema/runtime/schema_context.json" in extract_skill
     assert "extraction_root_class" in extract_skill
     assert ".litschema/runtime/extraction_schema.json" in extract_skill
