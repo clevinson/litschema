@@ -18,9 +18,8 @@ class SchemaContext:
     reasoning_schema_path: Path
 
 
-def prepare_schema_context(cfg: LitSchemaConfig | None = None) -> SchemaContext:
+def prepare_schema_context(cfg: LitSchemaConfig) -> SchemaContext:
     """Write runtime JSON Schemas derived from the configured LinkML schemas."""
-    cfg = cfg or load_config()
     runtime_dir = cfg.project_root / ".litschema" / "runtime"
 
     extraction_schema, root_class = resolve_extraction_schema(cfg)
@@ -39,7 +38,7 @@ def prepare_schema_context(cfg: LitSchemaConfig | None = None) -> SchemaContext:
 
 
 def main() -> None:
-    context = prepare_schema_context()
+    context = prepare_schema_context(load_config())
     print(f"extraction_schema={context.extraction_schema_path}")
     print(f"reasoning_schema={context.reasoning_schema_path}")
 

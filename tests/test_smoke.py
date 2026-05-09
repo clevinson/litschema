@@ -224,8 +224,8 @@ def test_validate_defaults_to_article_store(
 
     calls = []
 
-    def fake_validate(args):
-        calls.append(args)
+    def fake_validate(args, cfg):
+        calls.append((args, cfg.config_path))
         return 0
 
     def fail_subprocess(*args, **kwargs):
@@ -237,4 +237,4 @@ def test_validate_defaults_to_article_store(
     result = CliRunner().invoke(cli.app, ["validate"])
 
     assert result.exit_code == 0, result.output
-    assert calls == [[]]
+    assert calls == [([], tmp_path / "litschema.yaml")]

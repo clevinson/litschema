@@ -39,8 +39,7 @@ def _reasoning_files_for_target(cfg: LitSchemaConfig, target: Path | None) -> li
     return [target]
 
 
-def run(args: list[str] | None = None, cfg: LitSchemaConfig | None = None) -> int:
-    cfg = cfg or load_config()
+def run(args: list[str] | None, cfg: LitSchemaConfig) -> int:
     args = list(args or [])
     target = Path(args[0]) if args else None
 
@@ -76,7 +75,7 @@ def run(args: list[str] | None = None, cfg: LitSchemaConfig | None = None) -> in
 
 
 def main() -> None:
-    code = run(sys.argv[1:])
+    code = run(sys.argv[1:], load_config())
     if code:
         sys.exit(code)
 

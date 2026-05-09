@@ -176,10 +176,10 @@ def extract(ctx: typer.Context):
     help="Validate per-article extractions against the LinkML schema.",
 )
 def validate(ctx: typer.Context):
-    _require_config()
+    cfg = _require_config()
 
     typer.echo(f"{DIM}→ validating extractions against extraction schema{RESET}")
-    raise typer.Exit(code=validate_extraction.run(list(ctx.args)))
+    raise typer.Exit(code=validate_extraction.run(list(ctx.args), cfg))
 
 
 @app.command(

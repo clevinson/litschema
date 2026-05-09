@@ -28,8 +28,7 @@ from ..articles import (
     read_article_metadata,
     read_review_events,
 )
-from ..config import load_config
-from ..config import LitSchemaConfig
+from ..config import LitSchemaConfig, load_config
 from ..schema_resolution import resolve_extraction_schema_view
 from .search import strip_references
 
@@ -175,13 +174,12 @@ def _enum_permissible_values(sv: SchemaView, enum_name: str) -> list[dict]:
     return values
 
 
-def _schema_field_metadata(cfg: LitSchemaConfig | None = None) -> dict:
+def _schema_field_metadata(cfg: LitSchemaConfig) -> dict:
     """Return enum metadata keyed by verifier path pattern.
 
     Multivalued path components use [] so the frontend can normalize
     concrete paths such as experiments[0].treatments[1].type.
     """
-    cfg = cfg or _CFG
     sv, root_class = resolve_extraction_schema_view(cfg)
     classes = set(sv.all_classes())
     enums = set(sv.all_enums())
@@ -201,7 +199,11 @@ def _schema_field_metadata(cfg: LitSchemaConfig | None = None) -> dict:
                     "permissible_values": _enum_permissible_values(sv, slot_range),
                 }
             elif slot_range in classes:
-                walk(slot_range, path_pattern if slot.multivalued else slot_path, (*stack, class_name))
+                walk(
+                    slot_range,
+                    path_pattern if slot.multivalued else slot_path,
+                    (*stack, class_name),
+                )
 
     walk(root_class)
     return {"root_class": root_class, "fields": fields}

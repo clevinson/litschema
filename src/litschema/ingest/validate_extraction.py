@@ -24,9 +24,8 @@ from ..schema_resolution import resolve_extraction_schema
 from ..schema_validation import LinkMLDataValidator, create_linkml_validator, generate_json_schema
 
 
-def generate_extraction_schema(cfg: LitSchemaConfig | None = None) -> dict:
+def generate_extraction_schema(cfg: LitSchemaConfig) -> dict:
     """Generate JSON Schema from the configured LinkML extraction schema."""
-    cfg = cfg or _load_config()
     schema_path, root_class = resolve_extraction_schema(cfg)
     return generate_json_schema(schema_path, root_class)
 
@@ -69,9 +68,8 @@ def _files_for_args(args: list[str], cfg: LitSchemaConfig) -> list[Path]:
     return [target]
 
 
-def run(args: list[str] | None = None, cfg: LitSchemaConfig | None = None) -> int:
+def run(args: list[str] | None, cfg: LitSchemaConfig) -> int:
     args = list(args or [])
-    cfg = cfg or _load_config()
 
     if "--dump-schema" in args:
         schema = generate_extraction_schema(cfg)
@@ -109,7 +107,7 @@ def run(args: list[str] | None = None, cfg: LitSchemaConfig | None = None) -> in
 
 
 def main():
-    sys.exit(run(sys.argv[1:]))
+    sys.exit(run(sys.argv[1:], _load_config()))
 
 
 if __name__ == "__main__":
