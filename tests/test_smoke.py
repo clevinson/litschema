@@ -118,7 +118,7 @@ def test_no_old_aggregate_surface_remains() -> None:
     assert offenders == []
 
 
-def test_bundled_skills_use_runtime_schema_context() -> None:
+def test_bundled_skills_use_runtime_schemas() -> None:
     """Agent skills should use runtime JSON Schemas, not root-level artifacts."""
     extract_skill = (REPO_ROOT / "skills" / "extract-article" / "SKILL.md").read_text()
     validate_skill = (REPO_ROOT / "skills" / "validate-articles" / "SKILL.md").read_text()
@@ -132,9 +132,8 @@ def test_bundled_skills_use_runtime_schema_context() -> None:
     assert "$LITSCHEMA agent prepare-schema-context" in extract_skill
     assert "$LITSCHEMA agent validate-reasoning" in extract_skill
     assert "$LITSCHEMA agent validate-reasoning" in validate_skill
-    assert ".litschema/runtime/schema_context.json" in extract_skill
-    assert "extraction_root_class" in extract_skill
     assert ".litschema/runtime/extraction_schema.json" in extract_skill
+    assert "do not infer a different root from `$defs`" in extract_skill
     assert "A file is valid only if the corresponding command exits 0" in extract_skill
     assert "Do NOT finish until both validation commands exit 0" in extract_skill
     assert "`extraction_schema.json`" not in combined

@@ -269,8 +269,6 @@ def agent_prepare_schema_context():
     from .agent.prepare_schema_context import prepare_schema_context
 
     context = prepare_schema_context(cfg)
-    typer.echo(f"schema_context={context.manifest_path}")
-    typer.echo(f"extraction_root_class={context.extraction_root_class}")
     typer.echo(f"extraction_schema={context.extraction_schema_path}")
     typer.echo(f"reasoning_schema={context.reasoning_schema_path}")
 

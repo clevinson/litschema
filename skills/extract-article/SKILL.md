@@ -40,7 +40,7 @@ The user will provide an `article_id` (e.g., `bell-2024`). You must:
    ```bash
    $LITSCHEMA agent prepare-schema-context
    ```
-3. Read `.litschema/runtime/schema_context.json`, `.litschema/runtime/extraction_schema.json`, and `.litschema/runtime/reasoning_schema.json`
+3. Read `.litschema/runtime/extraction_schema.json` and `.litschema/runtime/reasoning_schema.json`
 4. Read the full-text markdown from `data/papers/{article_id}/article.md`
 
 If the markdown file doesn't exist or is < 100 characters, write an error marker:
@@ -52,7 +52,7 @@ to `data/papers/{article_id}/agent-extraction.json`.
 ## How to Extract
 
 1. **Domain context** (`domain_context.md`) tells you what the research domain is and gives domain-specific extraction rules and field guidance. Follow these rules exactly.
-2. **Runtime schema context** (`.litschema/runtime/schema_context.json`) gives the resolved `extraction_root_class`; use that class as the root object while reading `.litschema/runtime/extraction_schema.json` for fields, types, enums, and descriptions.
+2. **Extraction schema** (`.litschema/runtime/extraction_schema.json`) is already generated with the correct top-level root object. Read it for fields, types, enums, and descriptions; do not infer a different root from `$defs`.
 3. **Reasoning schema** (`.litschema/runtime/reasoning_schema.json`) defines the format for your reasoning output.
 4. **The article markdown** is your sole data source. Extract ONLY from this text.
 

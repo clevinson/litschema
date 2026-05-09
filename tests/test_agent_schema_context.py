@@ -39,15 +39,9 @@ def test_prepare_schema_context_writes_runtime_extraction_schema(tmp_path, monke
     context = prepare_schema_context.prepare_schema_context(cfg)
 
     assert context.extraction_schema_path == generated
-    assert context.extraction_root_class == "ClinicalTrialReport"
     generated_schema = json.loads(generated.read_text())
     assert "article_id" in generated_schema["$defs"]["ClinicalTrialReport"]["properties"]
-    manifest = json.loads(context.manifest_path.read_text())
-    assert manifest == {
-        "extraction_schema": ".litschema/runtime/extraction_schema.json",
-        "extraction_root_class": "ClinicalTrialReport",
-        "reasoning_schema": ".litschema/runtime/reasoning_schema.json",
-    }
+    assert not (tmp_path / ".litschema" / "runtime" / "schema_context.json").exists()
     assert (tmp_path / ".litschema" / "runtime" / "reasoning_schema.json").is_file()
 
 
@@ -85,9 +79,7 @@ def test_prepare_schema_context_writes_bundled_reasoning_schema(tmp_path, monkey
     reasoning_schema = json.loads(context.reasoning_schema_path.read_text())
     assert "ExtractionReasoning" in reasoning_schema["$defs"]
     assert "ReasoningField" in reasoning_schema["$defs"]
-    manifest = json.loads((project / ".litschema" / "runtime" / "schema_context.json").read_text())
-    assert manifest["extraction_root_class"] == "TestExtraction"
-    assert manifest["reasoning_schema"] == ".litschema/runtime/reasoning_schema.json"
+    assert not (project / ".litschema" / "runtime" / "schema_context.json").exists()
 
 
 def test_runtime_json_schema_writes_are_atomic(tmp_path, monkeypatch) -> None:
@@ -242,8 +234,10 @@ def test_agent_prepare_schema_context_cli_command(monkeypatch) -> None:
     result = CliRunner().invoke(cli.app, ["agent", "prepare-schema-context"])
 
     assert result.exit_code == 0, result.output
-    assert "schema_context=" in result.output
-    assert "extraction_root_class=ClinicalTrialReport" in result.output
+    assert "extraction_schema=" in result.output
+    assert "reasoning_schema=" in result.output
+    assert "schema_context=" not in result.output
+    assert "extraction_root_class=" not in result.output
 
 
 def test_agent_validate_reasoning_cli_command_without_reasoning_files(monkeypatch) -> None:
