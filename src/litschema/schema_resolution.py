@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 
 from linkml_runtime.utils.schemaview import SchemaView
@@ -11,7 +12,14 @@ from .config import LitSchemaConfig
 DEFAULT_EXTRACTION_SCHEMA = "extraction.yaml"
 
 
-def extraction_schema_path(cfg: LitSchemaConfig) -> Path:
+@dataclass(frozen=True)
+class ResolvedExtractionSchema:
+    path: Path
+    view: SchemaView
+    root_class: str
+
+
+def _extraction_schema_path(cfg: LitSchemaConfig) -> Path:
     schema_file = cfg.raw.get("extraction_schema_file", DEFAULT_EXTRACTION_SCHEMA)
     path = cfg.schema_dir / schema_file
     if path.exists():
@@ -35,17 +43,11 @@ def _find_tree_root_class(sv: SchemaView) -> str:
     )
 
 
-def _resolve_extraction_schema_parts(cfg: LitSchemaConfig) -> tuple[Path, SchemaView, str]:
-    schema_path = extraction_schema_path(cfg)
+def resolve_extraction_schema(cfg: LitSchemaConfig) -> ResolvedExtractionSchema:
+    schema_path = _extraction_schema_path(cfg)
     sv = SchemaView(str(schema_path))
-    return schema_path, sv, _find_tree_root_class(sv)
-
-
-def resolve_extraction_schema_view(cfg: LitSchemaConfig) -> tuple[SchemaView, str]:
-    _, sv, root_class = _resolve_extraction_schema_parts(cfg)
-    return sv, root_class
-
-
-def resolve_extraction_schema(cfg: LitSchemaConfig) -> tuple[Path, str]:
-    schema_path, _, root_class = _resolve_extraction_schema_parts(cfg)
-    return schema_path, root_class
+    return ResolvedExtractionSchema(
+        path=schema_path,
+        view=sv,
+        root_class=_find_tree_root_class(sv),
+    )

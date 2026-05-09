@@ -162,7 +162,6 @@ def test_validate_reasoning_uses_bundled_schema_when_project_schema_absent(
     schema_dir = tmp_path / "schema"
     schema_dir.mkdir()
     (tmp_path / "litschema.yaml").write_text('project_root: "."\nschema_dir: "schema"\n')
-    cfg = load_config(tmp_path / "litschema.yaml", reload=True)
     reasoning = tmp_path / "agent-reasoning.json"
     reasoning.write_text(
         json.dumps(
@@ -179,8 +178,8 @@ def test_validate_reasoning_uses_bundled_schema_when_project_schema_absent(
         )
     )
 
-    assert validate_reasoning.run([str(reasoning)], cfg) == 0
-    assert "Reasoning: 1/1 valid" in capsys.readouterr().out
+    assert validate_reasoning.run([str(reasoning)]) == 0
+    assert f"Reasoning valid: {reasoning}" in capsys.readouterr().out
 
 
 def test_bundled_reasoning_schema_is_packaged() -> None:
@@ -193,7 +192,7 @@ def test_bundled_reasoning_schema_is_packaged() -> None:
     assert "ExtractionReasoning" in schema_path.read_text()
 
 
-def test_validate_reasoning_fails_when_no_reasoning_files(tmp_path, monkeypatch, capsys) -> None:
+def test_validate_reasoning_requires_explicit_target(tmp_path, monkeypatch, capsys) -> None:
     from litschema.agent import validate_reasoning
 
     schema_dir = tmp_path / "schema"
@@ -206,7 +205,10 @@ def test_validate_reasoning_fails_when_no_reasoning_files(tmp_path, monkeypatch,
         validate_reasoning.main()
 
     assert exc.value.code == 1
-    assert "No reasoning files found" in capsys.readouterr().out
+    assert (
+        "Usage: litschema agent validate-reasoning <agent-reasoning.json>"
+        in capsys.readouterr().out
+    )
 
 
 def test_validate_reasoning_fails_missing_explicit_target(tmp_path, monkeypatch, capsys) -> None:
@@ -243,7 +245,7 @@ def test_agent_prepare_schema_context_cli_command(monkeypatch) -> None:
     assert "extraction_root_class=" not in result.output
 
 
-def test_agent_validate_reasoning_cli_command_without_reasoning_files(monkeypatch) -> None:
+def test_agent_validate_reasoning_cli_command_requires_target(monkeypatch) -> None:
     from typer.testing import CliRunner
 
     from litschema import cli
@@ -254,4 +256,4 @@ def test_agent_validate_reasoning_cli_command_without_reasoning_files(monkeypatc
     result = CliRunner().invoke(cli.app, ["agent", "validate-reasoning"])
 
     assert result.exit_code == 1, result.output
-    assert "No reasoning files found" in result.output
+    assert "Usage: litschema agent validate-reasoning <agent-reasoning.json>" in result.output

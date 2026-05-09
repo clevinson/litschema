@@ -290,13 +290,13 @@ def agent_prepare_schema_context():
 @agent_app.command(
     "validate-reasoning",
     context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
-    help="Validate agent reasoning files against the configured reasoning schema.",
+    help="Validate an agent reasoning file against the bundled reasoning schema.",
 )
 def agent_validate_reasoning(ctx: typer.Context):
-    cfg = _require_config()
+    _require_config()
     from .agent import validate_reasoning
 
-    raise typer.Exit(code=validate_reasoning.run(list(ctx.args), cfg))
+    raise typer.Exit(code=validate_reasoning.run(list(ctx.args)))
 
 
 @skills_app.command(

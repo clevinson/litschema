@@ -1,4 +1,4 @@
-id: https://litschema.org/schema/extraction-reasoning
+id: https://example.org/litschema/extraction-reasoning
 name: litschema_extraction_reasoning
 default_range: string
 

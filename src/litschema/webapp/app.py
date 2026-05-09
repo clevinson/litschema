@@ -29,7 +29,7 @@ from ..articles import (
     read_review_events,
 )
 from ..config import LitSchemaConfig, load_config
-from ..schema_resolution import resolve_extraction_schema_view
+from ..schema_resolution import resolve_extraction_schema
 from .search import strip_references
 
 _CFG = load_config()
@@ -180,7 +180,9 @@ def _schema_field_metadata(cfg: LitSchemaConfig) -> dict:
     Multivalued path components use [] so the frontend can normalize
     concrete paths such as experiments[0].treatments[1].type.
     """
-    sv, root_class = resolve_extraction_schema_view(cfg)
+    extraction_schema = resolve_extraction_schema(cfg)
+    sv = extraction_schema.view
+    root_class = extraction_schema.root_class
     classes = set(sv.all_classes())
     enums = set(sv.all_enums())
     fields: dict[str, dict] = {}

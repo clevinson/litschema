@@ -27,7 +27,7 @@ from ..articles import (
     read_review_events,
 )
 from ..config import LitSchemaConfig
-from ..schema_resolution import resolve_extraction_schema_view
+from ..schema_resolution import resolve_extraction_schema
 
 
 @dataclass
@@ -318,7 +318,13 @@ def build_store(
         db_path = cfg.project_root / ".litschema" / "explore.duckdb"
     db_path.parent.mkdir(parents=True, exist_ok=True)
 
-    sources = [cfg.article_store_dir, cfg.llm_extractions_dir, reviews_dir, authors_path, institutions_path]
+    sources = [
+        cfg.article_store_dir,
+        cfg.llm_extractions_dir,
+        reviews_dir,
+        authors_path,
+        institutions_path,
+    ]
     if not force_rebuild and not _needs_rebuild(db_path, sources):
         con = duckdb.connect(str(db_path))
         try:
@@ -350,9 +356,9 @@ def build_store(
             )
 
     # Full rebuild: schema introspection drives column shape.
-    sv, class_name = resolve_extraction_schema_view(cfg)
-    columns = _derive_columns(sv, class_name)
-    id_slot = _identifier_slot(sv, class_name)
+    extraction_schema = resolve_extraction_schema(cfg)
+    columns = _derive_columns(extraction_schema.view, extraction_schema.root_class)
+    id_slot = _identifier_slot(extraction_schema.view, extraction_schema.root_class)
 
     override_map = _build_override_map(cfg)
 

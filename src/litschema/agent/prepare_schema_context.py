@@ -13,7 +13,6 @@ from .reasoning_schema import reasoning_schema_source_path
 
 @dataclass(frozen=True)
 class SchemaContext:
-    runtime_dir: Path
     extraction_schema_path: Path
     reasoning_schema_path: Path
 
@@ -22,9 +21,9 @@ def prepare_schema_context(cfg: LitSchemaConfig) -> SchemaContext:
     """Write runtime JSON Schemas derived from the configured LinkML schemas."""
     runtime_dir = cfg.project_root / ".litschema" / "runtime"
 
-    extraction_schema, root_class = resolve_extraction_schema(cfg)
+    extraction_schema = resolve_extraction_schema(cfg)
     extraction_output = runtime_dir / "extraction_schema.json"
-    write_json_schema(extraction_schema, root_class, extraction_output)
+    write_json_schema(extraction_schema.path, extraction_schema.root_class, extraction_output)
 
     reasoning_schema = reasoning_schema_source_path()
     reasoning_output = runtime_dir / "reasoning_schema.json"
@@ -33,7 +32,6 @@ def prepare_schema_context(cfg: LitSchemaConfig) -> SchemaContext:
     (runtime_dir / "schema_context.json").unlink(missing_ok=True)
 
     return SchemaContext(
-        runtime_dir=runtime_dir,
         extraction_schema_path=extraction_output,
         reasoning_schema_path=reasoning_output,
     )

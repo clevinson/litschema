@@ -13,8 +13,9 @@ from litschema.config import load_config
 FIXTURES = "tests/fixtures/projects"
 
 
-def test_validate_generation_uses_configured_schema_and_tree_root(monkeypatch) -> None:
-    from litschema.ingest import validate_extraction
+def test_json_schema_generation_uses_configured_schema_and_tree_root(monkeypatch) -> None:
+    from litschema.schema_resolution import resolve_extraction_schema
+    from litschema.schema_validation import generate_json_schema
 
     cfg = load_config("tests/fixtures/projects/custom_clinical/litschema.yaml", reload=True)
 
@@ -23,7 +24,8 @@ def test_validate_generation_uses_configured_schema_and_tree_root(monkeypatch) -
 
     monkeypatch.setattr(subprocess, "run", fail_subprocess)
 
-    schema = validate_extraction.generate_extraction_schema(cfg)
+    extraction_schema = resolve_extraction_schema(cfg)
+    schema = generate_json_schema(extraction_schema.path, extraction_schema.root_class)
 
     assert "ClinicalTrialReport" in schema["$defs"]
     assert schema["$defs"]["ClinicalTrialReport"]["required"] == [

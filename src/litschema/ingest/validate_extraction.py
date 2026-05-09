@@ -6,9 +6,6 @@ Usage:
 
     # Validate all extractions
     uv run python -m litschema.ingest.validate_extraction data/llm_extractions/
-
-    # Generate the extraction schema (for inspection)
-    uv run python -m litschema.ingest.validate_extraction --dump-schema
 """
 
 from __future__ import annotations
@@ -21,18 +18,7 @@ from ..articles import iter_extraction_paths
 from ..config import LitSchemaConfig
 from ..config import load_config as _load_config
 from ..schema_resolution import resolve_extraction_schema
-from ..schema_validation import LinkMLDataValidator, create_linkml_validator, generate_json_schema
-
-
-def generate_extraction_schema(cfg: LitSchemaConfig) -> dict:
-    """Generate JSON Schema from the configured LinkML extraction schema."""
-    schema_path, root_class = resolve_extraction_schema(cfg)
-    return generate_json_schema(schema_path, root_class)
-
-
-def validate_extraction(data: dict, validator: LinkMLDataValidator) -> list[str]:
-    """Validate extraction data against schema. Returns list of error messages."""
-    return validator.validate(data)
+from ..schema_validation import LinkMLDataValidator, create_linkml_validator
 
 
 def validate_file(
@@ -49,7 +35,7 @@ def validate_file(
         return True, []
 
     validator = validator or create_linkml_validator(schema_path, root_class)
-    errors = validate_extraction(data, validator)
+    errors = validator.validate(data)
     return len(errors) == 0, errors
 
 
@@ -71,19 +57,14 @@ def _files_for_args(args: list[str], cfg: LitSchemaConfig) -> list[Path]:
 def run(args: list[str] | None, cfg: LitSchemaConfig) -> int:
     args = list(args or [])
 
-    if "--dump-schema" in args:
-        schema = generate_extraction_schema(cfg)
-        print(json.dumps(schema, indent=2))
-        return 0
-
     try:
         files = _files_for_args(args, cfg)
     except FileNotFoundError as exc:
         print(exc)
         return 1
 
-    schema_path, root_class = resolve_extraction_schema(cfg)
-    validator = create_linkml_validator(schema_path, root_class)
+    extraction_schema = resolve_extraction_schema(cfg)
+    validator = create_linkml_validator(extraction_schema.path, extraction_schema.root_class)
 
     total = 0
     valid_count = 0
@@ -91,7 +72,12 @@ def run(args: list[str] | None, cfg: LitSchemaConfig) -> int:
 
     for filepath in files:
         total += 1
-        is_valid, errors = validate_file(filepath, schema_path, root_class, validator=validator)
+        is_valid, errors = validate_file(
+            filepath,
+            extraction_schema.path,
+            extraction_schema.root_class,
+            validator=validator,
+        )
         if is_valid:
             valid_count += 1
         else:
