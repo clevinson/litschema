@@ -45,7 +45,7 @@ include = [
 ]
 
 [tool.hatch.build.targets.wheel.force-include]
-"skills" = "litschema/_bundled_skills"
+"skills" = "litschema/skills"
 
 [dependency-groups]
 docs-build = ["mkdocs-material>=9.5", "mkdocs-mermaid2-plugin>=1.1", "linkml>=1.10.0", "pyyaml>=6.0"]

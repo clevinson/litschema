@@ -77,7 +77,7 @@ def test_bundled_skills_are_included_in_wheel() -> None:
 
     force_include = pyproject["tool"]["hatch"]["build"]["targets"]["wheel"]["force-include"]
 
-    assert force_include["skills"] == "litschema/_bundled_skills"
+    assert force_include["skills"] == "litschema/skills"
 
-    bundled = cli._bundled_skills_dir()
+    bundled = cli._packaged_skills_dir()
     assert bundled.joinpath("extract-article", "SKILL.md").is_file()

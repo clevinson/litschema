@@ -100,8 +100,8 @@ def _valid_skill_dirs(skills_dir: Path) -> list[Path]:
     )
 
 
-def _bundled_skills_dir() -> Path:
-    packaged = resources.files("litschema") / "_bundled_skills"
+def _packaged_skills_dir() -> Path:
+    packaged = resources.files("litschema") / "skills"
     if packaged.is_dir():
         return Path(str(packaged))
     return Path(__file__).resolve().parents[2] / "skills"
@@ -109,7 +109,7 @@ def _bundled_skills_dir() -> Path:
 
 def _skill_sources() -> list[Path]:
     """Return installable bundled skills from the litschema package."""
-    return _valid_skill_dirs(_bundled_skills_dir())
+    return _valid_skill_dirs(_packaged_skills_dir())
 
 
 def _agent_skill_destinations(agent: str) -> list[Path]:
