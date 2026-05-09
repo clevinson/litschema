@@ -107,11 +107,25 @@ def _bundled_skills_dir() -> Path:
     return Path(__file__).resolve().parents[2] / "skills"
 
 
-def _skill_sources(cfg: LitSchemaConfig) -> list[Path]:
-    """Return installable skills, with project-local skills overriding bundled defaults."""
-    by_name = {path.name: path for path in _valid_skill_dirs(_bundled_skills_dir())}
-    by_name.update({path.name: path for path in _valid_skill_dirs(cfg.project_root / "skills")})
-    return [by_name[name] for name in sorted(by_name)]
+def _skill_sources() -> list[Path]:
+    """Return installable bundled skills from the litschema package."""
+    return _valid_skill_dirs(_bundled_skills_dir())
+
+
+def _agent_skill_destinations(agent: str) -> list[Path]:
+    home = Path.home()
+    destinations = {
+        "claude": home / ".claude" / "skills",
+        "codex": home / ".codex" / "skills",
+    }
+    agent = agent.lower()
+    if agent == "auto":
+        return [path for name, path in destinations.items() if (home / f".{name}").exists()]
+    if agent == "both":
+        return [destinations["claude"], destinations["codex"]]
+    if agent in destinations:
+        return [destinations[agent]]
+    raise typer.BadParameter("--agent must be one of: auto, claude, codex, both")
 
 
 # ── Pipeline verbs (delegate to existing module mains) ─────────────────────
@@ -254,7 +268,7 @@ def mcp(
 
 # ── Skills subcommands ─────────────────────────────────────────────────────
 
-skills_app = typer.Typer(help="Agentic skill management (.claude/skills/).", no_args_is_help=True)
+skills_app = typer.Typer(help="Agentic skill management.", no_args_is_help=True)
 app.add_typer(skills_app, name="skills")
 
 agent_app = typer.Typer(
@@ -287,49 +301,58 @@ def agent_validate_reasoning(ctx: typer.Context):
 
 @skills_app.command(
     "install",
-    help="Install bundled agentic skills into .claude/skills/ (Claude Code compatible).",
+    help="Install bundled agentic skills globally for Claude Code and/or Codex.",
 )
 def skills_install(
-    dest: Path = typer.Option(Path(".claude/skills"), "--dest", help="Destination for skill links"),
-    copy: bool = typer.Option(False, "--copy", help="Copy instead of symlink"),
+    agent: str = typer.Option(
+        "auto", "--agent", help="Agent destination: auto, claude, codex, or both"
+    ),
+    dest: Path | None = typer.Option(None, "--dest", help="Custom destination for skill files"),
+    copy: bool = typer.Option(True, "--copy/--symlink", help="Copy instead of symlink"),
     force: bool = typer.Option(False, "--force", help="Overwrite existing"),
 ):
-    cfg = _require_config()
-    skill_sources = _skill_sources(cfg)
+    skill_sources = _skill_sources()
     if not skill_sources:
-        typer.secho("no bundled or project-local skills found", fg=typer.colors.RED)
+        typer.secho("no bundled skills found", fg=typer.colors.RED)
         raise typer.Exit(code=2)
 
-    # If --dest is relative, anchor it to the project root so running from
-    # a subdirectory still installs into `<project>/.claude/skills/`.
-    if not dest.is_absolute():
-        dest = cfg.project_root / dest
-    dest = dest.resolve()
-    dest.mkdir(parents=True, exist_ok=True)
+    if dest is not None:
+        destinations = [dest.expanduser().resolve()]
+    else:
+        destinations = _agent_skill_destinations(agent)
+        if not destinations:
+            typer.secho(
+                "no Claude Code or Codex config directory found; use "
+                "`--agent claude`, `--agent codex`, `--agent both`, or `--dest <path>`",
+                fg=typer.colors.RED,
+            )
+            raise typer.Exit(code=2)
 
     installed = 0
-    for skill_dir in skill_sources:
-        target = dest / skill_dir.name
-        if target.exists() or target.is_symlink():
-            if not force:
-                typer.echo(f"{WARN} {target} already exists (use --force to overwrite)")
-                continue
-            if target.is_symlink() or target.is_file():
-                target.unlink()
+    for destination in destinations:
+        destination.mkdir(parents=True, exist_ok=True)
+        for skill_dir in skill_sources:
+            target = destination / skill_dir.name
+            if target.exists() or target.is_symlink():
+                if not force:
+                    typer.echo(f"{WARN} {target} already exists (use --force to overwrite)")
+                    continue
+                if target.is_symlink() or target.is_file():
+                    target.unlink()
+                else:
+                    shutil.rmtree(target)
+            if copy:
+                shutil.copytree(skill_dir, target)
+                typer.echo(f"{CHECK} copied {skill_dir.name} → {target}")
             else:
-                shutil.rmtree(target)
-        if copy:
-            shutil.copytree(skill_dir, target)
-            typer.echo(f"{CHECK} copied {skill_dir.name} → {target}")
-        else:
-            target.symlink_to(skill_dir.resolve(), target_is_directory=True)
-            typer.echo(f"{CHECK} linked {skill_dir.name} → {target}")
-        installed += 1
+                target.symlink_to(skill_dir.resolve(), target_is_directory=True)
+                typer.echo(f"{CHECK} linked {skill_dir.name} → {target}")
+            installed += 1
 
     if installed == 0:
         typer.echo("No skills installed.")
     else:
-        typer.echo("\nAvailable as slash-commands in agents that read .claude/skills/:")
+        typer.echo("\nAvailable as slash-commands in agents that read installed skills:")
         for skill_dir in skill_sources:
             typer.echo(f"  /{skill_dir.name}")
 
@@ -400,25 +423,24 @@ def doctor():
         issues.append(f"create {cfg.schema_dir}")
 
     # Skills check
-    claude_skills = cfg.project_root / ".claude" / "skills"
-    if claude_skills.is_dir():
-        installed = [p.name for p in claude_skills.iterdir() if (p / "SKILL.md").exists()]
-        if installed:
-            typer.echo(f"{CHECK} Claude Code skills linked: {', '.join(installed)}")
-        else:
-            typer.echo(f"{WARN} .claude/skills/ exists but no SKILL.md files found")
-            issues.append("run `litschema skills install`")
+    skills_dirs = _agent_skill_destinations("auto")
+    installed = []
+    for skills_dir in skills_dirs:
+        if skills_dir.is_dir():
+            installed.extend(p.name for p in skills_dir.iterdir() if (p / "SKILL.md").exists())
+    if installed:
+        typer.echo(f"{CHECK} global agent skills installed: {', '.join(sorted(set(installed)))}")
     else:
-        typer.echo(f"{WARN} Claude Code skills not installed")
-        issues.append("run `litschema skills install`")
+        typer.echo(f"{WARN} global agent skills not installed")
+        issues.append("run `litschema skills install --agent claude` or `--agent codex`")
 
-    if shutil.which("claude"):
-        typer.echo(f"{CHECK} agent CLI on PATH (claude)")
+    agent_cli = shutil.which("claude") or shutil.which("codex")
+    if agent_cli:
+        typer.echo(f"{CHECK} agent CLI on PATH ({Path(agent_cli).name})")
     else:
         typer.echo(f"{WARN} no agent CLI on PATH — bundled skills need one to run")
         issues.append(
-            "install an agentic CLI that reads .claude/skills/ "
-            "(e.g. Claude Code: npm install -g @anthropic-ai/claude-code)"
+            "install an agentic CLI that reads installed skills (e.g. Claude Code or Codex)"
         )
 
     if issues:

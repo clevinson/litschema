@@ -16,7 +16,7 @@ Before running extraction, verify you are in a litschema project by checking for
 Do not assume `uv` or `litschema` is available just because this skill is installed. Choose the command runner for this project:
 
 ```bash
-# Prefer project-local installs when uv is available
+# Prefer the project's Python environment when uv is available
 uv run litschema --help
 ```
 
@@ -80,7 +80,7 @@ This file documents WHY each value was extracted, with line-number evidence from
 - **path**: jq-style dot notation starting with `.` (e.g., `.foo.bar[0].baz`)
 - **value**: the extracted value rendered as text for cross-reference with the extraction JSON
 - **source_lines**: comma-separated line references from the markdown. Use `L{n}` for single lines, `L{start}-L{end}` for ranges. Example: `L23-L34,L55,L80-L90`
-- **reasoning**: plain text explanation for a human reviewer evaluating the extraction. Set to `null` if the source lines are self-explanatory (the value appears verbatim in the cited lines)
+- **reasoning**: plain text explanation for a human reviewer evaluating the extraction. Omit this key when the source lines are self-explanatory (the value appears verbatim in the cited lines)
 - Skip `article_id`, `confidence`, and `reasoning` (top-level metadata) — only document extracted data fields
 
 ## Validation

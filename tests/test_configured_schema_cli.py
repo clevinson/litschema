@@ -39,6 +39,8 @@ def test_validate_file_uses_linkml_schema_directly(tmp_path) -> None:
     valid = cfg.llm_extractions_dir / "garcia-2024.json"
     invalid = tmp_path / "invalid-missing-required.json"
     invalid.write_text('{"article_id": "invalid"}')
+    extra = tmp_path / "invalid-extra-property.json"
+    extra.write_text('{"article_id": "extra", "primary_endpoint": "yield", "unexpected": true}')
 
     assert validate_file(valid, cfg.schema_dir / "clinical_trial.yaml", "ClinicalTrialReport") == (
         True,
@@ -50,6 +52,10 @@ def test_validate_file_uses_linkml_schema_directly(tmp_path) -> None:
 
     assert ok is False
     assert any("primary_endpoint" in error for error in errors)
+
+    ok, errors = validate_file(extra, cfg.schema_dir / "clinical_trial.yaml", "ClinicalTrialReport")
+    assert ok is False
+    assert any("unexpected" in error for error in errors)
 
 
 def test_validate_run_reuses_linkml_validator(tmp_path, monkeypatch) -> None:

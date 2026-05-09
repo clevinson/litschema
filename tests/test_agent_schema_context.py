@@ -34,6 +34,9 @@ def test_prepare_schema_context_writes_runtime_extraction_schema(tmp_path, monke
         raise AssertionError("prepare_schema_context should use LinkML Python APIs")
 
     generated = tmp_path / ".litschema" / "runtime" / "extraction_schema.json"
+    stale_manifest = tmp_path / ".litschema" / "runtime" / "schema_context.json"
+    stale_manifest.parent.mkdir(parents=True)
+    stale_manifest.write_text("{}")
     monkeypatch.setattr(subprocess, "run", fail_subprocess)
 
     context = prepare_schema_context.prepare_schema_context(cfg)
@@ -41,7 +44,7 @@ def test_prepare_schema_context_writes_runtime_extraction_schema(tmp_path, monke
     assert context.extraction_schema_path == generated
     generated_schema = json.loads(generated.read_text())
     assert "article_id" in generated_schema["$defs"]["ClinicalTrialReport"]["properties"]
-    assert not (tmp_path / ".litschema" / "runtime" / "schema_context.json").exists()
+    assert not stale_manifest.exists()
     assert (tmp_path / ".litschema" / "runtime" / "reasoning_schema.json").is_file()
 
 

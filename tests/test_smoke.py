@@ -131,6 +131,8 @@ def test_bundled_skills_use_runtime_schemas() -> None:
     assert "$LITSCHEMA agent validate-reasoning" in extract_skill
     assert ".litschema/runtime/extraction_schema.json" in extract_skill
     assert "do not infer a different root from `$defs`" in extract_skill
+    assert "Omit this key when the source lines are self-explanatory" in extract_skill
+    assert "Set to `null`" not in extract_skill
     assert "A file is valid only if the corresponding command exits 0" in extract_skill
     assert "Do NOT finish until both validation commands exit 0" in extract_skill
     assert "`extraction_schema.json`" not in extract_skill
