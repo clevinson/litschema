@@ -162,8 +162,6 @@ def extract_metadata(raw: dict) -> dict:
 def harvest(
     cfg: LitSchemaConfig,
     *,
-    xlsx_path: Path | None = None,
-    data_dir: Path | None = None,
     email: str | None = None,
     skip_existing: bool = True,
 ) -> dict:
@@ -171,12 +169,11 @@ def harvest(
 
     Returns summary stats dict.
     """
-    xlsx_path = xlsx_path or cfg.tracking_xlsx
-    data_dir = data_dir or harvest_cache_dir(cfg, "openalex")
+    data_dir = harvest_cache_dir(cfg, "openalex")
     data_dir.mkdir(parents=True, exist_ok=True)
 
-    rows = load_dois_from_xlsx(xlsx_path)
-    logger.info("Loaded %d papers with DOIs from %s", len(rows), xlsx_path.name)
+    rows = load_dois_from_xlsx(cfg.tracking_xlsx)
+    logger.info("Loaded %d papers with DOIs from %s", len(rows), cfg.tracking_xlsx.name)
 
     stats = {"total": len(rows), "fetched": 0, "skipped": 0, "not_found": 0, "errors": 0}
 
@@ -223,21 +220,13 @@ def harvest(
 def main():
     parser = argparse.ArgumentParser(description="Harvest ERW paper metadata from OpenAlex")
     parser.add_argument("--email", help="Email for OpenAlex polite pool (recommended)")
-    parser.add_argument("--data-dir", type=Path, default=None)
-    parser.add_argument("--xlsx", type=Path, default=None)
     parser.add_argument("--no-skip", action="store_true", help="Re-fetch existing files")
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
     cfg = require_config_or_exit()
-    stats = harvest(
-        cfg,
-        xlsx_path=args.xlsx,
-        data_dir=args.data_dir,
-        email=args.email,
-        skip_existing=not args.no_skip,
-    )
+    stats = harvest(cfg, email=args.email, skip_existing=not args.no_skip)
     print(json.dumps(stats, indent=2))
 
 

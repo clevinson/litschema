@@ -274,15 +274,10 @@ def resolve_authors(openalex_dir: Path, institutions: list[dict]) -> list[dict]:
     return authors
 
 
-def resolve(
-    cfg: LitSchemaConfig,
-    *,
-    openalex_dir: Path | None = None,
-    data_dir: Path | None = None,
-) -> tuple[list[dict], list[dict]]:
+def resolve(cfg: LitSchemaConfig) -> tuple[list[dict], list[dict]]:
     """Run full entity resolution. Returns (institutions, authors)."""
-    openalex_dir = openalex_dir or harvest_cache_dir(cfg, "openalex")
-    data_dir = data_dir or cfg.data_dir
+    openalex_dir = harvest_cache_dir(cfg, "openalex")
+    data_dir = cfg.data_dir
     institutions = resolve_institutions(openalex_dir)
     authors = resolve_authors(openalex_dir, institutions)
 
@@ -302,18 +297,10 @@ def resolve(
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Resolve and deduplicate authors/institutions")
-    parser.add_argument("--openalex-dir", type=Path, default=None)
-    parser.add_argument("--data-dir", type=Path, default=None)
-    args = parser.parse_args()
-
+    argparse.ArgumentParser(description="Resolve and deduplicate authors/institutions").parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     cfg = require_config_or_exit()
-    resolve(
-        cfg,
-        openalex_dir=args.openalex_dir,
-        data_dir=args.data_dir,
-    )
+    resolve(cfg)
 
 
 if __name__ == "__main__":
