@@ -18,15 +18,9 @@ from pathlib import Path
 
 import requests
 
-from ..config import load_config
+from ..config import LitSchemaConfig, require_config
 
 logger = logging.getLogger(__name__)
-
-_CFG = load_config()
-# Project root is whatever litschema.yaml points at.
-PROJECT_ROOT = _CFG.project_root
-TRACKING_XLSX = _CFG.tracking_xlsx
-DEFAULT_DATA_DIR = _CFG.openalex_dir
 
 OPENALEX_API = "https://api.openalex.org/works"
 # Rate limit: 10 req/s without polite pool, 100 req/s with mailto
@@ -165,8 +159,10 @@ def extract_metadata(raw: dict) -> dict:
 
 
 def harvest(
-    xlsx_path: Path = TRACKING_XLSX,
-    data_dir: Path = DEFAULT_DATA_DIR,
+    cfg: LitSchemaConfig,
+    *,
+    xlsx_path: Path | None = None,
+    data_dir: Path | None = None,
     email: str | None = None,
     skip_existing: bool = True,
 ) -> dict:
@@ -174,6 +170,8 @@ def harvest(
 
     Returns summary stats dict.
     """
+    xlsx_path = xlsx_path or cfg.tracking_xlsx
+    data_dir = data_dir or cfg.openalex_dir
     data_dir.mkdir(parents=True, exist_ok=True)
 
     rows = load_dois_from_xlsx(xlsx_path)
@@ -224,14 +222,16 @@ def harvest(
 def main():
     parser = argparse.ArgumentParser(description="Harvest ERW paper metadata from OpenAlex")
     parser.add_argument("--email", help="Email for OpenAlex polite pool (recommended)")
-    parser.add_argument("--data-dir", type=Path, default=DEFAULT_DATA_DIR)
-    parser.add_argument("--xlsx", type=Path, default=TRACKING_XLSX)
+    parser.add_argument("--data-dir", type=Path, default=None)
+    parser.add_argument("--xlsx", type=Path, default=None)
     parser.add_argument("--no-skip", action="store_true", help="Re-fetch existing files")
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
+    cfg = require_config()
     stats = harvest(
+        cfg,
         xlsx_path=args.xlsx,
         data_dir=args.data_dir,
         email=args.email,

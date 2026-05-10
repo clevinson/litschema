@@ -42,7 +42,6 @@ def test_pdf_conversion_defaults_to_article_folder(
         json.dumps({"id": "smith-2024", "filename": "smith.pdf"})
     )
     (cfg.papers_dir / "smith.pdf").write_text("pdf placeholder")
-    monkeypatch.setattr(pdf_to_markdown, "_CFG", cfg)
 
     def fake_convert_pdf(pdf_path: Path, out_path: Path) -> int:
         out_path.write_text("# Smith\n")
@@ -51,6 +50,7 @@ def test_pdf_conversion_defaults_to_article_folder(
     monkeypatch.setattr(pdf_to_markdown, "convert_pdf", fake_convert_pdf)
 
     stats = pdf_to_markdown.run(
+        cfg,
         papers_dir=cfg.papers_dir,
         output_dir=None,
     )

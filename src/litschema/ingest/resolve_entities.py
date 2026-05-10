@@ -20,15 +20,9 @@ from pathlib import Path
 import jellyfish
 import yaml
 
-from ..config import load_config
+from ..config import LitSchemaConfig, require_config
 
 logger = logging.getLogger(__name__)
-
-_CFG = load_config()
-PROJECT_ROOT = _CFG.project_root
-OPENALEX_DIR = _CFG.openalex_dir
-CROSSREF_DIR = _CFG.crossref_dir
-DATA_DIR = _CFG.data_dir
 
 JARO_WINKLER_THRESHOLD = 0.92  # High threshold to avoid false merges
 
@@ -280,11 +274,16 @@ def resolve_authors(openalex_dir: Path, institutions: list[dict]) -> list[dict]:
 
 
 def resolve(
-    openalex_dir: Path = OPENALEX_DIR,
-    crossref_dir: Path = CROSSREF_DIR,
-    data_dir: Path = DATA_DIR,
+    cfg: LitSchemaConfig,
+    *,
+    openalex_dir: Path | None = None,
+    crossref_dir: Path | None = None,
+    data_dir: Path | None = None,
 ) -> tuple[list[dict], list[dict]]:
     """Run full entity resolution. Returns (institutions, authors)."""
+    openalex_dir = openalex_dir or cfg.openalex_dir
+    crossref_dir = crossref_dir or cfg.crossref_dir
+    data_dir = data_dir or cfg.data_dir
     institutions = resolve_institutions(openalex_dir, crossref_dir)
     authors = resolve_authors(openalex_dir, institutions)
 
@@ -305,13 +304,19 @@ def resolve(
 
 def main():
     parser = argparse.ArgumentParser(description="Resolve and deduplicate authors/institutions")
-    parser.add_argument("--openalex-dir", type=Path, default=OPENALEX_DIR)
-    parser.add_argument("--crossref-dir", type=Path, default=CROSSREF_DIR)
-    parser.add_argument("--data-dir", type=Path, default=DATA_DIR)
+    parser.add_argument("--openalex-dir", type=Path, default=None)
+    parser.add_argument("--crossref-dir", type=Path, default=None)
+    parser.add_argument("--data-dir", type=Path, default=None)
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    resolve(openalex_dir=args.openalex_dir, crossref_dir=args.crossref_dir, data_dir=args.data_dir)
+    cfg = require_config()
+    resolve(
+        cfg,
+        openalex_dir=args.openalex_dir,
+        crossref_dir=args.crossref_dir,
+        data_dir=args.data_dir,
+    )
 
 
 if __name__ == "__main__":
