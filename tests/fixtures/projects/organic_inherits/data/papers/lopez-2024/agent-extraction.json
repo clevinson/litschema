@@ -1,0 +1,42 @@
+{
+  "article_id": "lopez-2024",
+  "confidence": 0.81,
+  "reasoning": "Three-year certified-organic vineyard trial in Spain; explicit certification body and full set of organic practices documented.",
+  "study_type": "field_trial",
+  "crops": ["wine_grapes"],
+  "experiments": [
+    {
+      "site": {"country": "Spain", "admin_boundary": "Catalonia", "latitude": 41.4, "longitude": 1.8},
+      "soil": {
+        "texture_class": "clay_loam",
+        "sand_pct": 30.0,
+        "silt_pct": 35.0,
+        "clay_pct": 35.0,
+        "taxonomy_system": "WRB",
+        "taxonomy_class": "Calcisol"
+      },
+      "treatments": [
+        {
+          "name": "compost amendment",
+          "type": "amendment",
+          "rate": "10 t/ha compost",
+          "outcomes": [
+            {"variable": "yield", "unit": "kg/ha", "effect_direction": "neutral"},
+            {"variable": "soil_microbial_biomass", "unit": "mg C/kg", "effect_direction": "positive"}
+          ]
+        },
+        {
+          "name": "intercropping with legumes",
+          "type": "cover_crop",
+          "outcomes": [
+            {"variable": "yield", "unit": "kg/ha", "effect_direction": "neutral"},
+            {"variable": "soil_microbial_biomass", "unit": "mg C/kg", "effect_direction": "positive"}
+          ]
+        }
+      ]
+    }
+  ],
+  "sample_size": 18,
+  "certification_body": "EU Organic",
+  "organic_practices": ["cover_cropping", "intercropping", "compost_amendment"]
+}

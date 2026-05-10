@@ -2,10 +2,10 @@
 
 Usage:
     # Validate a single extraction
-    uv run python -m litschema.ingest.validate_extraction data/llm_extractions/beerling-2024.json
+    uv run python -m litschema.ingest.validate_extraction data/papers/beerling-2024/agent-extraction.json
 
     # Validate all extractions
-    uv run python -m litschema.ingest.validate_extraction data/llm_extractions/
+    uv run python -m litschema.ingest.validate_extraction
 """
 
 from __future__ import annotations
@@ -46,9 +46,9 @@ def _files_for_args(args: list[str], cfg: LitSchemaConfig) -> list[Path]:
     if not target.exists():
         raise FileNotFoundError(f"Missing extraction target: {target}")
     if target.is_dir():
-        files = sorted(target.glob("*.json"))
+        files = sorted(target.glob("*/agent-extraction.json"))
         if not files:
-            files = list(iter_extraction_paths(cfg))
+            raise FileNotFoundError(f"No agent-extraction.json files found under: {target}")
         return files
     return [target]
 
@@ -81,7 +81,7 @@ def run(args: list[str] | None, cfg: LitSchemaConfig) -> int:
             valid_count += 1
         else:
             error_files.append((filepath.name, errors))
-            print(f"INVALID: {filepath.name}")
+            print(f"INVALID: {filepath}")
             for err in errors:
                 print(f"  {err}")
 

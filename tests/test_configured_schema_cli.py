@@ -8,6 +8,7 @@ import sys
 import pytest
 from typer.testing import CliRunner
 
+from litschema.articles import article_files
 from litschema.config import load_config
 
 FIXTURES = "tests/fixtures/projects"
@@ -38,7 +39,7 @@ def test_validate_file_uses_linkml_schema_directly(tmp_path) -> None:
     from litschema.ingest.validate_extraction import validate_file
 
     cfg = load_config("tests/fixtures/projects/custom_clinical/litschema.yaml", reload=True)
-    valid = cfg.llm_extractions_dir / "garcia-2024.json"
+    valid = article_files(cfg, "garcia-2024").extraction
     invalid = tmp_path / "invalid-missing-required.json"
     invalid.write_text('{"article_id": "invalid"}')
     extra = tmp_path / "invalid-extra-property.json"
@@ -91,6 +92,27 @@ def test_validate_run_reuses_linkml_validator(tmp_path, monkeypatch) -> None:
     assert validate_extraction.run([], cfg) == 0
     assert created == [(cfg.schema_dir / "clinical_trial.yaml", "ClinicalTrialReport")]
     assert fake_validator.calls == 2
+
+
+def test_validate_directory_argument_uses_per_article_layout(tmp_path) -> None:
+    from litschema.ingest import validate_extraction
+
+    cfg = load_config("tests/fixtures/projects/custom_clinical/litschema.yaml", reload=True)
+    article_dir = tmp_path / "garcia-2024"
+    article_dir.mkdir()
+    extraction = article_dir / "agent-extraction.json"
+    extraction.write_text('{"article_id": "garcia-2024", "primary_endpoint": "yield"}')
+
+    assert validate_extraction._files_for_args([str(tmp_path)], cfg) == [extraction]
+
+
+def test_validate_directory_argument_requires_extraction_files(tmp_path) -> None:
+    from litschema.ingest import validate_extraction
+
+    cfg = load_config("tests/fixtures/projects/custom_clinical/litschema.yaml", reload=True)
+
+    with pytest.raises(FileNotFoundError, match="No agent-extraction.json files"):
+        validate_extraction._files_for_args([str(tmp_path)], cfg)
 
 
 def test_schema_command_is_not_part_of_public_cli() -> None:

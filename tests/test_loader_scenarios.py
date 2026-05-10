@@ -250,7 +250,6 @@ def test_imported_tree_root_is_filtered_out(tmp_path: Path) -> None:
     prevents — proves the filter is actually doing something."""
     project = tmp_path / "no_local_root"
     (project / "schema").mkdir(parents=True)
-    (project / "data" / "llm_extractions").mkdir(parents=True)
 
     # The agriculture schema has tree_root on AgricultureExtraction
     template = (
@@ -277,11 +276,7 @@ def test_imported_tree_root_is_filtered_out(tmp_path: Path) -> None:
         'schema_dir: "schema"\n'
         'extraction_schema_file: "shell.yaml"\n'
         'data_dir: "data"\n'
-        'llm_extractions_dir: "data/llm_extractions"\n'
-        'annotations_dir: "data/reviews"\n'
         'papers_dir: "papers"\n'
-        'fulltext_md_dir: "data/fulltext_md"\n'
-        'extraction_reasoning_dir: "data/extraction_reasoning"\n'
     )
 
     cfg = load_config(project / "litschema.yaml")

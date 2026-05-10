@@ -96,8 +96,7 @@ def _build_setups(records: list[dict]) -> pd.DataFrame:
                 {
                     "article_id": r["article_id"],
                     "setup_idx": idx,
-                    "experimental_scale": setup.get("experimental_scale")
-                    or setup.get("trial_type"),
+                    "experimental_scale": setup.get("experimental_scale"),
                     # location
                     "country": loc.get("country"),
                     "admin_boundary": loc.get("admin_boundary"),

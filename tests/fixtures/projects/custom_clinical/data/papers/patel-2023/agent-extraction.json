@@ -1,0 +1,10 @@
+{
+  "article_id": "patel-2023",
+  "registry_id": "NCT03999111",
+  "n_arms": 2,
+  "total_participants": 156,
+  "primary_endpoint": "change in HbA1c at 24 weeks",
+  "blinding": "open_label",
+  "interventions": ["standard care", "intensive lifestyle program"],
+  "outcomes_reported": ["HbA1c", "weight", "quality_of_life"]
+}

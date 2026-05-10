@@ -20,7 +20,7 @@ Typical usage::
 
     from litschema.config import load_config
     cfg = load_config()
-    md_dir = cfg.fulltext_md_dir   # -> Path
+    article_store = cfg.article_store_dir   # -> Path
 
 The loader result is cached per resolved path; pass ``reload=True`` to bust.
 """
@@ -54,11 +54,6 @@ class LitSchemaConfig:
     # Files.
     tracking_xlsx: Path
 
-    # Stage-numbered subdirectories.
-    fulltext_md_dir: Path
-    llm_extractions_dir: Path
-    extraction_reasoning_dir: Path
-    annotations_dir: Path
     article_store_dir: Path
 
     # External (typically sibling to project_root).
@@ -127,14 +122,6 @@ _PATH_FIELDS: tuple[tuple[str, str, str], ...] = (
     ("schema_dir", "schema_dir", "schema"),
     ("references_dir", "references_dir", "references"),
     ("tracking_xlsx", "tracking_xlsx", "paper_download_tracking.xlsx"),
-    ("fulltext_md_dir", "fulltext_md_dir", "data/fulltext_md"),
-    ("llm_extractions_dir", "llm_extractions_dir", "data/llm_extractions"),
-    (
-        "extraction_reasoning_dir",
-        "extraction_reasoning_dir",
-        "data/extraction_reasoning",
-    ),
-    ("annotations_dir", "annotations_dir", "data/reviews"),
     ("article_store_dir", "article_store_dir", "data/papers"),
     ("papers_dir", "papers_dir", "papers"),
     ("static_site_dir", "static_site_dir", "static-site"),

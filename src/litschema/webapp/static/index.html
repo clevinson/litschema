@@ -2274,7 +2274,6 @@ $("#article-select").addEventListener("change", async (e) => {
       let p = entry.path;
       if (p.startsWith(".")) p = p.slice(1);
       p = p.replace(/\.(\d+)(?=\.|$)/g, "[$1]");
-      p = normalizeReasoningPath(p);
       state.reasoningByPath[p] = entry;
     }
   }
@@ -3862,7 +3861,7 @@ function wireTableEvents(panel) {
         nav._activeIndex = 0;
         renderSourceState(nav);
       } else {
-        // Single source link or no source — use legacy selectHorizontalRowFallback
+        // Single source link or no source; use the row-level fallback.
         resetAllSourceNavs();
         row.classList.add("selected");
         const rowSources = collectSourceLines(state.extraction, rowPath);
@@ -4674,18 +4673,6 @@ function wireSelectedFieldActions() {
 function pathInScope(path, basePath) {
   if (!basePath) return true;
   return path === basePath || path.startsWith(basePath + ".") || path.startsWith(basePath + "[");
-}
-
-function normalizeReasoningPath(path) {
-  const legacySuffix = ".trial_type";
-  const currentSuffix = ".experimental_scale";
-  if (!path.endsWith(legacySuffix)) return path;
-
-  const currentPath = path.slice(0, -legacySuffix.length) + currentSuffix;
-  if (getValueAtPath(state.extraction, path) === undefined && getValueAtPath(state.extraction, currentPath) !== undefined) {
-    return currentPath;
-  }
-  return path;
 }
 
 function collectLeafPaths(obj, basePath = "") {

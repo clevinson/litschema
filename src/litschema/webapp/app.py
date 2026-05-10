@@ -135,14 +135,6 @@ def _leaf_paths(obj, base_path: str = "") -> list[str]:
     return paths
 
 
-def _normalize_review_path(path: str) -> str:
-    path = path.lstrip(".")
-    legacy_suffix = ".trial_type"
-    if path.endswith(legacy_suffix):
-        return path[: -len(legacy_suffix)] + ".experimental_scale"
-    return path
-
-
 def _review_progress(extraction: dict, annotations: list[dict]) -> dict:
     """Summarize field-level review progress for article queue filters."""
     leaf_paths = set(_leaf_paths(extraction))
@@ -152,7 +144,7 @@ def _review_progress(extraction: dict, annotations: list[dict]) -> dict:
         status = annotation.get("status")
         if not path:
             continue
-        path = _normalize_review_path(path)
+        path = path.lstrip(".")
         if status == "cleared":
             current.pop(path, None)
         elif path in leaf_paths:
@@ -452,8 +444,6 @@ def main():
 
     cfg = require_config_or_exit()
     print(f"Article store: {cfg.article_store_dir}")
-    print(f"Legacy markdown dir: {cfg.fulltext_md_dir}")
-    print(f"Legacy extraction dir: {cfg.llm_extractions_dir}")
     print(f"Papers dir: {cfg.papers_dir}")
     webbrowser.open("http://localhost:8000")
     uvicorn.run(app, host="127.0.0.1", port=8000)

@@ -4,9 +4,9 @@ import json
 from pathlib import Path
 
 from litschema import analysis
-from litschema.webapp import app as webapp
 from litschema.config import LitSchemaConfig
 from litschema.ingest import pdf_to_markdown
+from litschema.webapp import app as webapp
 
 
 def _cfg(project: Path) -> LitSchemaConfig:
@@ -17,10 +17,6 @@ def _cfg(project: Path) -> LitSchemaConfig:
         schema_dir=project / "schema",
         references_dir=project / "references",
         tracking_xlsx=project / "paper_download_tracking.xlsx",
-        fulltext_md_dir=project / "data" / "fulltext_md",
-        llm_extractions_dir=project / "data" / "llm_extractions",
-        extraction_reasoning_dir=project / "data" / "extraction_reasoning",
-        annotations_dir=project / "data" / "reviews",
         papers_dir=project / "papers",
         static_site_dir=project / "static-site",
         article_store_dir=project / "data" / "papers",
@@ -55,7 +51,6 @@ def test_pdf_conversion_defaults_to_article_folder(
 
     assert stats["converted"] == 1
     assert (cfg.article_store_dir / "smith-2024" / "article.md").read_text() == "# Smith\n"
-    assert not (cfg.fulltext_md_dir / "smith-2024.md").exists()
 
 
 def test_analysis_loads_extractions_from_article_folders(
@@ -123,7 +118,7 @@ def test_webapp_computes_article_review_progress() -> None:
         {"path": ".document_type", "status": "verified"},
         {"path": ".study_types[0]", "status": "flagged"},
         {"path": ".study_types[1]", "status": "cleared"},
-        {"path": ".experimental_setups[0].trial_type", "status": "verified"},
+        {"path": ".experimental_setups[0].experimental_scale", "status": "verified"},
     ]
 
     assert webapp._review_progress(extraction, annotations) == {

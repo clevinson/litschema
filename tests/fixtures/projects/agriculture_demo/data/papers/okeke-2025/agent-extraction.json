@@ -1,0 +1,40 @@
+{
+  "article_id": "okeke-2025",
+  "confidence": 0.72,
+  "reasoning": "Greenhouse pot study comparing biochar rates on tomato; soils were collected from a smallholder field in Enugu State and brought back to a greenhouse facility in Abuja for the trial.",
+  "study_type": "greenhouse",
+  "crops": ["tomato"],
+  "experiments": [
+    {
+      "site": {"country": "Nigeria", "admin_boundary": "Federal Capital Territory", "latitude": 9.07, "longitude": 7.49},
+      "soil_source": {"country": "Nigeria", "admin_boundary": "Enugu State"},
+      "soil": {
+        "texture_class": "sandy_loam",
+        "sand_pct": 64.0,
+        "silt_pct": 22.0,
+        "clay_pct": 14.0
+      },
+      "treatments": [
+        {
+          "name": "biochar 5 t/ha-equivalent",
+          "type": "amendment",
+          "rate": "5 t/ha",
+          "outcomes": [
+            {"variable": "fruit_yield", "unit": "kg/plant", "effect_direction": "positive"},
+            {"variable": "leaf_chlorophyll", "unit": "SPAD", "effect_direction": "neutral"}
+          ]
+        },
+        {
+          "name": "biochar 10 t/ha-equivalent",
+          "type": "amendment",
+          "rate": "10 t/ha",
+          "outcomes": [
+            {"variable": "fruit_yield", "unit": "kg/plant", "effect_direction": "positive"},
+            {"variable": "leaf_chlorophyll", "unit": "SPAD", "effect_direction": "positive"}
+          ]
+        }
+      ]
+    }
+  ],
+  "sample_size": 12
+}
