@@ -300,11 +300,11 @@ async def list_articles(cfg: CfgDep):
 @app.get("/api/schema/fields")
 async def get_schema_fields(cfg: CfgDep):
     """Return schema-driven field editor metadata for the verifier."""
-    key = str(extraction_schema_path(cfg))
-    cached = _schema_fields_by_path.get(key)
-    if cached is not None:
-        return cached
     try:
+        key = str(extraction_schema_path(cfg))
+        cached = _schema_fields_by_path.get(key)
+        if cached is not None:
+            return cached
         cached = _schema_field_metadata(cfg)
     except Exception as exc:
         raise HTTPException(404, "schema metadata unavailable") from exc

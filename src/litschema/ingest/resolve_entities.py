@@ -278,6 +278,7 @@ def resolve(cfg: LitSchemaConfig) -> tuple[list[dict], list[dict]]:
     """Run full entity resolution. Returns (institutions, authors)."""
     openalex_dir = harvest_cache_dir(cfg, "openalex")
     data_dir = cfg.data_dir
+    data_dir.mkdir(parents=True, exist_ok=True)
     institutions = resolve_institutions(openalex_dir)
     authors = resolve_authors(openalex_dir, institutions)
 
