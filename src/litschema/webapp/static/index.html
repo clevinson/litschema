@@ -301,10 +301,12 @@
   }
 
   /* Primary action — accent fill makes it visually distinct from the
-     close affordance next to it. */
+     close affordance next to it. Margin-left creates breathing room
+     between the input region (input + count) and the action region. */
   .filter-primary-btn {
     height: 28px;
-    padding: 0 12px;
+    padding: 0 14px;
+    margin-left: 12px;
     border-radius: var(--radius);
     border: 1px solid var(--accent);
     background: var(--accent);
@@ -319,11 +321,14 @@
   .filter-primary-btn:hover { filter: brightness(1.08); }
   .filter-primary-btn:disabled { opacity: 0.5; cursor: default; }
 
-  /* Icon close — dismisses the filter row and clears any active filter. */
+  /* Icon close — dismisses the filter row and clears any active filter.
+     Sits next to Apply but its icon-only / unfilled styling visually
+     distinguishes it from the primary action. */
   .filter-close-btn {
     width: 28px;
     height: 28px;
     padding: 0;
+    margin-left: 0;
     border: 1px solid var(--border);
     border-radius: var(--radius);
     background: transparent;
@@ -2159,11 +2164,11 @@
 </div>
 
 <div class="filter-row" id="filter-row" style="display:none">
+  <button class="filter-help-btn" id="btn-filter-help" type="button" aria-label="Filter expression reference" title="Filter expression reference">?</button>
   <input type="text" class="filter-input" id="filter-input"
          placeholder='JS expression over article fields, e.g. year >= 2024 && study_types.includes("review")'
          spellcheck="false" autocomplete="off">
   <span class="filter-count" id="filter-count">&mdash;</span>
-  <button class="filter-help-btn" id="btn-filter-help" type="button" aria-label="Filter expression reference" title="Filter expression reference">?</button>
   <button class="filter-primary-btn" id="btn-filter-apply" type="button">Apply</button>
   <button class="filter-close-btn" id="btn-filter-close" type="button" aria-label="Close filter" title="Close (clears active filter)">&times;</button>
 </div>
