@@ -275,6 +275,73 @@
     color: var(--bg);
   }
 
+  /* Inline help indicator inside the filter row. Reads as a tooltip cue,
+     not an action button. */
+  .filter-help-btn {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-dim);
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 1;
+    cursor: help;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: color 0.1s, border-color 0.1s;
+  }
+  .filter-help-btn:hover {
+    color: var(--text);
+    border-color: var(--text-dim);
+  }
+
+  /* Primary action — accent fill makes it visually distinct from the
+     close affordance next to it. */
+  .filter-primary-btn {
+    height: 28px;
+    padding: 0 12px;
+    border-radius: var(--radius);
+    border: 1px solid var(--accent);
+    background: var(--accent);
+    color: var(--bg);
+    font-family: var(--font-sans);
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: filter 0.1s, opacity 0.1s;
+  }
+  .filter-primary-btn:hover { filter: brightness(1.08); }
+  .filter-primary-btn:disabled { opacity: 0.5; cursor: default; }
+
+  /* Icon close — dismisses the filter row and clears any active filter. */
+  .filter-close-btn {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: transparent;
+    color: var(--text-dim);
+    font-size: 16px;
+    line-height: 1;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: color 0.1s, border-color 0.1s;
+  }
+  .filter-close-btn:hover {
+    color: var(--text);
+    border-color: var(--text-dim);
+  }
+
   /* ── Filter help modal ── */
   .filter-help-modal {
     width: min(720px, calc(100vw - 32px));
@@ -2096,9 +2163,9 @@
          placeholder='JS expression over article fields, e.g. year >= 2024 && study_types.includes("review")'
          spellcheck="false" autocomplete="off">
   <span class="filter-count" id="filter-count">&mdash;</span>
-  <button class="toolbar-btn" id="btn-filter-help" type="button" title="Show available fields">?</button>
-  <button class="toolbar-btn" id="btn-filter-apply" type="button">Apply</button>
-  <button class="toolbar-btn" id="btn-filter-clear" type="button">Clear</button>
+  <button class="filter-help-btn" id="btn-filter-help" type="button" aria-label="Filter expression reference" title="Filter expression reference">?</button>
+  <button class="filter-primary-btn" id="btn-filter-apply" type="button">Apply</button>
+  <button class="filter-close-btn" id="btn-filter-close" type="button" aria-label="Close filter" title="Close (clears active filter)">&times;</button>
 </div>
 
 <div class="orcid-modal-backdrop" id="filter-help-modal" role="dialog" aria-modal="true" aria-labelledby="filter-help-title">
@@ -2528,7 +2595,10 @@ function wireFilterControls() {
     applyFilter(input.value);
     row.style.display = "none";
   });
-  $("#btn-filter-clear").addEventListener("click", clearFilter);
+  $("#btn-filter-close").addEventListener("click", () => {
+    clearFilter();
+    row.style.display = "none";
+  });
   $("#btn-filter-help").addEventListener("click", openFilterHelp);
   $("#btn-filter-help-close").addEventListener("click", closeFilterHelp);
   $("#filter-help-modal").addEventListener("click", (e) => {
