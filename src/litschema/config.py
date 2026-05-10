@@ -195,4 +195,40 @@ def load_config(
     return _load_cached(resolved)
 
 
-__all__ = ["LitSchemaConfig", "load_config", "CONFIG_FILENAME", "ENV_VAR"]
+class ConfigNotFoundError(FileNotFoundError):
+    """Raised when no ``litschema.yaml`` can be located.
+
+    Subclass of ``FileNotFoundError`` so existing ``except FileNotFoundError``
+    handlers keep working. Carries an actionable hint in ``str(exc)``.
+    """
+
+
+_MISSING_CONFIG_HINT = (
+    "Run `litschema init <domain-name>` to scaffold a new project, "
+    "or cd into an existing one."
+)
+
+
+def require_config(path: Path | str | None = None) -> LitSchemaConfig:
+    """Load the config or raise ``ConfigNotFoundError`` with an actionable hint.
+
+    Use this from CLI / ``main()`` entry points so the user gets a single,
+    consistent error message instead of either a raw traceback or
+    command-specific phrasing.
+    """
+    try:
+        return load_config(path)
+    except FileNotFoundError as exc:
+        raise ConfigNotFoundError(
+            f"No {CONFIG_FILENAME} found in this directory tree.\n\n{_MISSING_CONFIG_HINT}"
+        ) from exc
+
+
+__all__ = [
+    "LitSchemaConfig",
+    "load_config",
+    "require_config",
+    "ConfigNotFoundError",
+    "CONFIG_FILENAME",
+    "ENV_VAR",
+]

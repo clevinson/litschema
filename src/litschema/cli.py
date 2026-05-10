@@ -23,7 +23,7 @@ from .articles import (
     iter_reasoning_paths,
     iter_review_paths,
 )
-from .config import CONFIG_FILENAME, LitSchemaConfig, load_config
+from .config import CONFIG_FILENAME, ConfigNotFoundError, LitSchemaConfig, require_config
 from .ingest import validate_extraction
 
 app = typer.Typer(
@@ -67,14 +67,15 @@ def _count_files(path: Path, pattern: str = "*") -> int:
 
 
 def _require_config() -> LitSchemaConfig:
-    """Load litschema.yaml or emit an actionable message and exit 2.
+    """Load litschema.yaml or emit a colored message and exit 2.
 
-    Every command that needs filesystem paths goes through here, so running
-    `litschema status` (etc.) outside a project never dumps a traceback.
+    Thin CLI wrapper around :func:`litschema.config.require_config` that
+    translates the typer-free :class:`ConfigNotFoundError` into colored output
+    and an exit code.
     """
     try:
-        return load_config()
-    except FileNotFoundError as exc:
+        return require_config()
+    except ConfigNotFoundError as exc:
         typer.secho(
             f"{CROSS} No {CONFIG_FILENAME} found in this directory tree.",
             fg=typer.colors.RED,
