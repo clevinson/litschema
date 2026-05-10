@@ -78,7 +78,6 @@ def test_analysis_loads_extractions_from_article_folders(
 
 def test_webapp_reads_bibliography_and_pdf_filename_from_article_metadata(
     tmp_path: Path,
-    monkeypatch,
 ) -> None:
     cfg = _cfg(tmp_path)
     article_dir = cfg.article_store_dir / "smith-2024"
@@ -96,9 +95,7 @@ def test_webapp_reads_bibliography_and_pdf_filename_from_article_metadata(
             }
         )
     )
-    monkeypatch.setattr(webapp, "_author_index_by_path", {})
-
-    assert webapp._article_meta(cfg, "smith-2024") == {
+    assert webapp._article_meta(cfg, "smith-2024", author_index={}) == {
         "title": "Smith example",
         "year": 2024,
         "journal": "Example Journal",

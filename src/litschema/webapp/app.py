@@ -30,7 +30,7 @@ from ..articles import (
     read_review_events,
 )
 from ..config import LitSchemaConfig, load_config, require_config
-from ..schema_resolution import extraction_schema_path, resolve_extraction_schema
+from ..schema_resolution import resolve_extraction_schema
 from .search import strip_references
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -39,13 +39,6 @@ app = FastAPI(title="ERW Extraction Verifier")
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 ORCID_RE = re.compile(r"^\d{4}-\d{4}-\d{4}-\d{3}[0-9X]$")
-
-# Path-keyed caches. Keying by resolved path (rather than a single global
-# slot) keeps test `app.dependency_overrides[get_config]` swaps isolated:
-# pointing at a different `data_dir` / `schema_dir` produces a different
-# cache key automatically.
-_author_index_by_path: dict[str, dict[str, dict]] = {}
-_schema_fields_by_path: dict[str, dict] = {}
 
 
 def get_config() -> LitSchemaConfig:
@@ -62,27 +55,29 @@ CfgDep = Annotated[LitSchemaConfig, Depends(get_config)]
 
 
 def _load_author_index(cfg: LitSchemaConfig) -> dict[str, dict]:
+    """Read ``authors.yaml`` and index it by author id. Empty if missing.
+
+    Callers that resolve many articles per request should call this once
+    and pass the result into :func:`_article_meta`, rather than calling
+    per-article — the read isn't cached.
+    """
     authors_path = cfg.data_dir / "authors.yaml"
-    key = str(authors_path)
-    cached = _author_index_by_path.get(key)
-    if cached is not None:
-        return cached
     if not authors_path.exists():
-        index: dict[str, dict] = {}
-    else:
-        authors = yaml.safe_load(authors_path.read_text()) or []
-        index = {a.get("id"): a for a in authors if a.get("id")}
-    _author_index_by_path[key] = index
-    return index
+        return {}
+    authors = yaml.safe_load(authors_path.read_text()) or []
+    return {a.get("id"): a for a in authors if a.get("id")}
 
 
-def _article_meta(cfg: LitSchemaConfig, article_id: str) -> dict:
+def _article_meta(
+    cfg: LitSchemaConfig,
+    article_id: str,
+    author_index: dict[str, dict],
+) -> dict:
     """Return a compact bibliographic dict for an article id."""
     a = read_article_metadata(article_files(cfg, article_id))
     if not a:
         return {}
     authors = []
-    author_index = _load_author_index(cfg)
     for aid in a.get("author_ids") or []:
         auth = author_index.get(aid)
         if auth:
@@ -258,6 +253,7 @@ async def index():
 @app.get("/api/articles")
 async def list_articles(cfg: CfgDep):
     """List articles that have both markdown and extraction JSON."""
+    author_index = _load_author_index(cfg)
     articles = []
     for article_id in iter_article_ids_with_extractions(cfg):
         files = article_files(cfg, article_id)
@@ -275,7 +271,7 @@ async def list_articles(cfg: CfgDep):
         annotations = _current_annotations(cfg, article_id)
         progress = _review_progress(data, annotations)
         # Look up bibliographic fields from article metadata.
-        bib = _article_meta(cfg, article_id)
+        bib = _article_meta(cfg, article_id, author_index)
         articles.append(
             {
                 "article_id": article_id,
@@ -301,15 +297,9 @@ async def list_articles(cfg: CfgDep):
 async def get_schema_fields(cfg: CfgDep):
     """Return schema-driven field editor metadata for the verifier."""
     try:
-        key = str(extraction_schema_path(cfg))
-        cached = _schema_fields_by_path.get(key)
-        if cached is not None:
-            return cached
-        cached = _schema_field_metadata(cfg)
+        return _schema_field_metadata(cfg)
     except Exception as exc:
         raise HTTPException(404, "schema metadata unavailable") from exc
-    _schema_fields_by_path[key] = cached
-    return cached
 
 
 @app.get("/api/orcid/{orcid_id}")
@@ -351,7 +341,7 @@ async def get_article(article_id: str, cfg: CfgDep):
 @app.get("/api/bibliography/{article_id}")
 async def get_bibliography(article_id: str, cfg: CfgDep):
     """Return bibliographic metadata (title, year, journal, authors, doi)."""
-    meta = _article_meta(cfg, article_id)
+    meta = _article_meta(cfg, article_id, _load_author_index(cfg))
     if not meta:
         raise HTTPException(404, f"No bibliographic entry for {article_id}")
     return meta
