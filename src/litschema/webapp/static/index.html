@@ -275,6 +275,119 @@
     color: var(--bg);
   }
 
+  /* ── Filter help modal ── */
+  .filter-help-modal {
+    width: min(720px, calc(100vw - 32px));
+    max-height: calc(100vh - 64px);
+    padding: 16px 18px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-raised);
+    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.2);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    overflow: hidden;
+  }
+  .filter-help-modal header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .filter-help-modal header h3 {
+    margin: 0;
+    font-size: 15px;
+  }
+  .filter-help-modal header .close-btn {
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text-dim);
+    cursor: pointer;
+    padding: 2px 8px;
+    font-size: 14px;
+    line-height: 1;
+  }
+  .filter-help-modal header .close-btn:hover {
+    color: var(--text);
+    border-color: var(--text-dim);
+  }
+  .filter-help-modal .help-body {
+    overflow-y: auto;
+    display: grid;
+    gap: 14px;
+  }
+  .filter-help-modal p {
+    margin: 0;
+    font-size: 12px;
+    color: var(--text-secondary);
+    line-height: 1.55;
+  }
+  .filter-help-modal table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+    font-size: 11px;
+  }
+  .filter-help-modal th {
+    text-align: left;
+    font-size: 9px;
+    font-weight: 500;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    padding: 4px 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  .filter-help-modal td {
+    padding: 4px 8px;
+    border-bottom: 1px solid var(--border-subtle);
+    vertical-align: top;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+  }
+  .filter-help-modal td.col-name {
+    width: 22%;
+    font-family: var(--font-mono);
+    color: var(--text);
+  }
+  .filter-help-modal td.col-type {
+    width: 14%;
+    font-family: var(--font-mono);
+    color: var(--text-dim);
+  }
+  .filter-help-modal td.col-example {
+    width: 24%;
+    font-family: var(--font-mono);
+    color: var(--text-secondary);
+  }
+  .filter-help-modal td.col-desc {
+    width: 40%;
+    color: var(--text-secondary);
+    line-height: 1.5;
+  }
+  .filter-help-modal pre.example {
+    margin: 0;
+    padding: 8px 10px;
+    background: var(--bg-input);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text);
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .filter-help-modal h4 {
+    margin: 0;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
   .view-mode-toggle {
     display: inline-flex;
     align-items: center;
@@ -1983,8 +2096,40 @@
          placeholder='JS expression over article fields, e.g. year >= 2024 && study_types.includes("review")'
          spellcheck="false" autocomplete="off">
   <span class="filter-count" id="filter-count">&mdash;</span>
+  <button class="toolbar-btn" id="btn-filter-help" type="button" title="Show available fields">?</button>
   <button class="toolbar-btn" id="btn-filter-apply" type="button">Apply</button>
   <button class="toolbar-btn" id="btn-filter-clear" type="button">Clear</button>
+</div>
+
+<div class="orcid-modal-backdrop" id="filter-help-modal" role="dialog" aria-modal="true" aria-labelledby="filter-help-title">
+  <div class="filter-help-modal">
+    <header>
+      <h3 id="filter-help-title">Filter expression reference</h3>
+      <button class="close-btn" id="btn-filter-help-close" type="button" aria-label="Close">&times;</button>
+    </header>
+    <div class="help-body">
+      <p>
+        The filter is a JavaScript boolean expression evaluated against each article's record from
+        <code>/api/articles</code>. Combine fields with <code>&amp;&amp;</code>, <code>||</code>, and
+        comparisons like <code>===</code>, <code>!=</code>, <code>&lt;</code>, <code>&gt;=</code>.
+        Arrays support <code>.includes(...)</code>, <code>.some(...)</code>, and <code>.length</code>.
+      </p>
+      <h4>Available fields</h4>
+      <table>
+        <thead>
+          <tr>
+            <th>Field</th>
+            <th>Type</th>
+            <th>Example value</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody id="filter-help-fields"></tbody>
+      </table>
+      <h4>Example expressions</h4>
+      <pre class="example" id="filter-help-examples"></pre>
+    </div>
+  </div>
 </div>
 
 <div class="orcid-modal-backdrop" id="orcid-modal" role="dialog" aria-modal="true" aria-labelledby="orcid-modal-title">
@@ -2384,9 +2529,93 @@ function wireFilterControls() {
     row.style.display = "none";
   });
   $("#btn-filter-clear").addEventListener("click", clearFilter);
+  $("#btn-filter-help").addEventListener("click", openFilterHelp);
+  $("#btn-filter-help-close").addEventListener("click", closeFilterHelp);
+  $("#filter-help-modal").addEventListener("click", (e) => {
+    if (e.target.id === "filter-help-modal") closeFilterHelp();
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && $("#filter-help-modal").classList.contains("active")) {
+      closeFilterHelp();
+    }
+  });
   // Seed the live count display
   $("#filter-count").textContent = `${state.articles.length}/${state.articles.length}`;
   if (state.filterExpr) evaluateFilterPreview(state.filterExpr);
+}
+
+// ── Filter help modal ──
+const FILTER_HELP_FIELDS = [
+  { name: "article_id",     type: "string",   note: "Stable identifier (folder name under data/papers/)." },
+  { name: "title",          type: "string",   note: "Bibliographic title from article-metadata.json." },
+  { name: "year",           type: "string",   note: "Publication year. Stored as string; use Number(year) for numeric compare." },
+  { name: "journal",        type: "string?",  note: "Journal name; null for theses, reports, preprints." },
+  { name: "doi",            type: "string?",  note: "DOI when present; null for ~25 grey-lit papers." },
+  { name: "authors",        type: "object[]", note: "Each entry has fields like .name; use authors.length or .some()." },
+  { name: "study_types",    type: "string[]", note: "e.g. \"experimental\", \"modeling\", \"review\", \"perspective\"." },
+  { name: "focus_areas",    type: "string[]", note: "Orthogonal research themes." },
+  { name: "document_type",  type: "string?",  note: "Bibliographic genre (journal article, thesis, preprint, ...)." },
+  { name: "confidence",     type: "number?",  note: "Extractor self-rated confidence 0–1; null when unset." },
+  { name: "n_setups",       type: "number",   note: "Count of experimental_setups. 0 typically means review/perspective." },
+  { name: "n_fields",       type: "number",   note: "Total leaf fields in the extraction (denominator for progress)." },
+  { name: "n_reviewed",     type: "number",   note: "Fields with a verified or flagged review event." },
+  { name: "n_verified",     type: "number",   note: "Fields with a verified review event." },
+  { name: "n_flagged",      type: "number",   note: "Fields currently flagged for correction." },
+  { name: "n_annotated",    type: "number",   note: "Alias for n_reviewed (kept for compatibility)." },
+  { name: "is_complete",    type: "boolean",  note: "True when n_reviewed >= n_fields and n_fields > 0." },
+  { name: "has_flags",      type: "boolean",  note: "True when n_flagged > 0." },
+];
+
+const FILTER_HELP_EXAMPLES = [
+  '// 2024+ papers',
+  'year >= 2024',
+  '',
+  '// Reviews only',
+  'study_types.includes("review")',
+  '',
+  '// Low-confidence extractions worth auditing',
+  'confidence != null && confidence < 0.7',
+  '',
+  '// Experimental papers with unreviewed flags',
+  'study_types.includes("experimental") && has_flags',
+  '',
+  '// Numeric year compare (since year is stored as string)',
+  'Number(year) >= 2022 && Number(year) <= 2024',
+  '',
+  '// Title text match',
+  '/basalt/i.test(title || "")',
+].join("\n");
+
+function previewValueFor(field) {
+  if (!state.articles.length) return "";
+  for (const a of state.articles) {
+    const v = a[field];
+    if (v == null || (Array.isArray(v) && v.length === 0)) continue;
+    if (Array.isArray(v)) {
+      const head = v.slice(0, 2).map((x) => (typeof x === "object" ? "{…}" : JSON.stringify(x)));
+      return `[${head.join(", ")}${v.length > 2 ? ", …" : ""}]`;
+    }
+    if (typeof v === "string") return v.length > 36 ? `"${v.slice(0, 33)}…"` : `"${v}"`;
+    return String(v);
+  }
+  return "";
+}
+
+function openFilterHelp() {
+  const tbody = $("#filter-help-fields");
+  tbody.innerHTML = FILTER_HELP_FIELDS.map((f) => `
+    <tr>
+      <td class="col-name">${f.name}</td>
+      <td class="col-type">${f.type}</td>
+      <td class="col-example">${escapeHtml(previewValueFor(f.name)) || "&mdash;"}</td>
+      <td class="col-desc">${f.note}</td>
+    </tr>`).join("");
+  $("#filter-help-examples").textContent = FILTER_HELP_EXAMPLES;
+  $("#filter-help-modal").classList.add("active");
+}
+
+function closeFilterHelp() {
+  $("#filter-help-modal").classList.remove("active");
 }
 
 function articleOptionLabel(article) {
