@@ -224,10 +224,33 @@ def require_config(path: Path | str | None = None) -> LitSchemaConfig:
         ) from exc
 
 
+def require_config_or_exit(
+    path: Path | str | None = None,
+    *,
+    exit_code: int = 2,
+) -> LitSchemaConfig:
+    """``require_config`` for plain ``main()`` entry points.
+
+    On missing config, prints the actionable hint to stderr and exits with
+    ``exit_code`` (default 2) instead of raising. The CLI uses
+    :func:`require_config` directly so it can render the error with typer's
+    colored output; module mains use this helper to avoid duplicating the
+    same try/except.
+    """
+    import sys
+
+    try:
+        return require_config(path)
+    except ConfigNotFoundError as exc:
+        print(exc, file=sys.stderr)
+        sys.exit(exit_code)
+
+
 __all__ = [
     "LitSchemaConfig",
     "load_config",
     "require_config",
+    "require_config_or_exit",
     "ConfigNotFoundError",
     "CONFIG_FILENAME",
     "ENV_VAR",

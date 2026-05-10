@@ -18,7 +18,7 @@ from pathlib import Path
 
 import requests
 
-from ..config import LitSchemaConfig, require_config
+from ..config import LitSchemaConfig, require_config_or_exit
 
 logger = logging.getLogger(__name__)
 
@@ -229,7 +229,7 @@ def main():
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
-    cfg = require_config()
+    cfg = require_config_or_exit()
     stats = harvest(
         cfg,
         xlsx_path=args.xlsx,

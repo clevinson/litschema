@@ -20,7 +20,7 @@ from pathlib import Path
 import jellyfish
 import yaml
 
-from ..config import LitSchemaConfig, require_config
+from ..config import LitSchemaConfig, require_config_or_exit
 
 logger = logging.getLogger(__name__)
 
@@ -310,7 +310,7 @@ def main():
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    cfg = require_config()
+    cfg = require_config_or_exit()
     resolve(
         cfg,
         openalex_dir=args.openalex_dir,

@@ -15,7 +15,7 @@ import logging
 from pathlib import Path
 
 from ..articles import article_files, iter_metadata_paths
-from ..config import LitSchemaConfig, require_config
+from ..config import LitSchemaConfig, require_config_or_exit
 
 logger = logging.getLogger(__name__)
 
@@ -119,15 +119,13 @@ def main():
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    cfg = require_config()
+    cfg = require_config_or_exit()
     stats = run(
         cfg,
         papers_dir=args.papers_dir,
         output_dir=args.output_dir,
         force=args.force,
     )
-    import json
-
     print(json.dumps(stats, indent=2))
 
 

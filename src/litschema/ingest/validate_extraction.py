@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 
 from ..articles import iter_extraction_paths
-from ..config import LitSchemaConfig, require_config
+from ..config import LitSchemaConfig, require_config_or_exit
 from ..schema_resolution import resolve_extraction_schema
 from ..schema_validation import LinkMLDataValidator, create_linkml_validator
 
@@ -92,7 +92,7 @@ def run(args: list[str] | None, cfg: LitSchemaConfig) -> int:
 
 
 def main():
-    sys.exit(run(sys.argv[1:], require_config()))
+    sys.exit(run(sys.argv[1:], require_config_or_exit()))
 
 
 if __name__ == "__main__":
