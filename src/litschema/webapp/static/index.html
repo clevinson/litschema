@@ -2363,10 +2363,17 @@ function wireFilterControls() {
     debounce = setTimeout(() => evaluateFilterPreview(input.value), 200);
   });
   input.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") { e.preventDefault(); applyFilter(input.value); }
+    if (e.key === "Enter") {
+      e.preventDefault();
+      applyFilter(input.value);
+      row.style.display = "none";
+    }
     if (e.key === "Escape") { clearFilter(); row.style.display = "none"; }
   });
-  $("#btn-filter-apply").addEventListener("click", () => applyFilter(input.value));
+  $("#btn-filter-apply").addEventListener("click", () => {
+    applyFilter(input.value);
+    row.style.display = "none";
+  });
   $("#btn-filter-clear").addEventListener("click", clearFilter);
   // Seed the live count display
   $("#filter-count").textContent = `${state.articles.length}/${state.articles.length}`;
