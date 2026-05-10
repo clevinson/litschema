@@ -65,7 +65,7 @@ def run(
 
         stats["total"] += 1
         if output_dir is None:
-            out_path = article_files(cfg, article_id).markdown_path(for_write=True)
+            out_path = article_files(cfg, article_id).markdown
         else:
             # Explicit output-dir keeps the historical flat-folder behavior.
             out_path = output_dir / f"{article_id}.md"

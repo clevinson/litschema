@@ -41,10 +41,19 @@ def test_article_files_prefers_per_article_paths_when_present(tmp_path: Path) ->
 
     files = article_files(cfg, "smith-2024")
 
-    assert files.extraction_path() == paper_dir / "agent-extraction.json"
-    assert files.reasoning_path() == paper_dir / "agent-reasoning.json"
-    assert files.reviews_path() == paper_dir / "reviews.jsonl"
+    assert files.extraction == paper_dir / "agent-extraction.json"
+    assert files.reasoning == paper_dir / "agent-reasoning.json"
+    assert files.reviews == paper_dir / "reviews.jsonl"
     assert read_review_events(files) == [{"article_id": "smith-2024", "path": ".study_type"}]
+
+
+def test_article_files_exposes_only_property_paths(tmp_path: Path) -> None:
+    files = article_files(_cfg(tmp_path), "smith-2024")
+
+    assert not hasattr(files, "markdown_path")
+    assert not hasattr(files, "extraction_path")
+    assert not hasattr(files, "reasoning_path")
+    assert not hasattr(files, "reviews_path")
 
 
 def test_iter_extraction_paths_reads_per_article_store(tmp_path: Path) -> None:

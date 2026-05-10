@@ -46,18 +46,6 @@ class ArticleFiles:
     def reviews(self) -> Path:
         return self.article_dir / "reviews.jsonl"
 
-    def markdown_path(self, *, for_write: bool = False) -> Path:
-        return self.markdown
-
-    def extraction_path(self, *, for_write: bool = False) -> Path:
-        return self.extraction
-
-    def reasoning_path(self, *, for_write: bool = False) -> Path:
-        return self.reasoning
-
-    def reviews_path(self, *, for_write: bool = False) -> Path:
-        return self.reviews
-
 
 def article_files(cfg: LitSchemaConfig, article_id: str) -> ArticleFiles:
     return ArticleFiles(cfg=cfg, article_id=article_id)

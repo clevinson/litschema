@@ -249,8 +249,8 @@ async def list_articles(cfg: CfgDep):
     articles = []
     for article_id in iter_article_ids_with_extractions(cfg):
         files = article_files(cfg, article_id)
-        ext_path = files.extraction_path()
-        md_path = files.markdown_path()
+        ext_path = files.extraction
+        md_path = files.markdown
         if not md_path.exists():
             continue
 
@@ -323,7 +323,7 @@ async def get_orcid_profile(orcid_id: str):
 @app.get("/api/article/{article_id}")
 async def get_article(article_id: str, cfg: CfgDep):
     """Return full extraction JSON for an article."""
-    path = article_files(cfg, article_id).extraction_path()
+    path = article_files(cfg, article_id).extraction
     if not path.exists():
         raise HTTPException(404, f"No extraction for {article_id}")
     return json.loads(path.read_text())
@@ -341,7 +341,7 @@ async def get_bibliography(article_id: str, cfg: CfgDep):
 @app.get("/api/markdown/{article_id}")
 async def get_markdown(article_id: str, cfg: CfgDep):
     """Return raw markdown text for an article."""
-    path = article_files(cfg, article_id).markdown_path()
+    path = article_files(cfg, article_id).markdown
     if not path.exists():
         raise HTTPException(404, f"No markdown for {article_id}")
     text = path.read_text()
@@ -365,7 +365,7 @@ async def get_pdf(article_id: str, cfg: CfgDep):
 @app.get("/api/reasoning/{article_id}")
 async def get_reasoning(article_id: str, cfg: CfgDep):
     """Return per-field extraction reasoning if it exists."""
-    path = article_files(cfg, article_id).reasoning_path()
+    path = article_files(cfg, article_id).reasoning
     if not path.exists():
         raise HTTPException(404, f"No reasoning for {article_id}")
     return json.loads(path.read_text())
@@ -413,7 +413,7 @@ async def put_annotation(article_id: str, request: Request, cfg: CfgDep):
         entry["batch_id"] = batch_id
 
     files = article_files(cfg, article_id)
-    ann_path = files.reviews_path(for_write=True)
+    ann_path = files.reviews
     ann_path.parent.mkdir(parents=True, exist_ok=True)
     with ann_path.open("a") as fh:
         fh.write(json.dumps(entry) + "\n")
@@ -424,7 +424,7 @@ async def put_annotation(article_id: str, request: Request, cfg: CfgDep):
 async def delete_annotation(article_id: str, field_path: str, cfg: CfgDep):
     """Remove an annotation for a specific field."""
     files = article_files(cfg, article_id)
-    ann_path = files.reviews_path(for_write=True)
+    ann_path = files.reviews
     ann_path.parent.mkdir(parents=True, exist_ok=True)
     entry = {
         "article_id": article_id,
