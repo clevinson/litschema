@@ -8,7 +8,7 @@ from litschema.config import load_config
 import litschema.webapp.app as webapp
 
 
-def test_author_index_fallback_is_cached(monkeypatch, tmp_path) -> None:
+def test_load_author_index_returns_id_keyed_dict(tmp_path) -> None:
     authors_path = tmp_path / "authors.yaml"
     authors_path.write_text(
         """
@@ -17,21 +17,17 @@ def test_author_index_fallback_is_cached(monkeypatch, tmp_path) -> None:
   given_name: A.
 """
     )
+    cfg = SimpleNamespace(data_dir=tmp_path)
 
-    calls = {"count": 0}
-    original_safe_load = webapp.yaml.safe_load
+    index = webapp._load_author_index(cfg)
 
-    def counted_safe_load(*args, **kwargs):
-        calls["count"] += 1
-        return original_safe_load(*args, **kwargs)
+    assert index["author_a"]["family_name"] == "Author"
+    assert index["author_a"]["given_name"] == "A."
 
-    monkeypatch.setattr(webapp, "_CFG", SimpleNamespace(data_dir=tmp_path))
-    monkeypatch.setattr(webapp, "_author_file_index", None)
-    monkeypatch.setattr(webapp.yaml, "safe_load", counted_safe_load)
 
-    assert webapp._load_author_index()["author_a"]["family_name"] == "Author"
-    assert webapp._load_author_index()["author_a"]["family_name"] == "Author"
-    assert calls["count"] == 1
+def test_load_author_index_returns_empty_when_authors_yaml_missing(tmp_path) -> None:
+    cfg = SimpleNamespace(data_dir=tmp_path)
+    assert webapp._load_author_index(cfg) == {}
 
 
 def test_orcid_id_normalization_accepts_urls() -> None:

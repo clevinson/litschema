@@ -20,15 +20,10 @@ from pathlib import Path
 import jellyfish
 import yaml
 
-from ..config import load_config
+from ..config import LitSchemaConfig, require_config_or_exit
+from . import harvest_cache_dir
 
 logger = logging.getLogger(__name__)
-
-_CFG = load_config()
-PROJECT_ROOT = _CFG.project_root
-OPENALEX_DIR = _CFG.openalex_dir
-CROSSREF_DIR = _CFG.crossref_dir
-DATA_DIR = _CFG.data_dir
 
 JARO_WINKLER_THRESHOLD = 0.92  # High threshold to avoid false merges
 
@@ -91,8 +86,8 @@ def parse_author_name(display_name: str) -> tuple[str, str]:
     return (parts[-1], " ".join(parts[:-1]))
 
 
-def resolve_institutions(openalex_dir: Path, crossref_dir: Path) -> list[dict]:
-    """Build canonical institution registry from all sources."""
+def resolve_institutions(openalex_dir: Path) -> list[dict]:
+    """Build canonical institution registry from OpenAlex harvest data."""
     # Collect all institution mentions
     raw_institutions: dict[str, dict] = {}  # ror -> best record
     no_ror: list[dict] = []
@@ -279,13 +274,18 @@ def resolve_authors(openalex_dir: Path, institutions: list[dict]) -> list[dict]:
     return authors
 
 
-def resolve(
-    openalex_dir: Path = OPENALEX_DIR,
-    crossref_dir: Path = CROSSREF_DIR,
-    data_dir: Path = DATA_DIR,
-) -> tuple[list[dict], list[dict]]:
+def resolve(cfg: LitSchemaConfig) -> tuple[list[dict], list[dict]]:
     """Run full entity resolution. Returns (institutions, authors)."""
-    institutions = resolve_institutions(openalex_dir, crossref_dir)
+    openalex_dir = harvest_cache_dir(cfg, "openalex")
+    if not openalex_dir.exists() or not any(openalex_dir.glob("*.json")):
+        raise FileNotFoundError(
+            f"No OpenAlex harvest data found at {openalex_dir}. "
+            "Run `litschema harvest` first, or migrate legacy raw harvests "
+            "(eg. `mv data/openalex_raw .litschema/cache/openalex`)."
+        )
+    data_dir = cfg.data_dir
+    data_dir.mkdir(parents=True, exist_ok=True)
+    institutions = resolve_institutions(openalex_dir)
     authors = resolve_authors(openalex_dir, institutions)
 
     # Save registries
@@ -304,14 +304,10 @@ def resolve(
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Resolve and deduplicate authors/institutions")
-    parser.add_argument("--openalex-dir", type=Path, default=OPENALEX_DIR)
-    parser.add_argument("--crossref-dir", type=Path, default=CROSSREF_DIR)
-    parser.add_argument("--data-dir", type=Path, default=DATA_DIR)
-    args = parser.parse_args()
-
+    argparse.ArgumentParser(description="Resolve and deduplicate authors/institutions").parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    resolve(openalex_dir=args.openalex_dir, crossref_dir=args.crossref_dir, data_dir=args.data_dir)
+    cfg = require_config_or_exit()
+    resolve(cfg)
 
 
 if __name__ == "__main__":

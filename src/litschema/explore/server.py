@@ -32,6 +32,7 @@ from pathlib import Path
 from typing import Any
 
 from ..config import LitSchemaConfig
+from ..schema_resolution import extraction_schema_path
 
 
 def _rows_to_tsv(columns: list[str], rows: list[tuple], max_rows: int) -> str:
@@ -135,11 +136,9 @@ def build_server(
         form a query. The DuckDB tables are a flattened view; this is
         the source of truth for what fields mean.
         """
-        schema_dir = cfg.schema_dir
-        root_name = cfg.raw.get("schema_root", "erw_articles.yaml")
-        schema_path = schema_dir / root_name
+        schema_path = extraction_schema_path(cfg)
         if not schema_path.exists():
-            return f"ERROR: schema root not found at {schema_path}"
+            return f"ERROR: extraction schema not found at {schema_path}"
         return schema_path.read_text()
 
     return mcp

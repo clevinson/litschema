@@ -18,14 +18,10 @@ from pathlib import Path
 
 import requests
 
-from ..config import load_config
+from ..config import LitSchemaConfig, require_config_or_exit
+from . import harvest_cache_dir
 
 logger = logging.getLogger(__name__)
-
-_CFG = load_config()
-PROJECT_ROOT = _CFG.project_root
-OPENALEX_DIR = _CFG.openalex_dir
-CROSSREF_DIR = _CFG.crossref_dir
 
 CROSSREF_API = "https://api.crossref.org/works"
 RATE_LIMIT_DELAY = 0.1  # Be polite
@@ -115,12 +111,14 @@ def extract_crossref_metadata(raw: dict) -> dict:
 
 
 def harvest(
-    openalex_dir: Path = OPENALEX_DIR,
-    crossref_dir: Path = CROSSREF_DIR,
+    cfg: LitSchemaConfig,
+    *,
     email: str | None = None,
     skip_existing: bool = True,
 ) -> dict:
     """Run CrossRef harvest for papers needing supplementation."""
+    openalex_dir = harvest_cache_dir(cfg, "openalex")
+    crossref_dir = harvest_cache_dir(cfg, "crossref")
     crossref_dir.mkdir(parents=True, exist_ok=True)
 
     stats = {"checked": 0, "needs_supplement": 0, "fetched": 0, "skipped": 0, "not_found": 0}
@@ -162,19 +160,13 @@ def harvest(
 def main():
     parser = argparse.ArgumentParser(description="Supplement missing metadata from CrossRef")
     parser.add_argument("--email", help="Email for CrossRef polite pool")
-    parser.add_argument("--openalex-dir", type=Path, default=OPENALEX_DIR)
-    parser.add_argument("--crossref-dir", type=Path, default=CROSSREF_DIR)
     parser.add_argument("--no-skip", action="store_true")
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
-    stats = harvest(
-        openalex_dir=args.openalex_dir,
-        crossref_dir=args.crossref_dir,
-        email=args.email,
-        skip_existing=not args.no_skip,
-    )
+    cfg = require_config_or_exit()
+    stats = harvest(cfg, email=args.email, skip_existing=not args.no_skip)
     print(json.dumps(stats, indent=2))
 
 

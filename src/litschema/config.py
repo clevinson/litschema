@@ -55,8 +55,6 @@ class LitSchemaConfig:
     tracking_xlsx: Path
 
     # Stage-numbered subdirectories.
-    openalex_dir: Path
-    crossref_dir: Path
     fulltext_md_dir: Path
     llm_extractions_dir: Path
     extraction_reasoning_dir: Path
@@ -129,8 +127,6 @@ _PATH_FIELDS: tuple[tuple[str, str, str], ...] = (
     ("schema_dir", "schema_dir", "schema"),
     ("references_dir", "references_dir", "references"),
     ("tracking_xlsx", "tracking_xlsx", "paper_download_tracking.xlsx"),
-    ("openalex_dir", "openalex_dir", "data/openalex_raw"),
-    ("crossref_dir", "crossref_dir", "data/crossref_raw"),
     ("fulltext_md_dir", "fulltext_md_dir", "data/fulltext_md"),
     ("llm_extractions_dir", "llm_extractions_dir", "data/llm_extractions"),
     (
@@ -195,4 +191,70 @@ def load_config(
     return _load_cached(resolved)
 
 
-__all__ = ["LitSchemaConfig", "load_config", "CONFIG_FILENAME", "ENV_VAR"]
+class ConfigNotFoundError(FileNotFoundError):
+    """Raised when no ``litschema.yaml`` can be located.
+
+    Subclass of ``FileNotFoundError`` so existing ``except FileNotFoundError``
+    handlers keep working. Carries an actionable hint in ``str(exc)``.
+    """
+
+
+_MISSING_CONFIG_HINT = (
+    "Run `litschema init <domain-name>` to scaffold a new project, "
+    "or cd into an existing one."
+)
+
+
+def require_config(path: Path | str | None = None) -> LitSchemaConfig:
+    """Load the config or raise ``ConfigNotFoundError`` with an actionable hint.
+
+    Use this from CLI / ``main()`` entry points so the user gets a single,
+    consistent error message instead of either a raw traceback or
+    command-specific phrasing.
+
+    The "no config found in this directory tree" hint only applies to the
+    auto-discovery case (no explicit path, no env var). For explicit paths
+    and ``LITSCHEMA_CONFIG`` mismatches the original ``FileNotFoundError``
+    message — which already names the missing file — is preserved.
+    """
+    try:
+        return load_config(path)
+    except FileNotFoundError as exc:
+        if path is not None or os.environ.get(ENV_VAR):
+            raise ConfigNotFoundError(str(exc)) from exc
+        raise ConfigNotFoundError(
+            f"No {CONFIG_FILENAME} found in this directory tree.\n\n{_MISSING_CONFIG_HINT}"
+        ) from exc
+
+
+def require_config_or_exit(
+    path: Path | str | None = None,
+    *,
+    exit_code: int = 2,
+) -> LitSchemaConfig:
+    """``require_config`` for plain ``main()`` entry points.
+
+    On missing config, prints the actionable hint to stderr and exits with
+    ``exit_code`` (default 2) instead of raising. The CLI uses
+    :func:`require_config` directly so it can render the error with typer's
+    colored output; module mains use this helper to avoid duplicating the
+    same try/except.
+    """
+    import sys
+
+    try:
+        return require_config(path)
+    except ConfigNotFoundError as exc:
+        print(exc, file=sys.stderr)
+        sys.exit(exit_code)
+
+
+__all__ = [
+    "LitSchemaConfig",
+    "load_config",
+    "require_config",
+    "require_config_or_exit",
+    "ConfigNotFoundError",
+    "CONFIG_FILENAME",
+    "ENV_VAR",
+]

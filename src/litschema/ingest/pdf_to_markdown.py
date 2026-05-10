@@ -15,14 +15,9 @@ import logging
 from pathlib import Path
 
 from ..articles import article_files, iter_metadata_paths
-from ..config import load_config
+from ..config import LitSchemaConfig, require_config_or_exit
 
 logger = logging.getLogger(__name__)
-
-_CFG = load_config()
-PROJECT_ROOT = _CFG.project_root
-PAPERS_DIR = _CFG.papers_dir
-FULLTEXT_DIR = _CFG.fulltext_md_dir
 
 # Minimum character count to consider a conversion non-empty
 # (scanned PDFs may produce very little text)
@@ -38,9 +33,9 @@ def convert_pdf(pdf_path: Path, out_path: Path) -> int:
     return len(md_text)
 
 
-def _load_articles() -> list[dict]:
+def _load_articles(cfg: LitSchemaConfig) -> list[dict]:
     articles = []
-    for path in iter_metadata_paths(_CFG):
+    for path in iter_metadata_paths(cfg):
         data = json.loads(path.read_text())
         data.setdefault("id", path.parent.name)
         articles.append(data)
@@ -48,15 +43,18 @@ def _load_articles() -> list[dict]:
 
 
 def run(
-    papers_dir: Path = PAPERS_DIR,
+    cfg: LitSchemaConfig,
+    *,
+    papers_dir: Path | None = None,
     output_dir: Path | None = None,
     force: bool = False,
 ) -> dict:
     """Convert all PDFs referenced by per-article metadata to markdown."""
+    papers_dir = papers_dir or cfg.papers_dir
     if output_dir is not None:
         output_dir.mkdir(parents=True, exist_ok=True)
 
-    articles = _load_articles()
+    articles = _load_articles(cfg)
     stats = {"total": 0, "converted": 0, "skipped": 0, "empty": 0, "missing": 0, "errors": 0}
 
     for article in articles:
@@ -67,7 +65,7 @@ def run(
 
         stats["total"] += 1
         if output_dir is None:
-            out_path = article_files(_CFG, article_id).markdown_path(for_write=True)
+            out_path = article_files(cfg, article_id).markdown_path(for_write=True)
         else:
             # Explicit output-dir keeps the historical flat-folder behavior.
             out_path = output_dir / f"{article_id}.md"
@@ -111,7 +109,7 @@ def run(
 def main():
     parser = argparse.ArgumentParser(description="Convert PDFs to markdown for LLM extraction")
     parser.add_argument("--force", action="store_true", help="Re-convert existing files")
-    parser.add_argument("--papers-dir", type=Path, default=PAPERS_DIR)
+    parser.add_argument("--papers-dir", type=Path, default=None)
     parser.add_argument(
         "--output-dir",
         type=Path,
@@ -121,13 +119,13 @@ def main():
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    cfg = require_config_or_exit()
     stats = run(
+        cfg,
         papers_dir=args.papers_dir,
         output_dir=args.output_dir,
         force=args.force,
     )
-    import json
-
     print(json.dumps(stats, indent=2))
 
 

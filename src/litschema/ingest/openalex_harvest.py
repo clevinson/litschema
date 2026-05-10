@@ -18,15 +18,10 @@ from pathlib import Path
 
 import requests
 
-from ..config import load_config
+from ..config import LitSchemaConfig, require_config_or_exit
+from . import harvest_cache_dir
 
 logger = logging.getLogger(__name__)
-
-_CFG = load_config()
-# Project root is whatever litschema.yaml points at.
-PROJECT_ROOT = _CFG.project_root
-TRACKING_XLSX = _CFG.tracking_xlsx
-DEFAULT_DATA_DIR = _CFG.openalex_dir
 
 OPENALEX_API = "https://api.openalex.org/works"
 # Rate limit: 10 req/s without polite pool, 100 req/s with mailto
@@ -165,8 +160,8 @@ def extract_metadata(raw: dict) -> dict:
 
 
 def harvest(
-    xlsx_path: Path = TRACKING_XLSX,
-    data_dir: Path = DEFAULT_DATA_DIR,
+    cfg: LitSchemaConfig,
+    *,
     email: str | None = None,
     skip_existing: bool = True,
 ) -> dict:
@@ -174,10 +169,11 @@ def harvest(
 
     Returns summary stats dict.
     """
+    data_dir = harvest_cache_dir(cfg, "openalex")
     data_dir.mkdir(parents=True, exist_ok=True)
 
-    rows = load_dois_from_xlsx(xlsx_path)
-    logger.info("Loaded %d papers with DOIs from %s", len(rows), xlsx_path.name)
+    rows = load_dois_from_xlsx(cfg.tracking_xlsx)
+    logger.info("Loaded %d papers with DOIs from %s", len(rows), cfg.tracking_xlsx.name)
 
     stats = {"total": len(rows), "fetched": 0, "skipped": 0, "not_found": 0, "errors": 0}
 
@@ -224,19 +220,13 @@ def harvest(
 def main():
     parser = argparse.ArgumentParser(description="Harvest ERW paper metadata from OpenAlex")
     parser.add_argument("--email", help="Email for OpenAlex polite pool (recommended)")
-    parser.add_argument("--data-dir", type=Path, default=DEFAULT_DATA_DIR)
-    parser.add_argument("--xlsx", type=Path, default=TRACKING_XLSX)
     parser.add_argument("--no-skip", action="store_true", help="Re-fetch existing files")
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
-    stats = harvest(
-        xlsx_path=args.xlsx,
-        data_dir=args.data_dir,
-        email=args.email,
-        skip_existing=not args.no_skip,
-    )
+    cfg = require_config_or_exit()
+    stats = harvest(cfg, email=args.email, skip_existing=not args.no_skip)
     print(json.dumps(stats, indent=2))
 
 

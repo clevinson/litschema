@@ -17,8 +17,6 @@ def _cfg(project: Path) -> LitSchemaConfig:
         schema_dir=project / "schema",
         references_dir=project / "references",
         tracking_xlsx=project / "paper_download_tracking.xlsx",
-        openalex_dir=project / "data" / "openalex_raw",
-        crossref_dir=project / "data" / "crossref_raw",
         fulltext_md_dir=project / "data" / "fulltext_md",
         llm_extractions_dir=project / "data" / "llm_extractions",
         extraction_reasoning_dir=project / "data" / "extraction_reasoning",
@@ -42,7 +40,6 @@ def test_pdf_conversion_defaults_to_article_folder(
         json.dumps({"id": "smith-2024", "filename": "smith.pdf"})
     )
     (cfg.papers_dir / "smith.pdf").write_text("pdf placeholder")
-    monkeypatch.setattr(pdf_to_markdown, "_CFG", cfg)
 
     def fake_convert_pdf(pdf_path: Path, out_path: Path) -> int:
         out_path.write_text("# Smith\n")
@@ -51,6 +48,7 @@ def test_pdf_conversion_defaults_to_article_folder(
     monkeypatch.setattr(pdf_to_markdown, "convert_pdf", fake_convert_pdf)
 
     stats = pdf_to_markdown.run(
+        cfg,
         papers_dir=cfg.papers_dir,
         output_dir=None,
     )
@@ -80,7 +78,6 @@ def test_analysis_loads_extractions_from_article_folders(
 
 def test_webapp_reads_bibliography_and_pdf_filename_from_article_metadata(
     tmp_path: Path,
-    monkeypatch,
 ) -> None:
     cfg = _cfg(tmp_path)
     article_dir = cfg.article_store_dir / "smith-2024"
@@ -98,10 +95,7 @@ def test_webapp_reads_bibliography_and_pdf_filename_from_article_metadata(
             }
         )
     )
-    monkeypatch.setattr(webapp, "_CFG", cfg)
-    monkeypatch.setattr(webapp, "_author_file_index", None)
-
-    assert webapp._article_meta("smith-2024") == {
+    assert webapp._article_meta(cfg, "smith-2024", author_index={}) == {
         "title": "Smith example",
         "year": 2024,
         "journal": "Example Journal",
@@ -109,7 +103,7 @@ def test_webapp_reads_bibliography_and_pdf_filename_from_article_metadata(
         "publisher": "Example Publisher",
         "authors": [],
     }
-    assert webapp._article_pdf_filename("smith-2024") == "smith.pdf"
+    assert webapp._article_pdf_filename(cfg, "smith-2024") == "smith.pdf"
 
 
 def test_webapp_computes_article_review_progress() -> None:

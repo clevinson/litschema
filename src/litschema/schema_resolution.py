@@ -19,15 +19,16 @@ class ResolvedExtractionSchema:
     root_class: str
 
 
-def _extraction_schema_path(cfg: LitSchemaConfig) -> Path:
+def extraction_schema_path(cfg: LitSchemaConfig) -> Path:
+    """Resolve the extraction schema file path from config.
+
+    Lenient: returns the path even if the file does not exist; callers
+    that need the file to exist (e.g. :func:`resolve_extraction_schema`)
+    check separately, while informational consumers (status, MCP) decide
+    how to render a missing file.
+    """
     schema_file = cfg.raw.get("extraction_schema_file", DEFAULT_EXTRACTION_SCHEMA)
-    path = cfg.schema_dir / schema_file
-    if path.exists():
-        return path
-    raise FileNotFoundError(
-        f"extraction schema not found at {path}. "
-        "Set `extraction_schema_file` in litschema.yaml or place a file at the default location."
-    )
+    return cfg.schema_dir / schema_file
 
 
 def _find_tree_root_class(sv: SchemaView) -> str:
@@ -44,7 +45,13 @@ def _find_tree_root_class(sv: SchemaView) -> str:
 
 
 def resolve_extraction_schema(cfg: LitSchemaConfig) -> ResolvedExtractionSchema:
-    schema_path = _extraction_schema_path(cfg)
+    schema_path = extraction_schema_path(cfg)
+    if not schema_path.exists():
+        raise FileNotFoundError(
+            f"extraction schema not found at {schema_path}. "
+            "Set `extraction_schema_file` in litschema.yaml or place a file "
+            "at the default location."
+        )
     sv = SchemaView(str(schema_path))
     return ResolvedExtractionSchema(
         path=schema_path,

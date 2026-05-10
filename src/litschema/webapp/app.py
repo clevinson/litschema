@@ -15,9 +15,10 @@ import urllib.request
 import webbrowser
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Annotated
 
 import yaml
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from linkml_runtime.utils.schemaview import SchemaView
@@ -28,43 +29,55 @@ from ..articles import (
     read_article_metadata,
     read_review_events,
 )
-from ..config import LitSchemaConfig, load_config
+from ..config import LitSchemaConfig, load_config, require_config_or_exit
 from ..schema_resolution import resolve_extraction_schema
 from .search import strip_references
 
-_CFG = load_config()
-PROJECT_ROOT = _CFG.project_root
-PAPERS_DIR = _CFG.papers_dir
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 app = FastAPI(title="ERW Extraction Verifier")
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
-_author_file_index: dict[str, dict] | None = None
-_schema_fields_cache: dict | None = None
 ORCID_RE = re.compile(r"^\d{4}-\d{4}-\d{4}-\d{3}[0-9X]$")
 
 
-def _load_author_index() -> dict[str, dict]:
-    global _author_file_index
-    if _author_file_index is not None:
-        return _author_file_index
-    authors_path = _CFG.data_dir / "authors.yaml"
+def get_config() -> LitSchemaConfig:
+    """FastAPI dependency yielding the active litschema config.
+
+    Tests override via ``app.dependency_overrides[get_config] = ...``
+    (the documented FastAPI pattern). ``load_config`` is already
+    ``lru_cache``-d, so calling per-request is cheap.
+    """
+    return load_config()
+
+
+CfgDep = Annotated[LitSchemaConfig, Depends(get_config)]
+
+
+def _load_author_index(cfg: LitSchemaConfig) -> dict[str, dict]:
+    """Read ``authors.yaml`` and index it by author id. Empty if missing.
+
+    Callers that resolve many articles per request should call this once
+    and pass the result into :func:`_article_meta`, rather than calling
+    per-article — the read isn't cached.
+    """
+    authors_path = cfg.data_dir / "authors.yaml"
     if not authors_path.exists():
-        _author_file_index = {}
         return {}
     authors = yaml.safe_load(authors_path.read_text()) or []
-    _author_file_index = {a.get("id"): a for a in authors if a.get("id")}
-    return _author_file_index
+    return {a.get("id"): a for a in authors if a.get("id")}
 
 
-def _article_meta(article_id: str) -> dict:
+def _article_meta(
+    cfg: LitSchemaConfig,
+    article_id: str,
+    author_index: dict[str, dict],
+) -> dict:
     """Return a compact bibliographic dict for an article id."""
-    a = read_article_metadata(article_files(_CFG, article_id))
+    a = read_article_metadata(article_files(cfg, article_id))
     if not a:
         return {}
     authors = []
-    author_index = _load_author_index()
     for aid in a.get("author_ids") or []:
         auth = author_index.get(aid)
         if auth:
@@ -81,18 +94,18 @@ def _article_meta(article_id: str) -> dict:
     }
 
 
-def _article_pdf_filename(article_id: str) -> str | None:
+def _article_pdf_filename(cfg: LitSchemaConfig, article_id: str) -> str | None:
     """Look up PDF filename from per-article metadata."""
-    a = read_article_metadata(article_files(_CFG, article_id))
+    a = read_article_metadata(article_files(cfg, article_id))
     if not a:
         return None
     return a.get("filename") or a.get("standard_filename")
 
 
-def _current_annotations(article_id: str) -> list[dict]:
+def _current_annotations(cfg: LitSchemaConfig, article_id: str) -> list[dict]:
     """Return latest annotation state per path, hiding JSONL clear events."""
     current: dict[str, dict] = {}
-    for event in read_review_events(article_files(_CFG, article_id)):
+    for event in read_review_events(article_files(cfg, article_id)):
         path = event.get("path")
         if not path:
             continue
@@ -238,11 +251,12 @@ async def index():
 
 
 @app.get("/api/articles")
-async def list_articles():
+async def list_articles(cfg: CfgDep):
     """List articles that have both markdown and extraction JSON."""
+    author_index = _load_author_index(cfg)
     articles = []
-    for article_id in iter_article_ids_with_extractions(_CFG):
-        files = article_files(_CFG, article_id)
+    for article_id in iter_article_ids_with_extractions(cfg):
+        files = article_files(cfg, article_id)
         ext_path = files.extraction_path()
         md_path = files.markdown_path()
         if not md_path.exists():
@@ -254,10 +268,10 @@ async def list_articles():
 
         setups = data.get("experimental_setups") or []
         # Annotation progress
-        annotations = _current_annotations(article_id)
+        annotations = _current_annotations(cfg, article_id)
         progress = _review_progress(data, annotations)
         # Look up bibliographic fields from article metadata.
-        bib = _article_meta(article_id)
+        bib = _article_meta(cfg, article_id, author_index)
         articles.append(
             {
                 "article_id": article_id,
@@ -280,15 +294,12 @@ async def list_articles():
 
 
 @app.get("/api/schema/fields")
-async def get_schema_fields():
+async def get_schema_fields(cfg: CfgDep):
     """Return schema-driven field editor metadata for the verifier."""
-    global _schema_fields_cache
-    if _schema_fields_cache is None:
-        try:
-            _schema_fields_cache = _schema_field_metadata(_CFG)
-        except Exception as exc:
-            raise HTTPException(404, "schema metadata unavailable") from exc
-    return _schema_fields_cache
+    try:
+        return _schema_field_metadata(cfg)
+    except Exception as exc:
+        raise HTTPException(404, "schema metadata unavailable") from exc
 
 
 @app.get("/api/orcid/{orcid_id}")
@@ -319,27 +330,27 @@ async def get_orcid_profile(orcid_id: str):
 
 
 @app.get("/api/article/{article_id}")
-async def get_article(article_id: str):
+async def get_article(article_id: str, cfg: CfgDep):
     """Return full extraction JSON for an article."""
-    path = article_files(_CFG, article_id).extraction_path()
+    path = article_files(cfg, article_id).extraction_path()
     if not path.exists():
         raise HTTPException(404, f"No extraction for {article_id}")
     return json.loads(path.read_text())
 
 
 @app.get("/api/bibliography/{article_id}")
-async def get_bibliography(article_id: str):
+async def get_bibliography(article_id: str, cfg: CfgDep):
     """Return bibliographic metadata (title, year, journal, authors, doi)."""
-    meta = _article_meta(article_id)
+    meta = _article_meta(cfg, article_id, _load_author_index(cfg))
     if not meta:
         raise HTTPException(404, f"No bibliographic entry for {article_id}")
     return meta
 
 
 @app.get("/api/markdown/{article_id}")
-async def get_markdown(article_id: str):
+async def get_markdown(article_id: str, cfg: CfgDep):
     """Return raw markdown text for an article."""
-    path = article_files(_CFG, article_id).markdown_path()
+    path = article_files(cfg, article_id).markdown_path()
     if not path.exists():
         raise HTTPException(404, f"No markdown for {article_id}")
     text = path.read_text()
@@ -347,13 +358,13 @@ async def get_markdown(article_id: str):
 
 
 @app.get("/api/pdf/{article_id}")
-async def get_pdf(article_id: str):
+async def get_pdf(article_id: str, cfg: CfgDep):
     """Serve the PDF file for an article."""
-    filename = _article_pdf_filename(article_id)
+    filename = _article_pdf_filename(cfg, article_id)
     if not filename:
         raise HTTPException(404, f"No PDF filename found for {article_id}")
 
-    pdf_path = PAPERS_DIR / filename
+    pdf_path = cfg.papers_dir / filename
     if not pdf_path.exists():
         raise HTTPException(404, f"PDF not found: {filename}")
 
@@ -361,22 +372,22 @@ async def get_pdf(article_id: str):
 
 
 @app.get("/api/reasoning/{article_id}")
-async def get_reasoning(article_id: str):
+async def get_reasoning(article_id: str, cfg: CfgDep):
     """Return per-field extraction reasoning if it exists."""
-    path = article_files(_CFG, article_id).reasoning_path()
+    path = article_files(cfg, article_id).reasoning_path()
     if not path.exists():
         raise HTTPException(404, f"No reasoning for {article_id}")
     return json.loads(path.read_text())
 
 
 @app.get("/api/annotations/{article_id}")
-async def get_annotations(article_id: str):
+async def get_annotations(article_id: str, cfg: CfgDep):
     """Return annotations for an article."""
-    return {"article_id": article_id, "annotations": _current_annotations(article_id)}
+    return {"article_id": article_id, "annotations": _current_annotations(cfg, article_id)}
 
 
 @app.put("/api/annotations/{article_id}")
-async def put_annotation(article_id: str, request: Request):
+async def put_annotation(article_id: str, request: Request, cfg: CfgDep):
     """Add or update a field annotation."""
     body = await request.json()
     field_path = body.get("path")
@@ -410,7 +421,7 @@ async def put_annotation(article_id: str, request: Request):
     if batch_id:
         entry["batch_id"] = batch_id
 
-    files = article_files(_CFG, article_id)
+    files = article_files(cfg, article_id)
     ann_path = files.reviews_path(for_write=True)
     ann_path.parent.mkdir(parents=True, exist_ok=True)
     with ann_path.open("a") as fh:
@@ -419,9 +430,9 @@ async def put_annotation(article_id: str, request: Request):
 
 
 @app.delete("/api/annotations/{article_id}/{field_path:path}")
-async def delete_annotation(article_id: str, field_path: str):
+async def delete_annotation(article_id: str, field_path: str, cfg: CfgDep):
     """Remove an annotation for a specific field."""
-    files = article_files(_CFG, article_id)
+    files = article_files(cfg, article_id)
     ann_path = files.reviews_path(for_write=True)
     ann_path.parent.mkdir(parents=True, exist_ok=True)
     entry = {
@@ -439,10 +450,11 @@ async def delete_annotation(article_id: str, field_path: str):
 def main():
     import uvicorn
 
-    print(f"Article store: {_CFG.article_store_dir}")
-    print(f"Legacy markdown dir: {_CFG.fulltext_md_dir}")
-    print(f"Legacy extraction dir: {_CFG.llm_extractions_dir}")
-    print(f"Papers dir: {PAPERS_DIR}")
+    cfg = require_config_or_exit()
+    print(f"Article store: {cfg.article_store_dir}")
+    print(f"Legacy markdown dir: {cfg.fulltext_md_dir}")
+    print(f"Legacy extraction dir: {cfg.llm_extractions_dir}")
+    print(f"Papers dir: {cfg.papers_dir}")
     webbrowser.open("http://localhost:8000")
     uvicorn.run(app, host="127.0.0.1", port=8000)
 

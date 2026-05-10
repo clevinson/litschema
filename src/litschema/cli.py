@@ -23,8 +23,9 @@ from .articles import (
     iter_reasoning_paths,
     iter_review_paths,
 )
-from .config import CONFIG_FILENAME, LitSchemaConfig, load_config
+from .config import CONFIG_FILENAME, ConfigNotFoundError, LitSchemaConfig, require_config
 from .ingest import validate_extraction
+from .schema_resolution import extraction_schema_path
 
 app = typer.Typer(
     name="litschema",
@@ -67,29 +68,19 @@ def _count_files(path: Path, pattern: str = "*") -> int:
 
 
 def _require_config() -> LitSchemaConfig:
-    """Load litschema.yaml or emit an actionable message and exit 2.
+    """Load litschema.yaml or emit a colored message and exit 2.
 
-    Every command that needs filesystem paths goes through here, so running
-    `litschema status` (etc.) outside a project never dumps a traceback.
+    Thin CLI wrapper around :func:`litschema.config.require_config` that
+    translates the typer-free :class:`ConfigNotFoundError` into colored
+    output and an exit code. The exception's ``str(exc)`` already carries
+    either the generic auto-discovery hint or the specific missing-path
+    message — render it verbatim instead of substituting our own.
     """
     try:
-        return load_config()
-    except FileNotFoundError as exc:
-        typer.secho(
-            f"{CROSS} No {CONFIG_FILENAME} found in this directory tree.",
-            fg=typer.colors.RED,
-        )
-        typer.echo(
-            "\nRun `litschema init <domain-name>` to scaffold a new project, "
-            "or cd into an existing one."
-        )
+        return require_config()
+    except ConfigNotFoundError as exc:
+        typer.secho(f"{CROSS} {exc}", fg=typer.colors.RED)
         raise typer.Exit(code=2) from exc
-
-
-def _schema_root_path(cfg: LitSchemaConfig) -> Path:
-    """Resolve the domain's root schema file from config (with sensible default)."""
-    raw = cfg.raw.get("schema_root", "erw_articles.yaml")
-    return cfg.schema_dir / raw
 
 
 def _valid_skill_dirs(skills_dir: Path) -> list[Path]:
@@ -369,7 +360,7 @@ def status():
     reasoning = len(list(iter_reasoning_paths(cfg)))
     annotations = len(list(iter_review_paths(cfg)))
 
-    schema_yaml = _schema_root_path(cfg)
+    schema_yaml = extraction_schema_path(cfg)
     papers = _count_files(cfg.papers_dir, "*.pdf")
 
     def _rel(path: Path) -> str:
