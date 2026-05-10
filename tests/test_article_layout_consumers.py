@@ -98,10 +98,9 @@ def test_webapp_reads_bibliography_and_pdf_filename_from_article_metadata(
             }
         )
     )
-    monkeypatch.setattr(webapp, "_CFG", cfg)
     monkeypatch.setattr(webapp, "_author_file_index", None)
 
-    assert webapp._article_meta("smith-2024") == {
+    assert webapp._article_meta(cfg, "smith-2024") == {
         "title": "Smith example",
         "year": 2024,
         "journal": "Example Journal",
@@ -109,7 +108,7 @@ def test_webapp_reads_bibliography_and_pdf_filename_from_article_metadata(
         "publisher": "Example Publisher",
         "authors": [],
     }
-    assert webapp._article_pdf_filename("smith-2024") == "smith.pdf"
+    assert webapp._article_pdf_filename(cfg, "smith-2024") == "smith.pdf"
 
 
 def test_webapp_computes_article_review_progress() -> None:

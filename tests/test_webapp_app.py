@@ -25,12 +25,12 @@ def test_author_index_fallback_is_cached(monkeypatch, tmp_path) -> None:
         calls["count"] += 1
         return original_safe_load(*args, **kwargs)
 
-    monkeypatch.setattr(webapp, "_CFG", SimpleNamespace(data_dir=tmp_path))
+    cfg = SimpleNamespace(data_dir=tmp_path)
     monkeypatch.setattr(webapp, "_author_file_index", None)
     monkeypatch.setattr(webapp.yaml, "safe_load", counted_safe_load)
 
-    assert webapp._load_author_index()["author_a"]["family_name"] == "Author"
-    assert webapp._load_author_index()["author_a"]["family_name"] == "Author"
+    assert webapp._load_author_index(cfg)["author_a"]["family_name"] == "Author"
+    assert webapp._load_author_index(cfg)["author_a"]["family_name"] == "Author"
     assert calls["count"] == 1
 
 
