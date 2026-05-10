@@ -25,6 +25,7 @@ from .articles import (
 )
 from .config import CONFIG_FILENAME, ConfigNotFoundError, LitSchemaConfig, require_config
 from .ingest import validate_extraction
+from .schema_resolution import resolve_domain_schema_path
 
 app = typer.Typer(
     name="litschema",
@@ -85,12 +86,6 @@ def _require_config() -> LitSchemaConfig:
             "or cd into an existing one."
         )
         raise typer.Exit(code=2) from exc
-
-
-def _schema_root_path(cfg: LitSchemaConfig) -> Path:
-    """Resolve the domain's root schema file from config (with sensible default)."""
-    raw = cfg.raw.get("schema_root", "erw_articles.yaml")
-    return cfg.schema_dir / raw
 
 
 def _valid_skill_dirs(skills_dir: Path) -> list[Path]:
@@ -370,7 +365,7 @@ def status():
     reasoning = len(list(iter_reasoning_paths(cfg)))
     annotations = len(list(iter_review_paths(cfg)))
 
-    schema_yaml = _schema_root_path(cfg)
+    schema_yaml = resolve_domain_schema_path(cfg)
     papers = _count_files(cfg.papers_dir, "*.pdf")
 
     def _rel(path: Path) -> str:

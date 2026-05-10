@@ -10,6 +10,7 @@ from linkml_runtime.utils.schemaview import SchemaView
 from .config import LitSchemaConfig
 
 DEFAULT_EXTRACTION_SCHEMA = "extraction.yaml"
+DEFAULT_DOMAIN_SCHEMA = "erw_articles.yaml"
 
 
 @dataclass(frozen=True)
@@ -28,6 +29,19 @@ def _extraction_schema_path(cfg: LitSchemaConfig) -> Path:
         f"extraction schema not found at {path}. "
         "Set `extraction_schema_file` in litschema.yaml or place a file at the default location."
     )
+
+
+def resolve_domain_schema_path(cfg: LitSchemaConfig) -> Path:
+    """Resolve the domain's root LinkML schema file.
+
+    The domain root is the schema that imports everything else
+    (``schema_root`` in litschema.yaml, defaulting to ``erw_articles.yaml``).
+    Lenient: returns the path even if the file does not exist; callers
+    decide how to react (``status`` reports a missing file; the MCP tool
+    returns an error string).
+    """
+    schema_file = cfg.raw.get("schema_root", DEFAULT_DOMAIN_SCHEMA)
+    return cfg.schema_dir / schema_file
 
 
 def _find_tree_root_class(sv: SchemaView) -> str:
