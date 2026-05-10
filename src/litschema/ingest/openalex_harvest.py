@@ -19,6 +19,7 @@ from pathlib import Path
 import requests
 
 from ..config import LitSchemaConfig, require_config_or_exit
+from . import harvest_cache_dir
 
 logger = logging.getLogger(__name__)
 
@@ -171,7 +172,7 @@ def harvest(
     Returns summary stats dict.
     """
     xlsx_path = xlsx_path or cfg.tracking_xlsx
-    data_dir = data_dir or cfg.openalex_dir
+    data_dir = data_dir or harvest_cache_dir(cfg, "openalex")
     data_dir.mkdir(parents=True, exist_ok=True)
 
     rows = load_dois_from_xlsx(xlsx_path)

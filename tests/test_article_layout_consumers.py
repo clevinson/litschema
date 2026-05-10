@@ -17,8 +17,6 @@ def _cfg(project: Path) -> LitSchemaConfig:
         schema_dir=project / "schema",
         references_dir=project / "references",
         tracking_xlsx=project / "paper_download_tracking.xlsx",
-        openalex_dir=project / "data" / "openalex_raw",
-        crossref_dir=project / "data" / "crossref_raw",
         fulltext_md_dir=project / "data" / "fulltext_md",
         llm_extractions_dir=project / "data" / "llm_extractions",
         extraction_reasoning_dir=project / "data" / "extraction_reasoning",

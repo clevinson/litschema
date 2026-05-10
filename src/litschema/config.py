@@ -55,8 +55,6 @@ class LitSchemaConfig:
     tracking_xlsx: Path
 
     # Stage-numbered subdirectories.
-    openalex_dir: Path
-    crossref_dir: Path
     fulltext_md_dir: Path
     llm_extractions_dir: Path
     extraction_reasoning_dir: Path
@@ -129,8 +127,6 @@ _PATH_FIELDS: tuple[tuple[str, str, str], ...] = (
     ("schema_dir", "schema_dir", "schema"),
     ("references_dir", "references_dir", "references"),
     ("tracking_xlsx", "tracking_xlsx", "paper_download_tracking.xlsx"),
-    ("openalex_dir", "openalex_dir", "data/openalex_raw"),
-    ("crossref_dir", "crossref_dir", "data/crossref_raw"),
     ("fulltext_md_dir", "fulltext_md_dir", "data/fulltext_md"),
     ("llm_extractions_dir", "llm_extractions_dir", "data/llm_extractions"),
     (

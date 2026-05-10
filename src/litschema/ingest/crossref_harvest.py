@@ -19,6 +19,7 @@ from pathlib import Path
 import requests
 
 from ..config import LitSchemaConfig, require_config_or_exit
+from . import harvest_cache_dir
 
 logger = logging.getLogger(__name__)
 
@@ -118,8 +119,8 @@ def harvest(
     skip_existing: bool = True,
 ) -> dict:
     """Run CrossRef harvest for papers needing supplementation."""
-    openalex_dir = openalex_dir or cfg.openalex_dir
-    crossref_dir = crossref_dir or cfg.crossref_dir
+    openalex_dir = openalex_dir or harvest_cache_dir(cfg, "openalex")
+    crossref_dir = crossref_dir or harvest_cache_dir(cfg, "crossref")
     crossref_dir.mkdir(parents=True, exist_ok=True)
 
     stats = {"checked": 0, "needs_supplement": 0, "fetched": 0, "skipped": 0, "not_found": 0}
