@@ -25,7 +25,7 @@ from .articles import (
 )
 from .config import CONFIG_FILENAME, ConfigNotFoundError, LitSchemaConfig, require_config
 from .ingest import validate_extraction
-from .schema_resolution import resolve_domain_schema_path
+from .schema_resolution import extraction_schema_path
 
 app = typer.Typer(
     name="litschema",
@@ -365,7 +365,7 @@ def status():
     reasoning = len(list(iter_reasoning_paths(cfg)))
     annotations = len(list(iter_review_paths(cfg)))
 
-    schema_yaml = resolve_domain_schema_path(cfg)
+    schema_yaml = extraction_schema_path(cfg)
     papers = _count_files(cfg.papers_dir, "*.pdf")
 
     def _rel(path: Path) -> str:
