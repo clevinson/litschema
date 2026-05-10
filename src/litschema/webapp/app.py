@@ -29,7 +29,7 @@ from ..articles import (
     read_article_metadata,
     read_review_events,
 )
-from ..config import LitSchemaConfig, load_config, require_config
+from ..config import LitSchemaConfig, load_config, require_config_or_exit
 from ..schema_resolution import resolve_extraction_schema
 from .search import strip_references
 
@@ -450,7 +450,7 @@ async def delete_annotation(article_id: str, field_path: str, cfg: CfgDep):
 def main():
     import uvicorn
 
-    cfg = require_config()
+    cfg = require_config_or_exit()
     print(f"Article store: {cfg.article_store_dir}")
     print(f"Legacy markdown dir: {cfg.fulltext_md_dir}")
     print(f"Legacy extraction dir: {cfg.llm_extractions_dir}")
