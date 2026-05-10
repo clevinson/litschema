@@ -65,7 +65,7 @@ Extract ONLY non-bibliographic fields. Bibliographic fields (title, DOI, year, a
 Write valid JSON to `data/papers/{article_id}/agent-extraction.json`. Create the
 article directory first if needed.
 
-The output must conform to the extraction schema. Include `article_id`, `confidence` (0.0-1.0 reflecting extraction certainty), and `reasoning` (1-3 sentence explanation of extraction choices) as metadata fields, plus all extracted data fields from the schema.
+The output must conform to the extraction schema. Include `article_id` when the schema requires it. Do not add top-level `confidence` or `reasoning` fields unless the project schema explicitly defines them; extraction rationale belongs in `agent-reasoning.json`.
 
 **Missing values:** Omit keys entirely when the paper does not mention them. Do not use `null` or empty arrays — just leave the key out. Downstream consumers handle missing keys defensively.
 
@@ -73,7 +73,7 @@ The output must conform to the extraction schema. Include `article_id`, `confide
 
 Write a SEPARATE reasoning file to `data/papers/{article_id}/agent-reasoning.json`.
 
-This file documents WHY each value was extracted, with line-number evidence from the markdown. Every non-metadata leaf field in the extraction MUST have an entry.
+This file documents WHY each value was extracted, with line-number evidence from the markdown. Every non-identifier leaf field in the extraction MUST have an entry.
 
 ### Reasoning format rules
 
@@ -81,7 +81,7 @@ This file documents WHY each value was extracted, with line-number evidence from
 - **value**: the extracted value rendered as text for cross-reference with the extraction JSON
 - **source_lines**: comma-separated line references from the markdown. Use `L{n}` for single lines, `L{start}-L{end}` for ranges. Example: `L23-L34,L55,L80-L90`
 - **reasoning**: plain text explanation for a human reviewer evaluating the extraction. Omit this key when the source lines are self-explanatory (the value appears verbatim in the cited lines)
-- Skip `article_id`, `confidence`, and `reasoning` (top-level metadata) — only document extracted data fields
+- Skip `article_id`; document every extracted domain data field
 
 ## Validation
 
@@ -108,6 +108,6 @@ Do NOT finish until both validation commands exit 0 or you have exhausted retrie
 Before finishing, verify:
 - [ ] `data/papers/{article_id}/agent-extraction.json` exists and passes extraction validation
 - [ ] `data/papers/{article_id}/agent-reasoning.json` exists and passes reasoning validation
-- [ ] Every non-metadata leaf field in the extraction has a corresponding reasoning entry
+- [ ] Every non-identifier leaf field in the extraction has a corresponding reasoning entry
 - [ ] All `source_lines` reference real line numbers from the markdown
 - [ ] No data was extracted from the References/Bibliography section

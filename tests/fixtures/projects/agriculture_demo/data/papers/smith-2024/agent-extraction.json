@@ -1,7 +1,5 @@
 {
   "article_id": "smith-2024",
-  "confidence": 0.88,
-  "reasoning": "Five-year corn-soybean rotation trial in Iowa comparing cover crop, no-till, and the combined practice against a conventional control. Yield and soil organic carbon were measured under all three treatments; per-treatment effects clearly reported.",
   "study_type": "field_trial",
   "crops": ["corn", "soybean"],
   "experiments": [

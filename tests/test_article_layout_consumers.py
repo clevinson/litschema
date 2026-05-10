@@ -61,14 +61,14 @@ def test_analysis_loads_extractions_from_article_folders(
     article_dir = cfg.article_store_dir / "smith-2024"
     article_dir.mkdir(parents=True)
     (article_dir / "agent-extraction.json").write_text(
-        json.dumps({"article_id": "smith-2024", "confidence": 0.8})
+        json.dumps({"article_id": "smith-2024", "document_type": "journal_article"})
     )
     monkeypatch.setattr(analysis, "load_config", lambda: cfg)
 
     dfs = analysis.load_extractions()
 
     assert dfs["articles"]["article_id"].tolist() == ["smith-2024"]
-    assert dfs["articles"]["confidence"].tolist() == [0.8]
+    assert dfs["articles"]["document_type"].tolist() == ["journal_article"]
 
 
 def test_webapp_reads_bibliography_and_pdf_filename_from_article_metadata(
@@ -104,7 +104,6 @@ def test_webapp_reads_bibliography_and_pdf_filename_from_article_metadata(
 def test_webapp_computes_article_review_progress() -> None:
     extraction = {
         "article_id": "smith-2024",
-        "confidence": 0.9,
         "document_type": "journal_article",
         "study_types": ["experimental", "modeling"],
         "experimental_setups": [

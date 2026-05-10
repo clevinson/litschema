@@ -128,7 +128,7 @@ def _leaf_paths(obj, base_path: str = "") -> list[str]:
 
     paths = []
     for key, value in obj.items():
-        if not base_path and key in {"article_id", "confidence", "reasoning"}:
+        if not base_path and key == "article_id":
             continue
         child_path = f"{base_path}.{key}" if base_path else key
         paths.extend(_leaf_paths(value, child_path))
@@ -267,7 +267,6 @@ async def list_articles(cfg: CfgDep):
         articles.append(
             {
                 "article_id": article_id,
-                "confidence": data.get("confidence"),
                 "study_types": data.get("study_types", []),
                 "focus_areas": data.get("focus_areas", []),
                 "document_type": data.get("document_type"),

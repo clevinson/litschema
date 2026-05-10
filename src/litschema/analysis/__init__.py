@@ -73,8 +73,6 @@ def _build_articles(records: list[dict]) -> pd.DataFrame:
         rows.append(
             {
                 "article_id": r["article_id"],
-                "confidence": r.get("confidence"),
-                "reasoning": r.get("reasoning"),
                 "study_types": r.get("study_types", []),
                 "focus_areas": r.get("focus_areas", []),
                 "document_type": r.get("document_type"),

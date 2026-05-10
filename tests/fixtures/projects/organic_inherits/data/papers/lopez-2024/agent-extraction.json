@@ -1,7 +1,5 @@
 {
   "article_id": "lopez-2024",
-  "confidence": 0.81,
-  "reasoning": "Three-year certified-organic vineyard trial in Spain; explicit certification body and full set of organic practices documented.",
   "study_type": "field_trial",
   "crops": ["wine_grapes"],
   "experiments": [

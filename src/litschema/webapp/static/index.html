@@ -2415,7 +2415,7 @@ function renderReviewTable() {
     return;
   }
 
-  const skipKeys = new Set(["article_id", "confidence", "reasoning"]);
+  const skipKeys = new Set(["article_id"]);
   let html = '<div class="table-view">';
 
   // Partition top-level keys into scalars, primitive arrays, and complex
@@ -3188,7 +3188,7 @@ function renderOverviewView(data = effectiveExtraction()) {
     return;
   }
 
-  const skipKeys = new Set(["article_id", "confidence", "reasoning"]);
+  const skipKeys = new Set(["article_id"]);
   let html = '<div class="table-view overview-view">';
   const scalarRows = [];
   const primitiveArrayKeys = [];
@@ -4127,7 +4127,7 @@ function buildTreeHtml(obj, path) {
     let html = "";
     for (const [key, val] of Object.entries(obj)) {
       const childPath = path ? `${path}.${key}` : key;
-      if (!path && (key === "article_id" || key === "confidence" || key === "reasoning")) continue;
+      if (!path && key === "article_id") continue;
 
       if (val !== null && typeof val === "object") {
         const isEmpty = Array.isArray(val) ? val.length === 0 : Object.keys(val).length === 0;
@@ -4689,7 +4689,7 @@ function collectLeafPaths(obj, basePath = "") {
     return paths;
   }
   for (const [key, value] of Object.entries(obj)) {
-    if (!basePath && ["article_id", "confidence", "reasoning"].includes(key)) continue;
+    if (!basePath && key === "article_id") continue;
     const childPath = basePath ? `${basePath}.${key}` : key;
     paths.push(...collectLeafPaths(value, childPath));
   }

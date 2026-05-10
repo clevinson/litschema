@@ -31,8 +31,6 @@ def test_loader_reads_per_article_folder_and_reviews_jsonl(
         json.dumps(
             {
                 "article_id": "smith-2024",
-                "confidence": 0.8,
-                "reasoning": "test extraction",
                 "study_type": "field_trial",
                 "crops": ["maize"],
                 "sample_size": 12,

@@ -19,8 +19,7 @@ extraction will differ accordingly — see the rules below.
   directions of effect.
 - **For reviews and meta-analyses: leave `experiments` empty.** Do not
   re-extract the underlying studies' data. Extract only what the review
-  itself contributes (`study_type=review` or `meta_analysis`,
-  `crops`, `confidence`, `reasoning`).
+  itself contributes (`study_type=review` or `meta_analysis`, `crops`).
 - **For pure modeling papers (no empirical data of their own): leave
   `experiments` empty.** Set `study_type=modeling`. If a paper combines
   modeling AND original empirical work, populate `experiments` for the
@@ -72,10 +71,3 @@ extraction will differ accordingly — see the rules below.
 - **`sample_size`** — total replicate count (plot count for field
   trials, pot count for greenhouse). Leave null when the paper
   reports replicates per treatment but not a total.
-- **`confidence`** — your overall extraction certainty (0.0–1.0).
-  Lower it when the paper is ambiguous, when key fields had to be
-  inferred from figures, or when terminology is non-standard.
-- **`reasoning`** — 1–3 sentences for the human reviewer summarizing
-  the most consequential extraction choices (especially `study_type`,
-  whether `experiments` was populated, and any unusual treatment
-  encoding).

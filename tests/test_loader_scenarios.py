@@ -98,11 +98,9 @@ def test_agriculture_template_as_is(tmp_path: Path) -> None:
 
     cols = _column_map(summary.article_columns)
 
-    # All 7 top-level AgricultureExtraction slots are present
+    # All 5 top-level AgricultureExtraction slots are present
     expected = {
         "article_id",
-        "confidence",
-        "reasoning",
         "study_type",
         "crops",
         "experiments",
@@ -112,7 +110,6 @@ def test_agriculture_template_as_is(tmp_path: Path) -> None:
 
     # Type rules
     assert cols["article_id"] == "VARCHAR"
-    assert cols["confidence"] == "DOUBLE"
     assert cols["sample_size"] == "BIGINT"
     assert cols["study_type"] == "VARCHAR"  # scalar enum
     assert cols["crops"] == "JSON"  # multivalued strings
@@ -188,7 +185,7 @@ def test_agriculture_template_as_is(tmp_path: Path) -> None:
 def test_inheritance_is_a_with_tree_root_override(tmp_path: Path) -> None:
     """Subclassing `AgricultureExtraction` via `is_a` should:
 
-    - Inherit all 9 base slots (LinkML class_induced_slots)
+    - Inherit all 5 base slots (LinkML class_induced_slots)
     - Add the 2 new slots from the subclass
     - Make `OrganicAgricultureExtraction` the active root because IT is the
       class with `tree_root: true` in the entry-point file (the imported
@@ -201,8 +198,6 @@ def test_inheritance_is_a_with_tree_root_override(tmp_path: Path) -> None:
     # Inherited slots
     inherited = {
         "article_id",
-        "confidence",
-        "reasoning",
         "study_type",
         "crops",
         "experiments",

@@ -36,7 +36,7 @@ def test_article_files_prefers_per_article_paths_when_present(tmp_path: Path) ->
     (paper_dir / "agent-extraction.json").write_text('{"article_id": "smith-2024"}')
     (paper_dir / "agent-reasoning.json").write_text('{"fields": []}')
     (paper_dir / "reviews.jsonl").write_text(
-        json.dumps({"article_id": "smith-2024", "path": ".confidence"}) + "\n"
+        json.dumps({"article_id": "smith-2024", "path": ".study_type"}) + "\n"
     )
 
     files = article_files(cfg, "smith-2024")
@@ -44,7 +44,7 @@ def test_article_files_prefers_per_article_paths_when_present(tmp_path: Path) ->
     assert files.extraction_path() == paper_dir / "agent-extraction.json"
     assert files.reasoning_path() == paper_dir / "agent-reasoning.json"
     assert files.reviews_path() == paper_dir / "reviews.jsonl"
-    assert read_review_events(files) == [{"article_id": "smith-2024", "path": ".confidence"}]
+    assert read_review_events(files) == [{"article_id": "smith-2024", "path": ".study_type"}]
 
 
 def test_iter_extraction_paths_reads_per_article_store(tmp_path: Path) -> None:

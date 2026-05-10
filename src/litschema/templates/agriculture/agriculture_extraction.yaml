@@ -31,14 +31,6 @@ classes:
         identifier: true
         required: true
         description: Stable identifier for this article (e.g. first-author + year).
-      confidence:
-        range: float
-        description: >-
-          Self-rated confidence (0.0–1.0) in this extraction's overall quality.
-      reasoning:
-        description: >-
-          Free-text rationale the extractor wrote about choices made during
-          extraction. Not validated; useful for downstream review.
       study_type:
         range: StudyTypeEnum
         description: One-of classification of the work's methodology.

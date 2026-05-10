@@ -1,7 +1,5 @@
 {
   "article_id": "okeke-2025",
-  "confidence": 0.72,
-  "reasoning": "Greenhouse pot study comparing biochar rates on tomato; soils were collected from a smallholder field in Enugu State and brought back to a greenhouse facility in Abuja for the trial.",
   "study_type": "greenhouse",
   "crops": ["tomato"],
   "experiments": [
