@@ -30,7 +30,7 @@ from ..articles import (
     read_review_events,
 )
 from ..config import LitSchemaConfig, load_config, require_config
-from ..schema_resolution import resolve_extraction_schema
+from ..schema_resolution import extraction_schema_path, resolve_extraction_schema
 from .search import strip_references
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -38,9 +38,14 @@ STATIC_DIR = Path(__file__).resolve().parent / "static"
 app = FastAPI(title="ERW Extraction Verifier")
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
-_author_file_index: dict[str, dict] | None = None
-_schema_fields_cache: dict | None = None
 ORCID_RE = re.compile(r"^\d{4}-\d{4}-\d{4}-\d{3}[0-9X]$")
+
+# Path-keyed caches. Keying by resolved path (rather than a single global
+# slot) keeps test `app.dependency_overrides[get_config]` swaps isolated:
+# pointing at a different `data_dir` / `schema_dir` produces a different
+# cache key automatically.
+_author_index_by_path: dict[str, dict[str, dict]] = {}
+_schema_fields_by_path: dict[str, dict] = {}
 
 
 def get_config() -> LitSchemaConfig:
@@ -57,16 +62,18 @@ CfgDep = Annotated[LitSchemaConfig, Depends(get_config)]
 
 
 def _load_author_index(cfg: LitSchemaConfig) -> dict[str, dict]:
-    global _author_file_index
-    if _author_file_index is not None:
-        return _author_file_index
     authors_path = cfg.data_dir / "authors.yaml"
+    key = str(authors_path)
+    cached = _author_index_by_path.get(key)
+    if cached is not None:
+        return cached
     if not authors_path.exists():
-        _author_file_index = {}
-        return {}
-    authors = yaml.safe_load(authors_path.read_text()) or []
-    _author_file_index = {a.get("id"): a for a in authors if a.get("id")}
-    return _author_file_index
+        index: dict[str, dict] = {}
+    else:
+        authors = yaml.safe_load(authors_path.read_text()) or []
+        index = {a.get("id"): a for a in authors if a.get("id")}
+    _author_index_by_path[key] = index
+    return index
 
 
 def _article_meta(cfg: LitSchemaConfig, article_id: str) -> dict:
@@ -293,13 +300,16 @@ async def list_articles(cfg: CfgDep):
 @app.get("/api/schema/fields")
 async def get_schema_fields(cfg: CfgDep):
     """Return schema-driven field editor metadata for the verifier."""
-    global _schema_fields_cache
-    if _schema_fields_cache is None:
-        try:
-            _schema_fields_cache = _schema_field_metadata(cfg)
-        except Exception as exc:
-            raise HTTPException(404, "schema metadata unavailable") from exc
-    return _schema_fields_cache
+    key = str(extraction_schema_path(cfg))
+    cached = _schema_fields_by_path.get(key)
+    if cached is not None:
+        return cached
+    try:
+        cached = _schema_field_metadata(cfg)
+    except Exception as exc:
+        raise HTTPException(404, "schema metadata unavailable") from exc
+    _schema_fields_by_path[key] = cached
+    return cached
 
 
 @app.get("/api/orcid/{orcid_id}")

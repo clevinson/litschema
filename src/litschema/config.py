@@ -211,10 +211,17 @@ def require_config(path: Path | str | None = None) -> LitSchemaConfig:
     Use this from CLI / ``main()`` entry points so the user gets a single,
     consistent error message instead of either a raw traceback or
     command-specific phrasing.
+
+    The "no config found in this directory tree" hint only applies to the
+    auto-discovery case (no explicit path, no env var). For explicit paths
+    and ``LITSCHEMA_CONFIG`` mismatches the original ``FileNotFoundError``
+    message — which already names the missing file — is preserved.
     """
     try:
         return load_config(path)
     except FileNotFoundError as exc:
+        if path is not None or os.environ.get(ENV_VAR):
+            raise ConfigNotFoundError(str(exc)) from exc
         raise ConfigNotFoundError(
             f"No {CONFIG_FILENAME} found in this directory tree.\n\n{_MISSING_CONFIG_HINT}"
         ) from exc

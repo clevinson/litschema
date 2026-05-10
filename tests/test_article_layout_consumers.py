@@ -96,7 +96,7 @@ def test_webapp_reads_bibliography_and_pdf_filename_from_article_metadata(
             }
         )
     )
-    monkeypatch.setattr(webapp, "_author_file_index", None)
+    monkeypatch.setattr(webapp, "_author_index_by_path", {})
 
     assert webapp._article_meta(cfg, "smith-2024") == {
         "title": "Smith example",

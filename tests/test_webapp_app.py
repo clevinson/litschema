@@ -26,7 +26,7 @@ def test_author_index_fallback_is_cached(monkeypatch, tmp_path) -> None:
         return original_safe_load(*args, **kwargs)
 
     cfg = SimpleNamespace(data_dir=tmp_path)
-    monkeypatch.setattr(webapp, "_author_file_index", None)
+    monkeypatch.setattr(webapp, "_author_index_by_path", {})
     monkeypatch.setattr(webapp.yaml, "safe_load", counted_safe_load)
 
     assert webapp._load_author_index(cfg)["author_a"]["family_name"] == "Author"
