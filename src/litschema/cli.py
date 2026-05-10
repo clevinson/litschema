@@ -71,20 +71,15 @@ def _require_config() -> LitSchemaConfig:
     """Load litschema.yaml or emit a colored message and exit 2.
 
     Thin CLI wrapper around :func:`litschema.config.require_config` that
-    translates the typer-free :class:`ConfigNotFoundError` into colored output
-    and an exit code.
+    translates the typer-free :class:`ConfigNotFoundError` into colored
+    output and an exit code. The exception's ``str(exc)`` already carries
+    either the generic auto-discovery hint or the specific missing-path
+    message — render it verbatim instead of substituting our own.
     """
     try:
         return require_config()
     except ConfigNotFoundError as exc:
-        typer.secho(
-            f"{CROSS} No {CONFIG_FILENAME} found in this directory tree.",
-            fg=typer.colors.RED,
-        )
-        typer.echo(
-            "\nRun `litschema init <domain-name>` to scaffold a new project, "
-            "or cd into an existing one."
-        )
+        typer.secho(f"{CROSS} {exc}", fg=typer.colors.RED)
         raise typer.Exit(code=2) from exc
 
 
