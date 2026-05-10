@@ -1565,6 +1565,15 @@
     overflow-wrap: anywhere;
   }
 
+  /* Data cells in horizontal-table need to wrap regardless of column index.
+     The standard table's nth-child(3)/(4) rules set white-space: nowrap for
+     source/status columns; in horizontal mode those positions hold actual
+     content, so override here. Targets only .cell-value to leave source-cell
+     and status-cell nowrap behavior intact. */
+  .ext-table.horizontal-table td.cell-value {
+    white-space: normal;
+  }
+
   .ext-table.horizontal-table tr.sub-row td {
     border-top: 1px solid var(--border-subtle);
   }
