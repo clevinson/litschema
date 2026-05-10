@@ -232,20 +232,35 @@
   /* ── Filter row ──
      Drawer-style panel pulled down from the toolbar. Uses the page bg
      (subtly different from the toolbar's bg-raised) plus an inset top
-     shadow to read as "below the toolbar fold." */
+     shadow to read as "below the toolbar fold." Stacks vertically:
+     header (label + help), textarea, footer (count + actions). */
   .filter-row {
     display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 12px 16px 14px;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px 16px 12px;
     background: var(--bg);
     border-bottom: 1px solid var(--border);
     box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.06),
                 inset 3px 0 0 var(--accent);
     flex-shrink: 0;
   }
+  .filter-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .filter-header-label {
+    font-family: var(--font-sans);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+  }
   .filter-row .filter-input {
-    flex: 1;
+    width: 100%;
+    box-sizing: border-box;
     font-family: var(--font-mono);
     font-size: 12px;
     line-height: 1.55;
@@ -266,13 +281,17 @@
   .filter-row .filter-input.error:focus {
     box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.18);
   }
-  .filter-row .filter-count {
+  .filter-footer {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .filter-footer .filter-count {
+    flex: 1;
     font-family: var(--font-mono);
     font-size: 11px;
     color: var(--text-secondary);
-    min-width: 90px;
-    text-align: right;
-    align-self: center;
+    text-align: left;
   }
   .filter-row .filter-count.error { color: var(--red, #ef4444); }
   .toolbar-btn.filter-toggle.active {
@@ -289,19 +308,21 @@
     color: var(--bg);
   }
 
-  /* Inline help indicator inside the filter row. Reads as a tooltip cue,
-     not an action button. */
+  /* Inline help indicator next to the header label. Reads as a tooltip
+     cue, not an action button. Standard pointer cursor — clicking
+     opens the modal, so the affordance is "this is clickable," not
+     "hover for a tooltip." */
   .filter-help-btn {
-    width: 20px;
-    height: 20px;
+    width: 18px;
+    height: 18px;
     border-radius: 50%;
     border: 1px solid var(--border);
     background: transparent;
     color: var(--text-dim);
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 500;
     line-height: 1;
-    cursor: help;
+    cursor: pointer;
     padding: 0;
     display: inline-flex;
     align-items: center;
@@ -315,12 +336,10 @@
   }
 
   /* Primary action — accent fill makes it visually distinct from the
-     close affordance next to it. Margin-left creates breathing room
-     between the input region (input + count) and the action region. */
+     close affordance next to it. */
   .filter-primary-btn {
     height: 28px;
     padding: 0 14px;
-    margin-left: 12px;
     border-radius: var(--radius);
     border: 1px solid var(--accent);
     background: var(--accent);
@@ -342,7 +361,6 @@
     width: 28px;
     height: 28px;
     padding: 0;
-    margin-left: 0;
     border: 1px solid var(--border);
     border-radius: var(--radius);
     background: transparent;
@@ -2178,14 +2196,19 @@
 </div>
 
 <div class="filter-row" id="filter-row" style="display:none">
-  <button class="filter-help-btn" id="btn-filter-help" type="button" aria-label="Filter expression reference" title="Filter expression reference">?</button>
+  <div class="filter-header">
+    <span class="filter-header-label">Add Filter</span>
+    <button class="filter-help-btn" id="btn-filter-help" type="button" aria-label="Filter expression reference" title="Filter expression reference">?</button>
+  </div>
   <textarea class="filter-input" id="filter-input" rows="2"
             placeholder='JS expression over article fields. Cmd/Ctrl+Enter to apply.
 e.g. year >= 2024 && study_types.includes("review")'
             spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off"></textarea>
-  <span class="filter-count" id="filter-count">&mdash;</span>
-  <button class="filter-primary-btn" id="btn-filter-apply" type="button">Apply</button>
-  <button class="filter-close-btn" id="btn-filter-close" type="button" aria-label="Close filter" title="Close (clears active filter)">&times;</button>
+  <div class="filter-footer">
+    <span class="filter-count" id="filter-count">&mdash;</span>
+    <button class="filter-primary-btn" id="btn-filter-apply" type="button">Apply</button>
+    <button class="filter-close-btn" id="btn-filter-close" type="button" aria-label="Close filter" title="Close (clears active filter)">&times;</button>
+  </div>
 </div>
 
 <div class="orcid-modal-backdrop" id="filter-help-modal" role="dialog" aria-modal="true" aria-labelledby="filter-help-title">
