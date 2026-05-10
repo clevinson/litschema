@@ -149,15 +149,14 @@ def test_load_config_from_repo_root() -> None:
     assert cfg.schema_dir.is_dir()
 
 
-def test_schema_root_is_valid_yaml() -> None:
-    """The referenced schema_root file parses as YAML."""
+def test_extraction_schema_resolves_to_valid_yaml() -> None:
+    """The configured extraction schema file parses as YAML."""
     from litschema.config import load_config
+    from litschema.schema_resolution import extraction_schema_path
 
-    cfg = load_config()
-    schema_root_name = cfg.raw.get("schema_root", "erw_articles.yaml")
-    schema_path = cfg.schema_dir / schema_root_name
+    schema_path = extraction_schema_path(load_config())
 
-    assert schema_path.is_file(), f"schema_root not found at {schema_path}"
+    assert schema_path.is_file(), f"extraction schema not found at {schema_path}"
     with schema_path.open() as fh:
         parsed = yaml.safe_load(fh)
     assert isinstance(parsed, dict)
@@ -190,7 +189,7 @@ def test_status_uses_per_article_store(tmp_path: Path, monkeypatch) -> None:
     (tmp_path / "litschema.yaml").write_text(
         'project_root: "."\n'
         'schema_dir: "schema"\n'
-        'schema_root: "erw_articles.yaml"\n'
+        'extraction_schema_file: "erw_articles.yaml"\n'
         'article_store_dir: "data/papers"\n'
     )
     monkeypatch.setenv("LITSCHEMA_CONFIG", str(tmp_path / "litschema.yaml"))
@@ -216,7 +215,7 @@ def test_validate_defaults_to_article_store(
     (tmp_path / "litschema.yaml").write_text(
         'project_root: "."\n'
         'schema_dir: "schema"\n'
-        'schema_root: "erw_articles.yaml"\n'
+        'extraction_schema_file: "erw_articles.yaml"\n'
         'article_store_dir: "data/papers"\n'
     )
     monkeypatch.setenv("LITSCHEMA_CONFIG", str(tmp_path / "litschema.yaml"))

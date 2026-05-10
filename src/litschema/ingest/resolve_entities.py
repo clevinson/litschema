@@ -277,6 +277,12 @@ def resolve_authors(openalex_dir: Path, institutions: list[dict]) -> list[dict]:
 def resolve(cfg: LitSchemaConfig) -> tuple[list[dict], list[dict]]:
     """Run full entity resolution. Returns (institutions, authors)."""
     openalex_dir = harvest_cache_dir(cfg, "openalex")
+    if not openalex_dir.exists() or not any(openalex_dir.glob("*.json")):
+        raise FileNotFoundError(
+            f"No OpenAlex harvest data found at {openalex_dir}. "
+            "Run `litschema harvest` first, or migrate legacy raw harvests "
+            "(eg. `mv data/openalex_raw .litschema/cache/openalex`)."
+        )
     data_dir = cfg.data_dir
     data_dir.mkdir(parents=True, exist_ok=True)
     institutions = resolve_institutions(openalex_dir)
