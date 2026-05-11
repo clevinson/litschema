@@ -2835,10 +2835,26 @@ function populateDropdown() {
     select.appendChild(opt);
   }
 
-  if (currentVal && state.filteredArticles.some(a => a.article_id === currentVal)) {
+  const currentStillVisible =
+    currentVal && state.filteredArticles.some((a) => a.article_id === currentVal);
+  if (currentStillVisible) {
     select.value = currentVal;
-  } else if (currentVal) {
+  } else if (state.filteredArticles.length > 0) {
+    // Currently loaded article was filtered out (or none was loaded yet
+    // when a URL filter applied). Auto-select the first match so the
+    // detail panel always reflects the filtered queue.
+    const firstId = state.filteredArticles[0].article_id;
+    select.value = firstId;
+    if (currentVal !== firstId) {
+      select.dispatchEvent(new Event("change"));
+    }
+  } else if (state.currentId || currentVal) {
+    // Filter has zero matches and an article was previously loaded —
+    // return to the welcome screen rather than leaving stale content up.
     select.value = "";
+    state.currentId = null;
+    $("#panels").style.display = "none";
+    $("#welcome").style.display = "flex";
   }
 
   updateNavState();
