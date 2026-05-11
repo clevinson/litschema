@@ -293,6 +293,10 @@
     color: var(--text-secondary);
     text-align: left;
   }
+  .filter-footer .filter-count.loading {
+    color: var(--text-dim);
+    font-style: italic;
+  }
   .filter-row .filter-count.error { color: var(--red, #ef4444); }
   .toolbar-btn.filter-toggle.active {
     color: var(--accent);
@@ -2219,12 +2223,18 @@ e.g. year >= 2024 && study_types.includes("review")'
     </header>
     <div class="help-body">
       <p>
-        The filter is a JavaScript boolean expression evaluated against each article's record from
-        <code>/api/articles</code>. Combine fields with <code>&amp;&amp;</code>, <code>||</code>, and
+        The filter is a JavaScript boolean expression evaluated against each article's record.
+        Combine fields with <code>&amp;&amp;</code>, <code>||</code>, and
         comparisons like <code>===</code>, <code>!=</code>, <code>&lt;</code>, <code>&gt;=</code>.
         Arrays support <code>.includes(...)</code>, <code>.some(...)</code>, and <code>.length</code>.
       </p>
-      <h4>Available fields</h4>
+      <p>
+        <strong>Deep extraction fields</strong> (e.g. <code>experimental_setups</code>,
+        <code>quantification_approaches</code>, <code>modeling_details</code>) load in the
+        background when this panel opens. Until they finish loading, expressions that
+        reference them will return no matches; the count will update automatically once load completes.
+      </p>
+      <h4>Summary fields</h4>
       <table>
         <thead>
           <tr>
@@ -2371,6 +2381,8 @@ const state = {
   suppressClearHoverSections: new Set(),
   filterExpr: "",
   filterFn: null,
+  deepLoaded: false,
+  deepLoading: null,
 };
 
 function initialViewMode() {
@@ -2494,7 +2506,12 @@ async function init() {
   state.viewMode = initialViewMode();
   state.overviewMode = initialOverviewMode();
   syncViewControls();
-  applyInitialFilterFromUrl();
+  // If a URL filter is present, load deep fields up front so the first
+  // dropdown render reflects accurate matches (the filter expression may
+  // reference fields like experimental_setups that aren't in the summary).
+  if (applyInitialFilterFromUrl()) {
+    await ensureDeepFields();
+  }
   populateDropdown();
   updateFilterBadge();
 
@@ -2534,15 +2551,15 @@ function safeFilterCall(fn) {
 
 function applyInitialFilterFromUrl() {
   const expr = new URLSearchParams(window.location.search).get("filter");
-  if (!expr) return;
+  if (!expr) return false;
   const { fn } = compileFilter(expr);
-  if (fn) {
-    state.filterExpr = expr;
-    state.filterFn = fn;
-    $("#filter-input").value = expr;
-    $("#filter-row").style.display = "flex";
-    $("#btn-filter-toggle").classList.add("active");
-  }
+  if (!fn) return false;
+  state.filterExpr = expr;
+  state.filterFn = fn;
+  $("#filter-input").value = expr;
+  $("#filter-row").style.display = "flex";
+  $("#btn-filter-toggle").classList.add("active");
+  return true;
 }
 
 function updateFilterBadge() {
@@ -2579,9 +2596,12 @@ function evaluateFilterPreview(expr) {
   return fn;
 }
 
-function applyFilter(expr) {
+async function applyFilter(expr) {
   const { fn, error } = compileFilter(expr);
   if (error) return;
+  // If the user wrote a filter that references deep fields and we haven't
+  // loaded them yet, wait. ensureDeepFields() is a no-op once cached.
+  await ensureDeepFields();
   state.filterExpr = expr.trim();
   state.filterFn = fn;
   const url = new URL(window.location.href);
@@ -2593,6 +2613,67 @@ function applyFilter(expr) {
   history.replaceState(null, "", url.toString());
   populateDropdown();
   updateFilterBadge();
+}
+
+// ── Deep fields: bulk-fetch full extraction JSON into state.articles ──
+//
+// /api/articles returns only the summary fields (study_types, focus_areas,
+// document_type, n_setups, ...). /api/article/{id} returns the full
+// extraction (experimental_setups, quantification_approaches, modeling_*,
+// etc.). To let filter expressions reach into those deep fields, we fetch
+// the full extraction for every article once on first open of the filter
+// panel, then merge each one into its corresponding state.articles entry
+// (additive only — never overwriting the computed summary fields).
+async function ensureDeepFields() {
+  if (state.deepLoaded) return;
+  if (state.deepLoading) return state.deepLoading;
+  state.deepLoading = (async () => {
+    setDeepLoadingHint(true);
+    const byId = new Map(state.articles.map((a) => [a.article_id, a]));
+    const ids = state.articles.map((a) => a.article_id);
+    const concurrency = 12;
+    let cursor = 0;
+    async function worker() {
+      while (cursor < ids.length) {
+        const id = ids[cursor++];
+        try {
+          const ext = await fetchJson(`/api/article/${id}`);
+          mergeDeepExtraction(byId.get(id), ext);
+        } catch { /* skip; filter just won't match this article on deep keys */ }
+      }
+    }
+    await Promise.all(Array.from({ length: concurrency }, worker));
+    state.deepLoaded = true;
+    state.deepLoading = null;
+    setDeepLoadingHint(false);
+    // Re-run the live preview now that deep fields are available.
+    evaluateFilterPreview($("#filter-input").value);
+  })();
+  return state.deepLoading;
+}
+
+function mergeDeepExtraction(article, extraction) {
+  if (!article || !extraction || typeof extraction !== "object") return;
+  for (const [key, value] of Object.entries(extraction)) {
+    // Don't clobber computed summary fields. Anything already on the
+    // summary object stays; anything new gets added.
+    if (!(key in article)) article[key] = value;
+  }
+}
+
+function setDeepLoadingHint(loading) {
+  const countEl = $("#filter-count");
+  if (loading) {
+    countEl.dataset.summaryText = countEl.textContent;
+    countEl.textContent = "loading deep fields…";
+    countEl.classList.add("loading");
+  } else {
+    countEl.classList.remove("loading");
+    if (countEl.dataset.summaryText) {
+      countEl.textContent = countEl.dataset.summaryText;
+      delete countEl.dataset.summaryText;
+    }
+  }
 }
 
 function clearFilter() {
@@ -2619,6 +2700,7 @@ function wireFilterControls() {
     if (!open) {
       input.focus();
       evaluateFilterPreview(input.value);
+      ensureDeepFields();
     }
   });
   let debounce;
@@ -2681,23 +2763,19 @@ const FILTER_HELP_FIELDS = [
 ];
 
 const FILTER_HELP_EXAMPLES = [
-  '// 2024+ papers',
+  '// Summary-only filters (work immediately)',
   'year >= 2024',
-  '',
-  '// Reviews only',
   'study_types.includes("review")',
-  '',
-  '// Low-confidence extractions worth auditing',
   'confidence != null && confidence < 0.7',
-  '',
-  '// Experimental papers with unreviewed flags',
-  'study_types.includes("experimental") && has_flags',
-  '',
-  '// Numeric year compare (since year is stored as string)',
   'Number(year) >= 2022 && Number(year) <= 2024',
-  '',
-  '// Title text match',
   '/basalt/i.test(title || "")',
+  '',
+  '// Deep extraction filters (work after deep fields load)',
+  'experimental_setups?.some(s => s.experimental_scale === "mesocosm")',
+  'experimental_setups?.some(s => s.interventions?.some(i => /basalt/i.test(i.feedstock?.type || "")))',
+  'quantification_approaches?.some(q => q.media === "water")',
+  '(modeling_details?.scale || "") === "global"',
+  'experimental_setups?.length === 0   // reviews/perspectives, no original experiments',
 ].join("\n");
 
 function previewValueFor(field) {
