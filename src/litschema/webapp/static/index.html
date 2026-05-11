@@ -871,6 +871,41 @@
     background: var(--cited-strong);
   }
 
+  /* In-document search hits. Word-level highlight, distinct from the
+     blue citation/source-line bg (--cited*). Standard <mark> styling
+     in the find-on-page tradition (yellow), tuned per-theme so dark
+     mode doesn't blow out. */
+  .md-line .search-hit {
+    background: rgba(255, 213, 79, 0.55);
+    color: inherit;
+    border-radius: 2px;
+    padding: 0 1px;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+  }
+  .md-line .search-hit.current {
+    background: rgba(255, 167, 38, 0.75);
+    outline: 1px solid rgba(255, 167, 38, 0.95);
+  }
+  @media (prefers-color-scheme: dark) {
+    .md-line .search-hit {
+      background: rgba(255, 213, 79, 0.28);
+      color: #ffe8a3;
+    }
+    .md-line .search-hit.current {
+      background: rgba(255, 167, 38, 0.45);
+      outline: 1px solid rgba(255, 167, 38, 0.7);
+    }
+  }
+  [data-theme="dark"] .md-line .search-hit {
+    background: rgba(255, 213, 79, 0.28);
+    color: #ffe8a3;
+  }
+  [data-theme="dark"] .md-line .search-hit.current {
+    background: rgba(255, 167, 38, 0.45);
+    outline: 1px solid rgba(255, 167, 38, 0.7);
+  }
+
   .md-content h1, .md-content h2, .md-content h3,
   .md-content h4, .md-content h5, .md-content h6 {
     color: var(--text);
@@ -5018,17 +5053,18 @@ function doSearch() {
   renderMarkdown();
   state.selectedPath = null;
 
-  const lines = state.markdown.split("\n");
   state.searchMatches = [];
-  const re = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
+  const reSrc = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-  for (let i = 0; i < lines.length; i++) {
-    if (re.test(lines[i])) {
-      state.searchMatches.push(i + 1);
-      const lineEl = document.querySelector(`.md-line[data-line="${i + 1}"]`);
-      if (lineEl) lineEl.classList.add("highlighted");
+  // Walk each rendered .md-line and wrap text matches in <mark class="search-hit">.
+  // Using TreeWalker over text nodes avoids matching inside HTML attributes
+  // and skips the line-number gutter.
+  document.querySelectorAll(".md-line").forEach((lineEl) => {
+    const lineNum = parseInt(lineEl.dataset.line, 10);
+    if (highlightMatchesIn(lineEl, reSrc)) {
+      state.searchMatches.push(lineNum);
     }
-  }
+  });
 
   state.searchIndex = 0;
   if (state.searchMatches.length > 0) {
@@ -5037,13 +5073,51 @@ function doSearch() {
   updateSearchNav();
 }
 
+function highlightMatchesIn(lineEl, reSrc) {
+  const walker = document.createTreeWalker(lineEl, NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      // Skip line-number gutter — never highlight digits in the gutter.
+      return node.parentElement && node.parentElement.closest(".line-num")
+        ? NodeFilter.FILTER_REJECT
+        : NodeFilter.FILTER_ACCEPT;
+    },
+  });
+  const textNodes = [];
+  let n;
+  while ((n = walker.nextNode())) textNodes.push(n);
+
+  let any = false;
+  for (const node of textNodes) {
+    const re = new RegExp(reSrc, "gi");
+    const text = node.nodeValue;
+    if (!re.test(text)) continue;
+    any = true;
+    re.lastIndex = 0;
+    const frag = document.createDocumentFragment();
+    let last = 0;
+    let m;
+    while ((m = re.exec(text)) !== null) {
+      if (m.index > last) frag.appendChild(document.createTextNode(text.slice(last, m.index)));
+      const mark = document.createElement("mark");
+      mark.className = "search-hit";
+      mark.textContent = m[0];
+      frag.appendChild(mark);
+      last = m.index + m[0].length;
+      if (m[0].length === 0) re.lastIndex++;  // guard against zero-width
+    }
+    if (last < text.length) frag.appendChild(document.createTextNode(text.slice(last)));
+    node.parentNode.replaceChild(frag, node);
+  }
+  return any;
+}
+
 function scrollToSearchMatch(index) {
-  document.querySelectorAll(".md-line.active").forEach(e => e.classList.remove("active"));
+  document.querySelectorAll(".search-hit.current").forEach((e) => e.classList.remove("current"));
   state.searchIndex = index;
   const lineNum = state.searchMatches[index];
   const lineEl = document.querySelector(`.md-line[data-line="${lineNum}"]`);
   if (lineEl) {
-    lineEl.classList.add("active");
+    lineEl.querySelectorAll(".search-hit").forEach((m) => m.classList.add("current"));
     lineEl.scrollIntoView({ behavior: "smooth", block: "center" });
   }
   updateSearchNav();
