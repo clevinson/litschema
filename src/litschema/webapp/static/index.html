@@ -2592,7 +2592,9 @@ function applyInitialFilterFromUrl() {
   state.filterExpr = expr;
   state.filterFn = fn;
   $("#filter-input").value = expr;
-  $("#filter-row").style.display = "flex";
+  // Leave the filter row closed on initial load — the toolbar badge already
+  // signals the active filter. The user can click Filter to re-open and edit
+  // if they want; auto-popping the drawer on every refresh is noise.
   $("#btn-filter-toggle").classList.add("active");
   return true;
 }
