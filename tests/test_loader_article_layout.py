@@ -55,7 +55,7 @@ def test_loader_reads_per_article_folder_and_reviews_jsonl(
         'extraction_schema_file: "agriculture_extraction.yaml"\n'
         'data_dir: "data"\n'
         'article_store_dir: "data/papers"\n'
-        'papers_dir: "papers"\n'
+        'paper_inbox_dir: "papers-inbox"\n'
     )
 
     cfg = load_config(project / "litschema.yaml")

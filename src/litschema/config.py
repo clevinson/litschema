@@ -54,9 +54,7 @@ class LitSchemaConfig:
     tracking_xlsx: Path = field(metadata={"default_path": "paper_download_tracking.xlsx"})
 
     article_store_dir: Path = field(metadata={"default_path": "data/papers"})
-
-    # External (typically sibling to project_root).
-    papers_dir: Path = field(metadata={"default_path": "papers"})
+    paper_inbox_dir: Path = field(metadata={"default_path": "papers-inbox"})
 
     # Build output.
     static_site_dir: Path = field(metadata={"default_path": "static-site"})

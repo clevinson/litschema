@@ -17,7 +17,7 @@ def _cfg(project: Path) -> LitSchemaConfig:
         schema_dir=project / "schema",
         references_dir=project / "references",
         tracking_xlsx=project / "paper_download_tracking.xlsx",
-        papers_dir=project / "papers",
+        paper_inbox_dir=project / "papers-inbox",
         static_site_dir=project / "static-site",
         article_store_dir=project / "data" / "papers",
         raw={},
@@ -29,13 +29,13 @@ def test_pdf_conversion_defaults_to_article_folder(
     monkeypatch,
 ) -> None:
     cfg = _cfg(tmp_path)
-    cfg.papers_dir.mkdir(parents=True)
+    cfg.paper_inbox_dir.mkdir(parents=True)
     article_dir = cfg.article_store_dir / "smith-2024"
     article_dir.mkdir(parents=True)
     (article_dir / "article-metadata.json").write_text(
         json.dumps({"id": "smith-2024", "filename": "smith.pdf"})
     )
-    (cfg.papers_dir / "smith.pdf").write_text("pdf placeholder")
+    (cfg.paper_inbox_dir / "smith.pdf").write_text("pdf placeholder")
 
     def fake_convert_pdf(pdf_path: Path, out_path: Path) -> int:
         out_path.write_text("# Smith\n")
@@ -45,7 +45,7 @@ def test_pdf_conversion_defaults_to_article_folder(
 
     stats = pdf_to_markdown.run(
         cfg,
-        papers_dir=cfg.papers_dir,
+        papers_dir=cfg.paper_inbox_dir,
         output_dir=None,
     )
 

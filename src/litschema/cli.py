@@ -16,6 +16,7 @@ from pathlib import Path
 
 import typer
 
+from .article_registry import ARTICLE_REGISTRY_COLUMNS
 from .articles import (
     iter_extraction_paths,
     iter_markdown_paths,
@@ -127,6 +128,10 @@ def _agent_skill_destinations(agent: str) -> list[Path]:
     if agent in destinations:
         return [destinations[agent]]
     raise typer.BadParameter("--agent must be one of: auto, claude, codex, both")
+
+
+def _project_skill_destination(project: Path) -> Path:
+    return project.expanduser().resolve() / ".agents" / "skills"
 
 
 # ── Pipeline verbs ─────────────────────────────────────────────────────────
@@ -333,13 +338,15 @@ def agent_validate_reasoning(ctx: typer.Context):
 
 @skills_app.command(
     "install",
-    help="Install bundled agentic skills globally for Claude Code and/or Codex.",
+    help="Install bundled agentic skills globally or into a project-local skills directory.",
 )
 def skills_install(
     agent: str = typer.Option(
         "auto", "--agent", help="Agent destination: auto, claude, codex, or both"
     ),
-    dest: Path | None = typer.Option(None, "--dest", help="Custom destination for skill files"),
+    local: bool = typer.Option(
+        False, "--local", help="Install into the current directory's .agents/skills"
+    ),
     copy: bool = typer.Option(True, "--copy/--symlink", help="Copy instead of symlink"),
     force: bool = typer.Option(False, "--force", help="Overwrite existing"),
 ):
@@ -348,14 +355,14 @@ def skills_install(
         typer.secho("no bundled skills found", fg=typer.colors.RED)
         raise typer.Exit(code=2)
 
-    if dest is not None:
-        destinations = [dest.expanduser().resolve()]
+    if local:
+        destinations = [_project_skill_destination(Path.cwd())]
     else:
         destinations = _agent_skill_destinations(agent)
         if not destinations:
             typer.secho(
                 "no Claude Code or Codex config directory found; use "
-                "`--agent claude`, `--agent codex`, `--agent both`, or `--dest <path>`",
+                "`--agent claude`, `--agent codex`, `--agent both`, or `--local`",
                 fg=typer.colors.RED,
             )
             raise typer.Exit(code=2)
@@ -404,7 +411,7 @@ def status(ctx: typer.Context):
     annotations = len(list(iter_review_paths(cfg)))
 
     schema_yaml = extraction_schema_path(cfg)
-    papers = _count_files(cfg.papers_dir, "*.pdf")
+    papers = _count_files(cfg.paper_inbox_dir, "*.pdf")
 
     def _rel(path: Path) -> str:
         """Show as project-relative where possible; absolute otherwise."""
@@ -419,7 +426,7 @@ def status(ctx: typer.Context):
         if schema_yaml.exists()
         else f"schema:      {CROSS} not found"
     )
-    typer.echo(f"papers:      {papers} PDFs in {cfg.papers_dir.name}/")
+    typer.echo(f"inbox:       {papers} PDFs in {cfg.paper_inbox_dir.name}/")
     typer.echo(f"articles:    {metadata} metadata files")
     typer.echo(f"converted:   {converted} markdown files")
     typer.echo(f"extracted:   {extractions} extractions")
@@ -485,20 +492,112 @@ def doctor(ctx: typer.Context):
     typer.echo("\nEverything looks good.")
 
 
-# ── Init (stub) ────────────────────────────────────────────────────────────
+# ── Init ───────────────────────────────────────────────────────────────────
 
 
-@app.command(help="Scaffold a new domain project. Not yet implemented.")
+def _write_draft_schema(project: Path) -> None:
+    domain_context = project.joinpath("domain_context.md")
+    if not domain_context.exists():
+        domain_context.write_text(
+            "# Domain Context\n\n"
+            "Describe the review question, inclusion boundaries, key concepts, "
+            "and extraction guidance for agents.\n"
+        )
+    schema_path = project.joinpath("schema", "extraction.yaml")
+    if not schema_path.exists():
+        schema_path.write_text(
+            "id: https://example.org/litschema/project\n"
+            "name: draft_extraction\n"
+            "description: Draft extraction schema. Revise for your review before extraction.\n"
+            "prefixes:\n"
+            "  draft: https://example.org/litschema/project/\n"
+            "  linkml: https://w3id.org/linkml/\n"
+            "default_prefix: draft\n"
+            "default_range: string\n"
+            "imports:\n"
+            "  - linkml:types\n"
+            "classes:\n"
+            "  DraftExtraction:\n"
+            "    tree_root: true\n"
+            "    description: Draft structured extraction for one article.\n"
+            "    attributes:\n"
+            "      article_id:\n"
+            "        identifier: true\n"
+            "        required: true\n"
+            "        description: Stable article identifier.\n"
+        )
+
+
+def _write_source_scaffold(project: Path) -> None:
+    sources_dir = project / "data" / "sources"
+    articles_csv = sources_dir / "articles.csv"
+    if not articles_csv.exists():
+        articles_csv.write_text(",".join(ARTICLE_REGISTRY_COLUMNS) + "\n")
+
+
+def _ensure_gitignore_entries(project: Path) -> None:
+    gitignore_path = project / ".gitignore"
+    entries = [
+        ".venv/",
+        ".litschema/",
+        "papers-inbox/*.pdf",
+        "papers-inbox/.processed/*.pdf",
+        "data/papers/*/*.pdf",
+        "# For non-open-access articles, add article-specific ignores such as:",
+        "# data/papers/<article-id>/article.md",
+        ".DS_Store",
+    ]
+    if not gitignore_path.exists():
+        gitignore_path.write_text("\n".join(entries) + "\n")
+        return
+
+    existing = gitignore_path.read_text()
+    existing_lines = set(existing.splitlines())
+    missing = [entry for entry in entries if entry not in existing_lines]
+    if missing:
+        separator = "" if existing.endswith("\n") else "\n"
+        gitignore_path.write_text(existing + separator + "\n".join(missing) + "\n")
+
+
+@app.command(help="Scaffold a new litschema project.")
 def init(
-    domain: str | None = typer.Argument(None, help="Domain name (e.g. 'my-study')"),
+    domain: Path = typer.Argument(..., help="Project directory to create"),
+    force: bool = typer.Option(False, "--force", help="Allow initializing an existing directory"),
 ):
-    typer.secho(
-        "`litschema init` is planned for a later release. "
-        "For now, copy a template from src/litschema/templates/ "
-        "(e.g. agriculture/) into your project's schema/ directory.",
-        fg=typer.colors.YELLOW,
-    )
-    raise typer.Exit(code=2)
+    project = domain.expanduser().resolve()
+    if project.exists() and not project.is_dir():
+        typer.secho(f"{CROSS} {project} exists and is not a directory", fg=typer.colors.RED)
+        raise typer.Exit(code=2)
+    if project.exists() and any(project.iterdir()) and not force:
+        typer.secho(f"{CROSS} {project} already exists and is not empty", fg=typer.colors.RED)
+        raise typer.Exit(code=2)
+
+    project.mkdir(parents=True, exist_ok=True)
+    project.joinpath("schema").mkdir(exist_ok=True)
+    project.joinpath("data", "sources").mkdir(parents=True, exist_ok=True)
+    project.joinpath("data", "papers").mkdir(parents=True, exist_ok=True)
+    project.joinpath("papers-inbox").mkdir(exist_ok=True)
+
+    config_path = project.joinpath("litschema.yaml")
+    if not config_path.exists():
+        config_path.write_text(
+            'project_root: "."\n'
+            'schema_dir: "schema"\n'
+            'schema_root: "extraction.yaml"\n'
+            'extraction_schema_file: "extraction.yaml"\n'
+            'data_dir: "data"\n'
+            'article_store_dir: "data/papers"\n'
+            'paper_inbox_dir: "papers-inbox"\n'
+        )
+    _write_draft_schema(project)
+    _write_source_scaffold(project)
+    _ensure_gitignore_entries(project)
+
+    typer.echo(f"{CHECK} initialized litschema project at {project}")
+    typer.echo("\nNext steps:")
+    typer.echo(f"  1. cd {project}")
+    typer.echo("  2. Add DOI rows to data/sources/articles.csv")
+    typer.echo("  3. Run `litschema skills install --local` for project-local skills")
 
 
 if __name__ == "__main__":

@@ -57,6 +57,22 @@ def test_skills_install_agent_both_creates_global_destinations(tmp_path, monkeyp
     assert (tmp_path / ".codex" / "skills" / "extract-article" / "SKILL.md").is_file()
 
 
+def test_skills_install_local_uses_project_agent_skills_dir(tmp_path, monkeypatch) -> None:
+    from litschema import cli
+
+    monkeypatch.delenv("LITSCHEMA_CONFIG", raising=False)
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    project = tmp_path / "review"
+    project.mkdir()
+    monkeypatch.chdir(project)
+
+    result = CliRunner().invoke(cli.app, ["skills", "install", "--local"])
+
+    assert result.exit_code == 0, result.output
+    assert (project / ".agents" / "skills" / "extract-article" / "SKILL.md").is_file()
+    assert not (tmp_path / "home" / ".claude" / "skills").exists()
+
+
 def test_skills_install_auto_requires_existing_agent_config(tmp_path, monkeypatch) -> None:
     from litschema import cli
 
@@ -68,6 +84,7 @@ def test_skills_install_auto_requires_existing_agent_config(tmp_path, monkeypatc
     assert result.exit_code == 2, result.output
     assert "no Claude Code or Codex config directory found" in result.output
     assert "--agent claude" in result.output
+    assert "--local" in result.output
 
 
 def test_bundled_skills_are_included_in_wheel() -> None:

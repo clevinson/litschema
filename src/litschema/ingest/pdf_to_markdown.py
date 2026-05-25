@@ -50,7 +50,7 @@ def run(
     force: bool = False,
 ) -> dict:
     """Convert all PDFs referenced by per-article metadata to markdown."""
-    papers_dir = papers_dir or cfg.papers_dir
+    papers_dir = papers_dir or cfg.paper_inbox_dir
     if output_dir is not None:
         output_dir.mkdir(parents=True, exist_ok=True)
 

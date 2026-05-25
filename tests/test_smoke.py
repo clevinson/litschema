@@ -110,6 +110,24 @@ def test_extract_command_is_explicitly_unsupported() -> None:
     assert "/extract-article <article-id>" in result.output
 
 
+def test_verify_command_accepts_port_option(monkeypatch) -> None:
+    from litschema import cli
+    from litschema.project import Project
+    from litschema.webapp import app as webapp
+
+    calls = []
+    project = Project.open(
+        REPO_ROOT / "tests" / "fixtures" / "projects" / "agriculture_demo" / "litschema.yaml"
+    )
+    monkeypatch.setattr(cli, "_require_project", lambda ctx=None: project)
+    monkeypatch.setattr(webapp, "run_app", lambda cfg, *, port: calls.append((cfg, port)))
+
+    result = CliRunner().invoke(cli.app, ["verify", "--port", "8017"])
+
+    assert result.exit_code == 0, result.output
+    assert calls == [(project.config, 8017)]
+
+
 def test_no_old_aggregate_surface_remains() -> None:
     """Public litschema code should not carry the old aggregate workflow."""
     checked_roots = [
@@ -153,11 +171,13 @@ def test_bundled_skills_use_runtime_schemas() -> None:
     assert "`reasoning_schema.json`" not in extract_skill
 
 
-def test_load_config_from_repo_root() -> None:
-    """load_config() walks up to the repo's litschema.yaml."""
+def test_load_config_from_fixture_project() -> None:
+    """load_config() can load a standalone litschema project explicitly."""
     from litschema.config import load_config
 
-    cfg = load_config()
+    cfg = load_config(
+        REPO_ROOT / "tests" / "fixtures" / "projects" / "custom_clinical" / "litschema.yaml"
+    )
     assert cfg.config_path.name == "litschema.yaml"
     assert cfg.project_root.is_dir()
     assert cfg.schema_dir.is_dir()
@@ -178,7 +198,7 @@ def test_load_config_resolves_default_paths_from_dataclass_metadata(tmp_path: Pa
     assert cfg.references_dir == tmp_path / "references"
     assert cfg.tracking_xlsx == tmp_path / "paper_download_tracking.xlsx"
     assert cfg.article_store_dir == tmp_path / "data" / "papers"
-    assert cfg.papers_dir == tmp_path / "papers"
+    assert cfg.paper_inbox_dir == tmp_path / "papers-inbox"
     assert cfg.static_site_dir == tmp_path / "static-site"
 
 
@@ -201,7 +221,10 @@ def test_extraction_schema_resolves_to_valid_yaml() -> None:
     from litschema.config import load_config
     from litschema.schema_resolution import extraction_schema_path
 
-    schema_path = extraction_schema_path(load_config())
+    cfg = load_config(
+        REPO_ROOT / "tests" / "fixtures" / "projects" / "custom_clinical" / "litschema.yaml"
+    )
+    schema_path = extraction_schema_path(cfg)
 
     assert schema_path.is_file(), f"extraction schema not found at {schema_path}"
     with schema_path.open() as fh:
@@ -213,16 +236,17 @@ def test_extraction_schema_resolves_to_valid_yaml() -> None:
 
 @pytest.mark.skipif(shutil.which("uv") is None, reason="uv not on PATH")
 def test_cli_status_exits_zero() -> None:
-    """`litschema status` runs end-to-end from the repo root."""
+    """`litschema status` runs end-to-end from a standalone fixture project."""
+    fixture = REPO_ROOT / "tests" / "fixtures" / "projects" / "custom_clinical"
     result = subprocess.run(
         ["uv", "run", "litschema", "status"],
         capture_output=True,
         text=True,
-        cwd=REPO_ROOT,
+        cwd=fixture,
         timeout=30,
     )
     assert result.returncode == 0, result.stderr
-    assert "papers:" in result.stdout
+    assert "inbox:" in result.stdout
     assert "extracted:" in result.stdout
 
 
