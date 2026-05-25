@@ -35,6 +35,10 @@ class ArticleFiles:
         return self.article_dir / "article.md"
 
     @property
+    def pdf(self) -> Path:
+        return self.article_dir / f"{self.article_id}.pdf"
+
+    @property
     def extraction(self) -> Path:
         return self.article_dir / "agent-extraction.json"
 

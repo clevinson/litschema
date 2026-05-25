@@ -45,12 +45,47 @@ def test_pdf_conversion_defaults_to_article_folder(
 
     stats = pdf_to_markdown.run(
         cfg,
-        papers_dir=cfg.paper_inbox_dir,
+        inbox_dir=cfg.paper_inbox_dir,
         output_dir=None,
     )
 
     assert stats["converted"] == 1
     assert (cfg.article_store_dir / "smith-2024" / "article.md").read_text() == "# Smith\n"
+
+
+def test_pdf_conversion_can_prepare_one_article(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    cfg = _cfg(tmp_path)
+    cfg.paper_inbox_dir.mkdir(parents=True)
+    for article_id in ("smith-2024", "jones-2025"):
+        article_dir = cfg.article_store_dir / article_id
+        article_dir.mkdir(parents=True)
+        (article_dir / "article-metadata.json").write_text(
+            json.dumps({"id": article_id, "filename": f"{article_id}.pdf"})
+        )
+        (cfg.paper_inbox_dir / f"{article_id}.pdf").write_text("pdf placeholder")
+
+    converted = []
+
+    def fake_convert_pdf(pdf_path: Path, out_path: Path) -> int:
+        converted.append(pdf_path.name)
+        out_path.write_text(f"# {pdf_path.stem}\n")
+        return 250
+
+    monkeypatch.setattr(pdf_to_markdown, "convert_pdf", fake_convert_pdf)
+
+    stats = pdf_to_markdown.run(
+        cfg,
+        article_ids=["smith-2024"],
+        inbox_dir=cfg.paper_inbox_dir,
+    )
+
+    assert stats["converted"] == 1
+    assert converted == ["smith-2024.pdf"]
+    assert (cfg.article_store_dir / "smith-2024" / "article.md").is_file()
+    assert not (cfg.article_store_dir / "jones-2025" / "article.md").exists()
 
 
 def test_analysis_loads_extractions_from_article_folders(

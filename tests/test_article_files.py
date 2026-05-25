@@ -44,6 +44,7 @@ def test_article_files_prefers_per_article_paths_when_present(tmp_path: Path) ->
     assert files.extraction == paper_dir / "agent-extraction.json"
     assert files.reasoning == paper_dir / "agent-reasoning.json"
     assert files.reviews == paper_dir / "reviews.jsonl"
+    assert files.pdf == paper_dir / "smith-2024.pdf"
     assert read_review_events(files) == [{"article_id": "smith-2024", "path": ".study_type"}]
 
 

@@ -28,7 +28,7 @@ litschema --help
 
 If that exits 0, set `LITSCHEMA` to `litschema`.
 
-If `litschema.yaml` is missing, stop and tell the user this skill must be run from a litschema project directory. Ask them to either point you to the folder containing `litschema.yaml`, or start the project onboarding/builder skill. The builder flow should run `litschema init` if needed, then ask for a file containing DOIs, PDFs, or bibliography records to initialize the article set.
+If `litschema.yaml` is missing, stop and tell the user this skill must be run from a litschema project directory. Ask them to either point you to the folder containing `litschema.yaml`, or run `litschema init <project-directory>` before extraction.
 
 If neither command runner works, stop and tell the user litschema is not available in this shell. Ask them whether litschema should be installed globally or run through the project's local `uv` environment.
 
@@ -41,9 +41,14 @@ The user will provide an `article_id` (e.g., `bell-2024`). You must:
    $LITSCHEMA agent prepare-schema-context
    ```
 3. Read `.litschema/runtime/extraction_schema.json` and `.litschema/runtime/reasoning_schema.json`
-4. Read the full-text markdown from `data/papers/{article_id}/article.md`
+4. Ensure full-text markdown exists for this article:
+   ```bash
+   $LITSCHEMA prepare-text {article_id}
+   ```
+5. Read the full-text markdown from `data/papers/{article_id}/article.md`
 
-If the markdown file doesn't exist or is < 100 characters, write an error marker:
+If the markdown file still doesn't exist or is < 100 characters after running
+`$LITSCHEMA prepare-text {article_id}`, write an error marker:
 ```json
 {"article_id": "{article_id}", "error": true, "reason": "markdown file missing or empty"}
 ```
@@ -103,11 +108,27 @@ If either command exits nonzero, read the errors, fix the JSON, and re-run the f
 
 Do NOT finish until both validation commands exit 0 or you have exhausted retries.
 
+After both validation commands exit 0, record extraction provenance:
+
+```bash
+$LITSCHEMA agent record-extraction {article_id}
+```
+
+If you know the exact provider or model for this agent session, include them:
+
+```bash
+$LITSCHEMA agent record-extraction {article_id} --provider codex --model gpt-5.5
+```
+
+Do not invent provider or model names. The command will still record extraction
+date and schema commit when provider/model are omitted.
+
 ## Checklist
 
 Before finishing, verify:
 - [ ] `data/papers/{article_id}/agent-extraction.json` exists and passes extraction validation
 - [ ] `data/papers/{article_id}/agent-reasoning.json` exists and passes reasoning validation
+- [ ] `data/sources/articles.csv` has been updated by `agent record-extraction`
 - [ ] Every non-identifier leaf field in the extraction has a corresponding reasoning entry
 - [ ] All `source_lines` reference real line numbers from the markdown
 - [ ] No data was extracted from the References/Bibliography section

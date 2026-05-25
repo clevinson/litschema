@@ -1,15 +1,16 @@
 """Phase 1a: Harvest structured metadata from OpenAlex API.
 
-Queries OpenAlex for each DOI in the tracking spreadsheet. Extracts authors,
-affiliations, ORCIDs, ROR IDs, abstracts, keywords. Saves raw JSON per paper.
+Queries OpenAlex for each DOI in data/sources/articles.csv. Extracts authors,
+affiliations, ORCIDs, ROR IDs, abstracts, keywords. Saves raw JSON per article.
 
 Usage:
-    uv run python -m litschema.ingest.openalex_harvest [--email EMAIL] [--data-dir DIR]
+    uv run python -m litschema.ingest.openalex_harvest [--email EMAIL]
 """
 
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import logging
 import re
@@ -18,6 +19,7 @@ from pathlib import Path
 
 import requests
 
+from ..article_registry import has_article_id, is_valid_doi, normalize_doi
 from ..config import LitSchemaConfig, require_config_or_exit
 from . import harvest_cache_dir
 
@@ -26,6 +28,29 @@ logger = logging.getLogger(__name__)
 OPENALEX_API = "https://api.openalex.org/works"
 # Rate limit: 10 req/s without polite pool, 100 req/s with mailto
 RATE_LIMIT_DELAY = 0.1  # 100 req/s with polite pool
+
+
+def _metadata_open_access(value: object) -> bool | str | None:
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized == "true":
+            return True
+        if normalized == "false":
+            return False
+        return value if value.strip() else None
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, dict) and "is_oa" in value:
+        return bool(value["is_oa"])
+    return None
+
+
+def _has_metadata_only_fields(row: dict[str, str]) -> bool:
+    if not has_article_id(row):
+        return False
+    if not str(row.get("title") or "").strip():
+        return False
+    return any(str(row.get(key) or "").strip() for key in ("author_citation", "year", "publisher"))
 
 
 def doi_to_slug(doi: str) -> str:
@@ -46,25 +71,65 @@ def reconstruct_abstract(inverted_index: dict | None) -> str | None:
     return " ".join(word for _, word in word_positions)
 
 
-def load_dois_from_xlsx(xlsx_path: Path) -> list[dict]:
-    """Load DOIs and metadata from tracking spreadsheet."""
-    import openpyxl
-
-    wb = openpyxl.load_workbook(xlsx_path, read_only=True)
-    ws = wb.active
-    headers = [c.value for c in next(ws.iter_rows(min_row=1, max_row=1))]
+def load_dois_from_csv(csv_path: Path) -> list[dict]:
+    """Load DOIs and metadata from data/sources/articles.csv."""
     rows = []
-    for row in ws.iter_rows(min_row=2, values_only=True):
-        record = dict(zip(headers, row, strict=False))
-        doi = record.get("doi")
-        if doi and str(doi).strip():
-            doi = str(doi).strip()
-            # Clean BOM characters
-            doi = doi.lstrip("\ufeff")
-            record["doi"] = doi
-            rows.append(record)
-    wb.close()
+    with csv_path.open(newline="", encoding="utf-8-sig") as fh:
+        reader = csv.DictReader(fh)
+        fieldnames = set(reader.fieldnames or [])
+        if "id" in fieldnames and "article_id" not in fieldnames:
+            raise ValueError(
+                f"{csv_path} uses legacy `id`; rename that column to `article_id`."
+            )
+        for record in reader:
+            doi = record.get("doi")
+            record["doi"] = normalize_doi(doi.lstrip("\ufeff")) if doi and doi.strip() else ""
+            if any(value not in (None, "") for value in record.values()):
+                rows.append(record)
     return rows
+
+
+def _default_source_path(cfg: LitSchemaConfig) -> Path:
+    return cfg.data_dir / "sources" / "articles.csv"
+
+
+def _article_id_for_row(row: dict, doi: str | None = None) -> str | None:
+    explicit = row.get("article_id")
+    if explicit and str(explicit).strip():
+        return str(explicit).strip()
+    if doi and is_valid_doi(doi):
+        return doi_to_slug(doi)
+    return None
+
+
+def _write_article_metadata(cfg: LitSchemaConfig, row: dict, extracted: dict) -> bool:
+    doi = row.get("doi") or extracted.get("doi")
+    article_id = _article_id_for_row(row, str(doi) if doi else None)
+    if not article_id:
+        return False
+    metadata = {
+        "id": article_id,
+        "doi": str(doi) if doi and is_valid_doi(str(doi)) else None,
+        "title": row.get("title") or extracted.get("title"),
+        "abstract": row.get("abstract") or extracted.get("abstract"),
+        "year": row.get("year") or extracted.get("publication_year"),
+        "journal": row.get("journal") or extracted.get("journal"),
+        "publisher": row.get("publisher") or extracted.get("publisher_from_source"),
+        "author_citation": row.get("author_citation"),
+        "open_access": _metadata_open_access(row.get("open_access") or extracted.get("open_access")),
+    }
+    metadata = {key: value for key, value in metadata.items() if value not in (None, "")}
+    out_path = cfg.article_store_dir / article_id / "article-metadata.json"
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    if out_path.exists():
+        try:
+            existing = json.loads(out_path.read_text())
+        except json.JSONDecodeError:
+            existing = {}
+        if isinstance(existing, dict):
+            metadata = existing | metadata
+    out_path.write_text(json.dumps(metadata, indent=2, ensure_ascii=False) + "\n")
+    return True
 
 
 def fetch_openalex(doi: str, email: str | None = None) -> dict | None:
@@ -162,6 +227,7 @@ def extract_metadata(raw: dict) -> dict:
 def harvest(
     cfg: LitSchemaConfig,
     *,
+    source_path: Path | None = None,
     email: str | None = None,
     skip_existing: bool = True,
 ) -> dict:
@@ -172,17 +238,47 @@ def harvest(
     data_dir = harvest_cache_dir(cfg, "openalex")
     data_dir.mkdir(parents=True, exist_ok=True)
 
-    rows = load_dois_from_xlsx(cfg.tracking_xlsx)
-    logger.info("Loaded %d papers with DOIs from %s", len(rows), cfg.tracking_xlsx.name)
+    source_path = source_path or _default_source_path(cfg)
+    rows = load_dois_from_csv(source_path)
+    logger.info("Loaded %d source rows from %s", len(rows), source_path.name)
 
-    stats = {"total": len(rows), "fetched": 0, "skipped": 0, "not_found": 0, "errors": 0}
+    stats = {
+        "total": len(rows),
+        "fetched": 0,
+        "skipped": 0,
+        "not_found": 0,
+        "missing_doi": 0,
+        "invalid_doi": 0,
+        "missing_metadata": 0,
+        "errors": 0,
+    }
 
     for i, row in enumerate(rows):
-        doi = row["doi"]
+        doi = row.get("doi") or ""
+        if not doi:
+            stats["missing_doi"] += 1
+            if _has_metadata_only_fields(row):
+                _write_article_metadata(cfg, row, {})
+            else:
+                stats["missing_metadata"] += 1
+            logger.info("Skipping OpenAlex harvest for DOI-less row: %s", row.get("article_id"))
+            continue
+        if not is_valid_doi(doi):
+            stats["invalid_doi"] += 1
+            if _has_metadata_only_fields(row):
+                _write_article_metadata(cfg, row, {})
+            else:
+                stats["missing_metadata"] += 1
+            logger.info("Skipping OpenAlex harvest for invalid DOI row: %s", row.get("article_id"))
+            continue
+
         slug = doi_to_slug(doi)
         out_path = data_dir / f"{slug}.json"
 
         if skip_existing and out_path.exists():
+            existing = json.loads(out_path.read_text())
+            if not existing.get("error"):
+                _write_article_metadata(cfg, row, existing)
             stats["skipped"] += 1
             continue
 
@@ -191,12 +287,12 @@ def harvest(
             stats["not_found"] += 1
             # Save a marker so we don't re-query
             out_path.write_text(json.dumps({"doi": doi, "error": "not_found"}))
+            _write_article_metadata(cfg, row, {"doi": doi})
         else:
             extracted = extract_metadata(raw)
             extracted["_source_doi"] = doi
-            extracted["_tracking_author"] = row.get("author_short")
-            extracted["_tracking_filename"] = row.get("filename")
             out_path.write_text(json.dumps(extracted, indent=2, ensure_ascii=False))
+            _write_article_metadata(cfg, row, extracted)
             stats["fetched"] += 1
 
         # Progress
@@ -218,15 +314,26 @@ def harvest(
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Harvest ERW paper metadata from OpenAlex")
+    parser = argparse.ArgumentParser(description="Harvest article metadata from OpenAlex")
     parser.add_argument("--email", help="Email for OpenAlex polite pool (recommended)")
+    parser.add_argument(
+        "--source-file",
+        type=Path,
+        default=None,
+        help="CSV source file with DOI rows (defaults to data/sources/articles.csv)",
+    )
     parser.add_argument("--no-skip", action="store_true", help="Re-fetch existing files")
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
     cfg = require_config_or_exit()
-    stats = harvest(cfg, email=args.email, skip_existing=not args.no_skip)
+    stats = harvest(
+        cfg,
+        source_path=args.source_file,
+        email=args.email,
+        skip_existing=not args.no_skip,
+    )
     print(json.dumps(stats, indent=2))
 
 

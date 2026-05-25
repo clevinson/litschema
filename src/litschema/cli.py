@@ -1,6 +1,6 @@
 """litschema CLI - single entry point for the pipeline.
 
-Verbs: harvest / convert / extract / validate / verify / mcp / status /
+Verbs: harvest / prepare-text / extract / validate / verify / mcp / status /
 doctor / skills install / init.
 """
 
@@ -11,12 +11,13 @@ import os
 import shutil
 import subprocess
 import sys
+from datetime import UTC, datetime
 from importlib import resources
 from pathlib import Path
 
 import typer
 
-from .article_registry import ARTICLE_REGISTRY_COLUMNS
+from .article_registry import ARTICLE_REGISTRY_COLUMNS, record_extraction_provenance, registry_path
 from .articles import (
     iter_extraction_paths,
     iter_markdown_paths,
@@ -24,8 +25,8 @@ from .articles import (
     iter_reasoning_paths,
     iter_review_paths,
 )
-from .config import ConfigNotFoundError
-from .ingest import validate_extraction
+from .config import ConfigNotFoundError, LitSchemaConfig
+from .ingest import article_assembly, validate_extraction
 from .project import Project
 from .schema_resolution import extraction_schema_path
 
@@ -44,6 +45,7 @@ WARN = "\033[33m⚠\033[0m"
 CROSS = "\033[31m✗\033[0m"
 DIM = "\033[2m"
 RESET = "\033[0m"
+EXPERIMENTAL_SKILLS = {"litschema-builder"}
 
 
 def _disable_color_if_needed():
@@ -75,6 +77,105 @@ def main(
 
 def _count_files(path: Path, pattern: str = "*") -> int:
     return len(list(path.glob(pattern))) if path.is_dir() else 0
+
+
+def _schema_commit(cfg: LitSchemaConfig) -> str | None:
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=cfg.project_root,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+    except Exception:
+        return None
+    return result.stdout.strip() or None
+
+
+class _AssembleCliReporter:
+    def __init__(self) -> None:
+        self.label = ""
+        self.total = 0
+        self.current = 0
+        self.show_progress = True
+
+    def __call__(self, event: str, payload: dict[str, object]) -> None:
+        if event == "start":
+            typer.echo("Assembling article inputs")
+            inbox_pdfs = int(payload.get("inbox_pdfs") or 0)
+            if inbox_pdfs == 0:
+                typer.echo("No inbox PDFs found.")
+            self._stage("Inbox PDFs", inbox_pdfs, show_progress=inbox_pdfs > 0)
+        elif event == "stage":
+            name = "Registry rows" if payload.get("name") == "registry" else str(payload["name"])
+            self._stage(name, int(payload.get("total") or 0), show_progress=name != "Registry rows")
+        elif event == "pdf_start":
+            path = Path(str(payload["path"]))
+            typer.echo(f"Scanning PDF {payload['index']}/{payload['total']}: {path.name}")
+        elif event == "pdf":
+            self._advance()
+            self._report_pdf(payload)
+        elif event == "pdf_error":
+            self._advance()
+            path = Path(str(payload["path"]))
+            error = payload.get("error")
+            typer.echo(f"{CROSS} PDF failed: {path.name} ({error})")
+        elif event == "row":
+            self._advance()
+            self._report_row(payload)
+
+    def _stage(self, label: str, total: int, *, show_progress: bool = True) -> None:
+        self.label = label
+        self.total = total
+        self.current = 0
+        self.show_progress = show_progress
+        if show_progress and total == 0:
+            typer.echo(f"{label} [{'.' * 20}] 0/0")
+
+    def _advance(self) -> None:
+        self.current += 1
+        if self.show_progress:
+            typer.echo(f"{self.label} {self._bar()} {self.current}/{self.total}")
+
+    def _bar(self) -> str:
+        filled = 0 if self.total <= 0 else round((self.current / self.total) * 20)
+        filled = max(0, min(20, filled))
+        return f"[{'#' * filled}{'-' * (20 - filled)}]"
+
+    def _report_pdf(self, payload: dict[str, object]) -> None:
+        path = Path(str(payload["path"]))
+        doi = payload.get("doi")
+        result = str(payload.get("result"))
+        if result == "assembled":
+            suffix = f" ({doi})" if doi else ""
+            typer.echo(f"{CHECK} PDF assembled: {path.name}{suffix}")
+        elif result == "already_assembled":
+            typer.echo(f"{CHECK} PDF already assembled: {path.name}")
+        elif result == "missing_doi":
+            typer.echo(f"{WARN} PDF missing DOI: {path.name}")
+        elif result == "ambiguous_doi":
+            typer.echo(f"{WARN} PDF ambiguous DOI: {path.name}")
+        elif result == "missing_metadata":
+            suffix = f" ({doi})" if doi else ""
+            typer.echo(f"{WARN} PDF missing metadata: {path.name}{suffix}")
+        else:
+            typer.echo(f"{WARN} PDF {result}: {path.name}")
+
+    def _report_row(self, payload: dict[str, object]) -> None:
+        row = payload.get("row")
+        row = row if isinstance(row, dict) else {}
+        article_id = row.get("article_id") or "(no article_id)"
+        doi = row.get("doi") or "(no DOI)"
+        result = str(payload.get("result"))
+        if result == "harvested":
+            typer.echo(f"{CHECK} Registry harvested: {article_id} ({doi})")
+        elif result == "metadata_only":
+            typer.echo(f"{CHECK} Registry metadata-only: {article_id}")
+        elif result == "missing_metadata":
+            typer.echo(f"{WARN} Registry missing metadata: {article_id}")
+        elif result == "invalid_doi":
+            typer.echo(f"{WARN} Registry invalid DOI: {article_id} ({doi})")
 
 
 def _require_project(ctx: typer.Context | None = None) -> Project:
@@ -109,9 +210,12 @@ def _packaged_skills_dir() -> Path:
     return Path(__file__).resolve().parents[2] / "skills"
 
 
-def _skill_sources() -> list[Path]:
+def _skill_sources(*, experimental: bool = False) -> list[Path]:
     """Return installable bundled skills from the litschema package."""
-    return _valid_skill_dirs(_packaged_skills_dir())
+    skills = _valid_skill_dirs(_packaged_skills_dir())
+    if experimental:
+        return skills
+    return [skill for skill in skills if skill.name not in EXPERIMENTAL_SKILLS]
 
 
 def _agent_skill_destinations(agent: str) -> list[Path]:
@@ -132,6 +236,36 @@ def _agent_skill_destinations(agent: str) -> list[Path]:
 
 def _project_skill_destination(project: Path) -> Path:
     return project.expanduser().resolve() / ".agents" / "skills"
+
+
+def _install_skill_dirs(
+    skill_sources: list[Path],
+    dest: Path,
+    *,
+    copy: bool,
+    force: bool,
+) -> tuple[int, list[str]]:
+    dest.mkdir(parents=True, exist_ok=True)
+    installed = 0
+    messages = []
+    for skill_dir in skill_sources:
+        target = dest / skill_dir.name
+        if target.exists() or target.is_symlink():
+            if not force:
+                messages.append(f"{WARN} {target} already exists (use --force to overwrite)")
+                continue
+            if target.is_symlink() or target.is_file():
+                target.unlink()
+            else:
+                shutil.rmtree(target)
+        if copy:
+            shutil.copytree(skill_dir, target)
+            messages.append(f"{CHECK} copied {skill_dir.name} → {target}")
+        else:
+            target.symlink_to(skill_dir.resolve(), target_is_directory=True)
+            messages.append(f"{CHECK} linked {skill_dir.name} → {target}")
+        installed += 1
+    return installed, messages
 
 
 # ── Pipeline verbs ─────────────────────────────────────────────────────────
@@ -176,29 +310,64 @@ def harvest(
         )
 
 
-@app.command(help="Convert PDFs to markdown via pymupdf4llm.")
-def convert(
+@app.command("prepare-text", help="Prepare article markdown text from PDFs.")
+def prepare_text(
     ctx: typer.Context,
-    papers_dir: Path | None = typer.Option(
-        None, "--papers-dir", help="Directory containing source PDFs."
+    article_id: str | None = typer.Argument(
+        None,
+        help="Article ID to prepare. Use --all to prepare every known article.",
+    ),
+    all_articles: bool = typer.Option(
+        False,
+        "--all",
+        help="Prepare markdown for every known article.",
+    ),
+    inbox_dir: Path | None = typer.Option(
+        None, "--inbox-dir", help="Directory containing source PDFs."
     ),
     output_dir: Path | None = typer.Option(
         None,
         "--output-dir",
         help="Write flat {article_id}.md files to DIR instead of per-article folders.",
     ),
-    force: bool = typer.Option(False, "--force", help="Re-convert existing markdown files."),
+    force: bool = typer.Option(False, "--force", help="Rebuild existing markdown files."),
 ):
+    if article_id is None and not all_articles:
+        typer.secho(f"{CROSS} Specify an article_id or use --all", fg=typer.colors.RED)
+        raise typer.Exit(code=2)
+    if article_id is not None and all_articles:
+        typer.secho(f"{CROSS} Use either article_id or --all, not both", fg=typer.colors.RED)
+        raise typer.Exit(code=2)
+
     project = _require_project(ctx)
     from .ingest import pdf_to_markdown
 
     stats = pdf_to_markdown.run(
         project.config,
-        papers_dir=papers_dir,
+        article_ids=None if all_articles else [article_id],
+        inbox_dir=inbox_dir,
         output_dir=output_dir,
         force=force,
     )
     typer.echo(json.dumps(stats, indent=2))
+
+
+@app.command(help="Assemble article inputs from DOI rows and the PDF inbox.")
+def assemble(ctx: typer.Context):
+    project = _require_project(ctx)
+    cfg = project.config
+    try:
+        stats = article_assembly.assemble(cfg, reporter=_AssembleCliReporter())
+    except article_assembly.AssemblyInterrupted as exc:
+        path = exc.pdf_path
+        suffix = f" while processing {path.name}" if path is not None else ""
+        typer.echo(f"\n{WARN} Assembly interrupted{suffix}. Progress has been saved.")
+        typer.echo("Rerun `litschema assemble` to continue.")
+        raise typer.Exit(code=130) from exc
+    typer.echo(f"\n{CHECK} assembled article inputs")
+    typer.echo("Summary")
+    for key, value in stats.items():
+        typer.echo(f"{key}: {value}")
 
 
 @app.command(
@@ -336,6 +505,27 @@ def agent_validate_reasoning(ctx: typer.Context):
     raise typer.Exit(code=validate_reasoning.run(list(ctx.args)))
 
 
+@agent_app.command("record-extraction", help="Record extraction provenance in articles.csv.")
+def agent_record_extraction(
+    ctx: typer.Context,
+    article_id: str = typer.Argument(..., help="Article identifier that was extracted"),
+    provider: str | None = typer.Option(None, "--provider", help="Extraction provider, if known"),
+    model: str | None = typer.Option(None, "--model", help="Extraction model, if known"),
+):
+    project = _require_project(ctx)
+    cfg = project.config
+    extraction_date = datetime.now(UTC).isoformat()
+    record_extraction_provenance(
+        registry_path(cfg.data_dir),
+        article_id,
+        provider=provider,
+        model=model,
+        extraction_date=extraction_date,
+        schema_commit=_schema_commit(cfg),
+    )
+    typer.echo(f"{CHECK} recorded extraction provenance for {article_id}")
+
+
 @skills_app.command(
     "install",
     help="Install bundled agentic skills globally or into a project-local skills directory.",
@@ -347,10 +537,13 @@ def skills_install(
     local: bool = typer.Option(
         False, "--local", help="Install into the current directory's .agents/skills"
     ),
+    experimental: bool = typer.Option(
+        False, "--experimental", help="Also install experimental skills"
+    ),
     copy: bool = typer.Option(True, "--copy/--symlink", help="Copy instead of symlink"),
     force: bool = typer.Option(False, "--force", help="Overwrite existing"),
 ):
-    skill_sources = _skill_sources()
+    skill_sources = _skill_sources(experimental=experimental)
     if not skill_sources:
         typer.secho("no bundled skills found", fg=typer.colors.RED)
         raise typer.Exit(code=2)
@@ -369,24 +562,10 @@ def skills_install(
 
     installed = 0
     for destination in destinations:
-        destination.mkdir(parents=True, exist_ok=True)
-        for skill_dir in skill_sources:
-            target = destination / skill_dir.name
-            if target.exists() or target.is_symlink():
-                if not force:
-                    typer.echo(f"{WARN} {target} already exists (use --force to overwrite)")
-                    continue
-                if target.is_symlink() or target.is_file():
-                    target.unlink()
-                else:
-                    shutil.rmtree(target)
-            if copy:
-                shutil.copytree(skill_dir, target)
-                typer.echo(f"{CHECK} copied {skill_dir.name} → {target}")
-            else:
-                target.symlink_to(skill_dir.resolve(), target_is_directory=True)
-                typer.echo(f"{CHECK} linked {skill_dir.name} → {target}")
-            installed += 1
+        count, messages = _install_skill_dirs(skill_sources, destination, copy=copy, force=force)
+        installed += count
+        for message in messages:
+            typer.echo(message)
 
     if installed == 0:
         typer.echo("No skills installed.")
@@ -492,9 +671,6 @@ def doctor(ctx: typer.Context):
     typer.echo("\nEverything looks good.")
 
 
-# ── Init ───────────────────────────────────────────────────────────────────
-
-
 def _write_draft_schema(project: Path) -> None:
     domain_context = project.joinpath("domain_context.md")
     if not domain_context.exists():
@@ -559,6 +735,9 @@ def _ensure_gitignore_entries(project: Path) -> None:
         gitignore_path.write_text(existing + separator + "\n".join(missing) + "\n")
 
 
+# ── Init ───────────────────────────────────────────────────────────────────
+
+
 @app.command(help="Scaffold a new litschema project.")
 def init(
     domain: Path = typer.Argument(..., help="Project directory to create"),
@@ -596,8 +775,10 @@ def init(
     typer.echo(f"{CHECK} initialized litschema project at {project}")
     typer.echo("\nNext steps:")
     typer.echo(f"  1. cd {project}")
-    typer.echo("  2. Add DOI rows to data/sources/articles.csv")
+    typer.echo("  2. Add DOI rows to data/sources/articles.csv or PDFs to papers-inbox/")
     typer.echo("  3. Run `litschema skills install --local` for project-local skills")
+    typer.echo("  4. Open this project in your agent harness and run /litschema-assemble")
+    typer.echo("  5. Run `/extract-article <article-id>` to prepare text and extract data")
 
 
 if __name__ == "__main__":

@@ -58,8 +58,11 @@ def test_init_scaffolds_standalone_project(tmp_path) -> None:
     assert "Next steps" in result.output
     assert f"cd {project}" in result.output
     assert "litschema skills install --local" in result.output
+    assert "/litschema-assemble" in result.output
+    assert "/extract-article <article-id>" in result.output
+    assert "litschema convert" not in result.output
     assert "/litschema-builder" not in result.output
-    assert "papers-inbox/" not in result.output
+    assert "papers-inbox/" in result.output
 
 
 def test_init_refuses_to_overwrite_existing_project_without_force(tmp_path) -> None:

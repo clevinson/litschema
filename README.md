@@ -12,6 +12,7 @@ The source of truth is an article store on disk:
 ```text
 data/papers/<article-id>/
   article-metadata.json
+  <article-id>.pdf
   article.md
   agent-extraction.json
   agent-reasoning.json
@@ -41,17 +42,24 @@ uv run --project ../litschema litschema verify
 
 ```bash
 litschema status                 # count metadata, markdown, extractions, reviews
-litschema convert                # PDFs -> data/papers/<id>/article.md
+litschema assemble               # DOI rows + papers-inbox PDFs -> article folders
+litschema prepare-text <id>      # lower-level PDF -> markdown helper for one article
+litschema prepare-text --all     # prepare markdown for every known article
 litschema validate               # validate per-article extraction JSON
-litschema verify                 # launch local review webapp
+litschema verify --port 8000     # launch local review webapp
 litschema mcp                    # expose DuckDB-backed exploration tools
 litschema skills install         # install agent slash-command skills
 ```
 
 Extraction is intentionally agent-mediated. Install the bundled skills globally
-with `litschema skills install`, then run `/extract-article <article-id-or-doi>`
-inside an agent CLI from a configured project directory. The install command
-uses only the skills bundled with the litschema package.
+with `litschema skills install`, or into one project with
+`litschema skills install --local`, then run `/litschema-assemble` or
+`/extract-article <article-id>` inside an agent CLI from a configured project
+directory. New projects use `data/sources/articles.csv` as the article registry;
+users can fill only the `doi` column or drop PDFs into `papers-inbox/` and let
+`litschema assemble` populate the remaining metadata and canonical PDFs. The
+`/extract-article` skill prepares per-article markdown when needed before
+running extraction.
 
 ## Project Layout
 

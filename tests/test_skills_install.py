@@ -19,7 +19,11 @@ def test_skills_install_uses_bundled_skills_without_project_config(tmp_path, mon
 
     assert result.exit_code == 0, result.output
     assert (tmp_path / ".claude" / "skills" / "extract-article" / "SKILL.md").is_file()
+    assert (tmp_path / ".claude" / "skills" / "litschema-assemble" / "SKILL.md").is_file()
+    assert not (tmp_path / ".claude" / "skills" / "litschema-builder" / "SKILL.md").exists()
     assert "/extract-article" in result.output
+    assert "/litschema-assemble" in result.output
+    assert "/litschema-builder" not in result.output
     assert "/validate-articles" not in result.output
 
 
@@ -70,7 +74,27 @@ def test_skills_install_local_uses_project_agent_skills_dir(tmp_path, monkeypatc
 
     assert result.exit_code == 0, result.output
     assert (project / ".agents" / "skills" / "extract-article" / "SKILL.md").is_file()
+    assert (project / ".agents" / "skills" / "litschema-assemble" / "SKILL.md").is_file()
+    assert not (project / ".agents" / "skills" / "litschema-builder" / "SKILL.md").exists()
     assert not (tmp_path / "home" / ".claude" / "skills").exists()
+    assert "/litschema-builder" not in result.output
+
+
+def test_skills_install_experimental_does_not_include_deferred_builder(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    from litschema import cli
+
+    monkeypatch.delenv("LITSCHEMA_CONFIG", raising=False)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    (tmp_path / ".claude").mkdir()
+
+    result = CliRunner().invoke(cli.app, ["skills", "install", "--experimental"])
+
+    assert result.exit_code == 0, result.output
+    assert not (tmp_path / ".claude" / "skills" / "litschema-builder" / "SKILL.md").exists()
+    assert "/litschema-builder" not in result.output
 
 
 def test_skills_install_auto_requires_existing_agent_config(tmp_path, monkeypatch) -> None:
@@ -84,7 +108,6 @@ def test_skills_install_auto_requires_existing_agent_config(tmp_path, monkeypatc
     assert result.exit_code == 2, result.output
     assert "no Claude Code or Codex config directory found" in result.output
     assert "--agent claude" in result.output
-    assert "--local" in result.output
 
 
 def test_bundled_skills_are_included_in_wheel() -> None:
@@ -98,3 +121,14 @@ def test_bundled_skills_are_included_in_wheel() -> None:
 
     bundled = cli._packaged_skills_dir()
     assert bundled.joinpath("extract-article", "SKILL.md").is_file()
+    assert bundled.joinpath("litschema-assemble", "SKILL.md").is_file()
+
+
+def test_assemble_and_extract_skills_delegate_deterministic_pipeline_steps() -> None:
+    assemble = (REPO_ROOT / "skills" / "litschema-assemble" / "SKILL.md").read_text()
+    extract = (REPO_ROOT / "skills" / "extract-article" / "SKILL.md").read_text()
+
+    assert "LITSCHEMA assemble" in assemble
+    assert "LITSCHEMA convert" not in assemble
+    assert "LITSCHEMA prepare-text {article_id}" in extract
+    assert "agent record-extraction" in extract

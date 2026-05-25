@@ -293,11 +293,11 @@ def test_status_uses_explicit_config_option(tmp_path: Path, monkeypatch) -> None
     assert f"domain dir:  {tmp_path}" in result.output
 
 
-def test_convert_calls_python_api_with_explicit_config(
+def test_prepare_text_calls_python_api_for_one_article(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    """`litschema convert` should run in-process with the resolved project config."""
+    """`litschema prepare-text <article_id>` should prepare one article."""
     (tmp_path / "litschema.yaml").write_text('project_root: "."\n')
     monkeypatch.delenv("LITSCHEMA_CONFIG", raising=False)
 
@@ -306,11 +306,12 @@ def test_convert_calls_python_api_with_explicit_config(
 
     calls = []
 
-    def fake_convert(cfg, *, papers_dir=None, output_dir=None, force=False):
+    def fake_prepare_text(cfg, *, article_ids=None, inbox_dir=None, output_dir=None, force=False):
         calls.append(
             {
                 "config_path": cfg.config_path,
-                "papers_dir": papers_dir,
+                "article_ids": article_ids,
+                "inbox_dir": inbox_dir,
                 "output_dir": output_dir,
                 "force": force,
             }
@@ -318,18 +319,19 @@ def test_convert_calls_python_api_with_explicit_config(
         return {"total": 1, "converted": 1, "skipped": 0, "empty": 0, "missing": 0, "errors": 0}
 
     def fail_subprocess(*args, **kwargs):
-        raise AssertionError("litschema convert should call the Python conversion function")
+        raise AssertionError("litschema prepare-text should call the Python conversion function")
 
     monkeypatch.setattr(cli.subprocess, "run", fail_subprocess)
-    monkeypatch.setattr(pdf_to_markdown, "run", fake_convert)
+    monkeypatch.setattr(pdf_to_markdown, "run", fake_prepare_text)
 
     result = CliRunner().invoke(
         cli.app,
         [
             "--config",
             str(tmp_path / "litschema.yaml"),
-            "convert",
-            "--papers-dir",
+            "prepare-text",
+            "smith-2024",
+            "--inbox-dir",
             str(tmp_path / "pdfs"),
             "--output-dir",
             str(tmp_path / "markdown"),
@@ -341,7 +343,8 @@ def test_convert_calls_python_api_with_explicit_config(
     assert calls == [
         {
             "config_path": tmp_path / "litschema.yaml",
-            "papers_dir": tmp_path / "pdfs",
+            "article_ids": ["smith-2024"],
+            "inbox_dir": tmp_path / "pdfs",
             "output_dir": tmp_path / "markdown",
             "force": True,
         }
@@ -354,6 +357,85 @@ def test_convert_calls_python_api_with_explicit_config(
         "missing": 0,
         "errors": 0,
     }
+
+
+def test_prepare_text_all_calls_python_api_for_every_article(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    """`litschema prepare-text --all` should prepare every known article."""
+    (tmp_path / "litschema.yaml").write_text('project_root: "."\n')
+    monkeypatch.delenv("LITSCHEMA_CONFIG", raising=False)
+
+    from litschema import cli
+    from litschema.ingest import pdf_to_markdown
+
+    calls = []
+
+    def fake_prepare_text(cfg, *, article_ids=None, inbox_dir=None, output_dir=None, force=False):
+        calls.append(
+            {
+                "config_path": cfg.config_path,
+                "article_ids": article_ids,
+                "inbox_dir": inbox_dir,
+                "output_dir": output_dir,
+                "force": force,
+            }
+        )
+        return {"total": 2, "converted": 2, "skipped": 0, "empty": 0, "missing": 0, "errors": 0}
+
+    monkeypatch.setattr(pdf_to_markdown, "run", fake_prepare_text)
+
+    result = CliRunner().invoke(
+        cli.app,
+        [
+            "--config",
+            str(tmp_path / "litschema.yaml"),
+            "prepare-text",
+            "--all",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert calls == [
+        {
+            "config_path": tmp_path / "litschema.yaml",
+            "article_ids": None,
+            "inbox_dir": None,
+            "output_dir": None,
+            "force": False,
+        }
+    ]
+
+
+def test_prepare_text_requires_article_id_or_all(tmp_path: Path, monkeypatch) -> None:
+    (tmp_path / "litschema.yaml").write_text('project_root: "."\n')
+    monkeypatch.delenv("LITSCHEMA_CONFIG", raising=False)
+
+    from litschema import cli
+
+    result = CliRunner().invoke(
+        cli.app,
+        ["--config", str(tmp_path / "litschema.yaml"), "prepare-text"],
+    )
+
+    assert result.exit_code == 2
+    assert "Specify an article_id or use --all" in result.output
+
+
+def test_prepare_text_refuses_article_id_with_all(tmp_path: Path, monkeypatch) -> None:
+    (tmp_path / "litschema.yaml").write_text('project_root: "."\n')
+    monkeypatch.delenv("LITSCHEMA_CONFIG", raising=False)
+
+    from litschema import cli
+
+    result = CliRunner().invoke(
+        cli.app,
+        ["--config", str(tmp_path / "litschema.yaml"), "prepare-text", "smith-2024", "--all"],
+    )
+
+    assert result.exit_code == 2
+    assert "Use either article_id or --all, not both" in result.output
 
 
 def test_verify_calls_webapp_runner_with_explicit_config(
