@@ -14,7 +14,6 @@ import json
 import logging
 import re
 import time
-from pathlib import Path
 
 import requests
 
