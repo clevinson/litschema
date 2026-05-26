@@ -58,6 +58,13 @@ def test_orcid_display_name_falls_back_to_given_and_family() -> None:
     assert webapp._orcid_display_name(person) == "Given Family"
 
 
+def test_webapp_config_requires_cli_runner_or_dependency_override() -> None:
+    webapp.app.state._state.pop("litschema_config", None)
+
+    with pytest.raises(RuntimeError, match="litschema verify"):
+        webapp.get_config()
+
+
 def test_schema_field_metadata_exposes_top_level_enums() -> None:
     cfg = load_config("tests/fixtures/projects/custom_clinical/litschema.yaml", reload=True)
 

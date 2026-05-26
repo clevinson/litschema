@@ -27,7 +27,7 @@ from ..articles import (
     read_article_metadata,
     read_review_events,
 )
-from ..config import LitSchemaConfig, load_config, require_config_or_exit
+from ..config import LitSchemaConfig
 from ..schema_resolution import resolve_extraction_schema
 from .search import strip_references
 
@@ -43,13 +43,16 @@ def get_config() -> LitSchemaConfig:
     """FastAPI dependency yielding the active litschema config.
 
     Tests override via ``app.dependency_overrides[get_config] = ...``
-    (the documented FastAPI pattern). The CLI sets ``app.state`` before
-    launching uvicorn; direct ASGI use falls back to config discovery.
+    (the documented FastAPI pattern). Production use must launch through
+    ``litschema verify``, which sets ``app.state`` before uvicorn starts.
     """
-    cfg = getattr(app.state, "litschema_config", None)
-    if cfg is not None:
-        return cfg
-    return load_config()
+    try:
+        return app.state.litschema_config
+    except AttributeError as exc:
+        raise RuntimeError(
+            "Verification app config is not initialized; launch with "
+            "`litschema verify` or override get_config in tests."
+        ) from exc
 
 
 CfgDep = Annotated[LitSchemaConfig, Depends(get_config)]
@@ -447,11 +450,3 @@ def run_app(cfg: LitSchemaConfig, *, port: int = 8000) -> None:
     print(f"Papers dir: {cfg.papers_dir}")
     webbrowser.open(f"http://localhost:{port}")
     uvicorn.run(app, host="127.0.0.1", port=port)
-
-
-def main():
-    run_app(require_config_or_exit())
-
-
-if __name__ == "__main__":
-    main()
