@@ -23,7 +23,7 @@ from .articles import (
     iter_reasoning_paths,
     iter_review_paths,
 )
-from .config import ConfigNotFoundError, LitSchemaConfig, require_config
+from .config import ConfigNotFoundError, require_config
 from .ingest import validate_extraction
 from .project import Project
 from .schema_resolution import extraction_schema_path
@@ -101,10 +101,6 @@ def _require_project(ctx: typer.Context | None = None) -> Project:
     except ConfigNotFoundError as exc:
         typer.secho(f"{CROSS} {exc}", fg=typer.colors.RED)
         raise typer.Exit(code=2) from exc
-
-
-def _require_config(ctx: typer.Context | None = None) -> LitSchemaConfig:
-    return _require_project(ctx).config
 
 
 def _valid_skill_dirs(skills_dir: Path) -> list[Path]:
@@ -215,7 +211,8 @@ def extract(ctx: typer.Context):
     help="Validate per-article extractions against the LinkML schema.",
 )
 def validate(ctx: typer.Context):
-    cfg = _require_config(ctx)
+    project = _require_project(ctx)
+    cfg = project.config
 
     typer.echo(f"{DIM}→ validating extractions against extraction schema{RESET}")
     raise typer.Exit(code=validate_extraction.run(list(ctx.args), cfg))
@@ -247,7 +244,8 @@ def mcp(
         200, "--max-rows", help="Cap on rows returned by run_sql per query"
     ),
 ):
-    cfg = _require_config(ctx)
+    project = _require_project(ctx)
+    cfg = project.config
     from .explore.loader import build_store
     from .explore.server import build_server
 
@@ -305,7 +303,8 @@ app.add_typer(agent_app, name="agent")
 
 @agent_app.command("prepare-schema-context", help="Write runtime schema context files.")
 def agent_prepare_schema_context(ctx: typer.Context):
-    cfg = _require_config(ctx)
+    project = _require_project(ctx)
+    cfg = project.config
     from .agent.prepare_schema_context import prepare_schema_context
 
     context = prepare_schema_context(cfg)
@@ -387,7 +386,8 @@ def skills_install(
 
 @app.command(help="Show pipeline state: what's done, what's pending.")
 def status(ctx: typer.Context):
-    cfg = _require_config(ctx)
+    project = _require_project(ctx)
+    cfg = project.config
 
     metadata = len(list(iter_metadata_paths(cfg)))
     converted = len(list(iter_markdown_paths(cfg)))
@@ -421,7 +421,8 @@ def status(ctx: typer.Context):
 
 @app.command(help="Diagnose configuration and dependency issues.")
 def doctor(ctx: typer.Context):
-    cfg = _require_config(ctx)
+    project = _require_project(ctx)
+    cfg = project.config
     issues: list[str] = []
 
     py_version = sys.version_info
