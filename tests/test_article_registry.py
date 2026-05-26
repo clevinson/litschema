@@ -6,7 +6,7 @@ import pytest
 
 from litschema.article_registry import (
     ARTICLE_REGISTRY_COLUMNS,
-    has_metadata_only_fields,
+    has_article_identity,
     read_article_registry,
     record_extraction_provenance,
     write_article_registry,
@@ -46,8 +46,8 @@ def test_article_registry_preserves_column_order_and_user_values(tmp_path: Path)
     ]
 
 
-def test_metadata_only_fields_reject_whitespace_values() -> None:
-    assert not has_metadata_only_fields(
+def test_article_identity_requires_nonblank_article_id() -> None:
+    assert not has_article_identity(
         {
             "article_id": "   ",
             "title": "Buyer guide",
@@ -55,6 +55,7 @@ def test_metadata_only_fields_reject_whitespace_values() -> None:
             "publisher": "Carbon Direct",
         }
     )
+    assert has_article_identity({"article_id": "buyer-guide"})
 
 
 def test_article_registry_rejects_legacy_id_column(tmp_path: Path) -> None:

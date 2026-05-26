@@ -21,7 +21,6 @@ ARTICLE_REGISTRY_COLUMNS = (
 )
 
 DOI_RE = re.compile(r"^10\.\d{4,9}/\S+$")
-METADATA_ONLY_REQUIRED_COLUMNS = ("article_id", "title", "year", "publisher")
 
 
 def normalize_doi(doi: str) -> str:
@@ -34,11 +33,11 @@ def is_valid_doi(doi: str) -> bool:
     return bool(DOI_RE.match(normalize_doi(doi)))
 
 
-def has_metadata_only_fields(row: dict[str, str]) -> bool:
-    return all(str(row.get(key) or "").strip() for key in METADATA_ONLY_REQUIRED_COLUMNS)
+def has_article_identity(row: dict[str, str]) -> bool:
+    return bool(str(row.get("article_id") or "").strip())
 
 
-def empty_registry_row(**values: object) -> dict[str, str]:
+def normalize_registry_row(**values: object) -> dict[str, str]:
     row = {column: "" for column in ARTICLE_REGISTRY_COLUMNS}
     for key, value in values.items():
         if key in row and value not in (None, ""):
@@ -57,7 +56,7 @@ def read_article_registry(path: Path) -> list[dict[str, str]]:
             raise ValueError(
                 f"{path} uses legacy column 'id'; rename it to 'article_id' before assembly"
             )
-        return [empty_registry_row(**record) for record in reader]
+        return [normalize_registry_row(**record) for record in reader]
 
 
 def write_article_registry(path: Path, rows: list[dict[str, object]]) -> None:
@@ -66,7 +65,7 @@ def write_article_registry(path: Path, rows: list[dict[str, object]]) -> None:
         writer = csv.DictWriter(fh, fieldnames=ARTICLE_REGISTRY_COLUMNS)
         writer.writeheader()
         for row in rows:
-            writer.writerow(empty_registry_row(**row))
+            writer.writerow(normalize_registry_row(**row))
 
 
 def registry_path(data_dir: Path) -> Path:
