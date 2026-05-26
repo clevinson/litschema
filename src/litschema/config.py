@@ -1,9 +1,8 @@
-"""Runtime configuration for the ERW meta-analysis pipeline.
+"""Runtime configuration for litschema projects.
 
-Replaces hardcoded ``PROJECT_ROOT = Path(__file__).resolve().parents[N]`` with
-a small YAML config loaded at runtime. Foundational prep for open-sourcing:
-keeps the package name (``litschema``) intact while making every filesystem
-path a single source of truth (``litschema.yaml``).
+Each project is configured by a ``litschema.yaml`` file. The loader resolves
+project-relative paths once and returns an immutable ``LitSchemaConfig`` whose
+path fields are absolute.
 
 Lookup order for ``litschema.yaml``:
 
