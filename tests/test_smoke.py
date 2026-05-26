@@ -15,6 +15,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 import yaml
@@ -41,6 +42,19 @@ def test_config_module_import() -> None:
     assert ENV_VAR == "LITSCHEMA_CONFIG"
     assert LitSchemaConfig is not None
     assert callable(load_config)
+
+
+def test_project_open_wraps_resolved_config() -> None:
+    from litschema.project import Project
+
+    config_path = (
+        REPO_ROOT / "tests" / "fixtures" / "projects" / "agriculture_demo" / "litschema.yaml"
+    )
+
+    project = Project.open(config_path)
+
+    assert project.config.config_path == config_path
+    assert project.article_dir("smith-2024") == project.config.article_store_dir / "smith-2024"
 
 
 def test_validate_extraction_import_does_not_load_project_config(tmp_path: Path) -> None:
@@ -233,6 +247,54 @@ def test_status_uses_per_article_store(tmp_path: Path, monkeypatch) -> None:
 
     assert result.exit_code == 0, result.output
     assert "[FAIL]" not in result.output
+
+
+def test_status_uses_explicit_config_option(tmp_path: Path, monkeypatch) -> None:
+    """Project commands should use the root --config option without chdir/env setup."""
+    (tmp_path / "schema").mkdir()
+    (tmp_path / "schema" / "erw_articles.yaml").write_text("name: test\nclasses: {}\n")
+    (tmp_path / "litschema.yaml").write_text(
+        'project_root: "."\n'
+        'schema_dir: "schema"\n'
+        'extraction_schema_file: "erw_articles.yaml"\n'
+        'article_store_dir: "data/papers"\n'
+    )
+    monkeypatch.delenv("LITSCHEMA_CONFIG", raising=False)
+
+    from litschema.cli import app
+
+    result = CliRunner().invoke(app, ["--config", str(tmp_path / "litschema.yaml"), "status"])
+
+    assert result.exit_code == 0, result.output
+    assert f"domain dir:  {tmp_path}" in result.output
+
+
+def test_delegated_commands_pass_explicit_config_to_child_process(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    """Subprocess-backed commands should inherit the resolved project config."""
+    (tmp_path / "litschema.yaml").write_text('project_root: "."\n')
+    monkeypatch.delenv("LITSCHEMA_CONFIG", raising=False)
+
+    from litschema import cli
+
+    calls = []
+
+    def fake_run(args, **kwargs):
+        calls.append((args, kwargs))
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(cli.subprocess, "run", fake_run)
+
+    result = CliRunner().invoke(
+        cli.app,
+        ["--config", str(tmp_path / "litschema.yaml"), "convert"],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert calls[0][0][:3] == [sys.executable, "-m", "litschema.ingest.pdf_to_markdown"]
+    assert calls[0][1]["env"]["LITSCHEMA_CONFIG"] == str(tmp_path / "litschema.yaml")
 
 
 def test_validate_defaults_to_article_store(

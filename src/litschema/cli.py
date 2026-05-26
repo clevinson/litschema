@@ -11,6 +11,7 @@ import os
 import shutil
 import subprocess
 import sys
+from dataclasses import dataclass
 from importlib import resources
 from pathlib import Path
 
@@ -25,6 +26,7 @@ from .articles import (
 )
 from .config import ConfigNotFoundError, LitSchemaConfig, require_config
 from .ingest import validate_extraction
+from .project import Project
 from .schema_resolution import extraction_schema_path
 
 app = typer.Typer(
@@ -44,6 +46,11 @@ DIM = "\033[2m"
 RESET = "\033[0m"
 
 
+@dataclass(frozen=True)
+class _CliState:
+    config_path: Path | None = None
+
+
 def _disable_color_if_needed():
     if os.environ.get("NO_COLOR"):
         global CHECK, WARN, CROSS, DIM, RESET
@@ -57,9 +64,33 @@ def _disable_color_if_needed():
 _disable_color_if_needed()
 
 
-def _delegate(module: str, args: list[str]) -> None:
+@app.callback()
+def main(
+    ctx: typer.Context,
+    config: Path | None = typer.Option(
+        None,
+        "--config",
+        "-c",
+        envvar="LITSCHEMA_CONFIG",
+        help="Path to litschema.yaml.",
+    ),
+) -> None:
+    ctx.obj = _CliState(config_path=config)
+
+
+def _config_path_from_ctx(ctx: typer.Context | None) -> Path | None:
+    if ctx is None or not isinstance(ctx.obj, _CliState):
+        return None
+    return ctx.obj.config_path
+
+
+def _delegate(module: str, args: list[str], project: Project | None = None) -> None:
     """Invoke `python -m litschema.<module>` with args. Exits with the child's code."""
-    result = subprocess.run([sys.executable, "-m", module, *args])
+    env = None
+    if project is not None:
+        env = os.environ.copy()
+        env["LITSCHEMA_CONFIG"] = str(project.config.config_path)
+    result = subprocess.run([sys.executable, "-m", module, *args], env=env)
     raise typer.Exit(code=result.returncode)
 
 
@@ -67,7 +98,7 @@ def _count_files(path: Path, pattern: str = "*") -> int:
     return len(list(path.glob(pattern))) if path.is_dir() else 0
 
 
-def _require_config() -> LitSchemaConfig:
+def _require_project(ctx: typer.Context | None = None) -> Project:
     """Load litschema.yaml or emit a colored message and exit 2.
 
     Thin CLI wrapper around :func:`litschema.config.require_config` that
@@ -77,10 +108,14 @@ def _require_config() -> LitSchemaConfig:
     message — render it verbatim instead of substituting our own.
     """
     try:
-        return require_config()
+        return Project(config=require_config(_config_path_from_ctx(ctx)))
     except ConfigNotFoundError as exc:
         typer.secho(f"{CROSS} {exc}", fg=typer.colors.RED)
         raise typer.Exit(code=2) from exc
+
+
+def _require_config(ctx: typer.Context | None = None) -> LitSchemaConfig:
+    return _require_project(ctx).config
 
 
 def _valid_skill_dirs(skills_dir: Path) -> list[Path]:
@@ -135,20 +170,30 @@ def harvest(
         True, "--resolve/--no-resolve", help="Run entity resolution after harvest"
     ),
 ):
-    _require_config()
+    project = _require_project(ctx)
+    env = os.environ.copy()
+    env["LITSCHEMA_CONFIG"] = str(project.config.config_path)
     if source in ("openalex", "both"):
         typer.echo(f"{DIM}→ harvesting OpenAlex...{RESET}")
         subprocess.run(
-            [sys.executable, "-m", "litschema.ingest.openalex_harvest", *ctx.args], check=True
+            [sys.executable, "-m", "litschema.ingest.openalex_harvest", *ctx.args],
+            check=True,
+            env=env,
         )
     if source in ("crossref", "both"):
         typer.echo(f"{DIM}→ harvesting CrossRef...{RESET}")
         subprocess.run(
-            [sys.executable, "-m", "litschema.ingest.crossref_harvest", *ctx.args], check=True
+            [sys.executable, "-m", "litschema.ingest.crossref_harvest", *ctx.args],
+            check=True,
+            env=env,
         )
     if resolve:
         typer.echo(f"{DIM}→ resolving entities...{RESET}")
-        subprocess.run([sys.executable, "-m", "litschema.ingest.resolve_entities"], check=True)
+        subprocess.run(
+            [sys.executable, "-m", "litschema.ingest.resolve_entities"],
+            check=True,
+            env=env,
+        )
 
 
 @app.command(
@@ -156,8 +201,8 @@ def harvest(
     help="Convert PDFs to markdown via pymupdf4llm.",
 )
 def convert(ctx: typer.Context):
-    _require_config()
-    _delegate("litschema.ingest.pdf_to_markdown", ctx.args)
+    project = _require_project(ctx)
+    _delegate("litschema.ingest.pdf_to_markdown", ctx.args, project)
 
 
 @app.command(
@@ -181,7 +226,7 @@ def extract(ctx: typer.Context):
     help="Validate per-article extractions against the LinkML schema.",
 )
 def validate(ctx: typer.Context):
-    cfg = _require_config()
+    cfg = _require_config(ctx)
 
     typer.echo(f"{DIM}→ validating extractions against extraction schema{RESET}")
     raise typer.Exit(code=validate_extraction.run(list(ctx.args), cfg))
@@ -192,14 +237,15 @@ def validate(ctx: typer.Context):
     help="Launch the verification webapp.",
 )
 def verify(ctx: typer.Context):
-    _require_config()
-    _delegate("litschema.webapp.app", ctx.args)
+    project = _require_project(ctx)
+    _delegate("litschema.webapp.app", ctx.args, project)
 
 
 @app.command(
     help="Start the explore MCP server (DuckDB-backed SQL query tools).",
 )
 def mcp(
+    ctx: typer.Context,
     rebuild: bool = typer.Option(
         False, "--rebuild", help="Force DuckDB rebuild even if sources haven't changed"
     ),
@@ -212,7 +258,7 @@ def mcp(
         200, "--max-rows", help="Cap on rows returned by run_sql per query"
     ),
 ):
-    cfg = _require_config()
+    cfg = _require_config(ctx)
     from .explore.loader import build_store
     from .explore.server import build_server
 
@@ -269,8 +315,8 @@ app.add_typer(agent_app, name="agent")
 
 
 @agent_app.command("prepare-schema-context", help="Write runtime schema context files.")
-def agent_prepare_schema_context():
-    cfg = _require_config()
+def agent_prepare_schema_context(ctx: typer.Context):
+    cfg = _require_config(ctx)
     from .agent.prepare_schema_context import prepare_schema_context
 
     context = prepare_schema_context(cfg)
@@ -351,8 +397,8 @@ def skills_install(
 
 
 @app.command(help="Show pipeline state: what's done, what's pending.")
-def status():
-    cfg = _require_config()
+def status(ctx: typer.Context):
+    cfg = _require_config(ctx)
 
     metadata = len(list(iter_metadata_paths(cfg)))
     converted = len(list(iter_markdown_paths(cfg)))
@@ -385,8 +431,8 @@ def status():
 
 
 @app.command(help="Diagnose configuration and dependency issues.")
-def doctor():
-    cfg = _require_config()
+def doctor(ctx: typer.Context):
+    cfg = _require_config(ctx)
     issues: list[str] = []
 
     py_version = sys.version_info
