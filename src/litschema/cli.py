@@ -23,7 +23,7 @@ from .articles import (
     iter_reasoning_paths,
     iter_review_paths,
 )
-from .config import ConfigNotFoundError, require_config
+from .config import ConfigNotFoundError
 from .ingest import validate_extraction
 from .project import Project
 from .schema_resolution import extraction_schema_path
@@ -89,7 +89,7 @@ def _count_files(path: Path, pattern: str = "*") -> int:
 def _require_project(ctx: typer.Context | None = None) -> Project:
     """Load litschema.yaml or emit a colored message and exit 2.
 
-    Thin CLI wrapper around :func:`litschema.config.require_config` that
+    Thin CLI wrapper around :meth:`litschema.project.Project.open` that
     translates the typer-free :class:`ConfigNotFoundError` into colored
     output and an exit code. The exception's ``str(exc)`` already carries
     either the generic auto-discovery hint or the specific missing-path
@@ -97,7 +97,7 @@ def _require_project(ctx: typer.Context | None = None) -> Project:
     """
     config_path = ctx.obj if ctx is not None and isinstance(ctx.obj, Path) else None
     try:
-        return Project(config=require_config(config_path))
+        return Project.open(config_path)
     except ConfigNotFoundError as exc:
         typer.secho(f"{CROSS} {exc}", fg=typer.colors.RED)
         raise typer.Exit(code=2) from exc
