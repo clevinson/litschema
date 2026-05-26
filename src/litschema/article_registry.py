@@ -33,7 +33,7 @@ def is_valid_doi(doi: str) -> bool:
     return bool(DOI_RE.match(normalize_doi(doi)))
 
 
-def has_article_identity(row: dict[str, str]) -> bool:
+def has_article_id(row: dict[str, str]) -> bool:
     return bool(str(row.get("article_id") or "").strip())
 
 

@@ -6,7 +6,7 @@ import pytest
 
 from litschema.article_registry import (
     ARTICLE_REGISTRY_COLUMNS,
-    has_article_identity,
+    has_article_id,
     read_article_registry,
     record_extraction_provenance,
     write_article_registry,
@@ -46,8 +46,8 @@ def test_article_registry_preserves_column_order_and_user_values(tmp_path: Path)
     ]
 
 
-def test_article_identity_requires_nonblank_article_id() -> None:
-    assert not has_article_identity(
+def test_has_article_id_requires_nonblank_article_id() -> None:
+    assert not has_article_id(
         {
             "article_id": "   ",
             "title": "Buyer guide",
@@ -55,7 +55,7 @@ def test_article_identity_requires_nonblank_article_id() -> None:
             "publisher": "Carbon Direct",
         }
     )
-    assert has_article_identity({"article_id": "buyer-guide"})
+    assert has_article_id({"article_id": "buyer-guide"})
 
 
 def test_article_registry_rejects_legacy_id_column(tmp_path: Path) -> None:
