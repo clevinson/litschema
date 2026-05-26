@@ -2,8 +2,6 @@
 
 Usage:
     uv run litschema verify
-    # or, directly:
-    uv run python -m litschema.webapp.app
 """
 
 from __future__ import annotations
@@ -45,9 +43,12 @@ def get_config() -> LitSchemaConfig:
     """FastAPI dependency yielding the active litschema config.
 
     Tests override via ``app.dependency_overrides[get_config] = ...``
-    (the documented FastAPI pattern). ``load_config`` is already
-    ``lru_cache``-d, so calling per-request is cheap.
+    (the documented FastAPI pattern). The CLI sets ``app.state`` before
+    launching uvicorn; direct ASGI use falls back to config discovery.
     """
+    cfg = getattr(app.state, "litschema_config", None)
+    if cfg is not None:
+        return cfg
     return load_config()
 
 
@@ -438,14 +439,18 @@ async def delete_annotation(article_id: str, field_path: str, cfg: CfgDep):
     return {"deleted": field_path}
 
 
-def main():
+def run_app(cfg: LitSchemaConfig, *, port: int = 8000) -> None:
     import uvicorn
 
-    cfg = require_config_or_exit()
+    app.state.litschema_config = cfg
     print(f"Article store: {cfg.article_store_dir}")
     print(f"Papers dir: {cfg.papers_dir}")
-    webbrowser.open("http://localhost:8000")
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    webbrowser.open(f"http://localhost:{port}")
+    uvicorn.run(app, host="127.0.0.1", port=port)
+
+
+def main():
+    run_app(require_config_or_exit())
 
 
 if __name__ == "__main__":
