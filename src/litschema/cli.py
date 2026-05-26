@@ -23,8 +23,9 @@ from .articles import (
     iter_reasoning_paths,
     iter_review_paths,
 )
-from .config import ConfigNotFoundError, LitSchemaConfig, require_config
+from .config import ConfigNotFoundError
 from .ingest import validate_extraction
+from .project import Project
 from .schema_resolution import extraction_schema_path
 
 app = typer.Typer(
@@ -57,9 +58,27 @@ def _disable_color_if_needed():
 _disable_color_if_needed()
 
 
-def _delegate(module: str, args: list[str]) -> None:
+@app.callback()
+def main(
+    ctx: typer.Context,
+    config: Path | None = typer.Option(
+        None,
+        "--config",
+        "-c",
+        envvar="LITSCHEMA_CONFIG",
+        help="Path to litschema.yaml.",
+    ),
+) -> None:
+    ctx.obj = config
+
+
+def _delegate(module: str, args: list[str], project: Project | None = None) -> None:
     """Invoke `python -m litschema.<module>` with args. Exits with the child's code."""
-    result = subprocess.run([sys.executable, "-m", module, *args])
+    env = None
+    if project is not None:
+        env = os.environ.copy()
+        env["LITSCHEMA_CONFIG"] = str(project.config.config_path)
+    result = subprocess.run([sys.executable, "-m", module, *args], env=env)
     raise typer.Exit(code=result.returncode)
 
 
@@ -67,17 +86,18 @@ def _count_files(path: Path, pattern: str = "*") -> int:
     return len(list(path.glob(pattern))) if path.is_dir() else 0
 
 
-def _require_config() -> LitSchemaConfig:
+def _require_project(ctx: typer.Context | None = None) -> Project:
     """Load litschema.yaml or emit a colored message and exit 2.
 
-    Thin CLI wrapper around :func:`litschema.config.require_config` that
+    Thin CLI wrapper around :meth:`litschema.project.Project.open` that
     translates the typer-free :class:`ConfigNotFoundError` into colored
     output and an exit code. The exception's ``str(exc)`` already carries
     either the generic auto-discovery hint or the specific missing-path
     message — render it verbatim instead of substituting our own.
     """
+    config_path = ctx.obj if ctx is not None and isinstance(ctx.obj, Path) else None
     try:
-        return require_config()
+        return Project.open(config_path)
     except ConfigNotFoundError as exc:
         typer.secho(f"{CROSS} {exc}", fg=typer.colors.RED)
         raise typer.Exit(code=2) from exc
@@ -135,20 +155,30 @@ def harvest(
         True, "--resolve/--no-resolve", help="Run entity resolution after harvest"
     ),
 ):
-    _require_config()
+    project = _require_project(ctx)
+    env = os.environ.copy()
+    env["LITSCHEMA_CONFIG"] = str(project.config.config_path)
     if source in ("openalex", "both"):
         typer.echo(f"{DIM}→ harvesting OpenAlex...{RESET}")
         subprocess.run(
-            [sys.executable, "-m", "litschema.ingest.openalex_harvest", *ctx.args], check=True
+            [sys.executable, "-m", "litschema.ingest.openalex_harvest", *ctx.args],
+            check=True,
+            env=env,
         )
     if source in ("crossref", "both"):
         typer.echo(f"{DIM}→ harvesting CrossRef...{RESET}")
         subprocess.run(
-            [sys.executable, "-m", "litschema.ingest.crossref_harvest", *ctx.args], check=True
+            [sys.executable, "-m", "litschema.ingest.crossref_harvest", *ctx.args],
+            check=True,
+            env=env,
         )
     if resolve:
         typer.echo(f"{DIM}→ resolving entities...{RESET}")
-        subprocess.run([sys.executable, "-m", "litschema.ingest.resolve_entities"], check=True)
+        subprocess.run(
+            [sys.executable, "-m", "litschema.ingest.resolve_entities"],
+            check=True,
+            env=env,
+        )
 
 
 @app.command(
@@ -156,8 +186,8 @@ def harvest(
     help="Convert PDFs to markdown via pymupdf4llm.",
 )
 def convert(ctx: typer.Context):
-    _require_config()
-    _delegate("litschema.ingest.pdf_to_markdown", ctx.args)
+    project = _require_project(ctx)
+    _delegate("litschema.ingest.pdf_to_markdown", ctx.args, project)
 
 
 @app.command(
@@ -181,7 +211,8 @@ def extract(ctx: typer.Context):
     help="Validate per-article extractions against the LinkML schema.",
 )
 def validate(ctx: typer.Context):
-    cfg = _require_config()
+    project = _require_project(ctx)
+    cfg = project.config
 
     typer.echo(f"{DIM}→ validating extractions against extraction schema{RESET}")
     raise typer.Exit(code=validate_extraction.run(list(ctx.args), cfg))
@@ -192,14 +223,15 @@ def validate(ctx: typer.Context):
     help="Launch the verification webapp.",
 )
 def verify(ctx: typer.Context):
-    _require_config()
-    _delegate("litschema.webapp.app", ctx.args)
+    project = _require_project(ctx)
+    _delegate("litschema.webapp.app", ctx.args, project)
 
 
 @app.command(
     help="Start the explore MCP server (DuckDB-backed SQL query tools).",
 )
 def mcp(
+    ctx: typer.Context,
     rebuild: bool = typer.Option(
         False, "--rebuild", help="Force DuckDB rebuild even if sources haven't changed"
     ),
@@ -212,7 +244,8 @@ def mcp(
         200, "--max-rows", help="Cap on rows returned by run_sql per query"
     ),
 ):
-    cfg = _require_config()
+    project = _require_project(ctx)
+    cfg = project.config
     from .explore.loader import build_store
     from .explore.server import build_server
 
@@ -269,8 +302,9 @@ app.add_typer(agent_app, name="agent")
 
 
 @agent_app.command("prepare-schema-context", help="Write runtime schema context files.")
-def agent_prepare_schema_context():
-    cfg = _require_config()
+def agent_prepare_schema_context(ctx: typer.Context):
+    project = _require_project(ctx)
+    cfg = project.config
     from .agent.prepare_schema_context import prepare_schema_context
 
     context = prepare_schema_context(cfg)
@@ -351,8 +385,9 @@ def skills_install(
 
 
 @app.command(help="Show pipeline state: what's done, what's pending.")
-def status():
-    cfg = _require_config()
+def status(ctx: typer.Context):
+    project = _require_project(ctx)
+    cfg = project.config
 
     metadata = len(list(iter_metadata_paths(cfg)))
     converted = len(list(iter_markdown_paths(cfg)))
@@ -385,8 +420,9 @@ def status():
 
 
 @app.command(help="Diagnose configuration and dependency issues.")
-def doctor():
-    cfg = _require_config()
+def doctor(ctx: typer.Context):
+    project = _require_project(ctx)
+    cfg = project.config
     issues: list[str] = []
 
     py_version = sys.version_info
