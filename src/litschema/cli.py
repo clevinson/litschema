@@ -11,7 +11,6 @@ import os
 import shutil
 import subprocess
 import sys
-from dataclasses import dataclass
 from importlib import resources
 from pathlib import Path
 
@@ -46,11 +45,6 @@ DIM = "\033[2m"
 RESET = "\033[0m"
 
 
-@dataclass(frozen=True)
-class _CliState:
-    config_path: Path | None = None
-
-
 def _disable_color_if_needed():
     if os.environ.get("NO_COLOR"):
         global CHECK, WARN, CROSS, DIM, RESET
@@ -75,13 +69,7 @@ def main(
         help="Path to litschema.yaml.",
     ),
 ) -> None:
-    ctx.obj = _CliState(config_path=config)
-
-
-def _config_path_from_ctx(ctx: typer.Context | None) -> Path | None:
-    if ctx is None or not isinstance(ctx.obj, _CliState):
-        return None
-    return ctx.obj.config_path
+    ctx.obj = config
 
 
 def _delegate(module: str, args: list[str], project: Project | None = None) -> None:
@@ -107,8 +95,9 @@ def _require_project(ctx: typer.Context | None = None) -> Project:
     either the generic auto-discovery hint or the specific missing-path
     message — render it verbatim instead of substituting our own.
     """
+    config_path = ctx.obj if ctx is not None and isinstance(ctx.obj, Path) else None
     try:
-        return Project(config=require_config(_config_path_from_ctx(ctx)))
+        return Project(config=require_config(config_path))
     except ConfigNotFoundError as exc:
         typer.secho(f"{CROSS} {exc}", fg=typer.colors.RED)
         raise typer.Exit(code=2) from exc

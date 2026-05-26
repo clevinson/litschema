@@ -15,14 +15,8 @@ class Project:
     config: LitSchemaConfig
 
     @classmethod
-    def open(
-        cls,
-        config_path: Path | str | None = None,
-        *,
-        config: LitSchemaConfig | None = None,
-    ) -> Project:
-        cfg = config if config is not None else load_config(config_path)
-        return cls(config=cfg)
+    def open(cls, config_path: Path | str | None = None) -> Project:
+        return cls(config=load_config(config_path))
 
     def article_dir(self, article_id: str) -> Path:
         return self.config.article_store_dir / article_id
