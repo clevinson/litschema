@@ -2274,7 +2274,6 @@ $("#article-select").addEventListener("change", async (e) => {
       let p = entry.path;
       if (p.startsWith(".")) p = p.slice(1);
       p = p.replace(/\.(\d+)(?=\.|$)/g, "[$1]");
-      p = normalizeReasoningPath(p);
       state.reasoningByPath[p] = entry;
     }
   }
@@ -2416,7 +2415,7 @@ function renderReviewTable() {
     return;
   }
 
-  const skipKeys = new Set(["article_id", "confidence", "reasoning"]);
+  const skipKeys = new Set(["article_id"]);
   let html = '<div class="table-view">';
 
   // Partition top-level keys into scalars, primitive arrays, and complex
@@ -3189,7 +3188,7 @@ function renderOverviewView(data = effectiveExtraction()) {
     return;
   }
 
-  const skipKeys = new Set(["article_id", "confidence", "reasoning"]);
+  const skipKeys = new Set(["article_id"]);
   let html = '<div class="table-view overview-view">';
   const scalarRows = [];
   const primitiveArrayKeys = [];
@@ -3862,7 +3861,7 @@ function wireTableEvents(panel) {
         nav._activeIndex = 0;
         renderSourceState(nav);
       } else {
-        // Single source link or no source — use legacy selectHorizontalRowFallback
+        // Single source link or no source; use the row-level fallback.
         resetAllSourceNavs();
         row.classList.add("selected");
         const rowSources = collectSourceLines(state.extraction, rowPath);
@@ -4128,7 +4127,7 @@ function buildTreeHtml(obj, path) {
     let html = "";
     for (const [key, val] of Object.entries(obj)) {
       const childPath = path ? `${path}.${key}` : key;
-      if (!path && (key === "article_id" || key === "confidence" || key === "reasoning")) continue;
+      if (!path && key === "article_id") continue;
 
       if (val !== null && typeof val === "object") {
         const isEmpty = Array.isArray(val) ? val.length === 0 : Object.keys(val).length === 0;
@@ -4676,18 +4675,6 @@ function pathInScope(path, basePath) {
   return path === basePath || path.startsWith(basePath + ".") || path.startsWith(basePath + "[");
 }
 
-function normalizeReasoningPath(path) {
-  const legacySuffix = ".trial_type";
-  const currentSuffix = ".experimental_scale";
-  if (!path.endsWith(legacySuffix)) return path;
-
-  const currentPath = path.slice(0, -legacySuffix.length) + currentSuffix;
-  if (getValueAtPath(state.extraction, path) === undefined && getValueAtPath(state.extraction, currentPath) !== undefined) {
-    return currentPath;
-  }
-  return path;
-}
-
 function collectLeafPaths(obj, basePath = "") {
   const paths = [];
   if (obj === undefined) return paths;
@@ -4702,7 +4689,7 @@ function collectLeafPaths(obj, basePath = "") {
     return paths;
   }
   for (const [key, value] of Object.entries(obj)) {
-    if (!basePath && ["article_id", "confidence", "reasoning"].includes(key)) continue;
+    if (!basePath && key === "article_id") continue;
     const childPath = basePath ? `${basePath}.${key}` : key;
     paths.push(...collectLeafPaths(value, childPath));
   }

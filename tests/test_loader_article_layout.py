@@ -31,8 +31,6 @@ def test_loader_reads_per_article_folder_and_reviews_jsonl(
         json.dumps(
             {
                 "article_id": "smith-2024",
-                "confidence": 0.8,
-                "reasoning": "test extraction",
                 "study_type": "field_trial",
                 "crops": ["maize"],
                 "sample_size": 12,
@@ -57,11 +55,7 @@ def test_loader_reads_per_article_folder_and_reviews_jsonl(
         'extraction_schema_file: "agriculture_extraction.yaml"\n'
         'data_dir: "data"\n'
         'article_store_dir: "data/papers"\n'
-        'llm_extractions_dir: "data/llm_extractions"\n'
-        'annotations_dir: "data/reviews"\n'
         'papers_dir: "papers"\n'
-        'fulltext_md_dir: "data/fulltext_md"\n'
-        'extraction_reasoning_dir: "data/extraction_reasoning"\n'
     )
 
     cfg = load_config(project / "litschema.yaml")

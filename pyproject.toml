@@ -26,7 +26,7 @@ dependencies = [
 
 [project.scripts]
 litschema = "litschema.cli:app"
-# Legacy per-step entry points (deprecated; use `litschema <verb>` instead).
+# Per-step entry points; prefer `litschema <verb>` for normal use.
 litschema-harvest-openalex = "litschema.ingest.openalex_harvest:main"
 litschema-harvest-crossref = "litschema.ingest.crossref_harvest:main"
 litschema-resolve = "litschema.ingest.resolve_entities:main"
@@ -110,7 +110,7 @@ python_version = "3.13"
 warn_unused_configs = true
 warn_redundant_casts = true
 warn_unused_ignores = true
-# Not strict-mode yet — legacy ingest code isn't typed. Tighten
+# Not strict-mode yet. Tighten
 # per-module over time via [[tool.mypy.overrides]] blocks.
 ignore_missing_imports = true
 exclude = [

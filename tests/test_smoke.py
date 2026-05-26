@@ -149,6 +149,39 @@ def test_load_config_from_repo_root() -> None:
     assert cfg.schema_dir.is_dir()
 
 
+def test_load_config_resolves_default_paths_from_dataclass_metadata(tmp_path: Path) -> None:
+    """Missing path keys should use the defaults declared on LitSchemaConfig."""
+    from litschema.config import load_config
+
+    config_path = tmp_path / "litschema.yaml"
+    config_path.write_text("{}\n")
+
+    cfg = load_config(config_path, reload=True)
+
+    assert cfg.project_root == tmp_path
+    assert cfg.data_dir == tmp_path / "data"
+    assert cfg.schema_dir == tmp_path / "schema"
+    assert cfg.references_dir == tmp_path / "references"
+    assert cfg.tracking_xlsx == tmp_path / "paper_download_tracking.xlsx"
+    assert cfg.article_store_dir == tmp_path / "data" / "papers"
+    assert cfg.papers_dir == tmp_path / "papers"
+    assert cfg.static_site_dir == tmp_path / "static-site"
+
+
+def test_load_config_resolves_overrides_relative_to_config_file(tmp_path: Path) -> None:
+    """Relative overrides should continue to resolve from litschema.yaml."""
+    from litschema.config import load_config
+
+    config_path = tmp_path / "nested" / "litschema.yaml"
+    config_path.parent.mkdir()
+    config_path.write_text('data_dir: "custom-data"\n')
+
+    cfg = load_config(config_path, reload=True)
+
+    assert cfg.project_root == config_path.parent
+    assert cfg.data_dir == config_path.parent / "custom-data"
+
+
 def test_extraction_schema_resolves_to_valid_yaml() -> None:
     """The configured extraction schema file parses as YAML."""
     from litschema.config import load_config

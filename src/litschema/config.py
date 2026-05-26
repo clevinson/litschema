@@ -1,9 +1,8 @@
-"""Runtime configuration for the ERW meta-analysis pipeline.
+"""Runtime configuration for litschema projects.
 
-Replaces hardcoded ``PROJECT_ROOT = Path(__file__).resolve().parents[N]`` with
-a small YAML config loaded at runtime. Foundational prep for open-sourcing:
-keeps the package name (``litschema``) intact while making every filesystem
-path a single source of truth (``litschema.yaml``).
+Each project is configured by a ``litschema.yaml`` file. The loader resolves
+project-relative paths once and returns an immutable ``LitSchemaConfig`` whose
+path fields are absolute.
 
 Lookup order for ``litschema.yaml``:
 
@@ -20,7 +19,7 @@ Typical usage::
 
     from litschema.config import load_config
     cfg = load_config()
-    md_dir = cfg.fulltext_md_dir   # -> Path
+    article_store = cfg.article_store_dir   # -> Path
 
 The loader result is cached per resolved path; pass ``reload=True`` to bust.
 """
@@ -46,26 +45,21 @@ class LitSchemaConfig:
     config_path: Path
 
     # Core roots.
-    project_root: Path
-    data_dir: Path
-    schema_dir: Path
-    references_dir: Path
+    project_root: Path = field(metadata={"default_path": "."})
+    data_dir: Path = field(metadata={"default_path": "data"})
+    schema_dir: Path = field(metadata={"default_path": "schema"})
+    references_dir: Path = field(metadata={"default_path": "references"})
 
     # Files.
-    tracking_xlsx: Path
+    tracking_xlsx: Path = field(metadata={"default_path": "paper_download_tracking.xlsx"})
 
-    # Stage-numbered subdirectories.
-    fulltext_md_dir: Path
-    llm_extractions_dir: Path
-    extraction_reasoning_dir: Path
-    annotations_dir: Path
-    article_store_dir: Path
+    article_store_dir: Path = field(metadata={"default_path": "data/papers"})
 
     # External (typically sibling to project_root).
-    papers_dir: Path
+    papers_dir: Path = field(metadata={"default_path": "papers"})
 
     # Build output.
-    static_site_dir: Path
+    static_site_dir: Path = field(metadata={"default_path": "static-site"})
 
     # Raw config dict (in case callers need exotic / future-added fields).
     raw: dict = field(default_factory=dict, repr=False)
@@ -120,36 +114,18 @@ def _resolve_path(value: str, base: Path) -> Path:
     return p.resolve()
 
 
-# Mapping of config-field name -> (yaml key, default relative path)
-_PATH_FIELDS: tuple[tuple[str, str, str], ...] = (
-    ("project_root", "project_root", "."),
-    ("data_dir", "data_dir", "data"),
-    ("schema_dir", "schema_dir", "schema"),
-    ("references_dir", "references_dir", "references"),
-    ("tracking_xlsx", "tracking_xlsx", "paper_download_tracking.xlsx"),
-    ("fulltext_md_dir", "fulltext_md_dir", "data/fulltext_md"),
-    ("llm_extractions_dir", "llm_extractions_dir", "data/llm_extractions"),
-    (
-        "extraction_reasoning_dir",
-        "extraction_reasoning_dir",
-        "data/extraction_reasoning",
-    ),
-    ("annotations_dir", "annotations_dir", "data/reviews"),
-    ("article_store_dir", "article_store_dir", "data/papers"),
-    ("papers_dir", "papers_dir", "papers"),
-    ("static_site_dir", "static_site_dir", "static-site"),
-)
-
-
 def _build_config(config_path: Path, raw: dict) -> LitSchemaConfig:
     base = config_path.parent
     # If user overrode project_root, subsequent relative paths should still be
     # resolved against the CONFIG FILE's directory, which is the documented
     # contract. This keeps behaviour predictable.
     kwargs: dict = {"config_path": config_path, "raw": raw}
-    for attr, key, default in _PATH_FIELDS:
-        value = raw.get(key, default)
-        kwargs[attr] = _resolve_path(value, base)
+    for config_field in fields(LitSchemaConfig):
+        default_path = config_field.metadata.get("default_path")
+        if default_path is None:
+            continue
+        value = raw.get(config_field.name, default_path)
+        kwargs[config_field.name] = _resolve_path(value, base)
 
     # Sanity: every dataclass Path field is covered.
     expected = {f.name for f in fields(LitSchemaConfig)} - {"config_path", "raw"}

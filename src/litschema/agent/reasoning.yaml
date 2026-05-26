@@ -8,7 +8,7 @@ classes:
     tree_root: true
     attributes:
       fields:
-        description: Evidence entries for extracted non-metadata leaf fields.
+        description: Evidence entries for extracted non-identifier leaf fields.
         range: ReasoningField
         multivalued: true
         required: true

@@ -98,11 +98,9 @@ def test_agriculture_template_as_is(tmp_path: Path) -> None:
 
     cols = _column_map(summary.article_columns)
 
-    # All 7 top-level AgricultureExtraction slots are present
+    # All 5 top-level AgricultureExtraction slots are present
     expected = {
         "article_id",
-        "confidence",
-        "reasoning",
         "study_type",
         "crops",
         "experiments",
@@ -112,7 +110,6 @@ def test_agriculture_template_as_is(tmp_path: Path) -> None:
 
     # Type rules
     assert cols["article_id"] == "VARCHAR"
-    assert cols["confidence"] == "DOUBLE"
     assert cols["sample_size"] == "BIGINT"
     assert cols["study_type"] == "VARCHAR"  # scalar enum
     assert cols["crops"] == "JSON"  # multivalued strings
@@ -188,7 +185,7 @@ def test_agriculture_template_as_is(tmp_path: Path) -> None:
 def test_inheritance_is_a_with_tree_root_override(tmp_path: Path) -> None:
     """Subclassing `AgricultureExtraction` via `is_a` should:
 
-    - Inherit all 9 base slots (LinkML class_induced_slots)
+    - Inherit all 5 base slots (LinkML class_induced_slots)
     - Add the 2 new slots from the subclass
     - Make `OrganicAgricultureExtraction` the active root because IT is the
       class with `tree_root: true` in the entry-point file (the imported
@@ -201,8 +198,6 @@ def test_inheritance_is_a_with_tree_root_override(tmp_path: Path) -> None:
     # Inherited slots
     inherited = {
         "article_id",
-        "confidence",
-        "reasoning",
         "study_type",
         "crops",
         "experiments",
@@ -250,7 +245,6 @@ def test_imported_tree_root_is_filtered_out(tmp_path: Path) -> None:
     prevents — proves the filter is actually doing something."""
     project = tmp_path / "no_local_root"
     (project / "schema").mkdir(parents=True)
-    (project / "data" / "llm_extractions").mkdir(parents=True)
 
     # The agriculture schema has tree_root on AgricultureExtraction
     template = (
@@ -277,11 +271,7 @@ def test_imported_tree_root_is_filtered_out(tmp_path: Path) -> None:
         'schema_dir: "schema"\n'
         'extraction_schema_file: "shell.yaml"\n'
         'data_dir: "data"\n'
-        'llm_extractions_dir: "data/llm_extractions"\n'
-        'annotations_dir: "data/reviews"\n'
         'papers_dir: "papers"\n'
-        'fulltext_md_dir: "data/fulltext_md"\n'
-        'extraction_reasoning_dir: "data/extraction_reasoning"\n'
     )
 
     cfg = load_config(project / "litschema.yaml")

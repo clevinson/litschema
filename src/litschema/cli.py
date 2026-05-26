@@ -23,7 +23,7 @@ from .articles import (
     iter_reasoning_paths,
     iter_review_paths,
 )
-from .config import CONFIG_FILENAME, ConfigNotFoundError, LitSchemaConfig, require_config
+from .config import ConfigNotFoundError, LitSchemaConfig, require_config
 from .ingest import validate_extraction
 from .schema_resolution import extraction_schema_path
 

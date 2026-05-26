@@ -73,8 +73,6 @@ def _build_articles(records: list[dict]) -> pd.DataFrame:
         rows.append(
             {
                 "article_id": r["article_id"],
-                "confidence": r.get("confidence"),
-                "reasoning": r.get("reasoning"),
                 "study_types": r.get("study_types", []),
                 "focus_areas": r.get("focus_areas", []),
                 "document_type": r.get("document_type"),
@@ -96,8 +94,7 @@ def _build_setups(records: list[dict]) -> pd.DataFrame:
                 {
                     "article_id": r["article_id"],
                     "setup_idx": idx,
-                    "experimental_scale": setup.get("experimental_scale")
-                    or setup.get("trial_type"),
+                    "experimental_scale": setup.get("experimental_scale"),
                     # location
                     "country": loc.get("country"),
                     "admin_boundary": loc.get("admin_boundary"),

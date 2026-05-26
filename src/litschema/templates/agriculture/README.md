@@ -8,7 +8,7 @@ to your sub-domain, or extend via `is_a` inheritance.
 
 One `AgricultureExtraction` per article, with:
 
-- Bibliographic-adjacent: `article_id`, `confidence`, `reasoning`
+- Bibliographic-adjacent: `article_id`
 - Method classification: `study_type` (field_trial / greenhouse / lab / modeling / review / meta_analysis)
 - Subject: `crops` (free-form names)
 - A list of **`experiments`** — one entry per distinct experimental run. A

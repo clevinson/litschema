@@ -4,8 +4,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from litschema.config import load_config
 import litschema.webapp.app as webapp
+from litschema.config import load_config
 
 
 def test_load_author_index_returns_id_keyed_dict(tmp_path) -> None:

@@ -44,19 +44,6 @@ class LoadSummary:
 # ── Review-override application (event-stream, latest-wins per field) ─────
 
 
-def _walk_review_events(review_path: Path) -> list[dict]:
-    """Yield annotation events. Supports current per-article JSON and JSONL."""
-    text = review_path.read_text()
-    if review_path.suffix == ".jsonl":
-        return [json.loads(line) for line in text.splitlines() if line.strip()]
-    data = json.loads(text)
-    events = data.get("annotations") or []
-    article_id = data.get("article_id") or review_path.stem
-    for ev in events:
-        ev.setdefault("article_id", article_id)
-    return events
-
-
 _PATH_SEG = re.compile(r"\.([A-Za-z_][A-Za-z0-9_]*)|\[(\d+)\]")
 
 
@@ -310,7 +297,6 @@ def build_store(
     """
     import duckdb
 
-    reviews_dir = cfg.annotations_dir
     authors_path = cfg.data_dir / "authors.yaml"
     institutions_path = cfg.data_dir / "institutions.yaml"
 
@@ -320,8 +306,6 @@ def build_store(
 
     sources = [
         cfg.article_store_dir,
-        cfg.llm_extractions_dir,
-        reviews_dir,
         authors_path,
         institutions_path,
     ]
