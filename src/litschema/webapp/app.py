@@ -100,10 +100,30 @@ def _article_meta(
 
 def _article_pdf_filename(cfg: LitSchemaConfig, article_id: str) -> str | None:
     """Look up PDF filename from per-article metadata."""
-    a = read_article_metadata(article_files(cfg, article_id))
+    files = article_files(cfg, article_id)
+    if files.pdf.exists():
+        return files.pdf.name
+    a = read_article_metadata(files)
     if not a:
         return None
-    return a.get("filename") or a.get("standard_filename")
+    filename = a.get("filename") or a.get("standard_filename")
+    if filename:
+        return filename
+    return None
+
+
+def _article_pdf_path(cfg: LitSchemaConfig, article_id: str) -> Path | None:
+    filename = _article_pdf_filename(cfg, article_id)
+    if not filename:
+        return None
+    files = article_files(cfg, article_id)
+    article_pdf = files.article_dir / filename
+    if article_pdf.exists():
+        return article_pdf
+    inbox_pdf = cfg.paper_inbox_dir / filename
+    if inbox_pdf.exists():
+        return inbox_pdf
+    return article_pdf
 
 
 def _current_annotations(cfg: LitSchemaConfig, article_id: str) -> list[dict]:
@@ -355,13 +375,11 @@ async def get_markdown(article_id: str, cfg: CfgDep):
 @app.get("/api/pdf/{article_id}")
 async def get_pdf(article_id: str, cfg: CfgDep):
     """Serve the PDF file for an article."""
-    filename = _article_pdf_filename(cfg, article_id)
-    if not filename:
+    pdf_path = _article_pdf_path(cfg, article_id)
+    if not pdf_path:
         raise HTTPException(404, f"No PDF filename found for {article_id}")
-
-    pdf_path = cfg.paper_inbox_dir / filename
     if not pdf_path.exists():
-        raise HTTPException(404, f"PDF not found: {filename}")
+        raise HTTPException(404, f"PDF not found: {pdf_path.name}")
 
     return FileResponse(pdf_path, media_type="application/pdf")
 

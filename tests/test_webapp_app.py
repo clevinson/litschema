@@ -87,3 +87,19 @@ def test_schema_field_metadata_uses_array_path_patterns_for_nested_enums() -> No
 
     assert metadata["fields"]["study_type"]["range"] == "StudyTypeEnum"
     assert metadata["fields"]["experiments[].treatments[].type"]["range"] == "TreatmentTypeEnum"
+
+
+def test_main_honors_port_argument(monkeypatch, tmp_path) -> None:
+    import uvicorn
+
+    cfg = SimpleNamespace(article_store_dir=tmp_path / "data" / "papers", paper_inbox_dir=tmp_path)
+    opened = []
+    runs = []
+
+    monkeypatch.setattr(webapp.webbrowser, "open", opened.append)
+    monkeypatch.setattr(uvicorn, "run", lambda *args, **kwargs: runs.append((args, kwargs)))
+
+    webapp.run_app(cfg, port=8017)
+
+    assert opened == ["http://localhost:8017"]
+    assert runs == [((webapp.app,), {"host": "127.0.0.1", "port": 8017})]

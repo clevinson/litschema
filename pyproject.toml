@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Schema-driven, agentic extraction of structured data from scientific literature. LinkML-native, local-first, with bundled agent skills."
 requires-python = ">=3.13"
 # All runtime deps live here. We deliberately do NOT split into extras —
-# the pipeline's five steps (harvest / convert / extract-skill / verify /
+# the pipeline's five steps (harvest / prepare-text / extract-skill / verify /
 # mcp) form a coherent tool surface, and anyone reaching for litschema is
 # almost certainly going to use the full pipeline. Forcing `--extra X`
 # incantations for first-time users was a net DX loss against a ~130 MB
@@ -17,7 +17,7 @@ dependencies = [
     "pyyaml>=6.0",
     "jellyfish>=1.0.0",
     "typer>=0.12.0",
-    "pymupdf4llm>=0.0.17",       # `convert` — PDF → markdown
+    "pymupdf4llm>=0.0.17",       # `prepare-text` — PDF → markdown
     "openpyxl>=3.1.0",           # paper-tracking spreadsheet reader
     "fastapi[standard]>=0.115",  # `verify` — verification webapp
     "duckdb>=1.0.0",             # `mcp` — explore store

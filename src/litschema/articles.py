@@ -35,6 +35,10 @@ class ArticleFiles:
         return self.article_dir / "article.md"
 
     @property
+    def pdf(self) -> Path:
+        return self.article_dir / f"{self.article_id}.pdf"
+
+    @property
     def extraction(self) -> Path:
         return self.article_dir / "agent-extraction.json"
 
@@ -45,6 +49,14 @@ class ArticleFiles:
     @property
     def reviews(self) -> Path:
         return self.article_dir / "reviews.jsonl"
+
+    def read_metadata(self) -> dict:
+        if not self.metadata.exists():
+            return {}
+        try:
+            return json.loads(self.metadata.read_text())
+        except json.JSONDecodeError:
+            return {}
 
 
 def article_files(cfg: LitSchemaConfig, article_id: str) -> ArticleFiles:
@@ -94,6 +106,41 @@ def read_article_metadata(files: ArticleFiles) -> dict:
     data = json.loads(files.metadata.read_text())
     data.setdefault("id", files.article_id)
     return data
+
+
+def write_article_metadata(files: ArticleFiles, metadata: dict) -> dict:
+    """Merge ``metadata`` into the article manifest, creating it if needed.
+
+    The per-article ``article-metadata.json`` is the source of truth and is
+    enriched in place across the pipeline (assemble writes identity, extraction
+    and harvest add bibliographic and provenance fields). Existing keys are
+    preserved; ``None`` values in ``metadata`` are ignored.
+    """
+    files.article_dir.mkdir(parents=True, exist_ok=True)
+    merged = files.read_metadata()
+    merged.update({key: value for key, value in metadata.items() if value is not None})
+    merged.setdefault("id", files.article_id)
+    files.metadata.write_text(json.dumps(merged, indent=2) + "\n")
+    return merged
+
+
+def record_extraction_provenance(
+    files: ArticleFiles,
+    *,
+    provider: str | None,
+    model: str | None,
+    extraction_date: str,
+    schema_commit: str | None,
+) -> dict:
+    """Record extraction provenance in the article manifest."""
+    provenance = {"date": extraction_date}
+    if provider:
+        provenance["provider"] = provider
+    if model:
+        provenance["model"] = model
+    if schema_commit:
+        provenance["schema_commit"] = schema_commit
+    return write_article_metadata(files, {"extraction": provenance})
 
 
 def _read_jsonl(path: Path) -> list[dict]:

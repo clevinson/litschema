@@ -68,11 +68,11 @@ Suggested order:
 To run the demo end-to-end:
 
 ```bash
-# 1. drop the four PDFs into your project's papers/ directory
-# 2. converting (PDF → markdown) and extraction:
-uv run litschema convert
-uv run litschema extract       # invokes the extract-article skill,
-                               # which reads domain_context.md + schema
+# 1. drop the four PDFs into your project's papers-inbox/ directory
+# 2. assemble metadata + canonical PDFs, then extract with the bundled skill:
+uv run litschema assemble
+# In your agent harness, run /extract-article <article-id>.
+# The skill prepares article markdown, then reads domain_context.md + schema.
 uv run litschema validate
 uv run litschema status
 ```
