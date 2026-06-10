@@ -125,13 +125,14 @@ def test_webapp_reads_bibliography_and_pdf_filename_from_article_metadata(
             }
         )
     )
-    assert webapp._article_meta(cfg, "smith-2024", author_index={}) == {
+    assert webapp._article_meta(cfg, "smith-2024") == {
         "title": "Smith example",
         "year": 2024,
         "journal": "Example Journal",
         "doi": "10.1234/example",
         "publisher": "Example Publisher",
-        "authors": [],
+        "metadata_source": "legacy",
+        "editable": True,
     }
     assert webapp._article_pdf_filename(cfg, "smith-2024") == "smith.pdf"
 

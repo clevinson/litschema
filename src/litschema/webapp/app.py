@@ -16,7 +16,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated
 
-import yaml
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -30,6 +29,7 @@ from ..articles import (
 )
 from ..config import LitSchemaConfig
 from ..schema_resolution import resolve_extraction_schema
+from ..source_metadata import EDITABLE_SOURCES, read_source_metadata
 from .search import strip_references
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -59,44 +59,20 @@ def get_config() -> LitSchemaConfig:
 CfgDep = Annotated[LitSchemaConfig, Depends(get_config)]
 
 
-def _load_author_index(cfg: LitSchemaConfig) -> dict[str, dict]:
-    """Read ``authors.yaml`` and index it by author id. Empty if missing.
+def _article_meta(cfg: LitSchemaConfig, article_id: str) -> dict:
+    """Return the provenance-tagged source metadata for an article id.
 
-    Callers that resolve many articles per request should call this once
-    and pass the result into :func:`_article_meta`, rather than calling
-    per-article — the read isn't cached.
+    ``editable`` tells the header which render mode to use; an assembled
+    article with no metadata yet comes back as an empty editable record.
     """
-    authors_path = cfg.data_dir / "authors.yaml"
-    if not authors_path.exists():
+    manifest = read_article_metadata(article_files(cfg, article_id))
+    if not manifest:
         return {}
-    authors = yaml.safe_load(authors_path.read_text()) or []
-    return {a.get("id"): a for a in authors if a.get("id")}
-
-
-def _article_meta(
-    cfg: LitSchemaConfig,
-    article_id: str,
-    author_index: dict[str, dict],
-) -> dict:
-    """Return a compact bibliographic dict for an article id."""
-    a = read_article_metadata(article_files(cfg, article_id))
-    if not a:
-        return {}
-    authors = []
-    for aid in a.get("author_ids") or []:
-        auth = author_index.get(aid)
-        if auth:
-            family = auth.get("family_name") or ""
-            given = auth.get("given_name") or ""
-            authors.append({"family": family, "given": given})
-    return {
-        "title": a.get("title"),
-        "year": a.get("year"),
-        "journal": a.get("journal"),
-        "doi": a.get("doi"),
-        "publisher": a.get("publisher"),
-        "authors": authors,
-    }
+    meta = read_source_metadata(manifest)
+    if not meta:
+        return {"metadata_source": "filename", "editable": True}
+    meta["editable"] = meta.get("metadata_source") in EDITABLE_SOURCES
+    return meta
 
 
 def _article_pdf_filename(cfg: LitSchemaConfig, article_id: str) -> str | None:
@@ -298,7 +274,6 @@ async def index():
 @app.get("/api/articles")
 async def list_articles(cfg: CfgDep):
     """List articles that have both markdown and extraction JSON."""
-    author_index = _load_author_index(cfg)
     articles = []
     for article_id in iter_article_ids_with_extractions(cfg):
         files = article_files(cfg, article_id)
@@ -316,7 +291,7 @@ async def list_articles(cfg: CfgDep):
         annotations = _current_annotations(cfg, article_id)
         progress = _review_progress(data, annotations)
         # Look up bibliographic fields from article metadata.
-        bib = _article_meta(cfg, article_id, author_index)
+        bib = _article_meta(cfg, article_id)
         articles.append(
             {
                 "article_id": article_id,
@@ -331,6 +306,7 @@ async def list_articles(cfg: CfgDep):
                 "year": bib.get("year"),
                 "journal": bib.get("journal"),
                 "authors": bib.get("authors", []),
+                "metadata_source": bib.get("metadata_source"),
             }
         )
 
@@ -384,10 +360,10 @@ async def get_article(article_id: str, cfg: CfgDep):
 
 @app.get("/api/bibliography/{article_id}")
 async def get_bibliography(article_id: str, cfg: CfgDep):
-    """Return bibliographic metadata (title, year, journal, authors, doi)."""
-    meta = _article_meta(cfg, article_id, _load_author_index(cfg))
+    """Return provenance-tagged source metadata for the verify header."""
+    meta = _article_meta(cfg, article_id)
     if not meta:
-        raise HTTPException(404, f"No bibliographic entry for {article_id}")
+        raise HTTPException(404, f"Unknown article {article_id}")
     return meta
 
 

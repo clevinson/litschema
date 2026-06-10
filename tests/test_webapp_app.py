@@ -1,33 +1,81 @@
 from __future__ import annotations
 
+import json as _json
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
 import litschema.webapp.app as webapp
-from litschema.config import load_config
+from litschema.config import LitSchemaConfig, load_config
 
 
-def test_load_author_index_returns_id_keyed_dict(tmp_path) -> None:
-    authors_path = tmp_path / "authors.yaml"
-    authors_path.write_text(
-        """
-- id: author_a
-  family_name: Author
-  given_name: A.
-"""
+def _project_cfg(project: Path) -> LitSchemaConfig:
+    return LitSchemaConfig(
+        config_path=project / "litschema.yaml",
+        project_root=project,
+        data_dir=project / "data",
+        schema_dir=project / "schema",
+        references_dir=project / "references",
+        tracking_xlsx=project / "paper_download_tracking.xlsx",
+        paper_inbox_dir=project / "papers-inbox",
+        static_site_dir=project / "static-site",
+        article_store_dir=project / "data" / "papers",
+        raw={},
     )
-    cfg = SimpleNamespace(data_dir=tmp_path)
-
-    index = webapp._load_author_index(cfg)
-
-    assert index["author_a"]["family_name"] == "Author"
-    assert index["author_a"]["given_name"] == "A."
 
 
-def test_load_author_index_returns_empty_when_authors_yaml_missing(tmp_path) -> None:
-    cfg = SimpleNamespace(data_dir=tmp_path)
-    assert webapp._load_author_index(cfg) == {}
+def _write_manifest(cfg: LitSchemaConfig, article_id: str, manifest: dict) -> None:
+    article_dir = cfg.article_store_dir / article_id
+    article_dir.mkdir(parents=True, exist_ok=True)
+    (article_dir / "article-metadata.json").write_text(_json.dumps(manifest))
+
+
+def test_article_meta_returns_provenance_and_editability(tmp_path) -> None:
+    cfg = _project_cfg(tmp_path)
+    _write_manifest(
+        cfg,
+        "a",
+        {
+            "id": "a",
+            "source_metadata": {
+                "title": "T",
+                "authors": ["Jane Smith"],
+                "year": 2024,
+                "metadata_source": "openalex",
+            },
+        },
+    )
+    meta = webapp._article_meta(cfg, "a")
+    assert meta["title"] == "T"
+    assert meta["authors"] == ["Jane Smith"]
+    assert meta["metadata_source"] == "openalex"
+    assert meta["editable"] is False
+
+
+def test_article_meta_marks_filename_and_legacy_editable(tmp_path) -> None:
+    cfg = _project_cfg(tmp_path)
+    _write_manifest(
+        cfg, "f", {"id": "f", "source_metadata": {"title": "T", "metadata_source": "filename"}}
+    )
+    _write_manifest(cfg, "l", {"id": "l", "title": "Old", "year": 2019})
+
+    assert webapp._article_meta(cfg, "f")["editable"] is True
+    legacy = webapp._article_meta(cfg, "l")
+    assert legacy["metadata_source"] == "legacy"
+    assert legacy["editable"] is True
+
+
+def test_article_meta_identity_only_manifest_is_editable_empty(tmp_path) -> None:
+    cfg = _project_cfg(tmp_path)
+    _write_manifest(cfg, "bare", {"id": "bare", "filename": "bare.pdf"})
+    meta = webapp._article_meta(cfg, "bare")
+    assert meta["editable"] is True
+    assert meta.get("title") is None
+
+
+def test_article_meta_empty_for_unknown_article(tmp_path) -> None:
+    assert webapp._article_meta(_project_cfg(tmp_path), "ghost") == {}
 
 
 def test_orcid_id_normalization_accepts_urls() -> None:
