@@ -128,7 +128,7 @@ date and schema commit when provider/model are omitted.
 Before finishing, verify:
 - [ ] `data/papers/{article_id}/agent-extraction.json` exists and passes extraction validation
 - [ ] `data/papers/{article_id}/agent-reasoning.json` exists and passes reasoning validation
-- [ ] `data/sources/articles.csv` has been updated by `agent record-extraction`
+- [ ] `data/papers/{article_id}/article-metadata.json` has been updated by `agent record-extraction`
 - [ ] Every non-identifier leaf field in the extraction has a corresponding reasoning entry
 - [ ] All `source_lines` reference real line numbers from the markdown
 - [ ] No data was extracted from the References/Bibliography section

@@ -17,13 +17,14 @@ from pathlib import Path
 
 import typer
 
-from .article_registry import ARTICLE_REGISTRY_COLUMNS, record_extraction_provenance, registry_path
 from .articles import (
+    article_files,
     iter_extraction_paths,
     iter_markdown_paths,
     iter_metadata_paths,
     iter_reasoning_paths,
     iter_review_paths,
+    record_extraction_provenance,
 )
 from .config import ConfigNotFoundError, LitSchemaConfig
 from .ingest import article_assembly, validate_extraction
@@ -95,7 +96,7 @@ def _schema_commit(cfg: LitSchemaConfig) -> str | None:
 
 class _AssembleCliReporter:
     def __init__(self) -> None:
-        self.label = ""
+        self.label = "Inbox PDFs"
         self.total = 0
         self.current = 0
         self.show_progress = True
@@ -104,15 +105,14 @@ class _AssembleCliReporter:
         if event == "start":
             typer.echo("Assembling article inputs")
             inbox_pdfs = int(payload.get("inbox_pdfs") or 0)
+            self.total = inbox_pdfs
+            self.current = 0
+            self.show_progress = inbox_pdfs > 0
             if inbox_pdfs == 0:
                 typer.echo("No inbox PDFs found.")
-            self._stage("Inbox PDFs", inbox_pdfs, show_progress=inbox_pdfs > 0)
-        elif event == "stage":
-            name = "Registry rows" if payload.get("name") == "registry" else str(payload["name"])
-            self._stage(name, int(payload.get("total") or 0), show_progress=name != "Registry rows")
         elif event == "pdf_start":
             path = Path(str(payload["path"]))
-            typer.echo(f"Scanning PDF {payload['index']}/{payload['total']}: {path.name}")
+            typer.echo(f"Processing PDF {payload['index']}/{payload['total']}: {path.name}")
         elif event == "pdf":
             self._advance()
             self._report_pdf(payload)
@@ -121,17 +121,6 @@ class _AssembleCliReporter:
             path = Path(str(payload["path"]))
             error = payload.get("error")
             typer.echo(f"{CROSS} PDF failed: {path.name} ({error})")
-        elif event == "row":
-            self._advance()
-            self._report_row(payload)
-
-    def _stage(self, label: str, total: int, *, show_progress: bool = True) -> None:
-        self.label = label
-        self.total = total
-        self.current = 0
-        self.show_progress = show_progress
-        if show_progress and total == 0:
-            typer.echo(f"{label} [{'.' * 20}] 0/0")
 
     def _advance(self) -> None:
         self.current += 1
@@ -145,37 +134,14 @@ class _AssembleCliReporter:
 
     def _report_pdf(self, payload: dict[str, object]) -> None:
         path = Path(str(payload["path"]))
-        doi = payload.get("doi")
+        article_id = payload.get("article_id")
         result = str(payload.get("result"))
         if result == "assembled":
-            suffix = f" ({doi})" if doi else ""
-            typer.echo(f"{CHECK} PDF assembled: {path.name}{suffix}")
+            typer.echo(f"{CHECK} PDF assembled: {path.name} → {article_id}")
         elif result == "already_assembled":
-            typer.echo(f"{CHECK} PDF already assembled: {path.name}")
-        elif result == "missing_doi":
-            typer.echo(f"{WARN} PDF missing DOI: {path.name}")
-        elif result == "ambiguous_doi":
-            typer.echo(f"{WARN} PDF ambiguous DOI: {path.name}")
-        elif result == "missing_metadata":
-            suffix = f" ({doi})" if doi else ""
-            typer.echo(f"{WARN} PDF missing metadata: {path.name}{suffix}")
+            typer.echo(f"{CHECK} PDF already assembled: {path.name} → {article_id}")
         else:
             typer.echo(f"{WARN} PDF {result}: {path.name}")
-
-    def _report_row(self, payload: dict[str, object]) -> None:
-        row = payload.get("row")
-        row = row if isinstance(row, dict) else {}
-        article_id = row.get("article_id") or "(no article_id)"
-        doi = row.get("doi") or "(no DOI)"
-        result = str(payload.get("result"))
-        if result == "harvested":
-            typer.echo(f"{CHECK} Registry harvested: {article_id} ({doi})")
-        elif result == "metadata_only":
-            typer.echo(f"{CHECK} Registry metadata-only: {article_id}")
-        elif result == "missing_metadata":
-            typer.echo(f"{WARN} Registry missing metadata: {article_id}")
-        elif result == "invalid_doi":
-            typer.echo(f"{WARN} Registry invalid DOI: {article_id} ({doi})")
 
 
 def _require_project(ctx: typer.Context | None = None) -> Project:
@@ -505,7 +471,9 @@ def agent_validate_reasoning(ctx: typer.Context):
     raise typer.Exit(code=validate_reasoning.run(list(ctx.args)))
 
 
-@agent_app.command("record-extraction", help="Record extraction provenance in articles.csv.")
+@agent_app.command(
+    "record-extraction", help="Record extraction provenance in article-metadata.json."
+)
 def agent_record_extraction(
     ctx: typer.Context,
     article_id: str = typer.Argument(..., help="Article identifier that was extracted"),
@@ -514,13 +482,15 @@ def agent_record_extraction(
 ):
     project = _require_project(ctx)
     cfg = project.config
-    extraction_date = datetime.now(UTC).isoformat()
+    files = article_files(cfg, article_id)
+    if not files.article_dir.is_dir():
+        typer.secho(f"{CROSS} unknown article: {article_id}", fg=typer.colors.RED)
+        raise typer.Exit(code=2)
     record_extraction_provenance(
-        registry_path(cfg.data_dir),
-        article_id,
+        files,
         provider=provider,
         model=model,
-        extraction_date=extraction_date,
+        extraction_date=datetime.now(UTC).isoformat(),
         schema_commit=_schema_commit(cfg),
     )
     typer.echo(f"{CHECK} recorded extraction provenance for {article_id}")
@@ -704,13 +674,6 @@ def _write_draft_schema(project: Path) -> None:
         )
 
 
-def _write_source_scaffold(project: Path) -> None:
-    sources_dir = project / "data" / "sources"
-    articles_csv = sources_dir / "articles.csv"
-    if not articles_csv.exists():
-        articles_csv.write_text(",".join(ARTICLE_REGISTRY_COLUMNS) + "\n")
-
-
 def _ensure_gitignore_entries(project: Path) -> None:
     gitignore_path = project / ".gitignore"
     entries = [
@@ -753,7 +716,6 @@ def init(
 
     project.mkdir(parents=True, exist_ok=True)
     project.joinpath("schema").mkdir(exist_ok=True)
-    project.joinpath("data", "sources").mkdir(parents=True, exist_ok=True)
     project.joinpath("data", "papers").mkdir(parents=True, exist_ok=True)
     project.joinpath("papers-inbox").mkdir(exist_ok=True)
 
@@ -769,13 +731,12 @@ def init(
             'paper_inbox_dir: "papers-inbox"\n'
         )
     _write_draft_schema(project)
-    _write_source_scaffold(project)
     _ensure_gitignore_entries(project)
 
     typer.echo(f"{CHECK} initialized litschema project at {project}")
     typer.echo("\nNext steps:")
     typer.echo(f"  1. cd {project}")
-    typer.echo("  2. Add DOI rows to data/sources/articles.csv or PDFs to papers-inbox/")
+    typer.echo("  2. Drop PDFs into papers-inbox/")
     typer.echo("  3. Run `litschema skills install --local` for project-local skills")
     typer.echo("  4. Open this project in your agent harness and run /litschema-assemble")
     typer.echo("  5. Run `/extract-article <article-id>` to prepare text and extract data")

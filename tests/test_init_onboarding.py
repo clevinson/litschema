@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import csv
-
 from typer.testing import CliRunner
 
 from litschema.config import load_config
@@ -18,7 +16,9 @@ def test_init_scaffolds_standalone_project(tmp_path) -> None:
     assert (project / "litschema.yaml").is_file()
     assert (project / "domain_context.md").is_file()
     assert (project / "schema" / "extraction.yaml").is_file()
-    assert (project / "data" / "sources" / "articles.csv").is_file()
+    assert (project / "data" / "papers").is_dir()
+    # Onboarding is local-PDF-first: no CSV registry is scaffolded.
+    assert not (project / "data" / "sources" / "articles.csv").exists()
     assert (project / "papers-inbox").is_dir()
     assert not (project / ".claude" / "skills").exists()
     gitignore = (project / ".gitignore").read_text()
@@ -30,23 +30,6 @@ def test_init_scaffolds_standalone_project(tmp_path) -> None:
     assert "agent-reasoning.json" not in gitignore
     assert "reviews.jsonl" not in gitignore
 
-    with (project / "data" / "sources" / "articles.csv").open() as fh:
-        assert next(csv.reader(fh)) == [
-            "doi",
-            "article_id",
-            "title",
-            "author_citation",
-            "year",
-            "publisher",
-            "open_access",
-            "extraction_provider",
-            "extraction_model",
-            "extraction_date",
-            "schema_commit",
-        ]
-        fh.seek(0)
-        rows = list(csv.DictReader(fh))
-    assert rows == []
     cfg = load_config(project / "litschema.yaml", reload=True)
     assert cfg.paper_inbox_dir == project / "papers-inbox"
     assert "extraction_schema_file: \"extraction.yaml\"" in (project / "litschema.yaml").read_text()

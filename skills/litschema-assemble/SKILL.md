@@ -1,13 +1,15 @@
 ---
 name: litschema-assemble
-description: "Use when preparing a litschema project's article inputs before schema building or extraction, including DOI rows in articles.csv or PDFs in papers-inbox."
+description: "Use when preparing a litschema project's article inputs before extraction, by moving PDFs from papers-inbox into per-article folders under data/papers."
 context: fork
 allowed-tools: Bash, Read
 ---
 
 # litschema Assemble
 
-Prepare article inputs for a litschema project using deterministic CLI commands.
+Move dropped PDFs into per-article folders using a single deterministic CLI
+command. Assembly is offline: it does not look up DOIs or fetch bibliographic
+metadata.
 
 ## Setup Gate
 
@@ -36,33 +38,30 @@ LITSCHEMA assemble
 
 This command owns the deterministic intake work:
 
-- reads and updates `data/sources/articles.csv`
 - scans `papers-inbox/*.pdf`
-- detects DOI strings from PDFs without running full markdown conversion
-- harvests bibliographic metadata for valid DOI rows
-- writes metadata-only article folders for rows without a DOI when `article_id`
-  and enough curated metadata are present in `articles.csv`
-- creates canonical article folders under `data/papers/{article_id}/`
-- writes `article-metadata.json` and canonical PDFs when possible
+- derives a stable `article_id` from each PDF filename (sanitized to a slug;
+  colliding names get a short content-hash suffix)
+- creates `data/papers/{article_id}/` and moves the PDF to
+  `data/papers/{article_id}/{article_id}.pdf`
+- writes a minimal `article-metadata.json` manifest (`id`, `filename`,
+  `original_filename`, `file_sha256`, `added_at`)
+- leaves the inbox empty after a successful run
+
+The `article_id` comes from the filename, so the user controls it by naming the
+PDF before dropping it in (e.g. `Smith 2024 enhanced weathering.pdf` →
+`smith-2024-enhanced-weathering`). Bibliographic fields (title, authors, year)
+are filled in later by extraction; they are not part of assembly.
 
 Extraction uses `data/papers/{article_id}/article.md`; `/extract-article`
 prepares that markdown for the requested article when needed. Do not run
 project-wide text preparation from this skill.
-
-Do not hand-edit `articles.csv` for fields that `litschema assemble` can fill.
-DOI-less rows are valid for theses, reports, blog posts, and grey literature.
-For those rows, ensure `articles.csv` has at least `article_id`, `title`, `year`,
-and `publisher` when known. Only ask the user for help when the command reports
-PDFs without DOI strings, rows without `article_id`, or rows that still lack
-enough metadata for schema building.
 
 ## Finish
 
 Report:
 
 - how many inbox PDFs were found
-- how many PDFs were assembled
-- how many DOI rows were harvested
-- any PDFs still missing DOI values
-- any DOI-less rows that need manual `article_id` or metadata fields
-- whether the article registry is ready for `/extract-article`
+- how many were assembled, and their new `article_id`s
+- how many were already assembled (duplicate re-drops)
+- any PDFs that failed and remain in the inbox
+- that the project is ready for `/extract-article <article-id>`
