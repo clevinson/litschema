@@ -6,6 +6,7 @@ Usage:
 
 from __future__ import annotations
 
+import contextlib
 import json
 import re
 import urllib.error
@@ -157,10 +158,8 @@ def _write_reviews_jsonl(path: Path, entries: list[dict]) -> None:
     don't accumulate 0-byte review files.
     """
     if not entries:
-        try:
+        with contextlib.suppress(FileNotFoundError):
             path.unlink()
-        except FileNotFoundError:
-            pass
         return
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(path.suffix + ".tmp")
