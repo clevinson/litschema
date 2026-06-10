@@ -2,8 +2,6 @@
 
 Usage:
     uv run litschema verify
-    # or, directly:
-    uv run python -m litschema.webapp.app
 """
 
 from __future__ import annotations
@@ -29,7 +27,7 @@ from ..articles import (
     read_article_metadata,
     read_review_events,
 )
-from ..config import LitSchemaConfig, load_config, require_config_or_exit
+from ..config import LitSchemaConfig
 from ..schema_resolution import resolve_extraction_schema
 from .search import strip_references
 
@@ -45,10 +43,16 @@ def get_config() -> LitSchemaConfig:
     """FastAPI dependency yielding the active litschema config.
 
     Tests override via ``app.dependency_overrides[get_config] = ...``
-    (the documented FastAPI pattern). ``load_config`` is already
-    ``lru_cache``-d, so calling per-request is cheap.
+    (the documented FastAPI pattern). Production use must launch through
+    ``litschema verify``, which sets ``app.state`` before uvicorn starts.
     """
-    return load_config()
+    try:
+        return app.state.litschema_config
+    except AttributeError as exc:
+        raise RuntimeError(
+            "Verification app config is not initialized; launch with "
+            "`litschema verify` or override get_config in tests."
+        ) from exc
 
 
 CfgDep = Annotated[LitSchemaConfig, Depends(get_config)]
@@ -438,15 +442,11 @@ async def delete_annotation(article_id: str, field_path: str, cfg: CfgDep):
     return {"deleted": field_path}
 
 
-def main():
+def run_app(cfg: LitSchemaConfig, *, port: int = 8000) -> None:
     import uvicorn
 
-    cfg = require_config_or_exit()
+    app.state.litschema_config = cfg
     print(f"Article store: {cfg.article_store_dir}")
     print(f"Papers dir: {cfg.papers_dir}")
-    webbrowser.open("http://localhost:8000")
-    uvicorn.run(app, host="127.0.0.1", port=8000)
-
-
-if __name__ == "__main__":
-    main()
+    webbrowser.open(f"http://localhost:{port}")
+    uvicorn.run(app, host="127.0.0.1", port=port)

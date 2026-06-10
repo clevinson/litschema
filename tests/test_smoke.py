@@ -10,12 +10,12 @@ Run:  uv run pytest tests/
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
 import sys
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 import yaml
@@ -269,32 +269,98 @@ def test_status_uses_explicit_config_option(tmp_path: Path, monkeypatch) -> None
     assert f"domain dir:  {tmp_path}" in result.output
 
 
-def test_delegated_commands_pass_explicit_config_to_child_process(
+def test_convert_calls_python_api_with_explicit_config(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    """Subprocess-backed commands should inherit the resolved project config."""
+    """`litschema convert` should run in-process with the resolved project config."""
     (tmp_path / "litschema.yaml").write_text('project_root: "."\n')
     monkeypatch.delenv("LITSCHEMA_CONFIG", raising=False)
 
     from litschema import cli
+    from litschema.ingest import pdf_to_markdown
 
     calls = []
 
-    def fake_run(args, **kwargs):
-        calls.append((args, kwargs))
-        return SimpleNamespace(returncode=0)
+    def fake_convert(cfg, *, papers_dir=None, output_dir=None, force=False):
+        calls.append(
+            {
+                "config_path": cfg.config_path,
+                "papers_dir": papers_dir,
+                "output_dir": output_dir,
+                "force": force,
+            }
+        )
+        return {"total": 1, "converted": 1, "skipped": 0, "empty": 0, "missing": 0, "errors": 0}
 
-    monkeypatch.setattr(cli.subprocess, "run", fake_run)
+    def fail_subprocess(*args, **kwargs):
+        raise AssertionError("litschema convert should call the Python conversion function")
+
+    monkeypatch.setattr(cli.subprocess, "run", fail_subprocess)
+    monkeypatch.setattr(pdf_to_markdown, "run", fake_convert)
 
     result = CliRunner().invoke(
         cli.app,
-        ["--config", str(tmp_path / "litschema.yaml"), "convert"],
+        [
+            "--config",
+            str(tmp_path / "litschema.yaml"),
+            "convert",
+            "--papers-dir",
+            str(tmp_path / "pdfs"),
+            "--output-dir",
+            str(tmp_path / "markdown"),
+            "--force",
+        ],
     )
 
     assert result.exit_code == 0, result.output
-    assert calls[0][0][:3] == [sys.executable, "-m", "litschema.ingest.pdf_to_markdown"]
-    assert calls[0][1]["env"]["LITSCHEMA_CONFIG"] == str(tmp_path / "litschema.yaml")
+    assert calls == [
+        {
+            "config_path": tmp_path / "litschema.yaml",
+            "papers_dir": tmp_path / "pdfs",
+            "output_dir": tmp_path / "markdown",
+            "force": True,
+        }
+    ]
+    assert json.loads(result.output) == {
+        "total": 1,
+        "converted": 1,
+        "skipped": 0,
+        "empty": 0,
+        "missing": 0,
+        "errors": 0,
+    }
+
+
+def test_verify_calls_webapp_runner_with_explicit_config(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    """`litschema verify` should launch the app in-process with the resolved config."""
+    (tmp_path / "litschema.yaml").write_text('project_root: "."\n')
+    monkeypatch.delenv("LITSCHEMA_CONFIG", raising=False)
+
+    from litschema import cli
+    from litschema.webapp import app as webapp
+
+    calls = []
+
+    def fake_run_app(cfg, *, port):
+        calls.append((cfg.config_path, port))
+
+    def fail_subprocess(*args, **kwargs):
+        raise AssertionError("litschema verify should call the Python webapp function")
+
+    monkeypatch.setattr(cli.subprocess, "run", fail_subprocess)
+    monkeypatch.setattr(webapp, "run_app", fake_run_app)
+
+    result = CliRunner().invoke(
+        cli.app,
+        ["--config", str(tmp_path / "litschema.yaml"), "verify", "--port", "8123"],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert calls == [(tmp_path / "litschema.yaml", 8123)]
 
 
 def test_validate_defaults_to_article_store(

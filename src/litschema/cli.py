@@ -1,12 +1,12 @@
 """litschema CLI - single entry point for the pipeline.
 
 Verbs: harvest / convert / extract / validate / verify / mcp / status /
-doctor / skills install / init. The pipeline verbs delegate to ingest-module
-mains; status/doctor/skills/mcp have first-class implementations here.
+doctor / skills install / init.
 """
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
@@ -72,16 +72,6 @@ def main(
     ctx.obj = config
 
 
-def _delegate(module: str, args: list[str], project: Project | None = None) -> None:
-    """Invoke `python -m litschema.<module>` with args. Exits with the child's code."""
-    env = None
-    if project is not None:
-        env = os.environ.copy()
-        env["LITSCHEMA_CONFIG"] = str(project.config.config_path)
-    result = subprocess.run([sys.executable, "-m", module, *args], env=env)
-    raise typer.Exit(code=result.returncode)
-
-
 def _count_files(path: Path, pattern: str = "*") -> int:
     return len(list(path.glob(pattern))) if path.is_dir() else 0
 
@@ -139,7 +129,7 @@ def _agent_skill_destinations(agent: str) -> list[Path]:
     raise typer.BadParameter("--agent must be one of: auto, claude, codex, both")
 
 
-# ── Pipeline verbs (delegate to existing module mains) ─────────────────────
+# ── Pipeline verbs ─────────────────────────────────────────────────────────
 
 
 @app.command(
@@ -181,13 +171,29 @@ def harvest(
         )
 
 
-@app.command(
-    context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
-    help="Convert PDFs to markdown via pymupdf4llm.",
-)
-def convert(ctx: typer.Context):
+@app.command(help="Convert PDFs to markdown via pymupdf4llm.")
+def convert(
+    ctx: typer.Context,
+    papers_dir: Path | None = typer.Option(
+        None, "--papers-dir", help="Directory containing source PDFs."
+    ),
+    output_dir: Path | None = typer.Option(
+        None,
+        "--output-dir",
+        help="Write flat {article_id}.md files to DIR instead of per-article folders.",
+    ),
+    force: bool = typer.Option(False, "--force", help="Re-convert existing markdown files."),
+):
     project = _require_project(ctx)
-    _delegate("litschema.ingest.pdf_to_markdown", ctx.args, project)
+    from .ingest import pdf_to_markdown
+
+    stats = pdf_to_markdown.run(
+        project.config,
+        papers_dir=papers_dir,
+        output_dir=output_dir,
+        force=force,
+    )
+    typer.echo(json.dumps(stats, indent=2))
 
 
 @app.command(
@@ -218,13 +224,15 @@ def validate(ctx: typer.Context):
     raise typer.Exit(code=validate_extraction.run(list(ctx.args), cfg))
 
 
-@app.command(
-    context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
-    help="Launch the verification webapp.",
-)
-def verify(ctx: typer.Context):
+@app.command(help="Launch the verification webapp.")
+def verify(
+    ctx: typer.Context,
+    port: int = typer.Option(8000, "--port", "-p", help="Port for the local web server."),
+):
     project = _require_project(ctx)
-    _delegate("litschema.webapp.app", ctx.args, project)
+    from .webapp import app as webapp_app
+
+    webapp_app.run_app(project.config, port=port)
 
 
 @app.command(
