@@ -56,9 +56,13 @@ def test_openalex_harvest_reads_articles_csv_and_writes_article_metadata(
     assert metadata == {
         "id": "smith-2024",
         "doi": "10.1234/example",
-        "title": "CSV title",
-        "year": 2024,
-        "journal": "Example Journal",
+        "source_metadata": {
+            "doi": "10.1234/example",
+            "title": "CSV title",
+            "year": 2024,
+            "journal": "Example Journal",
+            "metadata_source": "openalex",
+        },
     }
 
 
@@ -96,7 +100,7 @@ def test_openalex_harvest_preserves_existing_pdf_filename(
     metadata = json.loads((article_dir / "article-metadata.json").read_text())
     assert metadata["filename"] == "smith-2024.pdf"
     assert metadata["notes"] == "curated"
-    assert metadata["title"] == "CSV title"
+    assert metadata["source_metadata"]["title"] == "CSV title"
 
 
 def test_openalex_harvest_keeps_doi_less_rows_and_writes_curated_metadata(
@@ -136,11 +140,14 @@ def test_openalex_harvest_keeps_doi_less_rows_and_writes_curated_metadata(
     )
     assert metadata == {
         "id": "carbon-direct-2024",
-        "title": "Buyer guide",
-        "year": "2024",
-        "publisher": "Carbon Direct",
         "author_citation": "Carbon Direct",
         "open_access": True,
+        "source_metadata": {
+            "title": "Buyer guide",
+            "year": "2024",
+            "publisher": "Carbon Direct",
+            "metadata_source": "manual",
+        },
     }
 
 
@@ -169,7 +176,8 @@ def test_openalex_harvest_skips_malformed_doi_without_fetching(
         (cfg.article_store_dir / "singh-bano-2024" / "article-metadata.json").read_text()
     )
     assert metadata["id"] == "singh-bano-2024"
-    assert metadata["title"] == "Geoengineering"
+    assert metadata["source_metadata"]["title"] == "Geoengineering"
+    assert metadata["source_metadata"]["metadata_source"] == "manual"
 
 
 def test_openalex_harvest_does_not_write_incomplete_doi_less_metadata(tmp_path: Path) -> None:
@@ -208,6 +216,75 @@ def test_openalex_harvest_requires_title_and_citation_anchor_for_doi_less_metada
     assert stats["missing_metadata"] == 2
     assert not (cfg.article_store_dir / "year-only-2024" / "article-metadata.json").exists()
     assert not (cfg.article_store_dir / "open-access-only" / "article-metadata.json").exists()
+
+
+def test_harvest_writes_source_metadata_with_openalex_provenance(tmp_path: Path) -> None:
+    cfg = _cfg(tmp_path)
+    row = {"article_id": "smith-2024", "doi": "10.1234/abc"}
+    extracted = {
+        "openalex_id": "https://openalex.org/W1",
+        "doi": "10.1234/abc",
+        "title": "Enhanced weathering of basalt",
+        "publication_year": 2024,
+        "journal": "Nature Geoscience",
+        "publisher_from_source": "Springer Nature",
+        "abstract": "An abstract.",
+        "authors": [
+            {"display_name": "Jane Smith", "orcid": None},
+            {"display_name": "Mo Doe", "orcid": None},
+        ],
+    }
+
+    assert openalex_harvest._write_article_metadata(cfg, row, extracted)
+
+    manifest = json.loads(
+        (cfg.article_store_dir / "smith-2024" / "article-metadata.json").read_text()
+    )
+    block = manifest["source_metadata"]
+    assert block["metadata_source"] == "openalex"
+    assert block["title"] == "Enhanced weathering of basalt"
+    assert block["year"] == 2024
+    assert block["journal"] == "Nature Geoscience"
+    assert block["authors"] == ["Jane Smith", "Mo Doe"]
+    assert manifest["doi"] == "10.1234/abc"   # identity-level doi still written
+
+
+def test_harvest_overwrites_filename_seed_but_not_manual(tmp_path: Path) -> None:
+    from litschema.articles import article_files
+    from litschema.source_metadata import update_source_metadata
+
+    cfg = _cfg(tmp_path)
+    files = article_files(cfg, "smith-2024")
+    update_source_metadata(files, {"title": "Smith 2024"}, source="filename")
+    extracted = {"openalex_id": "W1", "title": "Real Title", "publication_year": 2024}
+
+    assert openalex_harvest._write_article_metadata(
+        cfg, {"article_id": "smith-2024", "doi": "10.1234/abc"}, extracted
+    )
+    block = json.loads(files.metadata.read_text())["source_metadata"]
+    assert block["title"] == "Real Title"
+    assert block["metadata_source"] == "openalex"
+
+    # a human edit wins over a later harvest
+    update_source_metadata(files, {"title": "Hand Fixed"}, source="manual")
+    assert not openalex_harvest._write_article_metadata(
+        cfg, {"article_id": "smith-2024", "doi": "10.1234/abc"}, extracted
+    )
+    block = json.loads(files.metadata.read_text())["source_metadata"]
+    assert block["title"] == "Hand Fixed"
+    assert block["metadata_source"] == "manual"
+
+
+def test_harvest_row_only_data_is_tagged_manual(tmp_path: Path) -> None:
+    cfg = _cfg(tmp_path)
+    row = {"article_id": "row-only", "title": "From The CSV", "year": "2021"}
+
+    assert openalex_harvest._write_article_metadata(cfg, row, {})
+
+    block = json.loads(
+        (cfg.article_store_dir / "row-only" / "article-metadata.json").read_text()
+    )["source_metadata"]
+    assert block == {"title": "From The CSV", "year": "2021", "metadata_source": "manual"}
 
 
 def test_openalex_harvest_rejects_legacy_id_column(tmp_path: Path) -> None:

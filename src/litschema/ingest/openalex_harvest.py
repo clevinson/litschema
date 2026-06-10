@@ -20,7 +20,9 @@ from pathlib import Path
 import requests
 
 from ..article_registry import has_article_id, is_valid_doi, normalize_doi
+from ..articles import article_files, write_article_metadata
 from ..config import LitSchemaConfig, require_config_or_exit
+from ..source_metadata import read_source_metadata, update_source_metadata
 from . import harvest_cache_dir
 
 logger = logging.getLogger(__name__)
@@ -107,28 +109,36 @@ def _write_article_metadata(cfg: LitSchemaConfig, row: dict, extracted: dict) ->
     article_id = _article_id_for_row(row, str(doi) if doi else None)
     if not article_id:
         return False
-    metadata = {
-        "id": article_id,
+    files = article_files(cfg, article_id)
+    if read_source_metadata(files.read_metadata()).get("metadata_source") == "manual":
+        logger.info("Keeping manual metadata for %s; harvest skipped", article_id)
+        return False
+
+    authors = [
+        a.get("display_name") for a in extracted.get("authors") or [] if a.get("display_name")
+    ]
+    fields = {
         "doi": str(doi) if doi and is_valid_doi(str(doi)) else None,
         "title": row.get("title") or extracted.get("title"),
         "abstract": row.get("abstract") or extracted.get("abstract"),
         "year": row.get("year") or extracted.get("publication_year"),
         "journal": row.get("journal") or extracted.get("journal"),
         "publisher": row.get("publisher") or extracted.get("publisher_from_source"),
-        "author_citation": row.get("author_citation"),
-        "open_access": _metadata_open_access(row.get("open_access") or extracted.get("open_access")),
+        "authors": authors or None,
     }
-    metadata = {key: value for key, value in metadata.items() if value not in (None, "")}
-    out_path = cfg.article_store_dir / article_id / "article-metadata.json"
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    if out_path.exists():
-        try:
-            existing = json.loads(out_path.read_text())
-        except json.JSONDecodeError:
-            existing = {}
-        if isinstance(existing, dict):
-            metadata = existing | metadata
-    out_path.write_text(json.dumps(metadata, indent=2, ensure_ascii=False) + "\n")
+    fields = {key: value for key, value in fields.items() if value not in (None, "")}
+    if not fields:
+        return False
+    source = "openalex" if extracted.get("openalex_id") else "manual"
+
+    identity = {"id": article_id, "doi": fields.get("doi")}
+    if row.get("author_citation"):
+        identity["author_citation"] = row.get("author_citation")
+    open_access = _metadata_open_access(row.get("open_access") or extracted.get("open_access"))
+    if open_access is not None:
+        identity["open_access"] = open_access
+    write_article_metadata(files, identity)
+    update_source_metadata(files, fields, source=source)
     return True
 
 
