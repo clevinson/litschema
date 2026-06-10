@@ -6,6 +6,7 @@ Usage:
 
 from __future__ import annotations
 
+import contextlib
 import json
 import re
 import urllib.error
@@ -126,10 +127,15 @@ def _article_pdf_path(cfg: LitSchemaConfig, article_id: str) -> Path | None:
     return article_pdf
 
 
-def _current_annotations(cfg: LitSchemaConfig, article_id: str) -> list[dict]:
-    """Return latest annotation state per path, hiding JSONL clear events."""
+def _collapse_review_events(events: list[dict]) -> list[dict]:
+    """Collapse an event stream to at most one entry per path.
+
+    Legacy 'cleared' events drop their path; everything else is last-write-wins.
+    Writes use this as the read-modify-write base so a file's persisted state
+    is always already collapsed (one row per path, no clear markers).
+    """
     current: dict[str, dict] = {}
-    for event in read_review_events(article_files(cfg, article_id)):
+    for event in events:
         path = event.get("path")
         if not path:
             continue
@@ -138,6 +144,29 @@ def _current_annotations(cfg: LitSchemaConfig, article_id: str) -> list[dict]:
         else:
             current[path] = event
     return list(current.values())
+
+
+def _current_annotations(cfg: LitSchemaConfig, article_id: str) -> list[dict]:
+    """Return latest annotation state per path."""
+    return _collapse_review_events(read_review_events(article_files(cfg, article_id)))
+
+
+def _write_reviews_jsonl(path: Path, entries: list[dict]) -> None:
+    """Atomically replace reviews.jsonl with ``entries``.
+
+    Removes the file entirely when ``entries`` is empty so paper folders
+    don't accumulate 0-byte review files.
+    """
+    if not entries:
+        with contextlib.suppress(FileNotFoundError):
+            path.unlink()
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    with tmp.open("w") as fh:
+        for e in entries:
+            fh.write(json.dumps(e) + "\n")
+    tmp.replace(path)
 
 
 def _leaf_paths(obj, base_path: str = "") -> list[str]:
@@ -436,27 +465,34 @@ async def put_annotation(article_id: str, request: Request, cfg: CfgDep):
 
     files = article_files(cfg, article_id)
     ann_path = files.reviews
-    ann_path.parent.mkdir(parents=True, exist_ok=True)
-    with ann_path.open("a") as fh:
-        fh.write(json.dumps(entry) + "\n")
+    # Upsert: keep at most one entry per path. The existing log is collapsed
+    # first so legacy duplicates and 'cleared' markers get cleaned up by the
+    # same write that records this annotation.
+    entries = [
+        e for e in _collapse_review_events(read_review_events(files))
+        if e.get("path") != entry["path"]
+    ]
+    entries.append(entry)
+    _write_reviews_jsonl(ann_path, entries)
     return entry
 
 
 @app.delete("/api/annotations/{article_id}/{field_path:path}")
 async def delete_annotation(article_id: str, field_path: str, cfg: CfgDep):
-    """Remove an annotation for a specific field."""
+    """Remove an annotation for a specific field.
+
+    Drops the matching line from reviews.jsonl rather than appending a
+    'cleared' marker — clearing is not an attributable action and the
+    file is meant to hold at most one entry per path.
+    """
     files = article_files(cfg, article_id)
     ann_path = files.reviews
-    ann_path.parent.mkdir(parents=True, exist_ok=True)
-    entry = {
-        "article_id": article_id,
-        "path": f".{field_path}",
-        "status": "cleared",
-        "reviewer": "",
-        "timestamp": datetime.now(UTC).isoformat(),
-    }
-    with ann_path.open("a") as fh:
-        fh.write(json.dumps(entry) + "\n")
+    target_path = f".{field_path}"
+    entries = [
+        e for e in _collapse_review_events(read_review_events(files))
+        if e.get("path") != target_path
+    ]
+    _write_reviews_jsonl(ann_path, entries)
     return {"deleted": field_path}
 
 

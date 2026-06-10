@@ -103,3 +103,67 @@ def test_main_honors_port_argument(monkeypatch, tmp_path) -> None:
 
     assert opened == ["http://localhost:8017"]
     assert runs == [((webapp.app,), {"host": "127.0.0.1", "port": 8017})]
+
+
+def test_collapse_review_events_dedupes_by_path_last_write_wins() -> None:
+    events = [
+        {"path": ".a", "status": "verified", "timestamp": "t1"},
+        {"path": ".a", "status": "flagged", "timestamp": "t2"},
+        {"path": ".b", "status": "verified", "timestamp": "t3"},
+    ]
+
+    by_path = {e["path"]: e for e in webapp._collapse_review_events(events)}
+
+    assert set(by_path) == {".a", ".b"}
+    assert by_path[".a"]["status"] == "flagged"
+    assert by_path[".a"]["timestamp"] == "t2"
+
+
+def test_collapse_review_events_drops_path_after_cleared_event() -> None:
+    events = [
+        {"path": ".a", "status": "verified"},
+        {"path": ".a", "status": "cleared"},
+    ]
+
+    assert webapp._collapse_review_events(events) == []
+
+
+def test_collapse_review_events_drops_events_without_path() -> None:
+    events = [
+        {"status": "verified"},
+        {"path": ".a", "status": "verified"},
+        {"path": "", "status": "flagged"},
+    ]
+
+    out = webapp._collapse_review_events(events)
+    assert [e["path"] for e in out] == [".a"]
+
+
+def test_write_reviews_jsonl_writes_one_line_per_entry(tmp_path) -> None:
+    p = tmp_path / "reviews.jsonl"
+
+    webapp._write_reviews_jsonl(p, [
+        {"path": ".a", "status": "verified"},
+        {"path": ".b", "status": "flagged"},
+    ])
+
+    lines = p.read_text().splitlines()
+    assert len(lines) == 2
+    assert all(line.startswith("{") for line in lines)
+
+
+def test_write_reviews_jsonl_removes_file_when_empty(tmp_path) -> None:
+    p = tmp_path / "reviews.jsonl"
+    p.write_text('{"path": ".x", "status": "verified"}\n')
+
+    webapp._write_reviews_jsonl(p, [])
+
+    assert not p.exists()
+
+
+def test_write_reviews_jsonl_no_op_when_empty_and_missing(tmp_path) -> None:
+    p = tmp_path / "reviews.jsonl"
+
+    webapp._write_reviews_jsonl(p, [])
+
+    assert not p.exists()

@@ -229,6 +229,273 @@
 
   .toolbar-spacer { flex: 1; }
 
+  /* ── Filter row ──
+     Drawer-style panel pulled down from the toolbar. Uses the page bg
+     (subtly different from the toolbar's bg-raised) plus an inset top
+     shadow to read as "below the toolbar fold." Stacks vertically:
+     header (label + help), textarea, footer (count + actions). */
+  .filter-row {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px 16px 12px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.06),
+                inset 3px 0 0 var(--accent);
+    flex-shrink: 0;
+  }
+  .filter-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .filter-header-label {
+    font-family: var(--font-sans);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+  }
+  .filter-row .filter-input {
+    width: 100%;
+    box-sizing: border-box;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.55;
+    color: var(--text);
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 8px 10px;
+    min-height: 60px;
+    resize: vertical;
+    outline: none;
+  }
+  .filter-row .filter-input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(212, 160, 84, 0.18);
+  }
+  .filter-row .filter-input.error { border-color: var(--red, #ef4444); }
+  .filter-row .filter-input.error:focus {
+    box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.18);
+  }
+  .filter-footer {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .filter-footer .filter-count {
+    flex: 1;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-secondary);
+    text-align: left;
+  }
+  .filter-footer .filter-count.loading {
+    color: var(--text-dim);
+    font-style: italic;
+  }
+  .filter-row .filter-count.error { color: var(--red, #ef4444); }
+  .toolbar-btn.filter-toggle.active {
+    color: var(--accent);
+    border-color: var(--accent);
+  }
+  .toolbar-btn.filter-toggle .filter-badge {
+    margin-left: 6px;
+    padding: 1px 6px;
+    border-radius: 8px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    background: var(--accent);
+    color: var(--bg);
+  }
+
+  /* Inline help indicator next to the header label. Reads as a tooltip
+     cue, not an action button. Standard pointer cursor — clicking
+     opens the modal, so the affordance is "this is clickable," not
+     "hover for a tooltip." */
+  .filter-help-btn {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-dim);
+    font-size: 10px;
+    font-weight: 500;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: color 0.1s, border-color 0.1s;
+  }
+  .filter-help-btn:hover {
+    color: var(--text);
+    border-color: var(--text-dim);
+  }
+
+  /* Primary action — accent fill makes it visually distinct from the
+     close affordance next to it. */
+  .filter-primary-btn {
+    height: 28px;
+    padding: 0 14px;
+    border-radius: var(--radius);
+    border: 1px solid var(--accent);
+    background: var(--accent);
+    color: var(--bg);
+    font-family: var(--font-sans);
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: filter 0.1s, opacity 0.1s;
+  }
+  .filter-primary-btn:hover { filter: brightness(1.08); }
+  .filter-primary-btn:disabled { opacity: 0.5; cursor: default; }
+
+  /* Icon close — dismisses the filter row and clears any active filter.
+     Sits next to Apply but its icon-only / unfilled styling visually
+     distinguishes it from the primary action. */
+  .filter-close-btn {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: transparent;
+    color: var(--text-dim);
+    font-size: 16px;
+    line-height: 1;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: color 0.1s, border-color 0.1s;
+  }
+  .filter-close-btn:hover {
+    color: var(--text);
+    border-color: var(--text-dim);
+  }
+
+  /* ── Filter help modal ── */
+  .filter-help-modal {
+    width: min(720px, calc(100vw - 32px));
+    max-height: calc(100vh - 64px);
+    padding: 16px 18px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-raised);
+    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.2);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    overflow: hidden;
+  }
+  .filter-help-modal header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .filter-help-modal header h3 {
+    margin: 0;
+    font-size: 15px;
+  }
+  .filter-help-modal header .close-btn {
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text-dim);
+    cursor: pointer;
+    padding: 2px 8px;
+    font-size: 14px;
+    line-height: 1;
+  }
+  .filter-help-modal header .close-btn:hover {
+    color: var(--text);
+    border-color: var(--text-dim);
+  }
+  .filter-help-modal .help-body {
+    overflow-y: auto;
+    display: grid;
+    gap: 14px;
+  }
+  .filter-help-modal p {
+    margin: 0;
+    font-size: 12px;
+    color: var(--text-secondary);
+    line-height: 1.55;
+  }
+  .filter-help-modal table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+    font-size: 11px;
+  }
+  .filter-help-modal th {
+    text-align: left;
+    font-size: 9px;
+    font-weight: 500;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    padding: 4px 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  .filter-help-modal td {
+    padding: 4px 8px;
+    border-bottom: 1px solid var(--border-subtle);
+    vertical-align: top;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+  }
+  .filter-help-modal td.col-name {
+    width: 22%;
+    font-family: var(--font-mono);
+    color: var(--text);
+  }
+  .filter-help-modal td.col-type {
+    width: 14%;
+    font-family: var(--font-mono);
+    color: var(--text-dim);
+  }
+  .filter-help-modal td.col-example {
+    width: 24%;
+    font-family: var(--font-mono);
+    color: var(--text-secondary);
+  }
+  .filter-help-modal td.col-desc {
+    width: 40%;
+    color: var(--text-secondary);
+    line-height: 1.5;
+  }
+  .filter-help-modal pre.example {
+    margin: 0;
+    padding: 8px 10px;
+    background: var(--bg-input);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text);
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .filter-help-modal h4 {
+    margin: 0;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
   .view-mode-toggle {
     display: inline-flex;
     align-items: center;
@@ -602,6 +869,41 @@
 
   .md-line.reasoned-highlight.active {
     background: var(--cited-strong);
+  }
+
+  /* In-document search hits. Word-level highlight, distinct from the
+     blue citation/source-line bg (--cited*). Standard <mark> styling
+     in the find-on-page tradition (yellow), tuned per-theme so dark
+     mode doesn't blow out. */
+  .md-line .search-hit {
+    background: rgba(255, 213, 79, 0.55);
+    color: inherit;
+    border-radius: 2px;
+    padding: 0 1px;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+  }
+  .md-line .search-hit.current {
+    background: rgba(255, 167, 38, 0.75);
+    outline: 1px solid rgba(255, 167, 38, 0.95);
+  }
+  @media (prefers-color-scheme: dark) {
+    .md-line .search-hit {
+      background: rgba(255, 213, 79, 0.28);
+      color: #ffe8a3;
+    }
+    .md-line .search-hit.current {
+      background: rgba(255, 167, 38, 0.45);
+      outline: 1px solid rgba(255, 167, 38, 0.7);
+    }
+  }
+  [data-theme="dark"] .md-line .search-hit {
+    background: rgba(255, 213, 79, 0.28);
+    color: #ffe8a3;
+  }
+  [data-theme="dark"] .md-line .search-hit.current {
+    background: rgba(255, 167, 38, 0.45);
+    outline: 1px solid rgba(255, 167, 38, 0.7);
   }
 
   .md-content h1, .md-content h2, .md-content h3,
@@ -1519,6 +1821,15 @@
     overflow-wrap: anywhere;
   }
 
+  /* Data cells in horizontal-table need to wrap regardless of column index.
+     The standard table's nth-child(3)/(4) rules set white-space: nowrap for
+     source/status columns; in horizontal mode those positions hold actual
+     content, so override here. Targets only .cell-value to leave source-cell
+     and status-cell nowrap behavior intact. */
+  .ext-table.horizontal-table td.cell-value {
+    white-space: normal;
+  }
+
   .ext-table.horizontal-table tr.sub-row td {
     border-top: 1px solid var(--border-subtle);
   }
@@ -1913,11 +2224,67 @@
     <button id="btn-next" disabled>&#9654;</button>
   </div>
   <div class="toolbar-spacer"></div>
+  <button class="toolbar-btn filter-toggle" id="btn-filter-toggle" type="button" title="Filter article queue">
+    Filter<span class="filter-badge" id="filter-badge" style="display:none"></span>
+  </button>
   <div class="view-mode-toggle" aria-label="Extraction view mode">
     <button class="view-mode-btn active" id="view-mode-review" data-view-mode="review" type="button">Audit</button>
     <button class="view-mode-btn" id="view-mode-overview" data-view-mode="overview" type="button">Overview</button>
   </div>
   <button class="theme-btn" id="btn-theme" title="Toggle theme">&#9790;</button>
+</div>
+
+<div class="filter-row" id="filter-row" style="display:none">
+  <div class="filter-header">
+    <span class="filter-header-label">Add Filter</span>
+    <button class="filter-help-btn" id="btn-filter-help" type="button" aria-label="Filter expression reference" title="Filter expression reference">?</button>
+  </div>
+  <textarea class="filter-input" id="filter-input" rows="2"
+            placeholder='JS expression over article fields. Cmd/Ctrl+Enter to apply.
+e.g. year >= 2024 && study_types.includes("review")'
+            spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off"></textarea>
+  <div class="filter-footer">
+    <span class="filter-count" id="filter-count">&mdash;</span>
+    <button class="filter-primary-btn" id="btn-filter-apply" type="button">Apply</button>
+    <button class="filter-close-btn" id="btn-filter-close" type="button" aria-label="Close filter" title="Close (clears active filter)">&times;</button>
+  </div>
+</div>
+
+<div class="orcid-modal-backdrop" id="filter-help-modal" role="dialog" aria-modal="true" aria-labelledby="filter-help-title">
+  <div class="filter-help-modal">
+    <header>
+      <h3 id="filter-help-title">Filter expression reference</h3>
+      <button class="close-btn" id="btn-filter-help-close" type="button" aria-label="Close">&times;</button>
+    </header>
+    <div class="help-body">
+      <p>
+        The filter is a JavaScript boolean expression evaluated against each article's record.
+        Combine fields with <code>&amp;&amp;</code>, <code>||</code>, and
+        comparisons like <code>===</code>, <code>!=</code>, <code>&lt;</code>, <code>&gt;=</code>.
+        Arrays support <code>.includes(...)</code>, <code>.some(...)</code>, and <code>.length</code>.
+      </p>
+      <p>
+        <strong>Deep extraction fields</strong> (e.g. <code>experimental_setups</code>,
+        <code>quantification_approaches</code>, <code>modeling_details</code>) load in the
+        background when this panel opens. Until they finish loading, expressions that
+        reference them will return no matches; the count will update automatically once load completes.
+      </p>
+      <h4>Summary fields</h4>
+      <table>
+        <thead>
+          <tr>
+            <th>Field</th>
+            <th>Type</th>
+            <th>Example value</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody id="filter-help-fields"></tbody>
+      </table>
+      <h4>Example expressions</h4>
+      <pre class="example" id="filter-help-examples"></pre>
+    </div>
+  </div>
 </div>
 
 <div class="orcid-modal-backdrop" id="orcid-modal" role="dialog" aria-modal="true" aria-labelledby="orcid-modal-title">
@@ -2047,6 +2414,10 @@ const state = {
   searchIndex: 0,
   suppressClearHoverPaths: new Set(),
   suppressClearHoverSections: new Set(),
+  filterExpr: "",
+  filterFn: null,
+  deepLoaded: false,
+  deepLoading: null,
 };
 
 function initialViewMode() {
@@ -2170,7 +2541,14 @@ async function init() {
   state.viewMode = initialViewMode();
   state.overviewMode = initialOverviewMode();
   syncViewControls();
+  // If a URL filter is present, load deep fields up front so the first
+  // dropdown render reflects accurate matches (the filter expression may
+  // reference fields like experimental_setups that aren't in the summary).
+  if (applyInitialFilterFromUrl()) {
+    await ensureDeepFields();
+  }
   populateDropdown();
+  updateFilterBadge();
 
   // Prev/next handlers
   $("#btn-prev").addEventListener("click", () => navigateArticle(-1));
@@ -2183,7 +2561,290 @@ async function init() {
   document.querySelectorAll(".view-mode-btn[data-overview-mode]").forEach(btn => {
     btn.addEventListener("click", () => setOverviewMode(btn.dataset.overviewMode));
   });
+  wireFilterControls();
   wireSelectedFieldActions();
+}
+
+// ── Article queue filter ──
+function compileFilter(expr) {
+  // Returns {fn, error}. fn is null if expr is empty/invalid.
+  if (!expr || !expr.trim()) return { fn: null, error: null };
+  try {
+    // eslint-disable-next-line no-new-func
+    const fn = new Function("a", `with(a){return (${expr});}`);
+    return { fn, error: null };
+  } catch (err) {
+    return { fn: null, error: err.message };
+  }
+}
+
+function safeFilterCall(fn) {
+  return (a) => {
+    try { return !!fn(a); } catch { return false; }
+  };
+}
+
+function applyInitialFilterFromUrl() {
+  const expr = new URLSearchParams(window.location.search).get("filter");
+  if (!expr) return false;
+  const { fn } = compileFilter(expr);
+  if (!fn) return false;
+  state.filterExpr = expr;
+  state.filterFn = fn;
+  $("#filter-input").value = expr;
+  // Leave the filter row closed on initial load — the toolbar badge already
+  // signals the active filter. The user can click Filter to re-open and edit
+  // if they want; auto-popping the drawer on every refresh is noise.
+  $("#btn-filter-toggle").classList.add("active");
+  return true;
+}
+
+function updateFilterBadge() {
+  const badge = $("#filter-badge");
+  const btn = $("#btn-filter-toggle");
+  if (state.filterFn) {
+    badge.textContent = `${state.filteredArticles.length}/${state.articles.length}`;
+    badge.style.display = "inline";
+    btn.classList.add("active");
+  } else {
+    badge.style.display = "none";
+    btn.classList.remove("active");
+  }
+}
+
+function evaluateFilterPreview(expr) {
+  const input = $("#filter-input");
+  const countEl = $("#filter-count");
+  const { fn, error } = compileFilter(expr);
+  if (error) {
+    input.classList.add("error");
+    countEl.classList.add("error");
+    countEl.textContent = "syntax error";
+    return null;
+  }
+  input.classList.remove("error");
+  countEl.classList.remove("error");
+  if (!fn) {
+    countEl.textContent = `${state.articles.length}/${state.articles.length}`;
+    return null;
+  }
+  const matches = state.articles.filter(safeFilterCall(fn));
+  countEl.textContent = `${matches.length}/${state.articles.length}`;
+  return fn;
+}
+
+async function applyFilter(expr) {
+  const { fn, error } = compileFilter(expr);
+  if (error) return;
+  // If the user wrote a filter that references deep fields and we haven't
+  // loaded them yet, wait. ensureDeepFields() is a no-op once cached.
+  await ensureDeepFields();
+  state.filterExpr = expr.trim();
+  state.filterFn = fn;
+  const url = new URL(window.location.href);
+  if (state.filterExpr) {
+    url.searchParams.set("filter", state.filterExpr);
+  } else {
+    url.searchParams.delete("filter");
+  }
+  history.replaceState(null, "", url.toString());
+  populateDropdown();
+  updateFilterBadge();
+}
+
+// ── Deep fields: bulk-fetch full extraction JSON into state.articles ──
+//
+// /api/articles returns only the summary fields (study_types, focus_areas,
+// document_type, n_setups, ...). /api/article/{id} returns the full
+// extraction (experimental_setups, quantification_approaches, modeling_*,
+// etc.). To let filter expressions reach into those deep fields, we fetch
+// the full extraction for every article once on first open of the filter
+// panel, then merge each one into its corresponding state.articles entry
+// (additive only — never overwriting the computed summary fields).
+async function ensureDeepFields() {
+  if (state.deepLoaded) return;
+  if (state.deepLoading) return state.deepLoading;
+  state.deepLoading = (async () => {
+    setDeepLoadingHint(true);
+    const byId = new Map(state.articles.map((a) => [a.article_id, a]));
+    const ids = state.articles.map((a) => a.article_id);
+    const concurrency = 12;
+    let cursor = 0;
+    async function worker() {
+      while (cursor < ids.length) {
+        const id = ids[cursor++];
+        try {
+          const ext = await fetchJson(`/api/article/${id}`);
+          mergeDeepExtraction(byId.get(id), ext);
+        } catch { /* skip; filter just won't match this article on deep keys */ }
+      }
+    }
+    await Promise.all(Array.from({ length: concurrency }, worker));
+    state.deepLoaded = true;
+    state.deepLoading = null;
+    setDeepLoadingHint(false);
+    // Re-run the live preview now that deep fields are available.
+    evaluateFilterPreview($("#filter-input").value);
+  })();
+  return state.deepLoading;
+}
+
+function mergeDeepExtraction(article, extraction) {
+  if (!article || !extraction || typeof extraction !== "object") return;
+  for (const [key, value] of Object.entries(extraction)) {
+    // Don't clobber computed summary fields. Anything already on the
+    // summary object stays; anything new gets added.
+    if (!(key in article)) article[key] = value;
+  }
+}
+
+function setDeepLoadingHint(loading) {
+  const countEl = $("#filter-count");
+  if (loading) {
+    countEl.dataset.summaryText = countEl.textContent;
+    countEl.textContent = "loading deep fields…";
+    countEl.classList.add("loading");
+  } else {
+    countEl.classList.remove("loading");
+    if (countEl.dataset.summaryText) {
+      countEl.textContent = countEl.dataset.summaryText;
+      delete countEl.dataset.summaryText;
+    }
+  }
+}
+
+function clearFilter() {
+  state.filterExpr = "";
+  state.filterFn = null;
+  $("#filter-input").value = "";
+  $("#filter-input").classList.remove("error");
+  $("#filter-count").classList.remove("error");
+  $("#filter-count").textContent = `${state.articles.length}/${state.articles.length}`;
+  const url = new URL(window.location.href);
+  url.searchParams.delete("filter");
+  history.replaceState(null, "", url.toString());
+  populateDropdown();
+  updateFilterBadge();
+}
+
+function wireFilterControls() {
+  const toggle = $("#btn-filter-toggle");
+  const row = $("#filter-row");
+  const input = $("#filter-input");
+  toggle.addEventListener("click", () => {
+    const open = row.style.display !== "none";
+    row.style.display = open ? "none" : "flex";
+    if (!open) {
+      input.focus();
+      evaluateFilterPreview(input.value);
+      ensureDeepFields();
+    }
+  });
+  let debounce;
+  input.addEventListener("input", () => {
+    clearTimeout(debounce);
+    debounce = setTimeout(() => evaluateFilterPreview(input.value), 200);
+  });
+  input.addEventListener("keydown", (e) => {
+    // Cmd/Ctrl+Enter applies. Plain Enter inserts a newline (textarea default).
+    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      applyFilter(input.value);
+      row.style.display = "none";
+    }
+    if (e.key === "Escape") { clearFilter(); row.style.display = "none"; }
+  });
+  $("#btn-filter-apply").addEventListener("click", () => {
+    applyFilter(input.value);
+    row.style.display = "none";
+  });
+  $("#btn-filter-close").addEventListener("click", () => {
+    clearFilter();
+    row.style.display = "none";
+  });
+  $("#btn-filter-help").addEventListener("click", openFilterHelp);
+  $("#btn-filter-help-close").addEventListener("click", closeFilterHelp);
+  $("#filter-help-modal").addEventListener("click", (e) => {
+    if (e.target.id === "filter-help-modal") closeFilterHelp();
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && $("#filter-help-modal").classList.contains("active")) {
+      closeFilterHelp();
+    }
+  });
+  // Seed the live count display
+  $("#filter-count").textContent = `${state.articles.length}/${state.articles.length}`;
+  if (state.filterExpr) evaluateFilterPreview(state.filterExpr);
+}
+
+// ── Filter help modal ──
+const FILTER_HELP_FIELDS = [
+  { name: "article_id",     type: "string",   note: "Stable identifier (folder name under data/papers/)." },
+  { name: "title",          type: "string",   note: "Bibliographic title from article-metadata.json." },
+  { name: "year",           type: "string",   note: "Publication year. Stored as string; use Number(year) for numeric compare." },
+  { name: "journal",        type: "string?",  note: "Journal name; null for theses, reports, preprints." },
+  { name: "doi",            type: "string?",  note: "DOI when present; null for ~25 grey-lit papers." },
+  { name: "authors",        type: "object[]", note: "Each entry has fields like .name; use authors.length or .some()." },
+  { name: "study_types",    type: "string[]", note: "e.g. \"experimental\", \"modeling\", \"review\", \"perspective\"." },
+  { name: "focus_areas",    type: "string[]", note: "Orthogonal research themes." },
+  { name: "document_type",  type: "string?",  note: "Bibliographic genre (journal article, thesis, preprint, ...)." },
+  { name: "confidence",     type: "number?",  note: "Extractor self-rated confidence 0–1; null when unset." },
+  { name: "n_setups",       type: "number",   note: "Count of experimental_setups. 0 typically means review/perspective." },
+  { name: "n_fields",       type: "number",   note: "Total leaf fields in the extraction (denominator for progress)." },
+  { name: "n_reviewed",     type: "number",   note: "Fields with a verified or flagged review event." },
+  { name: "n_verified",     type: "number",   note: "Fields with a verified review event." },
+  { name: "n_flagged",      type: "number",   note: "Fields currently flagged for correction." },
+  { name: "n_annotated",    type: "number",   note: "Alias for n_reviewed (kept for compatibility)." },
+  { name: "is_complete",    type: "boolean",  note: "True when n_reviewed >= n_fields and n_fields > 0." },
+  { name: "has_flags",      type: "boolean",  note: "True when n_flagged > 0." },
+];
+
+const FILTER_HELP_EXAMPLES = [
+  '// Summary-only filters (work immediately)',
+  'year >= 2024',
+  'study_types.includes("review")',
+  'confidence != null && confidence < 0.7',
+  'Number(year) >= 2022 && Number(year) <= 2024',
+  '/basalt/i.test(title || "")',
+  '',
+  '// Deep extraction filters (work after deep fields load)',
+  'experimental_setups?.some(s => s.experimental_scale === "mesocosm")',
+  'experimental_setups?.some(s => s.interventions?.some(i => /basalt/i.test(i.feedstock?.type || "")))',
+  'quantification_approaches?.some(q => q.media === "water")',
+  '(modeling_details?.scale || "") === "global"',
+  'experimental_setups?.length === 0   // reviews/perspectives, no original experiments',
+].join("\n");
+
+function previewValueFor(field) {
+  if (!state.articles.length) return "";
+  for (const a of state.articles) {
+    const v = a[field];
+    if (v == null || (Array.isArray(v) && v.length === 0)) continue;
+    if (Array.isArray(v)) {
+      const head = v.slice(0, 2).map((x) => (typeof x === "object" ? "{…}" : JSON.stringify(x)));
+      return `[${head.join(", ")}${v.length > 2 ? ", …" : ""}]`;
+    }
+    if (typeof v === "string") return v.length > 36 ? `"${v.slice(0, 33)}…"` : `"${v}"`;
+    return String(v);
+  }
+  return "";
+}
+
+function openFilterHelp() {
+  const tbody = $("#filter-help-fields");
+  tbody.innerHTML = FILTER_HELP_FIELDS.map((f) => `
+    <tr>
+      <td class="col-name">${f.name}</td>
+      <td class="col-type">${f.type}</td>
+      <td class="col-example">${escapeHtml(previewValueFor(f.name)) || "&mdash;"}</td>
+      <td class="col-desc">${f.note}</td>
+    </tr>`).join("");
+  $("#filter-help-examples").textContent = FILTER_HELP_EXAMPLES;
+  $("#filter-help-modal").classList.add("active");
+}
+
+function closeFilterHelp() {
+  $("#filter-help-modal").classList.remove("active");
 }
 
 function articleOptionLabel(article) {
@@ -2200,7 +2861,9 @@ function populateDropdown() {
   // Remove all except placeholder
   while (select.options.length > 1) select.remove(1);
 
-  state.filteredArticles = [...state.articles];
+  state.filteredArticles = state.filterFn
+    ? state.articles.filter(safeFilterCall(state.filterFn))
+    : [...state.articles];
 
   for (const a of state.filteredArticles) {
     const opt = document.createElement("option");
@@ -2209,10 +2872,26 @@ function populateDropdown() {
     select.appendChild(opt);
   }
 
-  if (currentVal && state.filteredArticles.some(a => a.article_id === currentVal)) {
+  const currentStillVisible =
+    currentVal && state.filteredArticles.some((a) => a.article_id === currentVal);
+  if (currentStillVisible) {
     select.value = currentVal;
-  } else if (currentVal) {
+  } else if (state.filteredArticles.length > 0) {
+    // Currently loaded article was filtered out (or none was loaded yet
+    // when a URL filter applied). Auto-select the first match so the
+    // detail panel always reflects the filtered queue.
+    const firstId = state.filteredArticles[0].article_id;
+    select.value = firstId;
+    if (currentVal !== firstId) {
+      select.dispatchEvent(new Event("change"));
+    }
+  } else if (state.currentId || currentVal) {
+    // Filter has zero matches and an article was previously loaded —
+    // return to the welcome screen rather than leaving stale content up.
     select.value = "";
+    state.currentId = null;
+    $("#panels").style.display = "none";
+    $("#welcome").style.display = "flex";
   }
 
   updateNavState();
@@ -4376,17 +5055,18 @@ function doSearch() {
   renderMarkdown();
   state.selectedPath = null;
 
-  const lines = state.markdown.split("\n");
   state.searchMatches = [];
-  const re = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
+  const reSrc = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-  for (let i = 0; i < lines.length; i++) {
-    if (re.test(lines[i])) {
-      state.searchMatches.push(i + 1);
-      const lineEl = document.querySelector(`.md-line[data-line="${i + 1}"]`);
-      if (lineEl) lineEl.classList.add("highlighted");
+  // Walk each rendered .md-line and wrap text matches in <mark class="search-hit">.
+  // Using TreeWalker over text nodes avoids matching inside HTML attributes
+  // and skips the line-number gutter.
+  document.querySelectorAll(".md-line").forEach((lineEl) => {
+    const lineNum = parseInt(lineEl.dataset.line, 10);
+    if (highlightMatchesIn(lineEl, reSrc)) {
+      state.searchMatches.push(lineNum);
     }
-  }
+  });
 
   state.searchIndex = 0;
   if (state.searchMatches.length > 0) {
@@ -4395,13 +5075,51 @@ function doSearch() {
   updateSearchNav();
 }
 
+function highlightMatchesIn(lineEl, reSrc) {
+  const walker = document.createTreeWalker(lineEl, NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      // Skip line-number gutter — never highlight digits in the gutter.
+      return node.parentElement && node.parentElement.closest(".line-num")
+        ? NodeFilter.FILTER_REJECT
+        : NodeFilter.FILTER_ACCEPT;
+    },
+  });
+  const textNodes = [];
+  let n;
+  while ((n = walker.nextNode())) textNodes.push(n);
+
+  let any = false;
+  for (const node of textNodes) {
+    const re = new RegExp(reSrc, "gi");
+    const text = node.nodeValue;
+    if (!re.test(text)) continue;
+    any = true;
+    re.lastIndex = 0;
+    const frag = document.createDocumentFragment();
+    let last = 0;
+    let m;
+    while ((m = re.exec(text)) !== null) {
+      if (m.index > last) frag.appendChild(document.createTextNode(text.slice(last, m.index)));
+      const mark = document.createElement("mark");
+      mark.className = "search-hit";
+      mark.textContent = m[0];
+      frag.appendChild(mark);
+      last = m.index + m[0].length;
+      if (m[0].length === 0) re.lastIndex++;  // guard against zero-width
+    }
+    if (last < text.length) frag.appendChild(document.createTextNode(text.slice(last)));
+    node.parentNode.replaceChild(frag, node);
+  }
+  return any;
+}
+
 function scrollToSearchMatch(index) {
-  document.querySelectorAll(".md-line.active").forEach(e => e.classList.remove("active"));
+  document.querySelectorAll(".search-hit.current").forEach((e) => e.classList.remove("current"));
   state.searchIndex = index;
   const lineNum = state.searchMatches[index];
   const lineEl = document.querySelector(`.md-line[data-line="${lineNum}"]`);
   if (lineEl) {
-    lineEl.classList.add("active");
+    lineEl.querySelectorAll(".search-hit").forEach((m) => m.classList.add("current"));
     lineEl.scrollIntoView({ behavior: "smooth", block: "center" });
   }
   updateSearchNav();
