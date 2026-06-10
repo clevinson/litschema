@@ -359,7 +359,7 @@ async def get_pdf(article_id: str, cfg: CfgDep):
     if not filename:
         raise HTTPException(404, f"No PDF filename found for {article_id}")
 
-    pdf_path = cfg.papers_dir / filename
+    pdf_path = cfg.paper_inbox_dir / filename
     if not pdf_path.exists():
         raise HTTPException(404, f"PDF not found: {filename}")
 
@@ -447,6 +447,6 @@ def run_app(cfg: LitSchemaConfig, *, port: int = 8000) -> None:
 
     app.state.litschema_config = cfg
     print(f"Article store: {cfg.article_store_dir}")
-    print(f"Papers dir: {cfg.papers_dir}")
+    print(f"Paper inbox: {cfg.paper_inbox_dir}")
     webbrowser.open(f"http://localhost:{port}")
     uvicorn.run(app, host="127.0.0.1", port=port)

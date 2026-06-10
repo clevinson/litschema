@@ -22,7 +22,7 @@ def _cfg(project: Path) -> LitSchemaConfig:
         schema_dir=project / "schema",
         references_dir=project / "references",
         tracking_xlsx=project / "paper_download_tracking.xlsx",
-        papers_dir=project / "papers",
+        paper_inbox_dir=project / "papers-inbox",
         static_site_dir=project / "static-site",
         article_store_dir=project / "data" / "papers",
         raw={},

@@ -271,7 +271,7 @@ def test_imported_tree_root_is_filtered_out(tmp_path: Path) -> None:
         'schema_dir: "schema"\n'
         'extraction_schema_file: "shell.yaml"\n'
         'data_dir: "data"\n'
-        'papers_dir: "papers"\n'
+        'paper_inbox_dir: "papers-inbox"\n'
     )
 
     cfg = load_config(project / "litschema.yaml")
