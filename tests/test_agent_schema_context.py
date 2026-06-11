@@ -182,6 +182,33 @@ def test_validate_reasoning_uses_bundled_schema_when_project_schema_absent(
     assert f"Reasoning valid: {reasoning}" in capsys.readouterr().out
 
 
+def test_bundled_reasoning_schema_accepts_confidence_fields(tmp_path) -> None:
+    from litschema.agent import validate_reasoning
+
+    (tmp_path / "litschema.yaml").write_text('project_root: "."\nschema_dir: "schema"\n')
+    (tmp_path / "schema").mkdir()
+    reasoning = tmp_path / "agent-reasoning.json"
+    reasoning.write_text(
+        json.dumps(
+            {
+                "confidence": 0.82,
+                "confidence_reasoning": "Methods well-structured; one value inferred.",
+                "fields": [
+                    {
+                        "path": ".study_type",
+                        "value": "field trial",
+                        "source_lines": "L12-L14",
+                        "reasoning": "The cited lines describe a field trial.",
+                        "confidence": 0.95,
+                    }
+                ],
+            }
+        )
+    )
+
+    assert validate_reasoning.run([str(reasoning)]) == 0
+
+
 def test_bundled_reasoning_schema_is_packaged() -> None:
     from litschema.agent.reasoning_schema import reasoning_schema_source_path
 

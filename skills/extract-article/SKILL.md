@@ -80,12 +80,17 @@ Write a SEPARATE reasoning file to `data/papers/{article_id}/agent-reasoning.jso
 
 This file documents WHY each value was extracted, with line-number evidence from the markdown. Every non-identifier leaf field in the extraction MUST have an entry.
 
+Confidence lives here, in the reasoning file — never in the extraction JSON (which stays pure domain data). Set a top-level `confidence` (0.0-1.0) summarizing how well the source supported the extraction overall, and a `confidence_reasoning` explaining that score (e.g. "sparse methods section", "all values stated explicitly in Table 2").
+
 ### Reasoning format rules
 
+- **confidence** (top level, optional): overall extraction confidence, 0.0-1.0
+- **confidence_reasoning** (top level, optional): one line on why that score was assigned
 - **path**: jq-style dot notation starting with `.` (e.g., `.foo.bar[0].baz`)
 - **value**: the extracted value rendered as text for cross-reference with the extraction JSON
 - **source_lines**: comma-separated line references from the markdown. Use `L{n}` for single lines, `L{start}-L{end}` for ranges. Example: `L23-L34,L55,L80-L90`
 - **reasoning**: plain text explanation for a human reviewer evaluating the extraction. Omit this key when the source lines are self-explanatory (the value appears verbatim in the cited lines)
+- **confidence** (per field, optional): 0.0-1.0 for a single field, to flag inferred or weakly-supported values
 - Skip `article_id`; document every extracted domain data field
 
 ## Validation
