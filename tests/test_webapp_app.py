@@ -5,6 +5,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from fastapi.testclient import TestClient
 
 import litschema.webapp.app as webapp
 from litschema.config import LitSchemaConfig, load_config
@@ -215,3 +216,57 @@ def test_write_reviews_jsonl_no_op_when_empty_and_missing(tmp_path) -> None:
     webapp._write_reviews_jsonl(p, [])
 
     assert not p.exists()
+
+
+def _client(cfg: LitSchemaConfig) -> TestClient:
+    webapp.app.dependency_overrides[webapp.get_config] = lambda: cfg
+    return TestClient(webapp.app)
+
+
+def teardown_function() -> None:
+    webapp.app.dependency_overrides.clear()
+
+
+def test_put_bibliography_writes_manual_source_metadata(tmp_path) -> None:
+    cfg = _project_cfg(tmp_path)
+    _write_manifest(
+        cfg, "a", {"id": "a", "source_metadata": {"title": "Seed", "metadata_source": "filename"}}
+    )
+    client = _client(cfg)
+
+    resp = client.put(
+        "/api/bibliography/a",
+        json={"title": "Fixed Title", "year": "2023", "authors": "Jane Smith, Mo Doe"},
+    )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["title"] == "Fixed Title"
+    assert body["year"] == 2023                      # coerced to int
+    assert body["authors"] == ["Jane Smith", "Mo Doe"]  # comma string split
+    assert body["metadata_source"] == "manual"
+    assert body["editable"] is True
+    on_disk = _json.loads((cfg.article_store_dir / "a" / "article-metadata.json").read_text())
+    assert on_disk["source_metadata"]["metadata_source"] == "manual"
+
+
+def test_put_bibliography_clears_a_field_with_null(tmp_path) -> None:
+    cfg = _project_cfg(tmp_path)
+    _write_manifest(
+        cfg,
+        "a",
+        {"id": "a", "source_metadata": {"title": "T", "doi": "10.1/x", "metadata_source": "manual"}},
+    )
+    client = _client(cfg)
+    resp = client.put("/api/bibliography/a", json={"doi": None})
+    assert resp.status_code == 200
+    assert "doi" not in resp.json()
+
+
+def test_put_bibliography_rejects_garbage(tmp_path) -> None:
+    cfg = _project_cfg(tmp_path)
+    _write_manifest(cfg, "a", {"id": "a"})
+    client = _client(cfg)
+    assert client.put("/api/bibliography/a", json={"hacker": 1}).status_code == 400
+    assert client.put("/api/bibliography/a", json={"year": "not-a-year"}).status_code == 400
+    assert client.put("/api/bibliography/ghost", json={"title": "T"}).status_code == 404

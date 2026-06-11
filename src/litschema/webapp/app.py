@@ -29,7 +29,12 @@ from ..articles import (
 )
 from ..config import LitSchemaConfig
 from ..schema_resolution import resolve_extraction_schema
-from ..source_metadata import EDITABLE_SOURCES, read_source_metadata
+from ..source_metadata import (
+    EDITABLE_SOURCES,
+    SOURCE_FIELDS,
+    read_source_metadata,
+    update_source_metadata,
+)
 from .search import strip_references
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -365,6 +370,42 @@ async def get_bibliography(article_id: str, cfg: CfgDep):
     if not meta:
         raise HTTPException(404, f"Unknown article {article_id}")
     return meta
+
+
+@app.put("/api/bibliography/{article_id}")
+async def put_bibliography(article_id: str, request: Request, cfg: CfgDep):
+    """Apply a human edit to the verify header; provenance becomes 'manual'.
+
+    Accepts a partial record of SOURCE_FIELDS. ``null`` clears a field.
+    Header metadata lives in the article manifest — review.json is never
+    touched by header edits (distinct layers, design doc §3.6).
+    """
+    body = await request.json()
+    if not isinstance(body, dict):
+        raise HTTPException(400, "body must be a JSON object")
+    unknown = set(body) - set(SOURCE_FIELDS)
+    if unknown:
+        raise HTTPException(400, f"unknown fields: {', '.join(sorted(unknown))}")
+    if not body:
+        raise HTTPException(400, "no fields to update")
+
+    fields = dict(body)
+    if isinstance(fields.get("authors"), str):
+        fields["authors"] = [n.strip() for n in fields["authors"].split(",") if n.strip()]
+    if fields.get("year") not in (None, ""):
+        try:
+            fields["year"] = int(fields["year"])
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(400, "year must be an integer") from exc
+    if fields.get("year") == "":
+        fields["year"] = None
+
+    files = article_files(cfg, article_id)
+    if not files.metadata.exists():
+        raise HTTPException(404, f"Unknown article {article_id}")
+    block = update_source_metadata(files, fields, source="manual")
+    block["editable"] = True
+    return block
 
 
 @app.get("/api/markdown/{article_id}")
