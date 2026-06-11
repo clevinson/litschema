@@ -26,7 +26,7 @@ from .articles import (
     iter_review_paths,
     record_extraction_provenance,
 )
-from .config import DOCUMENT_PROFILES, ConfigNotFoundError, LitSchemaConfig
+from .config import DOCUMENT_PROFILES, ConfigNotFoundError, LitSchemaConfig, document_profile
 from .ingest import article_assembly, validate_extraction
 from .project import Project
 from .schema_resolution import extraction_schema_path
@@ -581,6 +581,8 @@ def status(ctx: typer.Context):
     typer.echo(f"extracted:   {extractions} extractions")
     typer.echo(f"reasoning:   {reasoning} reasoning files")
     typer.echo(f"annotations: {annotations}")
+    if document_profile(cfg) == "journal_article":
+        typer.echo("harvest:     run `litschema harvest` to fill bibliographic metadata by DOI")
 
 
 @app.command(help="Diagnose configuration and dependency issues.")
