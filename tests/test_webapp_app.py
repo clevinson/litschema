@@ -299,6 +299,27 @@ def test_delete_annotation_with_reviewer_param_clears_only_that_author(tmp_path)
     assert client.get("/api/annotations/a").json()["annotations"] == []
 
 
+def test_get_annotations_with_reviewer_param_collapses_to_one_per_path(tmp_path) -> None:
+    cfg = _project_cfg(tmp_path)
+    _write_extraction(cfg, "a", {"article_id": "a", "title": "T", "year": 2024})
+    client = _client(cfg)
+    client.put("/api/annotations/a", json={"path": "title", "status": "flagged", "reviewer": "A"})
+    client.put("/api/annotations/a", json={"path": "title", "status": "verified", "reviewer": "B"})
+    client.put("/api/annotations/a", json={"path": "year", "status": "verified", "reviewer": "B"})
+
+    # without the param: API compat — every (path, author) entry is returned
+    assert len(client.get("/api/annotations/a").json()["annotations"]) == 3
+
+    # with the param: one annotation per path, the current reviewer's entry wins
+    anns = client.get("/api/annotations/a", params={"reviewer": "A"}).json()["annotations"]
+    by_path = {a["path"]: a for a in anns}
+    assert len(anns) == 2
+    assert by_path["title"]["reviewer"] == "A"
+    assert by_path["title"]["status"] == "flagged"
+    # paths where the reviewer has no entry fall back to the newest timestamp
+    assert by_path["year"]["reviewer"] == "B"
+
+
 def test_get_annotations_sets_aside_legacy_jsonl(tmp_path) -> None:
     cfg = _project_cfg(tmp_path)
     _write_extraction(cfg, "a", {"article_id": "a", "title": "T"})

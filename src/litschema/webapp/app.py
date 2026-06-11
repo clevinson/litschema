@@ -123,14 +123,34 @@ def _annotation_from_entry(path: str, entry: dict) -> dict:
     return ann
 
 
-def _current_annotations(cfg: LitSchemaConfig, article_id: str) -> list[dict]:
-    """Return the current annotation state per (path, author)."""
+def _current_annotations(
+    cfg: LitSchemaConfig, article_id: str, reviewer: str | None = None
+) -> list[dict]:
+    """Return the current annotation state.
+
+    With ``reviewer=None``, returns one annotation per (path, author) — the
+    historical API shape. With a reviewer given, collapses to one annotation
+    per path: that reviewer's entry when present, else the entry with the
+    newest timestamp. This is the single-active-reviewer model;
+    multi-reviewer collaboration happens via git merges of review.json
+    (alpha decision 2026-06-11).
+    """
     files = article_files(cfg, article_id)
-    return [
-        _annotation_from_entry(path, entry)
-        for path, entries in read_reviews(files).items()
-        for entry in entries
-    ]
+    fields = read_reviews(files)
+    if reviewer is None:
+        return [
+            _annotation_from_entry(path, entry)
+            for path, entries in fields.items()
+            for entry in entries
+        ]
+    annotations = []
+    for path, entries in fields.items():
+        if not entries:
+            continue
+        mine = [e for e in entries if e.get("author", "") == reviewer]
+        chosen = mine[0] if mine else max(entries, key=lambda e: e.get("timestamp") or "")
+        annotations.append(_annotation_from_entry(path, chosen))
+    return annotations
 
 
 def _leaf_paths(obj, base_path: str = "") -> list[str]:
@@ -441,9 +461,17 @@ async def get_reasoning(article_id: str, cfg: CfgDep):
 
 
 @app.get("/api/annotations/{article_id}")
-async def get_annotations(article_id: str, cfg: CfgDep):
-    """Return annotations for an article."""
-    return {"article_id": article_id, "annotations": _current_annotations(cfg, article_id)}
+async def get_annotations(article_id: str, cfg: CfgDep, reviewer: str | None = None):
+    """Return annotations for an article.
+
+    Without the ``reviewer`` query param, returns every (path, author) entry
+    (API compat). With it, returns one annotation per path — see
+    ``_current_annotations`` for the collapse rule.
+    """
+    return {
+        "article_id": article_id,
+        "annotations": _current_annotations(cfg, article_id, reviewer=reviewer),
+    }
 
 
 @app.put("/api/annotations/{article_id}")

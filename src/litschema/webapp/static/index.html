@@ -3047,11 +3047,15 @@ $("#article-select").addEventListener("change", async (e) => {
   $("#panel-left").innerHTML = '<div class="loading">Loading...</div>';
   $("#panel-right").innerHTML = '<div class="loading">Loading...</div>';
 
+  const reviewerId = $("#reviewer-id").value.trim();
+  const annotationsUrl = reviewerId
+    ? `/api/annotations/${id}?reviewer=${encodeURIComponent(reviewerId)}`
+    : `/api/annotations/${id}`;
   const [mdData, extraction, reasoningData, annData, bibData] = await Promise.all([
     fetchJson(`/api/markdown/${id}`),
     fetchJson(`/api/article/${id}`),
     fetchJson(`/api/reasoning/${id}`).catch(() => null),
-    fetchJson(`/api/annotations/${id}`).catch(() => ({ annotations: [] })),
+    fetchJson(annotationsUrl).catch(() => ({ annotations: [] })),
     fetchJson(`/api/bibliography/${id}`).catch(() => null),
   ]);
 
