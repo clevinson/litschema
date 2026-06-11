@@ -126,7 +126,8 @@ def test_schema_field_metadata_exposes_top_level_enums() -> None:
         "double_blind",
         "triple_blind",
     ]
-    assert "primary_endpoint" not in metadata["fields"]
+    assert metadata["fields"]["blinding"]["kind"] == "enum"
+    assert metadata["fields"]["primary_endpoint"]["kind"] == "string"
 
 
 def test_schema_field_metadata_uses_array_path_patterns_for_nested_enums() -> None:
@@ -289,3 +290,49 @@ def test_get_annotations_sets_aside_legacy_jsonl(tmp_path) -> None:
     assert anns == []                                   # throwaway data, not converted
     assert not (article_dir / "reviews.jsonl").exists()
     assert (article_dir / "reviews.jsonl.bak").exists()
+
+
+def _write_schema(cfg, text: str) -> None:
+    cfg.schema_dir.mkdir(parents=True, exist_ok=True)
+    (cfg.schema_dir / "extraction.yaml").write_text(text)
+    (cfg.config_path).write_text(
+        'schema_dir: "schema"\nextraction_schema_file: "extraction.yaml"\n'
+        'data_dir: "data"\narticle_store_dir: "data/papers"\npaper_inbox_dir: "papers-inbox"\n'
+    )
+
+
+_TYPED_SCHEMA = """
+id: https://example.org/t
+name: t
+prefixes: {t: "https://example.org/t/", linkml: "https://w3id.org/linkml/"}
+default_prefix: t
+default_range: string
+imports: [linkml:types]
+enums:
+  Mood: {permissible_values: {happy: {}, sad: {}}}
+classes:
+  Root:
+    tree_root: true
+    attributes:
+      article_id: {identifier: true}
+      mood: {range: Mood}
+      score: {range: float}
+      n_samples: {range: integer}
+      replicated: {range: boolean}
+      label: {range: string}
+"""
+
+
+def test_schema_fields_reports_kind_for_every_scalar_slot(tmp_path) -> None:
+    cfg = _project_cfg(tmp_path)
+    _write_schema(cfg, _TYPED_SCHEMA)
+    client = _client(cfg)
+
+    fields = client.get("/api/schema/fields").json()["fields"]
+
+    assert fields["mood"]["kind"] == "enum"
+    assert [v["value"] for v in fields["mood"]["permissible_values"]] == ["happy", "sad"]
+    assert fields["score"]["kind"] == "float"
+    assert fields["n_samples"]["kind"] == "integer"
+    assert fields["replicated"]["kind"] == "boolean"
+    assert fields["label"]["kind"] == "string"

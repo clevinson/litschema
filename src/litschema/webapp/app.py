@@ -181,6 +181,16 @@ def _review_progress(extraction: dict, annotations: list[dict]) -> dict:
     }
 
 
+#: LinkML scalar range -> editor "kind" reported by /api/schema/fields.
+_SCALAR_KINDS = {
+    "integer": "integer",
+    "float": "float",
+    "double": "float",
+    "decimal": "float",
+    "boolean": "boolean",
+}
+
+
 def _enum_permissible_values(sv: SchemaView, enum_name: str) -> list[dict]:
     enum = sv.get_enum(enum_name)
     if not enum:
@@ -218,6 +228,7 @@ def _schema_field_metadata(cfg: LitSchemaConfig) -> dict:
             slot_range = slot.range
             if slot_range in enums:
                 fields[path_pattern] = {
+                    "kind": "enum",
                     "range": slot_range,
                     "multivalued": bool(slot.multivalued),
                     "permissible_values": _enum_permissible_values(sv, slot_range),
@@ -228,6 +239,12 @@ def _schema_field_metadata(cfg: LitSchemaConfig) -> dict:
                     path_pattern if slot.multivalued else slot_path,
                     (*stack, class_name),
                 )
+            else:
+                fields[path_pattern] = {
+                    "kind": _SCALAR_KINDS.get(slot_range or "string", "string"),
+                    "range": slot_range or "string",
+                    "multivalued": bool(slot.multivalued),
+                }
 
     walk(root_class)
     return {"root_class": root_class, "fields": fields}
