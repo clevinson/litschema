@@ -314,9 +314,10 @@ def test_assemble_prefers_sidecar_metadata_as_manual(tmp_path: Path) -> None:
     assert manifest["source_metadata"]["year"] == 2023
     assert manifest["source_metadata"]["authors"] == ["Jane Smith", "Mo Doe"]
     assert manifest["source_metadata"]["metadata_source"] == "manual"
-    # sidecar is archived into the article folder, not left in the inbox
-    assert (article_dir / "meta.yaml").exists()
+    # sidecar is archived alongside processed inbox PDFs, not into the article folder
+    assert (cfg.paper_inbox_dir / ".processed" / "report.meta.yaml").exists()
     assert not (cfg.paper_inbox_dir / "report.meta.yaml").exists()
+    assert not (article_dir / "meta.yaml").exists()
 
 
 def test_assemble_broken_sidecar_falls_back_to_filename_title(tmp_path: Path) -> None:

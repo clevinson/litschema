@@ -129,12 +129,22 @@ def load_sidecar_metadata(pdf_path: Path) -> dict | None:
     return fields or None
 
 
-def archive_sidecar(pdf_path: Path, files: ArticleFiles) -> None:
-    """Move a consumed sidecar into the article folder as ``meta.yaml``."""
+def archive_sidecar(pdf_path: Path) -> None:
+    """Move a consumed sidecar into the inbox ``.processed/`` folder.
+
+    Mirrors ``_archive_processed_inbox_pdf`` in ingest/article_assembly.py:
+    the sidecar lands at ``<inbox>/.processed/<original sidecar name>``,
+    keeping the article folder free of inbox bookkeeping.
+    """
     sidecar = sidecar_path_for_pdf(pdf_path)
     if not sidecar.exists():
         return
+    processed_dir = sidecar.parent / ".processed"
     try:
-        shutil.move(str(sidecar), str(files.article_dir / "meta.yaml"))
+        processed_dir.mkdir(parents=True, exist_ok=True)
+        target = processed_dir / sidecar.name
+        if target.exists():
+            target.unlink()
+        shutil.move(str(sidecar), str(target))
     except OSError:
         logger.warning("Unable to archive metadata sidecar: %s", sidecar)
