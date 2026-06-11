@@ -139,3 +139,17 @@ def test_onboard_and_extract_skills_delegate_deterministic_pipeline_steps() -> N
     assert "extract-article" in onboard  # defers extraction mechanics to that skill
     assert "LITSCHEMA prepare-text {article_id}" in extract
     assert "agent record-extraction" in extract
+
+
+def test_skill_setup_gates_resolve_cli_with_dev_override() -> None:
+    onboard = (REPO_ROOT / "skills" / "litschema-onboard" / "SKILL.md").read_text()
+    extract = (REPO_ROOT / "skills" / "extract-article" / "SKILL.md").read_text()
+
+    for skill in (onboard, extract):
+        # Resolution order: .litschema/cli dev override, then uv run, then bare CLI.
+        assert "`.litschema/cli`" in skill
+        assert skill.index("`.litschema/cli`") < skill.index("`uv run litschema`")
+        assert "development override" in skill
+        assert "never required for normal use" in skill
+        # The gate must confirm the resolved command actually works.
+        assert "$LITSCHEMA --help" in skill

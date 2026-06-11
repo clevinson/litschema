@@ -13,24 +13,23 @@ You are extracting structured research metadata from a paper for a systematic re
 
 Before running extraction, verify you are in a litschema project by checking for `litschema.yaml` in the current directory or a parent directory.
 
-Do not assume `uv` or `litschema` is available just because this skill is installed. Choose the command runner for this project:
+Do not assume `uv` or `litschema` is available just because this skill is installed. Resolve the command runner for this project, in this order:
+
+1. If a `.litschema/cli` file exists in the project root, set `LITSCHEMA` to its single-line content verbatim (e.g. `uv run --project ../../litschema litschema`). This file is a development override that points at a work-in-progress litschema checkout; it is never required for normal use.
+2. Otherwise, set `LITSCHEMA` to `uv run litschema` (prefer the project's Python environment when uv is available).
+3. Otherwise, set `LITSCHEMA` to `litschema`.
+
+After resolving, confirm the command actually works before continuing:
 
 ```bash
-# Prefer the project's Python environment when uv is available
-uv run litschema --help
+$LITSCHEMA --help
 ```
 
-If that exits 0, set `LITSCHEMA` to `uv run litschema` for every command below. Otherwise try:
-
-```bash
-litschema --help
-```
-
-If that exits 0, set `LITSCHEMA` to `litschema`.
+If that exits nonzero, fall through to the next option in the order above and re-check.
 
 If `litschema.yaml` is missing, stop and tell the user this skill must be run from a litschema project directory. Ask them to either point you to the folder containing `litschema.yaml`, or run `litschema init <project-directory>` before extraction.
 
-If neither command runner works, stop and tell the user litschema is not available in this shell. Ask them whether litschema should be installed globally or run through the project's local `uv` environment.
+If no command runner works, stop and tell the user litschema is not available in this shell. Ask them whether litschema should be installed globally or run through the project's local `uv` environment.
 
 ## Input
 

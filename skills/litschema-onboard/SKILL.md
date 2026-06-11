@@ -16,8 +16,14 @@ checking extraction quality, and narrating clearly.
 
 1. Confirm `litschema.yaml` exists in the project root. If not, stop and tell
    the user to run `litschema init <dir>` first.
-2. Resolve the CLI: try `uv run litschema --help`; fall back to
-   `litschema --help`. Set `$LITSCHEMA` to whichever works.
+2. Resolve the CLI, in this order: (1) if a `.litschema/cli` file exists in
+   the project root, use its single-line content verbatim as the command
+   (e.g. `uv run --project ../../litschema litschema`);
+   (2) `uv run litschema`; (3) `litschema`. The `.litschema/cli` file is a
+   development override that points at a work-in-progress litschema
+   checkout — it is never required for normal use. Set `$LITSCHEMA` to the
+   resolved command, then confirm it works by running `$LITSCHEMA --help`;
+   if that fails, fall through to the next option.
 3. Run `$LITSCHEMA status` and `$LITSCHEMA doctor`. Report problems before
    continuing.
 4. Read `litschema.yaml` and note `document_profile`
