@@ -2937,9 +2937,13 @@ function closeFilterHelp() {
 function articleOptionLabel(article) {
   const authors = formatAuthors(article.authors);
   const year = article.year ? ` ${article.year}` : "";
-  const citation = authors ? `${authors}${year}` : (article.article_id || "Untitled article");
-  const title = article.title ? `. ${article.title}` : "";
-  return `${citation}${title}`;
+  if (authors) {
+    return `${authors}${year}${article.title ? `. ${article.title}` : ""}`;
+  }
+  if (article.title) {
+    return article.year ? `${article.title} (${article.year})` : article.title;
+  }
+  return article.article_id || "Untitled article";
 }
 
 function populateDropdown() {
@@ -3163,6 +3167,7 @@ $("#bib-edit-form").addEventListener("submit", async (ev) => {
     for (const key of ["title", "year", "journal", "doi"]) entry[key] = block[key] ?? null;
     entry.authors = block.authors || [];
     entry.metadata_source = block.metadata_source;
+    populateDropdown();
   }
   renderBibHeader(block);
 });
