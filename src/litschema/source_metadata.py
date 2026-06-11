@@ -23,7 +23,17 @@ from .articles import ArticleFiles, write_article_metadata
 logger = logging.getLogger(__name__)
 
 #: Fields the convention knows about, in display order.
-SOURCE_FIELDS = ("title", "authors", "year", "journal", "doi", "publisher", "url", "abstract")
+SOURCE_FIELDS = (
+    "title",
+    "authors",
+    "corporate_author",
+    "year",
+    "journal",
+    "doi",
+    "publisher",
+    "url",
+    "abstract",
+)
 
 #: Valid ``metadata_source`` values. ``legacy`` is synthesized at read time
 #: for manifests predating the convention; it is never written.

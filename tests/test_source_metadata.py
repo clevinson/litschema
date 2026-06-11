@@ -94,6 +94,12 @@ def test_editable_sources_cover_human_provenance_only() -> None:
         assert value not in sm.EDITABLE_SOURCES
 
 
+def test_source_fields_include_corporate_author_after_authors() -> None:
+    fields = list(sm.SOURCE_FIELDS)
+    assert "corporate_author" in fields
+    assert fields.index("corporate_author") == fields.index("authors") + 1
+
+
 # ── update_source_metadata ───────────────────────────────────────────────────
 
 
@@ -113,6 +119,15 @@ def test_update_source_metadata_merges_and_retags(tmp_path: Path) -> None:
     assert block["title"] == "Better"
     assert block["year"] == 2024              # untouched fields preserved
     assert block["metadata_source"] == "manual"
+
+
+def test_update_source_metadata_accepts_corporate_author(tmp_path: Path) -> None:
+    files = article_files(_cfg(tmp_path), "a")
+    block = sm.update_source_metadata(
+        files, {"corporate_author": "Carbon Direct"}, source="manual"
+    )
+    assert block["corporate_author"] == "Carbon Direct"
+    assert files.read_metadata()["source_metadata"]["corporate_author"] == "Carbon Direct"
 
 
 def test_update_source_metadata_null_deletes_a_field(tmp_path: Path) -> None:

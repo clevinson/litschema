@@ -236,7 +236,12 @@ def test_put_bibliography_writes_manual_source_metadata(tmp_path) -> None:
 
     resp = client.put(
         "/api/bibliography/a",
-        json={"title": "Fixed Title", "year": "2023", "authors": "Jane Smith, Mo Doe"},
+        json={
+            "title": "Fixed Title",
+            "year": "2023",
+            "authors": "Jane Smith, Mo Doe",
+            "corporate_author": "Carbon Direct",
+        },
     )
 
     assert resp.status_code == 200
@@ -244,6 +249,7 @@ def test_put_bibliography_writes_manual_source_metadata(tmp_path) -> None:
     assert body["title"] == "Fixed Title"
     assert body["year"] == 2023                      # coerced to int
     assert body["authors"] == ["Jane Smith", "Mo Doe"]  # comma string split
+    assert body["corporate_author"] == "Carbon Direct"  # accepted verbatim, never split
     assert body["metadata_source"] == "manual"
     assert body["editable"] is True
     on_disk = _json.loads((cfg.article_store_dir / "a" / "article-metadata.json").read_text())

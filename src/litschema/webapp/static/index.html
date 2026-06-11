@@ -1929,10 +1929,12 @@
   }
 
   .article-bibheader .bib-title {
-    font-size: 15px;
+    display: block;
+    width: 100%;
+    font-size: 22px;
     font-weight: 600;
     color: var(--text);
-    line-height: 1.3;
+    line-height: 1.25;
     max-width: 100%;
     text-wrap: balance;
   }
@@ -2022,6 +2024,7 @@
     display: flex;
     align-items: flex-end;
     gap: 6px;
+    flex-basis: 100%;
   }
 
   .article-bibheader .bib-edit-actions button {
@@ -2223,8 +2226,9 @@
     }
 
     .article-bibheader .bib-title {
-      min-width: 160px;
-      max-width: 260px;
+      font-size: 17px;
+      min-width: 0;
+      max-width: 100%;
     }
 
     .article-bibheader .bib-authors {
@@ -2399,8 +2403,9 @@ e.g. year >= 2024 && study_types.includes("review")'
         <form class="bib-edit-form" id="bib-edit-form" hidden>
           <label>Title <input name="title" type="text"></label>
           <label>Authors <input name="authors" type="text" placeholder="Jane Smith, Mo Doe"></label>
+          <label>Organization <input name="corporate_author" type="text" placeholder="e.g. Carbon Direct &mdash; for documents with no personal authors"></label>
           <label>Year <input name="year" type="number" min="1500" max="2100"></label>
-          <label>Venue <input name="journal" type="text"></label>
+          <label>Published in <input name="journal" type="text"></label>
           <label>DOI <input name="doi" type="text"></label>
           <label>URL <input name="url" type="url"></label>
           <div class="bib-edit-actions">
@@ -2940,6 +2945,9 @@ function articleOptionLabel(article) {
   if (authors) {
     return `${authors}${year}${article.title ? `. ${article.title}` : ""}`;
   }
+  if (article.corporate_author) {
+    return `${article.corporate_author}${year}${article.title ? `. ${article.title}` : ""}`;
+  }
   if (article.title) {
     return article.year ? `${article.title} (${article.year})` : article.title;
   }
@@ -3108,7 +3116,9 @@ function renderBibHeader(meta) {
   $("#bib-title").textContent = meta.title || meta.article_id || state.currentId || "";
   $("#bib-title").title = meta.title || "";
 
-  const authorsText = formatAuthors(meta.authors);
+  // Person authors win; otherwise show the corporate author verbatim
+  // (organization names must never be last-name-split).
+  const authorsText = formatAuthors(meta.authors) || (meta.corporate_author || "");
   const authorsEl = $("#bib-authors");
   authorsEl.textContent = authorsText;
   authorsEl.style.display = authorsText ? "inline" : "none";
@@ -3164,7 +3174,7 @@ $("#bib-edit-form").addEventListener("submit", async (ev) => {
   const block = await resp.json();
   const entry = state.articles.find(a => a.article_id === bibArticleId);
   if (entry) {
-    for (const key of ["title", "year", "journal", "doi"]) entry[key] = block[key] ?? null;
+    for (const key of ["title", "year", "journal", "doi", "corporate_author"]) entry[key] = block[key] ?? null;
     entry.authors = block.authors || [];
     entry.metadata_source = block.metadata_source;
     populateDropdown();

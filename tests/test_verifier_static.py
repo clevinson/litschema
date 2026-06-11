@@ -371,6 +371,21 @@ def test_bib_header_has_provenance_badge_and_edit_affordance() -> None:
     assert "bibArticleId" in html
 
 
+def test_bib_header_title_first_layout_with_corporate_author() -> None:
+    html = STATIC_HTML.read_text()
+
+    # corporate_author is editable and rendered when no personal authors exist
+    assert 'name="corporate_author"' in html
+    assert "Organization" in html
+    assert "for documents with no personal authors" in html
+    assert "meta.corporate_author" in html
+    assert "article.corporate_author" in html
+    # journal input keeps its name but is labelled "Published in"
+    assert 'Published in <input name="journal"' in html
+    # Save/Cancel sit on their own full-width row
+    assert "flex-basis: 100%" in html
+
+
 def test_verifier_index_served_by_app() -> None:
     from fastapi.testclient import TestClient
 
