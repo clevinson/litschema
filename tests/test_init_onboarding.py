@@ -20,7 +20,7 @@ def test_init_scaffolds_standalone_project(tmp_path) -> None:
     # Onboarding is local-PDF-first: no CSV registry is scaffolded.
     assert not (project / "data" / "sources" / "articles.csv").exists()
     assert (project / "papers-inbox").is_dir()
-    assert not (project / ".claude" / "skills").exists()
+    assert (project / ".claude" / "skills" / "extract-article" / "SKILL.md").is_file()
     gitignore = (project / ".gitignore").read_text()
     assert "papers-inbox/*.pdf" in gitignore
     assert "papers-inbox/.processed/*.pdf" in gitignore
@@ -42,7 +42,6 @@ def test_init_scaffolds_standalone_project(tmp_path) -> None:
     assert f"cd {project}" in result.output
     assert "/litschema-onboard" in result.output
     assert "litschema skills install --local" not in result.output
-    assert "/litschema-assemble" not in result.output
     assert "litschema convert" not in result.output
     assert "/litschema-builder" not in result.output
     assert "papers-inbox/" in result.output
@@ -135,3 +134,28 @@ def test_init_rejects_unknown_profile(tmp_path) -> None:
     runner = CliRunner()
     result = runner.invoke(cli.app, ["init", str(tmp_path / "x"), "--profile", "scrolls"])
     assert result.exit_code != 0
+
+
+def test_init_installs_skills_project_locally(tmp_path) -> None:
+    from litschema import cli
+
+    runner = CliRunner()
+    project = tmp_path / "myreview"
+
+    result = runner.invoke(cli.app, ["init", str(project), "--profile", "generic"])
+
+    assert result.exit_code == 0
+    assert (project / ".claude" / "skills" / "extract-article" / "SKILL.md").is_file()
+    # Task 5 extends this test with the litschema-onboard skill assertion.
+
+
+def test_init_no_skills_opts_out(tmp_path) -> None:
+    from litschema import cli
+
+    runner = CliRunner()
+    project = tmp_path / "myreview"
+
+    result = runner.invoke(cli.app, ["init", str(project), "--profile", "generic", "--no-skills"])
+
+    assert result.exit_code == 0
+    assert not (project / ".claude").exists()

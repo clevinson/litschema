@@ -201,7 +201,7 @@ def _agent_skill_destinations(agent: str) -> list[Path]:
 
 
 def _project_skill_destination(project: Path) -> Path:
-    return project.expanduser().resolve() / ".agents" / "skills"
+    return project.expanduser().resolve() / ".claude" / "skills"
 
 
 def _install_skill_dirs(
@@ -505,7 +505,7 @@ def skills_install(
         "auto", "--agent", help="Agent destination: auto, claude, codex, or both"
     ),
     local: bool = typer.Option(
-        False, "--local", help="Install into the current directory's .agents/skills"
+        False, "--local", help="Install into the current directory's .claude/skills"
     ),
     experimental: bool = typer.Option(
         False, "--experimental", help="Also install experimental skills"
@@ -754,6 +754,15 @@ def init(
         )
     _write_draft_schema(project)
     _ensure_gitignore_entries(project)
+
+    if not no_skills:
+        count, messages = _install_skill_dirs(
+            _skill_sources(), _project_skill_destination(project), copy=True, force=False
+        )
+        for message in messages:
+            typer.echo(message)
+        if count:
+            typer.echo(f"{CHECK} installed {count} agent skill(s) into .claude/skills/")
 
     typer.echo(f"{CHECK} initialized litschema project at {project}")
     typer.echo("\nNext steps:")
