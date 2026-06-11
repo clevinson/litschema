@@ -379,7 +379,7 @@ def test_bib_header_title_first_layout_with_corporate_author() -> None:
     # corporate_author is editable and rendered when no personal authors exist
     assert 'name="corporate_author"' in html
     assert "Organization" in html
-    assert "for documents with no personal authors" in html
+    assert 'placeholder="Acme Institute"' in html
     assert "meta.corporate_author" in html
     assert "article.corporate_author" in html
     # journal input keeps its name but is labelled "Published in"
