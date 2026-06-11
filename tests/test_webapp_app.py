@@ -54,7 +54,7 @@ def test_article_meta_returns_provenance_and_editability(tmp_path) -> None:
     assert meta["editable"] is False
 
 
-def test_article_meta_marks_filename_and_legacy_editable(tmp_path) -> None:
+def test_article_meta_marks_filename_editable_and_ignores_legacy_keys(tmp_path) -> None:
     cfg = _project_cfg(tmp_path)
     _write_manifest(
         cfg, "f", {"id": "f", "source_metadata": {"title": "T", "metadata_source": "filename"}}
@@ -62,9 +62,9 @@ def test_article_meta_marks_filename_and_legacy_editable(tmp_path) -> None:
     _write_manifest(cfg, "l", {"id": "l", "title": "Old", "year": 2019})
 
     assert webapp._article_meta(cfg, "f")["editable"] is True
-    legacy = webapp._article_meta(cfg, "l")
-    assert legacy["metadata_source"] == "legacy"
-    assert legacy["editable"] is True
+    # Legacy top-level bib keys are dead: the manifest reads as an empty
+    # editable record, same as any article with no source metadata yet.
+    assert webapp._article_meta(cfg, "l") == {"metadata_source": "filename", "editable": True}
 
 
 def test_article_meta_identity_only_manifest_is_editable_empty(tmp_path) -> None:

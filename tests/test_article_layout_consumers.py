@@ -125,13 +125,10 @@ def test_webapp_reads_bibliography_and_pdf_filename_from_article_metadata(
             }
         )
     )
+    # Legacy top-level bib keys are ignored (no back-compat): the article
+    # reads as an empty editable record until source_metadata is written.
     assert webapp._article_meta(cfg, "smith-2024") == {
-        "title": "Smith example",
-        "year": 2024,
-        "journal": "Example Journal",
-        "doi": "10.1234/example",
-        "publisher": "Example Publisher",
-        "metadata_source": "legacy",
+        "metadata_source": "filename",
         "editable": True,
     }
     assert webapp._article_pdf_filename(cfg, "smith-2024") == "smith.pdf"
