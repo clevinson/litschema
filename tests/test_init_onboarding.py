@@ -10,7 +10,7 @@ def test_init_scaffolds_standalone_project(tmp_path) -> None:
 
     project = tmp_path / "my-review"
 
-    result = CliRunner().invoke(cli.app, ["init", str(project)])
+    result = CliRunner().invoke(cli.app, ["init", str(project), "--profile", "generic"])
 
     assert result.exit_code == 0, result.output
     assert (project / "litschema.yaml").is_file()
@@ -40,9 +40,9 @@ def test_init_scaffolds_standalone_project(tmp_path) -> None:
     assert "reasoning:" not in schema
     assert "Next steps" in result.output
     assert f"cd {project}" in result.output
-    assert "litschema skills install --local" in result.output
-    assert "/litschema-assemble" in result.output
-    assert "/extract-article <article-id>" in result.output
+    assert "/litschema-onboard" in result.output
+    assert "litschema skills install --local" not in result.output
+    assert "/litschema-assemble" not in result.output
     assert "litschema convert" not in result.output
     assert "/litschema-builder" not in result.output
     assert "papers-inbox/" in result.output
@@ -55,7 +55,7 @@ def test_init_refuses_to_overwrite_existing_project_without_force(tmp_path) -> N
     project.mkdir()
     project.joinpath("keep.txt").write_text("important\n")
 
-    result = CliRunner().invoke(cli.app, ["init", str(project)])
+    result = CliRunner().invoke(cli.app, ["init", str(project), "--profile", "generic"])
 
     assert result.exit_code == 2
     assert project.joinpath("keep.txt").read_text() == "important\n"
@@ -75,7 +75,7 @@ def test_init_force_preserves_existing_project_files(tmp_path) -> None:
     )
     project.joinpath(".gitignore").write_text("custom-ignore\n")
 
-    result = CliRunner().invoke(cli.app, ["init", str(project), "--force"])
+    result = CliRunner().invoke(cli.app, ["init", str(project), "--profile", "generic", "--force"])
 
     assert result.exit_code == 0, result.output
     assert project.joinpath("litschema.yaml").read_text() == "project_root: existing\n"
@@ -99,3 +99,39 @@ def test_init_no_longer_accepts_source_modes(tmp_path) -> None:
 
     assert result.exit_code == 2
     assert not project.exists()
+
+
+def test_init_profile_flag_writes_document_profile(tmp_path) -> None:
+    from litschema import cli
+
+    runner = CliRunner()
+    project = tmp_path / "myreview"
+
+    result = runner.invoke(cli.app, ["init", str(project), "--profile", "journal_article"])
+
+    assert result.exit_code == 0
+    config = (project / "litschema.yaml").read_text()
+    assert 'document_profile: "journal_article"' in config
+    assert "litschema harvest" in result.output  # journal next-steps mention harvest
+
+
+def test_init_prompts_for_profile_when_flag_absent(tmp_path) -> None:
+    from litschema import cli
+
+    runner = CliRunner()
+    project = tmp_path / "myreview"
+
+    result = runner.invoke(cli.app, ["init", str(project)], input="2\n")
+
+    assert result.exit_code == 0
+    assert "What kind of documents" in result.output
+    assert 'document_profile: "generic"' in (project / "litschema.yaml").read_text()
+    assert "litschema harvest" not in result.output  # generic next-steps don't
+
+
+def test_init_rejects_unknown_profile(tmp_path) -> None:
+    from litschema import cli
+
+    runner = CliRunner()
+    result = runner.invoke(cli.app, ["init", str(tmp_path / "x"), "--profile", "scrolls"])
+    assert result.exit_code != 0

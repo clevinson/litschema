@@ -26,7 +26,7 @@ from .articles import (
     iter_review_paths,
     record_extraction_provenance,
 )
-from .config import ConfigNotFoundError, LitSchemaConfig
+from .config import DOCUMENT_PROFILES, ConfigNotFoundError, LitSchemaConfig
 from .ingest import article_assembly, validate_extraction
 from .project import Project
 from .schema_resolution import extraction_schema_path
@@ -704,8 +704,29 @@ def _ensure_gitignore_entries(project: Path) -> None:
 @app.command(help="Scaffold a new litschema project.")
 def init(
     domain: Path = typer.Argument(..., help="Project directory to create"),
+    profile: str | None = typer.Option(
+        None,
+        "--profile",
+        help="Document profile: journal_article or generic (prompted if omitted)",
+    ),
+    no_skills: bool = typer.Option(
+        False, "--no-skills", help="Skip installing agent skills into the project"
+    ),
     force: bool = typer.Option(False, "--force", help="Allow initializing an existing directory"),
 ):
+    if profile is None:
+        typer.echo("What kind of documents is this project about?")
+        typer.echo("  [1] Journal articles with DOIs   (bibliographic metadata auto-fetched)")
+        typer.echo("  [2] Other documents              (reports, theses, policy PDFs, ...)")
+        choice = typer.prompt("Choose 1 or 2", default="2").strip()
+        profile = {"1": "journal_article", "2": "generic"}.get(choice, choice)
+    if profile not in DOCUMENT_PROFILES:
+        typer.secho(
+            f"{CROSS} unknown profile {profile!r}; expected journal_article or generic",
+            fg=typer.colors.RED,
+        )
+        raise typer.Exit(code=2)
+
     project = domain.expanduser().resolve()
     if project.exists() and not project.is_dir():
         typer.secho(f"{CROSS} {project} exists and is not a directory", fg=typer.colors.RED)
@@ -729,6 +750,7 @@ def init(
             'data_dir: "data"\n'
             'article_store_dir: "data/papers"\n'
             'paper_inbox_dir: "papers-inbox"\n'
+            f'document_profile: "{profile}"\n'
         )
     _write_draft_schema(project)
     _ensure_gitignore_entries(project)
@@ -737,9 +759,13 @@ def init(
     typer.echo("\nNext steps:")
     typer.echo(f"  1. cd {project}")
     typer.echo("  2. Drop PDFs into papers-inbox/")
-    typer.echo("  3. Run `litschema skills install --local` for project-local skills")
-    typer.echo("  4. Open this project in your agent harness and run /litschema-assemble")
-    typer.echo("  5. Run `/extract-article <article-id>` to prepare text and extract data")
+    if profile == "journal_article":
+        typer.echo(
+            "     (after extraction, `litschema harvest` fills bibliographic metadata by DOI)"
+        )
+    typer.echo("  3. Open this project in your agent (e.g. `claude`) and run /litschema-onboard")
+    typer.echo("     — it drafts your schema with you, runs intake, and extracts your papers")
+    typer.echo("  4. `litschema verify` any time to review what's been extracted")
 
 
 if __name__ == "__main__":
