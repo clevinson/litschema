@@ -485,13 +485,17 @@ async def put_annotation(article_id: str, request: Request, cfg: CfgDep):
 
 
 @app.delete("/api/annotations/{article_id}/{field_path:path}")
-async def delete_annotation(article_id: str, field_path: str, cfg: CfgDep):
-    """Remove every author's annotation for a specific field.
+async def delete_annotation(
+    article_id: str, field_path: str, cfg: CfgDep, reviewer: str | None = None
+):
+    """Remove annotations for a specific field.
 
-    Drops the field's entries from review.json rather than recording a
-    'cleared' marker — clearing is not an attributable action.
+    Without the ``reviewer`` query param, drops every author's entries (the
+    historical wipe-all behavior); with it, removes only that author's entry.
+    Drops entries from review.json rather than recording a 'cleared' marker —
+    clearing is not an attributable action.
     """
-    delete_reviews_at(article_files(cfg, article_id), field_path)
+    delete_reviews_at(article_files(cfg, article_id), field_path, author=reviewer)
     return {"deleted": field_path}
 
 

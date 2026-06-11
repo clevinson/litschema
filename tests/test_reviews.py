@@ -82,6 +82,31 @@ def test_delete_reviews_at_removes_path_and_empty_file(tmp_path: Path) -> None:
     assert not (files.article_dir / "review.json").exists()  # no 0-entry litter
 
 
+def test_delete_reviews_at_author_scoped_leaves_other_authors(tmp_path: Path) -> None:
+    files = article_files(_cfg(tmp_path), "a")
+    reviews.upsert_review(files, "title", {"author": "A", "signal": "verified", "timestamp": "t1"})
+    reviews.upsert_review(files, "title", {"author": "B", "signal": "flagged", "timestamp": "t2"})
+
+    reviews.delete_reviews_at(files, "title", author="A")
+
+    entries = reviews.read_reviews(files)["title"]
+    assert [e["author"] for e in entries] == ["B"]
+
+    reviews.delete_reviews_at(files, "title")           # no author: wipe-all
+    assert reviews.read_reviews(files) == {}
+
+
+def test_delete_reviews_at_empty_author_matches_anonymous_entry(tmp_path: Path) -> None:
+    files = article_files(_cfg(tmp_path), "a")
+    reviews.upsert_review(files, "title", {"author": "", "signal": "verified", "timestamp": "t1"})
+    reviews.upsert_review(files, "title", {"author": "B", "signal": "flagged", "timestamp": "t2"})
+
+    reviews.delete_reviews_at(files, "title", author="")
+
+    entries = reviews.read_reviews(files)["title"]
+    assert [e["author"] for e in entries] == ["B"]
+
+
 # ── legacy reviews.jsonl set-aside ───────────────────────────────────────────
 
 

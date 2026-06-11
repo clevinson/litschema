@@ -282,6 +282,23 @@ def test_delete_annotation_clears_review_json(tmp_path) -> None:
     assert not (cfg.article_store_dir / "a" / "review.json").exists()
 
 
+def test_delete_annotation_with_reviewer_param_clears_only_that_author(tmp_path) -> None:
+    cfg = _project_cfg(tmp_path)
+    _write_extraction(cfg, "a", {"article_id": "a", "title": "T"})
+    client = _client(cfg)
+    client.put("/api/annotations/a", json={"path": "title", "status": "flagged", "reviewer": "A"})
+    client.put("/api/annotations/a", json={"path": "title", "status": "flagged", "reviewer": "B"})
+
+    assert client.delete("/api/annotations/a/title", params={"reviewer": "A"}).status_code == 200
+
+    anns = client.get("/api/annotations/a").json()["annotations"]
+    assert [a["reviewer"] for a in anns] == ["B"]
+
+    # without the param: wipe-all behavior is unchanged
+    assert client.delete("/api/annotations/a/title").status_code == 200
+    assert client.get("/api/annotations/a").json()["annotations"] == []
+
+
 def test_get_annotations_sets_aside_legacy_jsonl(tmp_path) -> None:
     cfg = _project_cfg(tmp_path)
     _write_extraction(cfg, "a", {"article_id": "a", "title": "T"})

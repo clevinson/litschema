@@ -81,10 +81,19 @@ def upsert_review(files: ArticleFiles, path: str, entry: dict) -> dict:
     return entry
 
 
-def delete_reviews_at(files: ArticleFiles, path: str) -> None:
-    """Remove every author's review at ``path`` (clearing is not attributable)."""
+def delete_reviews_at(files: ArticleFiles, path: str, author: str | None = None) -> None:
+    """Remove reviews at ``path``.
+
+    With ``author=None``, removes every author's entry (the historical
+    wipe-all behavior). With an author given — including ``""``, which
+    matches anonymous entries — removes only that author's entry.
+    """
+    key = canonical_review_path(path)
     fields = read_reviews(files)
-    fields.pop(canonical_review_path(path), None)
+    if author is None:
+        fields.pop(key, None)
+    else:
+        fields[key] = [e for e in fields.get(key, []) if e.get("author") != author]
     write_reviews(files, fields)
 
 

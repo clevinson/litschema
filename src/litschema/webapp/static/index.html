@@ -5571,7 +5571,10 @@ async function clearAnnotation(path, options = {}) {
   setSaveStatus("Clearing...", "saving");
 
   try {
-    const response = await fetch(`/api/annotations/${state.currentId}/${path}`, { method: "DELETE" });
+    const response = await fetch(
+      `/api/annotations/${state.currentId}/${path}?reviewer=${encodeURIComponent($("#reviewer-id").value.trim())}`,
+      { method: "DELETE" },
+    );
     if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
     delete state.annotations[path];
     state.suppressClearHoverPaths.delete(path);
