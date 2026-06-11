@@ -26,7 +26,13 @@ from ..articles import (
     read_article_metadata,
 )
 from ..config import LitSchemaConfig
-from ..reviews import canonical_review_path, delete_reviews_at, read_reviews, upsert_review
+from ..reviews import (
+    base_extraction_stale,
+    canonical_review_path,
+    delete_reviews_at,
+    read_reviews,
+    upsert_review,
+)
 from ..schema_resolution import resolve_extraction_schema
 from ..source_metadata import (
     EDITABLE_SOURCES,
@@ -444,10 +450,15 @@ async def get_reasoning(article_id: str, cfg: CfgDep):
 
 @app.get("/api/annotations/{article_id}")
 async def get_annotations(article_id: str, cfg: CfgDep):
-    """Return annotations for an article: one per reviewed field path."""
+    """Return annotations for an article: one per reviewed field path.
+
+    ``base_stale`` is true when the stored reviews were written against a
+    different agent-extraction.json than the current one (kata 3698).
+    """
     return {
         "article_id": article_id,
         "annotations": _current_annotations(cfg, article_id),
+        "base_stale": base_extraction_stale(article_files(cfg, article_id)),
     }
 
 

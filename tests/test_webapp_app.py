@@ -301,6 +301,31 @@ def test_put_annotation_replaces_across_reviewers(tmp_path) -> None:
     assert client.get("/api/annotations/a").json()["annotations"] == []
 
 
+def test_get_annotations_base_stale_false_on_fresh_write(tmp_path) -> None:
+    cfg = _project_cfg(tmp_path)
+    _write_extraction(cfg, "a", {"article_id": "a", "title": "T"})
+    client = _client(cfg)
+
+    # no reviews yet -> no stamp -> not stale
+    assert client.get("/api/annotations/a").json()["base_stale"] is False
+
+    client.put("/api/annotations/a", json={"path": "title", "status": "verified", "reviewer": ""})
+    assert client.get("/api/annotations/a").json()["base_stale"] is False
+
+
+def test_get_annotations_base_stale_true_after_extraction_changes(tmp_path) -> None:
+    cfg = _project_cfg(tmp_path)
+    _write_extraction(cfg, "a", {"article_id": "a", "title": "T"})
+    client = _client(cfg)
+    client.put("/api/annotations/a", json={"path": "title", "status": "verified", "reviewer": ""})
+
+    _write_extraction(cfg, "a", {"article_id": "a", "title": "T (re-extracted)"})
+
+    body = client.get("/api/annotations/a").json()
+    assert body["base_stale"] is True
+    assert body["annotations"]  # annotations still served alongside the warning
+
+
 def test_get_annotations_sets_aside_legacy_jsonl(tmp_path) -> None:
     cfg = _project_cfg(tmp_path)
     _write_extraction(cfg, "a", {"article_id": "a", "title": "T"})

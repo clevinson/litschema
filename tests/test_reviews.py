@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 
@@ -97,6 +98,34 @@ def test_read_reviews_ignores_non_dict_entry_values(tmp_path: Path) -> None:
     assert reviews.read_reviews(files) == {
         "year": {"author": "B", "signal": "verified", "timestamp": "t"}
     }
+
+
+# ── base-extraction staleness stamp ──────────────────────────────────────────
+
+
+def test_write_reviews_stamps_base_extraction_hash(tmp_path: Path) -> None:
+    files = article_files(_cfg(tmp_path), "a")
+    files.article_dir.mkdir(parents=True, exist_ok=True)
+    files.extraction.write_text(json.dumps({"article_id": "a", "title": "T"}))
+
+    reviews.upsert_review(files, "title", {"author": "A", "signal": "verified", "timestamp": "t"})
+
+    on_disk = json.loads(files.reviews.read_text())
+    assert on_disk["version"] == 1
+    assert on_disk["fields"]["title"]["signal"] == "verified"
+    assert on_disk["base_extraction_sha256"] == hashlib.sha256(
+        files.extraction.read_bytes()
+    ).hexdigest()
+
+
+def test_write_reviews_omits_stamp_without_extraction_file(tmp_path: Path) -> None:
+    files = article_files(_cfg(tmp_path), "a")
+
+    reviews.upsert_review(files, "title", {"author": "A", "signal": "verified", "timestamp": "t"})
+
+    on_disk = json.loads(files.reviews.read_text())
+    assert "base_extraction_sha256" not in on_disk
+    assert on_disk["fields"]["title"]["author"] == "A"
 
 
 # ── legacy reviews.jsonl set-aside ───────────────────────────────────────────

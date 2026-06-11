@@ -18,6 +18,7 @@ without converting it (pre-review.json logs are throwaway test data).
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import json
 import logging
 import re
@@ -43,6 +44,36 @@ def canonical_review_path(path: str) -> str:
     return re.sub(r"\.(\d+)(?=\.|\[|$)", r"[\1]", path)
 
 
+def base_extraction_sha256(files: ArticleFiles) -> str | None:
+    """SHA-256 of the article's agent-extraction.json bytes, or None if absent."""
+    path = files.extraction
+    if not path.exists():
+        return None
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def base_extraction_stale(files: ArticleFiles) -> bool:
+    """True when review.json carries a base-extraction stamp that no longer matches.
+
+    Staleness guard (kata 3698): reviews are written against a specific
+    agent-extraction.json; if that base has changed since, field paths may
+    silently misattach. No stamp, no review file, or no extraction file all
+    mean "not stale" — there is nothing to misattach against.
+    """
+    path = files.reviews
+    if not path.exists():
+        return False
+    try:
+        data = json.loads(path.read_text())
+    except json.JSONDecodeError:
+        return False
+    stamp = data.get("base_extraction_sha256") if isinstance(data, dict) else None
+    if not stamp:
+        return False
+    current = base_extraction_sha256(files)
+    return current is not None and current != stamp
+
+
 def read_reviews(files: ArticleFiles) -> dict[str, dict]:
     """Return the ``fields`` map (path -> entry). Runs the lazy legacy migration first.
 
@@ -65,7 +96,12 @@ def read_reviews(files: ArticleFiles) -> dict[str, dict]:
 
 
 def write_reviews(files: ArticleFiles, fields: dict[str, dict]) -> None:
-    """Atomically replace review.json; remove it entirely when empty."""
+    """Atomically replace review.json; remove it entirely when empty.
+
+    Non-empty writes are stamped with ``base_extraction_sha256`` — the hash of
+    the agent-extraction.json the reviews were written against — so readers can
+    detect a re-extracted base (kata 3698). Omitted when no extraction exists.
+    """
     path = files.reviews
     fields = {p: entry for p, entry in fields.items() if entry}
     if not fields:
@@ -73,7 +109,11 @@ def write_reviews(files: ArticleFiles, fields: dict[str, dict]) -> None:
             path.unlink()
         return
     path.parent.mkdir(parents=True, exist_ok=True)
-    payload = {"version": REVIEW_VERSION, "fields": {p: fields[p] for p in sorted(fields)}}
+    payload: dict = {"version": REVIEW_VERSION}
+    digest = base_extraction_sha256(files)
+    if digest is not None:
+        payload["base_extraction_sha256"] = digest
+    payload["fields"] = {p: fields[p] for p in sorted(fields)}
     tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n")
     tmp.replace(path)
