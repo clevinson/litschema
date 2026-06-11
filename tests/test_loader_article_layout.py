@@ -9,7 +9,7 @@ from litschema.config import load_config
 from litschema.explore.loader import build_store
 
 
-def test_loader_reads_per_article_folder_and_reviews_jsonl(
+def test_loader_reads_per_article_folder_and_review_json(
     tmp_path: Path,
 ) -> None:
     project = tmp_path / "project"
@@ -37,14 +37,20 @@ def test_loader_reads_per_article_folder_and_reviews_jsonl(
             }
         )
     )
-    (paper_dir / "reviews.jsonl").write_text(
+    (paper_dir / "review.json").write_text(
         json.dumps(
             {
-                "article_id": "smith-2024",
-                "path": ".sample_size",
-                "status": "flagged",
-                "timestamp": "2026-05-05T00:00:00+00:00",
-                "correct_value": 18,
+                "version": 1,
+                "fields": {
+                    "sample_size": [
+                        {
+                            "author": "0000-0002-1825-0097",
+                            "signal": "flagged",
+                            "timestamp": "2026-05-05T00:00:00+00:00",
+                            "override_value": 18,
+                        }
+                    ]
+                },
             }
         )
         + "\n"

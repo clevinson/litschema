@@ -6,7 +6,6 @@ Usage:
 
 from __future__ import annotations
 
-import contextlib
 import json
 import re
 import urllib.error
@@ -25,9 +24,9 @@ from ..articles import (
     article_files,
     iter_article_ids_with_extractions,
     read_article_metadata,
-    read_review_events,
 )
 from ..config import LitSchemaConfig
+from ..reviews import canonical_review_path, delete_reviews_at, read_reviews, upsert_review
 from ..schema_resolution import resolve_extraction_schema
 from ..source_metadata import (
     EDITABLE_SOURCES,
@@ -108,46 +107,30 @@ def _article_pdf_path(cfg: LitSchemaConfig, article_id: str) -> Path | None:
     return article_pdf
 
 
-def _collapse_review_events(events: list[dict]) -> list[dict]:
-    """Collapse an event stream to at most one entry per path.
-
-    Legacy 'cleared' events drop their path; everything else is last-write-wins.
-    Writes use this as the read-modify-write base so a file's persisted state
-    is always already collapsed (one row per path, no clear markers).
-    """
-    current: dict[str, dict] = {}
-    for event in events:
-        path = event.get("path")
-        if not path:
-            continue
-        if event.get("status") == "cleared":
-            current.pop(path, None)
-        else:
-            current[path] = event
-    return list(current.values())
+def _annotation_from_entry(path: str, entry: dict) -> dict:
+    """Map a review.json entry to the webapp's historical annotation shape."""
+    ann = {
+        "path": path,
+        "status": entry.get("signal"),
+        "reviewer": entry.get("author", ""),
+        "timestamp": entry.get("timestamp"),
+    }
+    if entry.get("override_value") is not None:
+        ann["correct_value"] = entry["override_value"]
+    for key in ("note", "source", "batch_id"):
+        if entry.get(key) is not None:
+            ann[key] = entry[key]
+    return ann
 
 
 def _current_annotations(cfg: LitSchemaConfig, article_id: str) -> list[dict]:
-    """Return latest annotation state per path."""
-    return _collapse_review_events(read_review_events(article_files(cfg, article_id)))
-
-
-def _write_reviews_jsonl(path: Path, entries: list[dict]) -> None:
-    """Atomically replace reviews.jsonl with ``entries``.
-
-    Removes the file entirely when ``entries`` is empty so paper folders
-    don't accumulate 0-byte review files.
-    """
-    if not entries:
-        with contextlib.suppress(FileNotFoundError):
-            path.unlink()
-        return
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    with tmp.open("w") as fh:
-        for e in entries:
-            fh.write(json.dumps(e) + "\n")
-    tmp.replace(path)
+    """Return the current annotation state per (path, author)."""
+    files = article_files(cfg, article_id)
+    return [
+        _annotation_from_entry(path, entry)
+        for path, entries in read_reviews(files).items()
+        for entry in entries
+    ]
 
 
 def _leaf_paths(obj, base_path: str = "") -> list[str]:
@@ -465,51 +448,32 @@ async def put_annotation(article_id: str, request: Request, cfg: CfgDep):
         raise HTTPException(400, "reviewer ORCID is required for flags")
 
     entry = {
-        "article_id": article_id,
-        "path": field_path,
-        "status": status,
-        "reviewer": reviewer,
+        "author": reviewer,
+        "signal": status,
         "timestamp": datetime.now(UTC).isoformat(),
     }
     if note:
         entry["note"] = note
     if correct_value is not None:
-        entry["correct_value"] = correct_value
+        entry["override_value"] = correct_value
     if source:
         entry["source"] = source
     if batch_id:
         entry["batch_id"] = batch_id
 
     files = article_files(cfg, article_id)
-    ann_path = files.reviews
-    # Upsert: keep at most one entry per path. The existing log is collapsed
-    # first so legacy duplicates and 'cleared' markers get cleaned up by the
-    # same write that records this annotation.
-    entries = [
-        e for e in _collapse_review_events(read_review_events(files))
-        if e.get("path") != entry["path"]
-    ]
-    entries.append(entry)
-    _write_reviews_jsonl(ann_path, entries)
-    return entry
+    upsert_review(files, field_path, entry)
+    return _annotation_from_entry(canonical_review_path(field_path), entry)
 
 
 @app.delete("/api/annotations/{article_id}/{field_path:path}")
 async def delete_annotation(article_id: str, field_path: str, cfg: CfgDep):
-    """Remove an annotation for a specific field.
+    """Remove every author's annotation for a specific field.
 
-    Drops the matching line from reviews.jsonl rather than appending a
-    'cleared' marker — clearing is not an attributable action and the
-    file is meant to hold at most one entry per path.
+    Drops the field's entries from review.json rather than recording a
+    'cleared' marker — clearing is not an attributable action.
     """
-    files = article_files(cfg, article_id)
-    ann_path = files.reviews
-    target_path = f".{field_path}"
-    entries = [
-        e for e in _collapse_review_events(read_review_events(files))
-        if e.get("path") != target_path
-    ]
-    _write_reviews_jsonl(ann_path, entries)
+    delete_reviews_at(article_files(cfg, article_id), field_path)
     return {"deleted": field_path}
 
 

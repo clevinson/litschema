@@ -4,7 +4,7 @@
   data/papers/<id>/article.md
   data/papers/<id>/agent-extraction.json
   data/papers/<id>/agent-reasoning.json
-  data/papers/<id>/reviews.jsonl
+  data/papers/<id>/review.json
 """
 
 from __future__ import annotations
@@ -48,6 +48,10 @@ class ArticleFiles:
 
     @property
     def reviews(self) -> Path:
+        return self.article_dir / "review.json"
+
+    @property
+    def reviews_legacy(self) -> Path:
         return self.article_dir / "reviews.jsonl"
 
     def read_metadata(self) -> dict:
@@ -80,7 +84,7 @@ def iter_reasoning_paths(cfg: LitSchemaConfig) -> Iterator[Path]:
 
 
 def iter_review_paths(cfg: LitSchemaConfig) -> Iterator[Path]:
-    yield from _iter_article_artifact_paths(cfg, "reviews.jsonl")
+    yield from _iter_article_artifact_paths(cfg, "review.json")
 
 
 def iter_metadata_paths(cfg: LitSchemaConfig) -> Iterator[Path]:
@@ -141,16 +145,3 @@ def record_extraction_provenance(
     if schema_commit:
         provenance["schema_commit"] = schema_commit
     return write_article_metadata(files, {"extraction": provenance})
-
-
-def _read_jsonl(path: Path) -> list[dict]:
-    return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
-
-
-def read_review_events(files: ArticleFiles) -> list[dict]:
-    if not files.reviews.exists():
-        return []
-    events = _read_jsonl(files.reviews)
-    for event in events:
-        event.setdefault("article_id", files.article_id)
-    return events

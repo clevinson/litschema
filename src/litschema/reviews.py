@@ -18,14 +18,12 @@ import contextlib
 import json
 import logging
 import re
-from pathlib import Path
 
 from .articles import ArticleFiles
 
 logger = logging.getLogger(__name__)
 
 REVIEW_VERSION = 1
-_LEGACY_NAME = "reviews.jsonl"
 
 #: Optional entry keys carried verbatim from the API payload.
 OPTIONAL_ENTRY_KEYS = ("override_value", "note", "source", "batch_id")
@@ -42,14 +40,10 @@ def canonical_review_path(path: str) -> str:
     return re.sub(r"\.(\d+)(?=\.|\[|$)", r"[\1]", path)
 
 
-def _review_path(files: ArticleFiles) -> Path:
-    return files.article_dir / "review.json"
-
-
 def read_reviews(files: ArticleFiles) -> dict[str, list[dict]]:
     """Return the ``fields`` map. Runs the lazy legacy migration first."""
     migrate_legacy_reviews(files)
-    path = _review_path(files)
+    path = files.reviews
     if not path.exists():
         return {}
     try:
@@ -63,7 +57,7 @@ def read_reviews(files: ArticleFiles) -> dict[str, list[dict]]:
 
 def write_reviews(files: ArticleFiles, fields: dict[str, list[dict]]) -> None:
     """Atomically replace review.json; remove it entirely when empty."""
-    path = _review_path(files)
+    path = files.reviews
     fields = {p: entries for p, entries in fields.items() if entries}
     if not fields:
         with contextlib.suppress(FileNotFoundError):
@@ -101,8 +95,8 @@ def migrate_legacy_reviews(files: ArticleFiles) -> bool:
     ``reviews.jsonl.bak`` (not converted) so they can't be mistaken for
     live review state. Never runs once review.json exists.
     """
-    legacy = files.article_dir / _LEGACY_NAME
-    if _review_path(files).exists() or not legacy.exists():
+    legacy = files.reviews_legacy
+    if files.reviews.exists() or not legacy.exists():
         return False
     legacy.rename(legacy.with_suffix(".jsonl.bak"))
     logger.info("Set aside legacy review log for %s", files.article_id)

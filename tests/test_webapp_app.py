@@ -154,68 +154,25 @@ def test_main_honors_port_argument(monkeypatch, tmp_path) -> None:
     assert runs == [((webapp.app,), {"host": "127.0.0.1", "port": 8017})]
 
 
-def test_collapse_review_events_dedupes_by_path_last_write_wins() -> None:
-    events = [
-        {"path": ".a", "status": "verified", "timestamp": "t1"},
-        {"path": ".a", "status": "flagged", "timestamp": "t2"},
-        {"path": ".b", "status": "verified", "timestamp": "t3"},
-    ]
+def test_annotation_from_entry_maps_spec_names_to_api_names() -> None:
+    entry = {
+        "author": "0000-0002-1825-0097",
+        "signal": "flagged",
+        "timestamp": "t1",
+        "override_value": "6.5",
+        "note": "n",
+    }
 
-    by_path = {e["path"]: e for e in webapp._collapse_review_events(events)}
+    ann = webapp._annotation_from_entry("experiments[0].ph", entry)
 
-    assert set(by_path) == {".a", ".b"}
-    assert by_path[".a"]["status"] == "flagged"
-    assert by_path[".a"]["timestamp"] == "t2"
-
-
-def test_collapse_review_events_drops_path_after_cleared_event() -> None:
-    events = [
-        {"path": ".a", "status": "verified"},
-        {"path": ".a", "status": "cleared"},
-    ]
-
-    assert webapp._collapse_review_events(events) == []
-
-
-def test_collapse_review_events_drops_events_without_path() -> None:
-    events = [
-        {"status": "verified"},
-        {"path": ".a", "status": "verified"},
-        {"path": "", "status": "flagged"},
-    ]
-
-    out = webapp._collapse_review_events(events)
-    assert [e["path"] for e in out] == [".a"]
-
-
-def test_write_reviews_jsonl_writes_one_line_per_entry(tmp_path) -> None:
-    p = tmp_path / "reviews.jsonl"
-
-    webapp._write_reviews_jsonl(p, [
-        {"path": ".a", "status": "verified"},
-        {"path": ".b", "status": "flagged"},
-    ])
-
-    lines = p.read_text().splitlines()
-    assert len(lines) == 2
-    assert all(line.startswith("{") for line in lines)
-
-
-def test_write_reviews_jsonl_removes_file_when_empty(tmp_path) -> None:
-    p = tmp_path / "reviews.jsonl"
-    p.write_text('{"path": ".x", "status": "verified"}\n')
-
-    webapp._write_reviews_jsonl(p, [])
-
-    assert not p.exists()
-
-
-def test_write_reviews_jsonl_no_op_when_empty_and_missing(tmp_path) -> None:
-    p = tmp_path / "reviews.jsonl"
-
-    webapp._write_reviews_jsonl(p, [])
-
-    assert not p.exists()
+    assert ann == {
+        "path": "experiments[0].ph",
+        "status": "flagged",
+        "reviewer": "0000-0002-1825-0097",
+        "timestamp": "t1",
+        "correct_value": "6.5",
+        "note": "n",
+    }
 
 
 def _client(cfg: LitSchemaConfig) -> TestClient:
@@ -270,3 +227,65 @@ def test_put_bibliography_rejects_garbage(tmp_path) -> None:
     assert client.put("/api/bibliography/a", json={"hacker": 1}).status_code == 400
     assert client.put("/api/bibliography/a", json={"year": "not-a-year"}).status_code == 400
     assert client.put("/api/bibliography/ghost", json={"title": "T"}).status_code == 404
+
+
+def _write_extraction(cfg, article_id: str, extraction: dict) -> None:
+    article_dir = cfg.article_store_dir / article_id
+    article_dir.mkdir(parents=True, exist_ok=True)
+    (article_dir / "agent-extraction.json").write_text(_json.dumps(extraction))
+
+
+def test_put_annotation_round_trip_via_review_json(tmp_path) -> None:
+    cfg = _project_cfg(tmp_path)
+    _write_extraction(cfg, "a", {"article_id": "a", "title": "T"})
+    client = _client(cfg)
+
+    resp = client.put(
+        "/api/annotations/a",
+        json={"path": ".title", "status": "flagged",
+              "reviewer": "0000-0002-1825-0097", "correct_value": "Better"},
+    )
+    assert resp.status_code == 200
+
+    # storage uses the spec shape...
+    on_disk = _json.loads((cfg.article_store_dir / "a" / "review.json").read_text())
+    (entry,) = on_disk["fields"]["title"]
+    assert entry["signal"] == "flagged"
+    assert entry["author"] == "0000-0002-1825-0097"
+    assert entry["override_value"] == "Better"
+    assert "status" not in entry and "correct_value" not in entry
+
+    # ...while the API keeps its historical shape
+    anns = client.get("/api/annotations/a").json()["annotations"]
+    (ann,) = anns
+    assert ann["path"] == "title"
+    assert ann["status"] == "flagged"
+    assert ann["reviewer"] == "0000-0002-1825-0097"
+    assert ann["correct_value"] == "Better"
+
+
+def test_delete_annotation_clears_review_json(tmp_path) -> None:
+    cfg = _project_cfg(tmp_path)
+    _write_extraction(cfg, "a", {"article_id": "a", "title": "T"})
+    client = _client(cfg)
+    client.put("/api/annotations/a", json={"path": ".title", "status": "verified", "reviewer": ""})
+
+    assert client.delete("/api/annotations/a/title").status_code == 200
+    assert client.get("/api/annotations/a").json()["annotations"] == []
+    assert not (cfg.article_store_dir / "a" / "review.json").exists()
+
+
+def test_get_annotations_sets_aside_legacy_jsonl(tmp_path) -> None:
+    cfg = _project_cfg(tmp_path)
+    _write_extraction(cfg, "a", {"article_id": "a", "title": "T"})
+    article_dir = cfg.article_store_dir / "a"
+    (article_dir / "reviews.jsonl").write_text(
+        _json.dumps({"path": ".title", "status": "verified", "reviewer": "A", "timestamp": "t"}) + "\n"
+    )
+    client = _client(cfg)
+
+    anns = client.get("/api/annotations/a").json()["annotations"]
+
+    assert anns == []                                   # throwaway data, not converted
+    assert not (article_dir / "reviews.jsonl").exists()
+    assert (article_dir / "reviews.jsonl.bak").exists()

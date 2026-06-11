@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 from litschema.articles import (
@@ -9,7 +8,6 @@ from litschema.articles import (
     iter_markdown_paths,
     iter_reasoning_paths,
     iter_review_paths,
-    read_review_events,
 )
 from litschema.config import LitSchemaConfig
 
@@ -35,17 +33,14 @@ def test_article_files_prefers_per_article_paths_when_present(tmp_path: Path) ->
     paper_dir.mkdir(parents=True)
     (paper_dir / "agent-extraction.json").write_text('{"article_id": "smith-2024"}')
     (paper_dir / "agent-reasoning.json").write_text('{"fields": []}')
-    (paper_dir / "reviews.jsonl").write_text(
-        json.dumps({"article_id": "smith-2024", "path": ".study_type"}) + "\n"
-    )
 
     files = article_files(cfg, "smith-2024")
 
     assert files.extraction == paper_dir / "agent-extraction.json"
     assert files.reasoning == paper_dir / "agent-reasoning.json"
-    assert files.reviews == paper_dir / "reviews.jsonl"
+    assert files.reviews == paper_dir / "review.json"
+    assert files.reviews_legacy == paper_dir / "reviews.jsonl"
     assert files.pdf == paper_dir / "smith-2024.pdf"
-    assert read_review_events(files) == [{"article_id": "smith-2024", "path": ".study_type"}]
 
 
 def test_article_files_exposes_only_property_paths(tmp_path: Path) -> None:
@@ -75,8 +70,8 @@ def test_iter_artifact_paths_read_per_article_store(tmp_path: Path) -> None:
     paper_dir.mkdir(parents=True)
     (paper_dir / "article.md").write_text("new markdown")
     (paper_dir / "agent-reasoning.json").write_text("{}")
-    (paper_dir / "reviews.jsonl").write_text("{}\n")
+    (paper_dir / "review.json").write_text('{"version": 1, "fields": {}}\n')
 
     assert list(iter_markdown_paths(cfg)) == [paper_dir / "article.md"]
     assert list(iter_reasoning_paths(cfg)) == [paper_dir / "agent-reasoning.json"]
-    assert list(iter_review_paths(cfg)) == [paper_dir / "reviews.jsonl"]
+    assert list(iter_review_paths(cfg)) == [paper_dir / "review.json"]
