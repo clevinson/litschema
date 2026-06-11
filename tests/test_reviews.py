@@ -80,3 +80,35 @@ def test_delete_reviews_at_removes_path_and_empty_file(tmp_path: Path) -> None:
 
     assert reviews.read_reviews(files) == {}
     assert not (files.article_dir / "review.json").exists()  # no 0-entry litter
+
+
+# ── legacy reviews.jsonl set-aside ───────────────────────────────────────────
+
+
+def test_leftover_legacy_log_is_renamed_aside_on_first_read(tmp_path: Path) -> None:
+    files = article_files(_cfg(tmp_path), "a")
+    files.article_dir.mkdir(parents=True, exist_ok=True)
+    legacy = files.article_dir / "reviews.jsonl"
+    legacy.write_text('{"path": ".title", "status": "verified"}\n')
+
+    assert reviews.read_reviews(files) == {}        # NOT converted — throwaway data
+
+    assert not legacy.exists()
+    assert (files.article_dir / "reviews.jsonl.bak").exists()
+
+
+def test_legacy_log_left_alone_when_review_json_exists(tmp_path: Path) -> None:
+    files = article_files(_cfg(tmp_path), "a")
+    reviews.upsert_review(files, "title", {"author": "A", "signal": "verified", "timestamp": "t9"})
+    legacy = files.article_dir / "reviews.jsonl"
+    legacy.write_text('{"path": ".title", "status": "flagged"}\n')
+
+    fields = reviews.read_reviews(files)
+
+    assert fields["title"][0]["timestamp"] == "t9"
+    assert legacy.exists()                          # nothing touched
+
+
+def test_migration_noop_without_legacy_file(tmp_path: Path) -> None:
+    files = article_files(_cfg(tmp_path), "a")
+    assert reviews.migrate_legacy_reviews(files) is False

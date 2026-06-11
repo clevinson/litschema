@@ -7,8 +7,9 @@ timestamp}`` (+ optional ``note``/``source``/``batch_id``). The webapp API
 keeps its historical field names (status/reviewer/correct_value) and maps at
 the endpoint boundary — see ``webapp/app.py``.
 
-The append-only ``reviews.jsonl`` predecessor migrates lazily and one-time:
-first read collapses the event log and renames it to ``reviews.jsonl.bak``.
+The append-only ``reviews.jsonl`` predecessor is set aside lazily and
+one-time: first read renames the event log to ``reviews.jsonl.bak``
+without converting it (pre-review.json logs are throwaway test data).
 """
 
 from __future__ import annotations
@@ -94,5 +95,15 @@ def delete_reviews_at(files: ArticleFiles, path: str) -> None:
 
 
 def migrate_legacy_reviews(files: ArticleFiles) -> bool:
-    """One-time reviews.jsonl -> review.json migration. See Task 2."""
-    return False
+    """Set aside a leftover append-only ``reviews.jsonl``.
+
+    Pre-review.json logs are throwaway test data — they are renamed to
+    ``reviews.jsonl.bak`` (not converted) so they can't be mistaken for
+    live review state. Never runs once review.json exists.
+    """
+    legacy = files.article_dir / _LEGACY_NAME
+    if _review_path(files).exists() or not legacy.exists():
+        return False
+    legacy.rename(legacy.with_suffix(".jsonl.bak"))
+    logger.info("Set aside legacy review log for %s", files.article_id)
+    return True
