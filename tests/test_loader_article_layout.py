@@ -42,14 +42,12 @@ def test_loader_reads_per_article_folder_and_review_json(
             {
                 "version": 1,
                 "fields": {
-                    "sample_size": [
-                        {
-                            "author": "0000-0002-1825-0097",
-                            "signal": "flagged",
-                            "timestamp": "2026-05-05T00:00:00+00:00",
-                            "override_value": 18,
-                        }
-                    ]
+                    "sample_size": {
+                        "author": "0000-0002-1825-0097",
+                        "signal": "flagged",
+                        "timestamp": "2026-05-05T00:00:00+00:00",
+                        "override_value": 18,
+                    }
                 },
             }
         )

@@ -74,7 +74,7 @@ def build_server(
 
         The store is a DuckDB database containing tables built from
         schema-validated extractions of scientific literature, with
-        reviewer overrides applied (latest-wins per field). The
+        reviewer overrides applied (one review per field). The
         connection is opened in read-only mode, so any attempt to
         mutate (INSERT / UPDATE / DELETE / DROP / CREATE / etc.) is
         rejected by DuckDB itself with a clear error.

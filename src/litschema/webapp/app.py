@@ -123,34 +123,16 @@ def _annotation_from_entry(path: str, entry: dict) -> dict:
     return ann
 
 
-def _current_annotations(
-    cfg: LitSchemaConfig, article_id: str, reviewer: str | None = None
-) -> list[dict]:
-    """Return the current annotation state.
+def _current_annotations(cfg: LitSchemaConfig, article_id: str) -> list[dict]:
+    """Return the current annotation state: one annotation per field path.
 
-    With ``reviewer=None``, returns one annotation per (path, author) — the
-    historical API shape. With a reviewer given, collapses to one annotation
-    per path: that reviewer's entry when present, else the entry with the
-    newest timestamp. This is the single-active-reviewer model;
-    multi-reviewer collaboration happens via git merges of review.json
-    (alpha decision 2026-06-11).
+    review.json holds at most one entry per field; ``author`` on the entry is
+    git-diff attribution, and multi-reviewer coordination happens in PR diffs
+    of review.json (decision 2026-06-11).
     """
     files = article_files(cfg, article_id)
     fields = read_reviews(files)
-    if reviewer is None:
-        return [
-            _annotation_from_entry(path, entry)
-            for path, entries in fields.items()
-            for entry in entries
-        ]
-    annotations = []
-    for path, entries in fields.items():
-        if not entries:
-            continue
-        mine = [e for e in entries if e.get("author", "") == reviewer]
-        chosen = mine[0] if mine else max(entries, key=lambda e: e.get("timestamp") or "")
-        annotations.append(_annotation_from_entry(path, chosen))
-    return annotations
+    return [_annotation_from_entry(path, entry) for path, entry in fields.items()]
 
 
 def _leaf_paths(obj, base_path: str = "") -> list[str]:
@@ -461,16 +443,11 @@ async def get_reasoning(article_id: str, cfg: CfgDep):
 
 
 @app.get("/api/annotations/{article_id}")
-async def get_annotations(article_id: str, cfg: CfgDep, reviewer: str | None = None):
-    """Return annotations for an article.
-
-    Without the ``reviewer`` query param, returns every (path, author) entry
-    (API compat). With it, returns one annotation per path — see
-    ``_current_annotations`` for the collapse rule.
-    """
+async def get_annotations(article_id: str, cfg: CfgDep):
+    """Return annotations for an article: one per reviewed field path."""
     return {
         "article_id": article_id,
-        "annotations": _current_annotations(cfg, article_id, reviewer=reviewer),
+        "annotations": _current_annotations(cfg, article_id),
     }
 
 
@@ -513,17 +490,13 @@ async def put_annotation(article_id: str, request: Request, cfg: CfgDep):
 
 
 @app.delete("/api/annotations/{article_id}/{field_path:path}")
-async def delete_annotation(
-    article_id: str, field_path: str, cfg: CfgDep, reviewer: str | None = None
-):
-    """Remove annotations for a specific field.
+async def delete_annotation(article_id: str, field_path: str, cfg: CfgDep):
+    """Remove THE annotation for a specific field, whoever wrote it.
 
-    Without the ``reviewer`` query param, drops every author's entries (the
-    historical wipe-all behavior); with it, removes only that author's entry.
-    Drops entries from review.json rather than recording a 'cleared' marker —
-    clearing is not an attributable action.
+    Drops the entry from review.json rather than recording a 'cleared'
+    marker — clearing is not an attributable action.
     """
-    delete_reviews_at(article_files(cfg, article_id), field_path, author=reviewer)
+    delete_reviews_at(article_files(cfg, article_id), field_path)
     return {"deleted": field_path}
 
 

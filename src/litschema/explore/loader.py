@@ -41,7 +41,7 @@ class LoadSummary:
     db_path: Path
 
 
-# ── Review-override application (review.json, latest-wins per field) ──────
+# ── Review-override application (review.json, one entry per field) ────────
 
 
 _PATH_SEG = re.compile(r"(?:^|\.)([A-Za-z_][A-Za-z0-9_]*)|\[(\d+)\]")
@@ -85,8 +85,7 @@ def _build_override_map(cfg: LitSchemaConfig) -> dict[str, list[dict]]:
         fields = read_reviews(article_files(cfg, article_id))
         overrides = [
             {"path": path, "value": entry["override_value"], "timestamp": entry.get("timestamp")}
-            for path, entries in fields.items()
-            for entry in entries
+            for path, entry in fields.items()
             if "override_value" in entry
         ]
         if overrides:

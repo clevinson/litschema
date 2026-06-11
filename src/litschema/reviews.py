@@ -1,11 +1,14 @@
 """Per-article human-review storage: ``data/papers/<id>/review.json``.
 
 The current verification state IS the file (design doc §4, option B): a map of
-canonical field path -> review entries, at most one entry per field per
-author. Entries use ``{author, signal: verified|flagged, override_value?,
-timestamp}`` (+ optional ``note``/``source``/``batch_id``). The webapp API
-keeps its historical field names (status/reviewer/correct_value) and maps at
-the endpoint boundary — see ``webapp/app.py``.
+canonical field path -> a single review entry, at most ONE review per field.
+Any save replaces whatever entry is at the path, regardless of author; the
+``author`` key is recorded on the entry so git diffs show "A replacing B's
+review" — multi-reviewer coordination happens in PR diffs of review.json
+(decision 2026-06-11). Entries use ``{author, signal: verified|flagged,
+override_value?, timestamp}`` (+ optional ``note``/``source``/``batch_id``).
+The webapp API keeps its historical field names (status/reviewer/
+correct_value) and maps at the endpoint boundary — see ``webapp/app.py``.
 
 The append-only ``reviews.jsonl`` predecessor is set aside lazily and
 one-time: first read renames the event log to ``reviews.jsonl.bak``
@@ -40,8 +43,12 @@ def canonical_review_path(path: str) -> str:
     return re.sub(r"\.(\d+)(?=\.|\[|$)", r"[\1]", path)
 
 
-def read_reviews(files: ArticleFiles) -> dict[str, list[dict]]:
-    """Return the ``fields`` map. Runs the lazy legacy migration first."""
+def read_reviews(files: ArticleFiles) -> dict[str, dict]:
+    """Return the ``fields`` map (path -> entry). Runs the lazy legacy migration first.
+
+    Non-dict entry values (e.g. the pre-2026-06-11 list-of-entries shape) are
+    ignored — old-shape files are throwaway alpha data, not migrated.
+    """
     migrate_legacy_reviews(files)
     path = files.reviews
     if not path.exists():
@@ -52,13 +59,15 @@ def read_reviews(files: ArticleFiles) -> dict[str, list[dict]]:
         logger.warning("Unreadable review.json (leaving in place): %s", path)
         return {}
     fields = data.get("fields") if isinstance(data, dict) else None
-    return fields if isinstance(fields, dict) else {}
+    if not isinstance(fields, dict):
+        return {}
+    return {p: entry for p, entry in fields.items() if isinstance(entry, dict)}
 
 
-def write_reviews(files: ArticleFiles, fields: dict[str, list[dict]]) -> None:
+def write_reviews(files: ArticleFiles, fields: dict[str, dict]) -> None:
     """Atomically replace review.json; remove it entirely when empty."""
     path = files.reviews
-    fields = {p: entries for p, entries in fields.items() if entries}
+    fields = {p: entry for p, entry in fields.items() if entry}
     if not fields:
         with contextlib.suppress(FileNotFoundError):
             path.unlink()
@@ -71,29 +80,19 @@ def write_reviews(files: ArticleFiles, fields: dict[str, list[dict]]) -> None:
 
 
 def upsert_review(files: ArticleFiles, path: str, entry: dict) -> dict:
-    """Insert/replace the entry for ``(path, entry['author'])``."""
+    """Set THE entry at ``path``, replacing any existing one regardless of author."""
     key = canonical_review_path(path)
     fields = read_reviews(files)
-    entries = [e for e in fields.get(key, []) if e.get("author") != entry.get("author")]
-    entries.append(entry)
-    fields[key] = entries
+    fields[key] = entry
     write_reviews(files, fields)
     return entry
 
 
-def delete_reviews_at(files: ArticleFiles, path: str, author: str | None = None) -> None:
-    """Remove reviews at ``path``.
-
-    With ``author=None``, removes every author's entry (the historical
-    wipe-all behavior). With an author given — including ``""``, which
-    matches anonymous entries — removes only that author's entry.
-    """
+def delete_reviews_at(files: ArticleFiles, path: str) -> None:
+    """Remove THE review at ``path``, whoever wrote it."""
     key = canonical_review_path(path)
     fields = read_reviews(files)
-    if author is None:
-        fields.pop(key, None)
-    else:
-        fields[key] = [e for e in fields.get(key, []) if e.get("author") != author]
+    fields.pop(key, None)
     write_reviews(files, fields)
 
 

@@ -53,23 +53,20 @@ def test_upsert_review_writes_versioned_file(tmp_path: Path) -> None:
 
     on_disk = json.loads((files.article_dir / "review.json").read_text())
     assert on_disk["version"] == 1
-    assert on_disk["fields"]["experiments[0].ph"] == [entry]
+    assert on_disk["fields"]["experiments[0].ph"] == entry  # single entry object, not a list
 
 
-def test_upsert_review_replaces_same_author_keeps_others(tmp_path: Path) -> None:
+def test_upsert_review_replaces_regardless_of_author(tmp_path: Path) -> None:
     files = article_files(_cfg(tmp_path), "a")
     reviews.upsert_review(files, "title", {"author": "A", "signal": "verified", "timestamp": "t1"})
-    reviews.upsert_review(files, "title", {"author": "B", "signal": "flagged", "timestamp": "t2"})
     reviews.upsert_review(
-        files, "title", {"author": "A", "signal": "flagged", "timestamp": "t3", "override_value": "X"}
+        files, "title", {"author": "B", "signal": "flagged", "timestamp": "t2", "override_value": "X"}
     )
 
-    entries = reviews.read_reviews(files)["title"]
-    assert len(entries) == 2
-    by_author = {e["author"]: e for e in entries}
-    assert by_author["A"]["signal"] == "flagged"
-    assert by_author["A"]["override_value"] == "X"
-    assert by_author["B"]["timestamp"] == "t2"
+    entry = reviews.read_reviews(files)["title"]
+    assert entry["author"] == "B"                       # B's save replaced A's entirely
+    assert entry["signal"] == "flagged"
+    assert entry["override_value"] == "X"
 
 
 def test_delete_reviews_at_removes_path_and_empty_file(tmp_path: Path) -> None:
@@ -82,29 +79,24 @@ def test_delete_reviews_at_removes_path_and_empty_file(tmp_path: Path) -> None:
     assert not (files.article_dir / "review.json").exists()  # no 0-entry litter
 
 
-def test_delete_reviews_at_author_scoped_leaves_other_authors(tmp_path: Path) -> None:
+def test_read_reviews_ignores_non_dict_entry_values(tmp_path: Path) -> None:
     files = article_files(_cfg(tmp_path), "a")
-    reviews.upsert_review(files, "title", {"author": "A", "signal": "verified", "timestamp": "t1"})
-    reviews.upsert_review(files, "title", {"author": "B", "signal": "flagged", "timestamp": "t2"})
+    files.article_dir.mkdir(parents=True, exist_ok=True)
+    files.reviews.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "fields": {
+                    "title": [{"author": "A", "signal": "verified", "timestamp": "t"}],  # old list shape
+                    "year": {"author": "B", "signal": "verified", "timestamp": "t"},
+                },
+            }
+        )
+    )
 
-    reviews.delete_reviews_at(files, "title", author="A")
-
-    entries = reviews.read_reviews(files)["title"]
-    assert [e["author"] for e in entries] == ["B"]
-
-    reviews.delete_reviews_at(files, "title")           # no author: wipe-all
-    assert reviews.read_reviews(files) == {}
-
-
-def test_delete_reviews_at_empty_author_matches_anonymous_entry(tmp_path: Path) -> None:
-    files = article_files(_cfg(tmp_path), "a")
-    reviews.upsert_review(files, "title", {"author": "", "signal": "verified", "timestamp": "t1"})
-    reviews.upsert_review(files, "title", {"author": "B", "signal": "flagged", "timestamp": "t2"})
-
-    reviews.delete_reviews_at(files, "title", author="")
-
-    entries = reviews.read_reviews(files)["title"]
-    assert [e["author"] for e in entries] == ["B"]
+    assert reviews.read_reviews(files) == {
+        "year": {"author": "B", "signal": "verified", "timestamp": "t"}
+    }
 
 
 # ── legacy reviews.jsonl set-aside ───────────────────────────────────────────
@@ -130,7 +122,7 @@ def test_legacy_log_left_alone_when_review_json_exists(tmp_path: Path) -> None:
 
     fields = reviews.read_reviews(files)
 
-    assert fields["title"][0]["timestamp"] == "t9"
+    assert fields["title"]["timestamp"] == "t9"
     assert legacy.exists()                          # nothing touched
 
 

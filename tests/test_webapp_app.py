@@ -254,9 +254,10 @@ def test_put_annotation_round_trip_via_review_json(tmp_path) -> None:
     )
     assert resp.status_code == 200
 
-    # storage uses the spec shape...
+    # storage uses the spec shape: one entry object per field path...
     on_disk = _json.loads((cfg.article_store_dir / "a" / "review.json").read_text())
-    (entry,) = on_disk["fields"]["title"]
+    entry = on_disk["fields"]["title"]
+    assert isinstance(entry, dict)
     assert entry["signal"] == "flagged"
     assert entry["author"] == "0000-0002-1825-0097"
     assert entry["override_value"] == "Better"
@@ -282,42 +283,22 @@ def test_delete_annotation_clears_review_json(tmp_path) -> None:
     assert not (cfg.article_store_dir / "a" / "review.json").exists()
 
 
-def test_delete_annotation_with_reviewer_param_clears_only_that_author(tmp_path) -> None:
+def test_put_annotation_replaces_across_reviewers(tmp_path) -> None:
     cfg = _project_cfg(tmp_path)
     _write_extraction(cfg, "a", {"article_id": "a", "title": "T"})
     client = _client(cfg)
     client.put("/api/annotations/a", json={"path": "title", "status": "flagged", "reviewer": "A"})
-    client.put("/api/annotations/a", json={"path": "title", "status": "flagged", "reviewer": "B"})
+    client.put("/api/annotations/a", json={"path": "title", "status": "verified", "reviewer": "B"})
 
-    assert client.delete("/api/annotations/a/title", params={"reviewer": "A"}).status_code == 200
-
+    # one review per field: B's save replaced A's, author records the attribution
     anns = client.get("/api/annotations/a").json()["annotations"]
-    assert [a["reviewer"] for a in anns] == ["B"]
+    (ann,) = anns
+    assert ann["reviewer"] == "B"
+    assert ann["status"] == "verified"
 
-    # without the param: wipe-all behavior is unchanged
+    # clearing removes THE entry, whoever wrote it
     assert client.delete("/api/annotations/a/title").status_code == 200
     assert client.get("/api/annotations/a").json()["annotations"] == []
-
-
-def test_get_annotations_with_reviewer_param_collapses_to_one_per_path(tmp_path) -> None:
-    cfg = _project_cfg(tmp_path)
-    _write_extraction(cfg, "a", {"article_id": "a", "title": "T", "year": 2024})
-    client = _client(cfg)
-    client.put("/api/annotations/a", json={"path": "title", "status": "flagged", "reviewer": "A"})
-    client.put("/api/annotations/a", json={"path": "title", "status": "verified", "reviewer": "B"})
-    client.put("/api/annotations/a", json={"path": "year", "status": "verified", "reviewer": "B"})
-
-    # without the param: API compat — every (path, author) entry is returned
-    assert len(client.get("/api/annotations/a").json()["annotations"]) == 3
-
-    # with the param: one annotation per path, the current reviewer's entry wins
-    anns = client.get("/api/annotations/a", params={"reviewer": "A"}).json()["annotations"]
-    by_path = {a["path"]: a for a in anns}
-    assert len(anns) == 2
-    assert by_path["title"]["reviewer"] == "A"
-    assert by_path["title"]["status"] == "flagged"
-    # paths where the reviewer has no entry fall back to the newest timestamp
-    assert by_path["year"]["reviewer"] == "B"
 
 
 def test_get_annotations_sets_aside_legacy_jsonl(tmp_path) -> None:
