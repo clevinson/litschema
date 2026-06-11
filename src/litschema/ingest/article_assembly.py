@@ -145,7 +145,7 @@ def _process_inbox_pdf(
     )
     if sidecar_fields:
         update_source_metadata(files, sidecar_fields, source="manual")
-        archive_sidecar(pdf_path, files)
+        archive_sidecar(pdf_path)
     else:
         update_source_metadata(
             files, {"title": title_from_filename(pdf_path.stem)}, source="filename"
