@@ -1397,7 +1397,7 @@
 
   .inline-edit-form {
     display: grid;
-    grid-template-columns: minmax(120px, 1fr) 22px 22px;
+    grid-template-columns: minmax(120px, 1fr) 22px 22px 22px;
     align-items: center;
     gap: 8px;
     width: 100%;
@@ -1432,7 +1432,8 @@
   }
 
   .inline-edit-save,
-  .inline-edit-cancel {
+  .inline-edit-cancel,
+  .inline-edit-remove {
     appearance: none;
     width: 22px;
     height: 22px;
@@ -1455,6 +1456,11 @@
   .inline-edit-cancel:hover,
   .inline-edit-cancel:focus-visible {
     color: var(--text);
+  }
+
+  .inline-edit-remove:hover,
+  .inline-edit-remove:focus-visible {
+    color: var(--red);
   }
 
   .table-ann-btn {
@@ -2481,6 +2487,8 @@ e.g. year >= 2024 && study_types.includes("review")'
 
 <script>
 const $ = (sel) => document.querySelector(sel);
+// Sentinel correct_value meaning "the extraction was wrong to include this field".
+const REMOVE_VALUE = "__remove__";
 const state = {
   articles: [],
   viewMode: "review",
@@ -3897,13 +3905,12 @@ function buildInlineEditForm(path, value = getValueAtPath(state.extraction, path
     ? ann.correct_value
     : value;
   const schemaField = schemaFieldForPath(path);
-  const controlHtml = schemaField
-    ? buildEnumEditSelect(path, current, schemaField)
-    : `<input class="inline-edit-input" data-path="${path}" value="${escapeHtml(displayFieldValue(current))}" aria-label="Edit value">`;
+  const controlHtml = buildTypedEditControl(path, current, schemaField);
   return `<span class="inline-edit-form" data-path="${path}">` +
     controlHtml +
     `<button type="button" class="inline-edit-save" data-path="${path}" aria-label="Save edit" title="Save edit">&#10003;</button>` +
     `<button type="button" class="inline-edit-cancel" data-path="${path}" aria-label="Cancel edit" title="Cancel edit">&#10005;</button>` +
+    `<button type="button" class="inline-edit-remove" data-path="${path}" aria-label="Remove field" title="Remove this field (extraction was wrong to include it)">&#9003;</button>` +
     `</span>`;
 }
 
@@ -3913,6 +3920,25 @@ function schemaPathPattern(path) {
 
 function schemaFieldForPath(path) {
   return state.schemaFields[schemaPathPattern(path)] || null;
+}
+
+function buildTypedEditControl(path, current, schemaField) {
+  if (schemaField && schemaField.permissible_values) {
+    return buildEnumEditSelect(path, current, schemaField);
+  }
+  const kind = schemaField ? schemaField.kind : "string";
+  if (kind === "integer" || kind === "float") {
+    const step = kind === "integer" ? "1" : "any";
+    return `<input type="number" step="${step}" class="inline-edit-input inline-edit-number" data-path="${path}" value="${escapeHtml(displayFieldValue(current))}" aria-label="Edit value">`;
+  }
+  if (kind === "boolean") {
+    const currentValue = displayFieldValue(current);
+    const opts = ["true", "false"].map(v =>
+      `<option value="${v}"${currentValue === v ? " selected" : ""}>${v}</option>`).join("");
+    return `<select class="inline-edit-select inline-edit-boolean" data-path="${path}" aria-label="Edit value">` +
+      `<option value="">Choose...</option>${opts}</select>`;
+  }
+  return `<input class="inline-edit-input" data-path="${path}" value="${escapeHtml(displayFieldValue(current))}" aria-label="Edit value">`;
 }
 
 function buildEnumEditSelect(path, current, schemaField) {
@@ -3932,6 +3958,9 @@ function buildEnumEditSelect(path, current, schemaField) {
 
 function displayFieldValueForPath(path, value = getValueAtPath(state.extraction, path)) {
   const ann = state.annotations[path];
+  if (ann && ann.status === "flagged" && ann.correct_value === REMOVE_VALUE) {
+    return { html: '<span style="color:var(--text-dim)">(removed)</span>', style: "" };
+  }
   if (ann && ann.status === "flagged" && ann.correct_value) {
     return { html: escapeHtml(ann.correct_value), style: "" };
   }
@@ -4207,9 +4236,9 @@ function effectiveExtraction() {
   if (!state.extraction) return null;
   const data = JSON.parse(JSON.stringify(state.extraction));
   for (const [path, ann] of Object.entries(state.annotations)) {
-    if (ann.status === "flagged" && ann.correct_value !== undefined) {
-      applyCorrectedValue(data, path, ann.correct_value);
-    }
+    if (ann.status !== "flagged" || ann.correct_value === undefined) continue;
+    if (ann.correct_value === REMOVE_VALUE) removeValueAtPath(data, path);
+    else applyCorrectedValue(data, path, ann.correct_value);
   }
   return data;
 }
@@ -4223,6 +4252,19 @@ function applyCorrectedValue(obj, path, value) {
     if (current === null || current === undefined) return;
   }
   current[parts[parts.length - 1]] = value;
+}
+
+function removeValueAtPath(obj, path) {
+  const parts = pathToParts(path);
+  if (parts.length === 0) return;
+  let current = obj;
+  for (let i = 0; i < parts.length - 1; i++) {
+    current = current?.[parts[i]];
+    if (current === null || current === undefined) return;
+  }
+  const last = parts[parts.length - 1];
+  if (Array.isArray(current)) current.splice(Number(last), 1);
+  else delete current[last];
 }
 
 function pathToParts(path) {
@@ -4487,10 +4529,26 @@ async function saveInlineEdit(path) {
   const reviewer = $("#reviewer-id").value.trim();
   if (!reviewer) { alert("Please connect ORCID before editing."); return; }
   const correctValue = control ? control.value.trim() : "";
+  if (correctValue === "" && control && control.classList.contains("inline-edit-number")) {
+    cancelInlineEdit();
+    return;
+  }
   state.editingPath = null;
   const ok = await saveAnnotation(path, "flagged", {
     correct_value: correctValue,
   });
+  if (!ok) {
+    state.editingPath = path;
+    renderExtractionPanel();
+  }
+}
+
+async function removeInlineEdit(path) {
+  if (!path) return;
+  const reviewer = $("#reviewer-id").value.trim();
+  if (!reviewer) { alert("Please connect ORCID before editing."); return; }
+  state.editingPath = null;
+  const ok = await saveAnnotation(path, "flagged", { correct_value: REMOVE_VALUE });
   if (!ok) {
     state.editingPath = path;
     renderExtractionPanel();
@@ -4642,6 +4700,13 @@ function wireTableEvents(panel) {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
       cancelInlineEdit();
+    });
+  });
+
+  panel.querySelectorAll(".inline-edit-remove[data-path]").forEach(btn => {
+    btn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      await removeInlineEdit(btn.dataset.path);
     });
   });
 

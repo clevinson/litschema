@@ -66,7 +66,8 @@ def test_verifier_overview_and_json_use_effective_post_edit_values() -> None:
 
     assert "effectiveExtraction" in html
     assert "applyCorrectedValue" in html
-    assert 'ann.status === "flagged" && ann.correct_value !== undefined' in html
+    assert 'ann.status !== "flagged" || ann.correct_value === undefined' in html
+    assert "removeValueAtPath" in html
     assert "renderOverviewView(effectiveExtraction())" in html
     assert "renderJsonView(effectiveExtraction())" in html
 
@@ -402,3 +403,16 @@ def test_verifier_moves_source_reasoning_to_left_overlay() -> None:
     assert 'id="selected-field-source"' not in html
     assert 'class="review-action-btn" id="btn-source-evidence-prev"' not in html
     assert 'class="review-action-btn" id="btn-source-evidence-next"' not in html
+
+
+def test_inline_edit_has_typed_inputs_and_remove_affordance() -> None:
+    html = STATIC_HTML.read_text()
+
+    assert "buildTypedEditControl" in html
+    assert "inline-edit-number" in html
+    assert "inline-edit-boolean" in html
+    assert "inline-edit-remove" in html
+    assert '"__remove__"' in html
+    assert "schemaField.kind" in html or "schemaField?.kind" in html
+    assert "(removed)" in html
+    assert "removeInlineEdit" in html
