@@ -19,10 +19,12 @@ def test_skills_install_uses_bundled_skills_without_project_config(tmp_path, mon
 
     assert result.exit_code == 0, result.output
     assert (tmp_path / ".claude" / "skills" / "extract-article" / "SKILL.md").is_file()
-    assert (tmp_path / ".claude" / "skills" / "litschema-assemble" / "SKILL.md").is_file()
+    assert (tmp_path / ".claude" / "skills" / "litschema-onboard" / "SKILL.md").is_file()
+    assert not (tmp_path / ".claude" / "skills" / "litschema-assemble" / "SKILL.md").exists()
     assert not (tmp_path / ".claude" / "skills" / "litschema-builder" / "SKILL.md").exists()
     assert "/extract-article" in result.output
-    assert "/litschema-assemble" in result.output
+    assert "/litschema-onboard" in result.output
+    assert "/litschema-assemble" not in result.output
     assert "/litschema-builder" not in result.output
     assert "/validate-articles" not in result.output
 
@@ -74,7 +76,8 @@ def test_skills_install_local_uses_project_claude_skills_dir(tmp_path, monkeypat
 
     assert result.exit_code == 0, result.output
     assert (project / ".claude" / "skills" / "extract-article" / "SKILL.md").is_file()
-    assert (project / ".claude" / "skills" / "litschema-assemble" / "SKILL.md").is_file()
+    assert (project / ".claude" / "skills" / "litschema-onboard" / "SKILL.md").is_file()
+    assert not (project / ".claude" / "skills" / "litschema-assemble" / "SKILL.md").exists()
     assert not (project / ".claude" / "skills" / "litschema-builder" / "SKILL.md").exists()
     assert not (tmp_path / "home" / ".claude" / "skills").exists()
     assert "/litschema-builder" not in result.output
@@ -121,14 +124,16 @@ def test_bundled_skills_are_included_in_wheel() -> None:
 
     bundled = cli._packaged_skills_dir()
     assert bundled.joinpath("extract-article", "SKILL.md").is_file()
-    assert bundled.joinpath("litschema-assemble", "SKILL.md").is_file()
+    assert bundled.joinpath("litschema-onboard", "SKILL.md").is_file()
+    assert not bundled.joinpath("litschema-assemble", "SKILL.md").exists()
 
 
-def test_assemble_and_extract_skills_delegate_deterministic_pipeline_steps() -> None:
-    assemble = (REPO_ROOT / "skills" / "litschema-assemble" / "SKILL.md").read_text()
+def test_onboard_and_extract_skills_delegate_deterministic_pipeline_steps() -> None:
+    onboard = (REPO_ROOT / "skills" / "litschema-onboard" / "SKILL.md").read_text()
     extract = (REPO_ROOT / "skills" / "extract-article" / "SKILL.md").read_text()
 
-    assert "LITSCHEMA assemble" in assemble
-    assert "LITSCHEMA convert" not in assemble
+    assert "$LITSCHEMA assemble" in onboard
+    assert "$LITSCHEMA convert" not in onboard
+    assert "extract-article" in onboard  # defers extraction mechanics to that skill
     assert "LITSCHEMA prepare-text {article_id}" in extract
     assert "agent record-extraction" in extract
