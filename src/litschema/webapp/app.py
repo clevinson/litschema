@@ -311,6 +311,7 @@ async def list_articles(cfg: CfgDep):
                 "year": bib.get("year"),
                 "journal": bib.get("journal"),
                 "authors": bib.get("authors", []),
+                "corporate_author": bib.get("corporate_author"),
                 "metadata_source": bib.get("metadata_source"),
             }
         )

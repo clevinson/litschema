@@ -63,7 +63,8 @@ def test_read_source_metadata_drops_null_values_and_defaults_source() -> None:
     assert meta == {"title": "T", "metadata_source": "manual"}
 
 
-def test_read_source_metadata_falls_back_to_legacy_top_level_keys() -> None:
+def test_read_source_metadata_ignores_legacy_top_level_keys() -> None:
+    # No back-compat: bibliographic fields live only in the source_metadata block.
     manifest = {
         "id": "a",
         "filename": "a.pdf",
@@ -72,14 +73,9 @@ def test_read_source_metadata_falls_back_to_legacy_top_level_keys() -> None:
         "journal": "J",
         "doi": "10.1/x",
         "publisher": "P",
-        "author_ids": ["x"],  # ignored: authors.yaml indirection is dead
+        "author_ids": ["x"],
     }
-    meta = sm.read_source_metadata(manifest)
-    assert meta["metadata_source"] == "legacy"
-    assert meta["title"] == "Old Title"
-    assert meta["year"] == 2020
-    assert "author_ids" not in meta
-    assert "filename" not in meta
+    assert sm.read_source_metadata(manifest) == {}
 
 
 def test_read_source_metadata_empty_for_identity_only_manifest() -> None:
@@ -88,10 +84,17 @@ def test_read_source_metadata_empty_for_identity_only_manifest() -> None:
 
 
 def test_editable_sources_cover_human_provenance_only() -> None:
-    assert frozenset({"filename", "manual", "legacy"}) == sm.EDITABLE_SOURCES
+    assert frozenset({"filename", "manual"}) == sm.EDITABLE_SOURCES
+    assert "legacy" not in sm.PROVENANCE_VALUES
     for value in ("openalex", "crossref", "doi"):
         assert value in sm.PROVENANCE_VALUES
         assert value not in sm.EDITABLE_SOURCES
+
+
+def test_source_fields_include_corporate_author_after_authors() -> None:
+    fields = list(sm.SOURCE_FIELDS)
+    assert "corporate_author" in fields
+    assert fields.index("corporate_author") == fields.index("authors") + 1
 
 
 # ── update_source_metadata ───────────────────────────────────────────────────
@@ -115,6 +118,15 @@ def test_update_source_metadata_merges_and_retags(tmp_path: Path) -> None:
     assert block["metadata_source"] == "manual"
 
 
+def test_update_source_metadata_accepts_corporate_author(tmp_path: Path) -> None:
+    files = article_files(_cfg(tmp_path), "a")
+    block = sm.update_source_metadata(
+        files, {"corporate_author": "Carbon Direct"}, source="manual"
+    )
+    assert block["corporate_author"] == "Carbon Direct"
+    assert files.read_metadata()["source_metadata"]["corporate_author"] == "Carbon Direct"
+
+
 def test_update_source_metadata_null_deletes_a_field(tmp_path: Path) -> None:
     files = article_files(_cfg(tmp_path), "a")
     sm.update_source_metadata(files, {"title": "T", "doi": "10.1/x"}, source="manual")
@@ -122,15 +134,13 @@ def test_update_source_metadata_null_deletes_a_field(tmp_path: Path) -> None:
     assert "doi" not in block
 
 
-def test_update_source_metadata_promotes_legacy_fields(tmp_path: Path) -> None:
+def test_update_source_metadata_does_not_promote_legacy_top_level_keys(tmp_path: Path) -> None:
     files = article_files(_cfg(tmp_path), "a")
     files.article_dir.mkdir(parents=True)
     files.metadata.write_text('{"id": "a", "title": "Old", "year": 2020}\n')
     block = sm.update_source_metadata(files, {"journal": "J"}, source="manual")
-    assert block["title"] == "Old"            # legacy fields carried into the block
-    assert block["year"] == 2020
-    assert block["journal"] == "J"
-    assert block["metadata_source"] == "manual"
+    assert block == {"journal": "J", "metadata_source": "manual"}
+    assert "title" not in block               # legacy top-level keys are not carried over
 
 
 def test_update_source_metadata_ignores_unknown_fields_and_bad_source(tmp_path: Path) -> None:

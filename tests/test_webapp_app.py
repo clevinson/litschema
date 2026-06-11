@@ -54,7 +54,7 @@ def test_article_meta_returns_provenance_and_editability(tmp_path) -> None:
     assert meta["editable"] is False
 
 
-def test_article_meta_marks_filename_and_legacy_editable(tmp_path) -> None:
+def test_article_meta_marks_filename_editable_and_ignores_legacy_keys(tmp_path) -> None:
     cfg = _project_cfg(tmp_path)
     _write_manifest(
         cfg, "f", {"id": "f", "source_metadata": {"title": "T", "metadata_source": "filename"}}
@@ -62,9 +62,9 @@ def test_article_meta_marks_filename_and_legacy_editable(tmp_path) -> None:
     _write_manifest(cfg, "l", {"id": "l", "title": "Old", "year": 2019})
 
     assert webapp._article_meta(cfg, "f")["editable"] is True
-    legacy = webapp._article_meta(cfg, "l")
-    assert legacy["metadata_source"] == "legacy"
-    assert legacy["editable"] is True
+    # Legacy top-level bib keys are dead: the manifest reads as an empty
+    # editable record, same as any article with no source metadata yet.
+    assert webapp._article_meta(cfg, "l") == {"metadata_source": "filename", "editable": True}
 
 
 def test_article_meta_identity_only_manifest_is_editable_empty(tmp_path) -> None:
@@ -194,7 +194,12 @@ def test_put_bibliography_writes_manual_source_metadata(tmp_path) -> None:
 
     resp = client.put(
         "/api/bibliography/a",
-        json={"title": "Fixed Title", "year": "2023", "authors": "Jane Smith, Mo Doe"},
+        json={
+            "title": "Fixed Title",
+            "year": "2023",
+            "authors": "Jane Smith, Mo Doe",
+            "corporate_author": "Carbon Direct",
+        },
     )
 
     assert resp.status_code == 200
@@ -202,6 +207,7 @@ def test_put_bibliography_writes_manual_source_metadata(tmp_path) -> None:
     assert body["title"] == "Fixed Title"
     assert body["year"] == 2023                      # coerced to int
     assert body["authors"] == ["Jane Smith", "Mo Doe"]  # comma string split
+    assert body["corporate_author"] == "Carbon Direct"  # accepted verbatim, never split
     assert body["metadata_source"] == "manual"
     assert body["editable"] is True
     on_disk = _json.loads((cfg.article_store_dir / "a" / "article-metadata.json").read_text())
