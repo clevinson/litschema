@@ -342,6 +342,52 @@ def test_get_annotations_sets_aside_legacy_jsonl(tmp_path) -> None:
     assert (article_dir / "reviews.jsonl.bak").exists()
 
 
+def test_list_articles_includes_assembled_but_unextracted(tmp_path) -> None:
+    cfg = _project_cfg(tmp_path)
+    _write_manifest(
+        cfg,
+        "noext",
+        {"id": "noext", "source_metadata": {"title": "Unextracted Title", "metadata_source": "openalex"}},
+    )
+    _write_manifest(
+        cfg,
+        "ext",
+        {"id": "ext", "source_metadata": {"title": "Extracted Title", "metadata_source": "openalex"}},
+    )
+    _write_extraction(cfg, "ext", {"article_id": "ext", "study_types": ["review"]})
+    client = _client(cfg)
+
+    body = client.get("/api/articles").json()
+
+    by_id = {a["article_id"]: a for a in body["articles"]}
+    assert set(by_id) == {"ext", "noext"}
+    noext = by_id["noext"]
+    assert noext["has_extraction"] is False
+    assert noext["title"] == "Unextracted Title"
+    assert noext["metadata_source"] == "openalex"
+    assert noext["n_setups"] == 0
+    assert noext["n_fields"] == 0
+    assert noext["n_reviewed"] == 0
+    assert noext["n_verified"] == 0
+    assert noext["n_flagged"] == 0
+    assert noext["is_complete"] is False
+    assert noext["has_flags"] is False
+    assert by_id["ext"]["has_extraction"] is True
+    assert by_id["ext"]["title"] == "Extracted Title"
+
+
+def test_list_articles_treats_errored_extraction_as_unextracted(tmp_path) -> None:
+    cfg = _project_cfg(tmp_path)
+    _write_manifest(cfg, "bad", {"id": "bad", "source_metadata": {"title": "B", "metadata_source": "manual"}})
+    _write_extraction(cfg, "bad", {"article_id": "bad", "error": "extraction failed"})
+    client = _client(cfg)
+
+    (article,) = client.get("/api/articles").json()["articles"]
+
+    assert article["article_id"] == "bad"
+    assert article["has_extraction"] is False
+
+
 def _write_schema(cfg, text: str) -> None:
     cfg.schema_dir.mkdir(parents=True, exist_ok=True)
     (cfg.schema_dir / "extraction.yaml").write_text(text)

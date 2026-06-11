@@ -388,6 +388,15 @@ def test_bib_header_title_first_layout_with_corporate_author() -> None:
     assert "flex-basis: 100%" in html
 
 
+def test_verifier_renders_placeholder_for_unextracted_articles() -> None:
+    html = STATIC_HTML.read_text()
+
+    assert "No extraction yet" in html
+    assert "/extract-article" in html
+    assert "renderNoExtractionPlaceholder" in html
+    assert "has_extraction === false" in html
+
+
 def test_verifier_index_served_by_app() -> None:
     from fastapi.testclient import TestClient
 

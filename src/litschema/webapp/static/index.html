@@ -1903,6 +1903,40 @@
     gap: 10px;
   }
 
+  .no-extraction-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    gap: 8px;
+    padding: 24px;
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 14px;
+    line-height: 1.6;
+  }
+
+  .no-extraction-state strong {
+    color: var(--text);
+  }
+
+  .no-extraction-state code {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    background: var(--bg-overlay);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 2px 8px;
+    color: var(--text-secondary);
+  }
+
+  .no-extraction-state code.no-extraction-cmd {
+    font-size: 13px;
+    padding: 6px 12px;
+    color: var(--text);
+  }
+
   /* ── Search clear button ── */
   .search-clear {
     background: var(--text-dim);
@@ -3047,15 +3081,23 @@ $("#article-select").addEventListener("change", async (e) => {
   $("#panel-left").innerHTML = '<div class="loading">Loading...</div>';
   $("#panel-right").innerHTML = '<div class="loading">Loading...</div>';
 
+  // Assembled-but-unextracted articles have no extraction JSON yet —
+  // /api/article would 404, so skip the extraction-side fetches and let
+  // renderExtractionPanel() show the "No extraction yet" placeholder.
+  const summary = state.articles.find(a => a.article_id === id);
+  const hasExtraction = !summary || summary.has_extraction !== false;
+
   const [mdData, extraction, reasoningData, annData, bibData] = await Promise.all([
-    fetchJson(`/api/markdown/${id}`),
-    fetchJson(`/api/article/${id}`),
-    fetchJson(`/api/reasoning/${id}`).catch(() => null),
-    fetchJson(`/api/annotations/${id}`).catch(() => ({ annotations: [] })),
+    fetchJson(`/api/markdown/${id}`).catch(() => null),
+    hasExtraction ? fetchJson(`/api/article/${id}`) : Promise.resolve(null),
+    hasExtraction ? fetchJson(`/api/reasoning/${id}`).catch(() => null) : Promise.resolve(null),
+    hasExtraction
+      ? fetchJson(`/api/annotations/${id}`).catch(() => ({ annotations: [] }))
+      : Promise.resolve({ annotations: [] }),
     fetchJson(`/api/bibliography/${id}`).catch(() => null),
   ]);
 
-  state.markdown = mdData.markdown;
+  state.markdown = mdData ? mdData.markdown : null;
   state.extraction = extraction;
   state.reasoning = reasoningData;
 
@@ -5962,7 +6004,23 @@ $("#btn-orcid-cancel").addEventListener("click", closeOrcidModal);
 initReviewerIdentity();
 
 // ── Extraction rendering ──
+function renderNoExtractionPlaceholder() {
+  const id = state.currentId || "";
+  $("#panel-right").innerHTML = `
+    <div class="no-extraction-state">
+      <p><strong>No extraction yet.</strong> This document has been assembled but not extracted.</p>
+      <p>Open this project in your agent harness (e.g. <code>claude</code>) and run:</p>
+      <p><code class="no-extraction-cmd">/extract-article ${escapeHtml(id)}</code></p>
+      <p>Then reload this page. The PDF and document metadata above are already available.</p>
+    </div>`;
+}
+
 function renderExtractionPanel() {
+  const summary = state.articles.find(a => a.article_id === state.currentId);
+  if (summary && summary.has_extraction === false) {
+    renderNoExtractionPlaceholder();
+    return;
+  }
   syncViewControls();
   if (state.viewMode === "overview" && state.overviewMode === "json") {
     renderJsonView(effectiveExtraction());

@@ -21,8 +21,9 @@ from fastapi.staticfiles import StaticFiles
 from linkml_runtime.utils.schemaview import SchemaView
 
 from ..articles import (
+    ArticleFiles,
     article_files,
-    iter_article_ids_with_extractions,
+    iter_metadata_paths,
     read_article_metadata,
 )
 from ..config import LitSchemaConfig
@@ -284,45 +285,76 @@ async def index():
     return (STATIC_DIR / "index.html").read_text()
 
 
+def _read_valid_extraction(files: ArticleFiles) -> dict | None:
+    """Return the parsed extraction JSON, or None if absent, invalid, or errored."""
+    if not files.extraction.exists():
+        return None
+    try:
+        data = json.loads(files.extraction.read_text())
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(data, dict) or data.get("error"):
+        return None
+    return data
+
+
 @app.get("/api/articles")
 async def list_articles(cfg: CfgDep):
-    """List articles that have both markdown and extraction JSON."""
+    """List all assembled articles; extracted ones carry review progress.
+
+    Articles without a (valid) extraction still appear so the verifier can
+    show their header and PDF with a "not yet extracted" placeholder.
+    Missing markdown never excludes an article — the PDF tab still works.
+    """
     articles = []
-    for article_id in iter_article_ids_with_extractions(cfg):
+    for metadata_path in iter_metadata_paths(cfg):
+        article_id = metadata_path.parent.name
         files = article_files(cfg, article_id)
-        ext_path = files.extraction
-        md_path = files.markdown
-        if not md_path.exists():
-            continue
-
-        data = json.loads(ext_path.read_text())
-        if data.get("error"):
-            continue
-
-        setups = data.get("experimental_setups") or []
-        # Annotation progress
-        annotations = _current_annotations(cfg, article_id)
-        progress = _review_progress(data, annotations)
         # Look up bibliographic fields from article metadata.
         bib = _article_meta(cfg, article_id)
-        articles.append(
-            {
-                "article_id": article_id,
-                "study_types": data.get("study_types", []),
-                "focus_areas": data.get("focus_areas", []),
-                "document_type": data.get("document_type"),
-                "n_setups": len(setups),
-                "n_annotated": progress["n_reviewed"],
-                **progress,
-                "doi": bib.get("doi"),
-                "title": bib.get("title"),
-                "year": bib.get("year"),
-                "journal": bib.get("journal"),
-                "authors": bib.get("authors", []),
-                "corporate_author": bib.get("corporate_author"),
-                "metadata_source": bib.get("metadata_source"),
-            }
-        )
+        entry = {
+            "article_id": article_id,
+            "doi": bib.get("doi"),
+            "title": bib.get("title"),
+            "year": bib.get("year"),
+            "journal": bib.get("journal"),
+            "authors": bib.get("authors", []),
+            "corporate_author": bib.get("corporate_author"),
+            "metadata_source": bib.get("metadata_source"),
+        }
+
+        data = _read_valid_extraction(files)
+        if data is None:
+            entry.update(
+                {
+                    "has_extraction": False,
+                    "n_setups": 0,
+                    "n_annotated": 0,
+                    "n_fields": 0,
+                    "n_reviewed": 0,
+                    "n_verified": 0,
+                    "n_flagged": 0,
+                    "is_complete": False,
+                    "has_flags": False,
+                }
+            )
+        else:
+            setups = data.get("experimental_setups") or []
+            # Annotation progress
+            annotations = _current_annotations(cfg, article_id)
+            progress = _review_progress(data, annotations)
+            entry.update(
+                {
+                    "has_extraction": True,
+                    "study_types": data.get("study_types", []),
+                    "focus_areas": data.get("focus_areas", []),
+                    "document_type": data.get("document_type"),
+                    "n_setups": len(setups),
+                    "n_annotated": progress["n_reviewed"],
+                    **progress,
+                }
+            )
+        articles.append(entry)
 
     return {"articles": articles, "total": len(articles)}
 
