@@ -358,6 +358,30 @@ def test_verifier_edits_values_in_review_table_without_docked_modal() -> None:
     assert "position: relative" in html
 
 
+def test_bib_header_has_provenance_badge_and_edit_affordance() -> None:
+    html = STATIC_HTML.read_text()
+
+    assert 'id="bib-badge"' in html
+    assert 'id="bib-edit-btn"' in html
+    assert 'id="bib-edit-form"' in html
+    assert 'id="bib-edit-cancel"' in html
+    assert "PROVENANCE_BADGES" in html
+    assert '"/api/bibliography/"' in html or "`/api/bibliography/" in html
+    assert "lastBibMeta" in html
+    assert "bibArticleId" in html
+
+
+def test_verifier_index_served_by_app() -> None:
+    from fastapi.testclient import TestClient
+
+    from litschema.webapp.app import app
+
+    client = TestClient(app)
+    resp = client.get("/")
+    assert resp.status_code == 200
+    assert 'id="bib-badge"' in resp.text
+
+
 def test_verifier_moves_source_reasoning_to_left_overlay() -> None:
     html = STATIC_HTML.read_text()
 
