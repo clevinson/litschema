@@ -58,7 +58,9 @@ reuse or revise it.
 ## Phase B — intake
 
 1. Run `$LITSCHEMA assemble`. Report what was assembled.
-2. If `document_profile` is `journal_article`: run `$LITSCHEMA harvest` so
+2. Run `$LITSCHEMA prepare-text --all` so article text is browsable in the
+   verifier before extraction begins.
+3. If `document_profile` is `journal_article`: run `$LITSCHEMA harvest` so
    bibliographic metadata is fetched by DOI. If it fails (offline, no DOIs),
    say so and continue —
    metadata stays editable in the verifier; nothing downstream breaks.

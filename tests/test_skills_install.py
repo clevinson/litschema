@@ -133,6 +133,8 @@ def test_onboard_and_extract_skills_delegate_deterministic_pipeline_steps() -> N
     extract = (REPO_ROOT / "skills" / "extract-article" / "SKILL.md").read_text()
 
     assert "$LITSCHEMA assemble" in onboard
+    assert "$LITSCHEMA prepare-text --all" in onboard
+    assert onboard.index("$LITSCHEMA assemble") < onboard.index("$LITSCHEMA prepare-text --all")
     assert "$LITSCHEMA convert" not in onboard
     assert "extract-article" in onboard  # defers extraction mechanics to that skill
     assert "LITSCHEMA prepare-text {article_id}" in extract
