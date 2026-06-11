@@ -2407,7 +2407,7 @@ e.g. year >= 2024 && study_types.includes("review")'
         <form class="bib-edit-form" id="bib-edit-form" hidden>
           <label>Title <input name="title" type="text"></label>
           <label>Authors <input name="authors" type="text" placeholder="Jane Smith, Mo Doe"></label>
-          <label>Organization <input name="corporate_author" type="text" placeholder="e.g. Carbon Direct &mdash; for documents with no personal authors"></label>
+          <label>Organization <input name="corporate_author" type="text" placeholder="Acme Institute"></label>
           <label>Year <input name="year" type="number" min="1500" max="2100"></label>
           <label>Published in <input name="journal" type="text"></label>
           <label>DOI <input name="doi" type="text"></label>
@@ -3082,12 +3082,12 @@ $("#article-select").addEventListener("change", async (e) => {
 });
 
 // ── Bibliographic header ──
+// Only registry-verified provenance earns a pill; human-entered metadata
+// is signaled by the edit affordance alone.
 const PROVENANCE_BADGES = {
   openalex: { label: "✓ verified via OpenAlex", verified: true },
   crossref: { label: "✓ verified via CrossRef", verified: true },
   doi:      { label: "✓ verified via DOI", verified: true },
-  filename: { label: "from filename — unconfirmed", verified: false },
-  manual:   { label: "entered manually", verified: false },
 };
 
 let lastBibMeta = null;
