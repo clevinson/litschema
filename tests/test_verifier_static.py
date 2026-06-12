@@ -430,6 +430,34 @@ def test_verifier_moves_source_reasoning_to_left_overlay() -> None:
     assert 'class="review-action-btn" id="btn-source-evidence-next"' not in html
 
 
+def test_verifier_surfaces_overall_extraction_confidence() -> None:
+    html = STATIC_HTML.read_text()
+
+    # Chip sits next to review-progress in the extraction panel header,
+    # hidden until reasoning supplies a top-level confidence.
+    assert 'id="confidence-chip"' in html
+    assert html.index('id="review-progress"') < html.index('id="confidence-chip"')
+    assert "updateConfidenceChip" in html
+    assert "model confidence" in html
+    assert "confidence_reasoning" in html
+    # Subtle banding off the existing palette vars.
+    assert "confidenceBand" in html
+    assert ".confidence-chip" in html
+    assert ".confidence-low { color: var(--red); }" in html
+    assert ".confidence-mid { color: var(--yellow); }" in html
+    assert ".confidence-high { color: var(--green); }" in html
+
+
+def test_verifier_surfaces_per_field_confidence_in_evidence_overlay() -> None:
+    html = STATIC_HTML.read_text()
+
+    assert 'id="source-evidence-confidence"' in html
+    assert html.index('id="source-evidence-value"') < html.index('id="source-evidence-confidence"')
+    assert "selectedConfidence" in html
+    assert ".source-evidence-confidence" in html
+    assert "typeof entry.confidence" in html
+
+
 def test_inline_edit_has_typed_inputs_and_remove_affordance() -> None:
     html = STATIC_HTML.read_text()
 
