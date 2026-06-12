@@ -35,11 +35,13 @@ SOURCE_FIELDS = (
     "abstract",
 )
 
-#: Valid ``metadata_source`` values.
-PROVENANCE_VALUES = ("openalex", "crossref", "doi", "filename", "manual")
+#: Valid ``metadata_source`` values. ``agent`` marks best-guess bibliographic
+#: fields populated by the extraction agent from the document itself (front
+#: matter, title page) — editable, never rendered as a verified pill.
+PROVENANCE_VALUES = ("openalex", "crossref", "doi", "filename", "manual", "agent")
 
 #: Provenance values the verify header renders as editable.
-EDITABLE_SOURCES = frozenset({"filename", "manual"})
+EDITABLE_SOURCES = frozenset({"filename", "manual", "agent"})
 
 
 def title_from_filename(stem: str) -> str:

@@ -83,8 +83,8 @@ def test_read_source_metadata_empty_for_identity_only_manifest() -> None:
     assert sm.read_source_metadata({}) == {}
 
 
-def test_editable_sources_cover_human_provenance_only() -> None:
-    assert frozenset({"filename", "manual"}) == sm.EDITABLE_SOURCES
+def test_editable_sources_cover_unverified_provenance_only() -> None:
+    assert frozenset({"filename", "manual", "agent"}) == sm.EDITABLE_SOURCES
     assert "legacy" not in sm.PROVENANCE_VALUES
     for value in ("openalex", "crossref", "doi"):
         assert value in sm.PROVENANCE_VALUES
