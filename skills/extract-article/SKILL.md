@@ -122,6 +122,17 @@ $LITSCHEMA agent record-extraction {article_id} --provider codex --model gpt-5.5
 Do not invent provider or model names. The command will still record extraction
 date and schema commit when provider/model are omitted.
 
+## Backfill Bibliographic Metadata
+
+After recording provenance, read `data/papers/{article_id}/article-metadata.json`.
+ONLY IF `source_metadata.metadata_source` is `"filename"` (or the block is missing),
+update the manifest's `source_metadata` block in place with best-guess bibliographic
+fields read from the document itself — front matter, title page: title, authors OR
+corporate_author, year, journal/venue if applicable, url if printed — and set
+`"metadata_source": "agent"`. Never overwrite `manual`, `openalex`, `crossref`,
+`doi`, or `agent` provenance; never invent values not visible in the document —
+omit unknown fields.
+
 ## Checklist
 
 Before finishing, verify:

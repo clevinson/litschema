@@ -141,6 +141,19 @@ def test_onboard_and_extract_skills_delegate_deterministic_pipeline_steps() -> N
     assert "agent record-extraction" in extract
 
 
+def test_extract_skill_backfills_agent_bib_metadata_for_filename_provenance() -> None:
+    extract = (REPO_ROOT / "skills" / "extract-article" / "SKILL.md").read_text()
+
+    # After provenance recording, the skill backfills best-guess bib metadata —
+    # but only when provenance is filename-derived (or absent).
+    assert '"filename"' in extract
+    assert '"metadata_source": "agent"' in extract
+    assert extract.index("record-extraction") < extract.index('"metadata_source": "agent"')
+    # Never overwrite real provenance or invent values.
+    assert "Never overwrite" in extract
+    assert "never invent" in extract
+
+
 def test_skill_setup_gates_resolve_cli_with_dev_override() -> None:
     onboard = (REPO_ROOT / "skills" / "litschema-onboard" / "SKILL.md").read_text()
     extract = (REPO_ROOT / "skills" / "extract-article" / "SKILL.md").read_text()
