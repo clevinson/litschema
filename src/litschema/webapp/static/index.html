@@ -3083,7 +3083,7 @@ $("#article-select").addEventListener("change", async (e) => {
 
   // Assembled-but-unextracted articles have no extraction JSON yet —
   // /api/article would 404, so skip the extraction-side fetches and let
-  // renderExtractionPanel() show the "No extraction yet" placeholder.
+  // renderExtractionPanel() show the no-extraction placeholder.
   const summary = state.articles.find(a => a.article_id === id);
   const hasExtraction = !summary || summary.has_extraction !== false;
 
@@ -6008,10 +6008,9 @@ function renderNoExtractionPlaceholder() {
   const id = state.currentId || "";
   $("#panel-right").innerHTML = `
     <div class="no-extraction-state">
-      <p><strong>No extraction yet.</strong> This document has been assembled but not extracted.</p>
-      <p>Open this project in your agent harness (e.g. <code>claude</code>) and run:</p>
+      <p>No litschema extraction has been run yet for this document.</p>
+      <p>Open this project in your agent (e.g. Claude, or Codex) and run:</p>
       <p><code class="no-extraction-cmd">/extract-article ${escapeHtml(id)}</code></p>
-      <p>Then reload this page. The PDF and document metadata above are already available.</p>
     </div>`;
 }
 
