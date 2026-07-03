@@ -440,12 +440,12 @@ def test_verifier_surfaces_overall_extraction_confidence() -> None:
     assert "updateConfidenceChip" in html
     assert "model confidence" in html
     assert "confidence_reasoning" in html
-    # Subtle banding off the existing palette vars.
+    # Subtle banding: colored dot indicator, text stays muted.
     assert "confidenceBand" in html
     assert ".confidence-chip" in html
-    assert ".confidence-low { color: var(--red); }" in html
-    assert ".confidence-mid { color: var(--yellow); }" in html
-    assert ".confidence-high { color: var(--green); }" in html
+    assert ".confidence-low::before { background: var(--red); }" in html
+    assert ".confidence-mid::before { background: var(--yellow); }" in html
+    assert ".confidence-high::before { background: var(--green); }" in html
 
 
 def test_verifier_surfaces_per_field_confidence_in_evidence_overlay() -> None:

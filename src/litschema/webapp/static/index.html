@@ -2260,11 +2260,22 @@
     color: var(--text-secondary);
   }
 
-  /* Confidence banding — declared after both confidence surfaces so the
-     band tint wins over their muted base color. */
-  .confidence-low { color: var(--red); }
-  .confidence-mid { color: var(--yellow); }
-  .confidence-high { color: var(--green); }
+  /* Confidence banding — text stays muted; the band shows as a small
+     colored dot so high confidence doesn't shout in green text. */
+  .confidence-low::before,
+  .confidence-mid::before,
+  .confidence-high::before {
+    content: "";
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    margin-right: 5px;
+    vertical-align: 1px;
+  }
+  .confidence-low::before { background: var(--red); }
+  .confidence-mid::before { background: var(--yellow); }
+  .confidence-high::before { background: var(--green); }
 
   @media (max-width: 760px) {
     body {
