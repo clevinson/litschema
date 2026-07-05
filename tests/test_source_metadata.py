@@ -149,33 +149,3 @@ def test_update_source_metadata_ignores_unknown_fields_and_bad_source(tmp_path: 
     assert "hacker" not in block
     with pytest.raises(ValueError):
         sm.update_source_metadata(files, {"title": "T"}, source="carrier-pigeon")
-
-
-# ── meta.yaml sidecar ────────────────────────────────────────────────────────
-
-
-def test_load_sidecar_metadata_reads_known_fields(tmp_path: Path) -> None:
-    pdf = tmp_path / "report.pdf"
-    pdf.write_text("pdf")
-    (tmp_path / "report.meta.yaml").write_text(
-        "title: Annual Report\nyear: 2024\nauthors:\n  - Jane Smith\nnonsense: ignored\n"
-    )
-    fields = sm.load_sidecar_metadata(pdf)
-    assert fields == {"title": "Annual Report", "year": 2024, "authors": ["Jane Smith"]}
-
-
-def test_load_sidecar_metadata_splits_comma_authors(tmp_path: Path) -> None:
-    pdf = tmp_path / "r.pdf"
-    pdf.write_text("pdf")
-    (tmp_path / "r.meta.yaml").write_text("authors: Jane Smith, Mo Doe\n")
-    assert sm.load_sidecar_metadata(pdf) == {"authors": ["Jane Smith", "Mo Doe"]}
-
-
-def test_load_sidecar_metadata_none_when_missing_or_invalid(tmp_path: Path) -> None:
-    pdf = tmp_path / "r.pdf"
-    pdf.write_text("pdf")
-    assert sm.load_sidecar_metadata(pdf) is None
-    (tmp_path / "r.meta.yaml").write_text("just a string")
-    assert sm.load_sidecar_metadata(pdf) is None
-    (tmp_path / "r.meta.yaml").write_text(": not [ yaml")
-    assert sm.load_sidecar_metadata(pdf) is None

@@ -299,41 +299,6 @@ def test_assemble_seeds_source_metadata_title_from_filename(tmp_path: Path) -> N
     }
 
 
-def test_assemble_prefers_sidecar_metadata_as_manual(tmp_path: Path) -> None:
-    cfg = _cfg(tmp_path)
-    _drop_pdf(cfg, "report.pdf", "pdf-bytes")
-    (cfg.paper_inbox_dir / "report.meta.yaml").write_text(
-        "title: The Real Title\nyear: 2023\nauthors: Jane Smith, Mo Doe\n"
-    )
-
-    article_assembly.assemble(cfg)
-
-    article_dir = cfg.article_store_dir / "report"
-    manifest = json.loads((article_dir / "article-metadata.json").read_text())
-    assert manifest["source_metadata"]["title"] == "The Real Title"
-    assert manifest["source_metadata"]["year"] == 2023
-    assert manifest["source_metadata"]["authors"] == ["Jane Smith", "Mo Doe"]
-    assert manifest["source_metadata"]["metadata_source"] == "manual"
-    # sidecar is archived alongside processed inbox PDFs, not into the article folder
-    assert (cfg.paper_inbox_dir / ".processed" / "report.meta.yaml").exists()
-    assert not (cfg.paper_inbox_dir / "report.meta.yaml").exists()
-    assert not (article_dir / "meta.yaml").exists()
-
-
-def test_assemble_broken_sidecar_falls_back_to_filename_title(tmp_path: Path) -> None:
-    cfg = _cfg(tmp_path)
-    _drop_pdf(cfg, "report.pdf", "pdf-bytes")
-    (cfg.paper_inbox_dir / "report.meta.yaml").write_text(": not [ yaml")
-
-    stats = article_assembly.assemble(cfg)
-
-    assert stats["assembled"] == 1            # never fail assembly over a sidecar
-    manifest = json.loads(
-        (cfg.article_store_dir / "report" / "article-metadata.json").read_text()
-    )
-    assert manifest["source_metadata"]["metadata_source"] == "filename"
-
-
 # ── Extraction provenance lands in the manifest, not a CSV ───────────────────
 
 

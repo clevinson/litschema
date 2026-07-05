@@ -19,12 +19,7 @@ from pathlib import Path
 
 from ..articles import ArticleFiles, article_files, write_article_metadata
 from ..config import LitSchemaConfig, require_config_or_exit
-from ..source_metadata import (
-    archive_sidecar,
-    load_sidecar_metadata,
-    title_from_filename,
-    update_source_metadata,
-)
+from ..source_metadata import title_from_filename, update_source_metadata
 
 logger = logging.getLogger(__name__)
 
@@ -131,7 +126,6 @@ def _process_inbox_pdf(
         return "already_assembled", article_id
 
     files.article_dir.mkdir(parents=True, exist_ok=True)
-    sidecar_fields = load_sidecar_metadata(pdf_path)
     shutil.move(str(pdf_path), str(files.pdf))
     write_article_metadata(
         files,
@@ -143,13 +137,9 @@ def _process_inbox_pdf(
             "added_at": datetime.now(UTC).isoformat(),
         },
     )
-    if sidecar_fields:
-        update_source_metadata(files, sidecar_fields, source="manual")
-        archive_sidecar(pdf_path)
-    else:
-        update_source_metadata(
-            files, {"title": title_from_filename(pdf_path.stem)}, source="filename"
-        )
+    update_source_metadata(
+        files, {"title": title_from_filename(pdf_path.stem)}, source="filename"
+    )
     existing_ids.add(article_id)
     return "assembled", article_id
 
