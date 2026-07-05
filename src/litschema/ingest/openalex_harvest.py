@@ -70,7 +70,7 @@ def _manifest_doi(manifest: dict) -> str | None:
 
 
 def _enrich_article(cfg: LitSchemaConfig, article_id: str, extracted: dict) -> bool:
-    """Write identity fields and an openalex-provenance block from a fetch result."""
+    """Write identity fields and a locked (``doi``) block from a fetch result."""
     if not extracted.get("openalex_id"):
         return False
     files = article_files(cfg, article_id)
@@ -96,7 +96,7 @@ def _enrich_article(cfg: LitSchemaConfig, article_id: str, extracted: dict) -> b
     if open_access is not None:
         identity["open_access"] = open_access
     write_article_metadata(files, identity)
-    update_source_metadata(files, fields, source="openalex")
+    update_source_metadata(files, fields, source="doi")
     return True
 
 

@@ -138,7 +138,7 @@ def _process_inbox_pdf(
         },
     )
     update_source_metadata(
-        files, {"title": title_from_filename(pdf_path.stem)}, source="filename"
+        files, {"title": title_from_filename(pdf_path.stem)}, source="auto"
     )
     existing_ids.add(article_id)
     return "assembled", article_id

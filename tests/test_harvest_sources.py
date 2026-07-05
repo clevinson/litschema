@@ -75,7 +75,7 @@ def test_harvest_enriches_assembled_article_with_identity_doi(
         "title": "OpenAlex title",
         "year": 2024,
         "journal": "Example Journal",
-        "metadata_source": "openalex",
+        "metadata_source": "doi",
     }
 
 
@@ -108,7 +108,7 @@ def test_harvest_migrates_legacy_manifest_with_top_level_bibliography(
     )
     assert manifest["title"] == "Old top-level title"  # legacy keys untouched
     assert manifest["source_metadata"]["title"] == "OpenAlex title"
-    assert manifest["source_metadata"]["metadata_source"] == "openalex"
+    assert manifest["source_metadata"]["metadata_source"] == "doi"
 
 
 def test_harvest_never_touches_manual_metadata(tmp_path: Path, monkeypatch) -> None:
@@ -133,7 +133,7 @@ def test_harvest_overwrites_filename_seed(tmp_path: Path, monkeypatch) -> None:
     files = article_files(cfg, "smith-2024")
     files.article_dir.mkdir(parents=True)
     files.metadata.write_text(json.dumps({"id": "smith-2024", "doi": "10.1234/example"}))
-    update_source_metadata(files, {"title": "Smith 2024"}, source="filename")
+    update_source_metadata(files, {"title": "Smith 2024"}, source="auto")
     monkeypatch.setattr(openalex_harvest.time, "sleep", lambda _: None)
     monkeypatch.setattr(openalex_harvest, "fetch_openalex", _fake_fetch)
 
@@ -141,7 +141,7 @@ def test_harvest_overwrites_filename_seed(tmp_path: Path, monkeypatch) -> None:
 
     block = json.loads(files.metadata.read_text())["source_metadata"]
     assert block["title"] == "OpenAlex title"
-    assert block["metadata_source"] == "openalex"
+    assert block["metadata_source"] == "doi"
 
 
 def test_harvest_reads_doi_from_source_metadata_block(tmp_path: Path, monkeypatch) -> None:
@@ -152,7 +152,7 @@ def test_harvest_reads_doi_from_source_metadata_block(tmp_path: Path, monkeypatc
     files.article_dir.mkdir(parents=True)
     files.metadata.write_text(json.dumps({"id": "report-2024"}))
     update_source_metadata(
-        files, {"title": "Report", "doi": "10.1234/report"}, source="agent"
+        files, {"title": "Report", "doi": "10.1234/report"}, source="auto"
     )
     monkeypatch.setattr(openalex_harvest.time, "sleep", lambda _: None)
     monkeypatch.setattr(openalex_harvest, "fetch_openalex", _fake_fetch)
@@ -162,7 +162,7 @@ def test_harvest_reads_doi_from_source_metadata_block(tmp_path: Path, monkeypatc
     assert stats["fetched"] == 1
     manifest = json.loads(files.metadata.read_text())
     assert manifest["doi"] == "10.1234/report"  # identity doi backfilled
-    assert manifest["source_metadata"]["metadata_source"] == "openalex"
+    assert manifest["source_metadata"]["metadata_source"] == "doi"
 
 
 def test_harvest_skips_articles_without_valid_doi(tmp_path: Path, monkeypatch) -> None:
@@ -225,4 +225,4 @@ def test_harvest_applies_cached_response_without_fetching(tmp_path: Path, monkey
         (cfg.article_store_dir / "smith-2024" / "article-metadata.json").read_text()
     )
     assert manifest["source_metadata"]["title"] == "OpenAlex title"
-    assert manifest["source_metadata"]["metadata_source"] == "openalex"
+    assert manifest["source_metadata"]["metadata_source"] == "doi"

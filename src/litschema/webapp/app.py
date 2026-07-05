@@ -30,7 +30,6 @@ from ..articles import (
 from ..config import LitSchemaConfig
 from ..schema_resolution import resolve_extraction_schema
 from ..source_metadata import (
-    EDITABLE_SOURCES,
     SOURCE_FIELDS,
     read_source_metadata,
     update_source_metadata,
@@ -67,16 +66,17 @@ CfgDep = Annotated[LitSchemaConfig, Depends(get_config)]
 def _article_meta(cfg: LitSchemaConfig, article_id: str) -> dict:
     """Return the provenance-tagged source metadata for an article id.
 
-    ``editable`` tells the header which render mode to use; an assembled
-    article with no metadata yet comes back as an empty editable record.
+    ``editable`` tells the header which render mode to use — everything is
+    editable except registry-locked (``doi``) records; an assembled article
+    with no metadata yet comes back as an empty editable record.
     """
     manifest = read_article_metadata(article_files(cfg, article_id))
     if not manifest:
         return {}
     meta = read_source_metadata(manifest)
     if not meta:
-        return {"metadata_source": "filename", "editable": True}
-    meta["editable"] = meta.get("metadata_source") in EDITABLE_SOURCES
+        return {"metadata_source": "auto", "editable": True}
+    meta["editable"] = meta.get("metadata_source") != "doi"
     return meta
 
 

@@ -28,14 +28,13 @@ SOURCE_FIELDS = (
     "abstract",
 )
 
-#: Valid ``metadata_source`` values — exactly the origins real writers stamp:
-#: harvest (``openalex``), assemble (``filename``), the extraction agent's
-#: best guess from the document itself (``agent``), and human edits
-#: (``manual``). New registry sources earn a value when a writer ships.
-PROVENANCE_VALUES = ("openalex", "filename", "manual", "agent")
-
-#: Provenance values the verify header renders as editable.
-EDITABLE_SOURCES = frozenset({"filename", "manual", "agent"})
+#: Valid ``metadata_source`` values — the 3-state lock model. ``doi``: fetched
+#: from the DOI registries; the verify header renders it LOCKED (verified pill,
+#: unlock affordance). ``auto``: machine-seeded (filename prettify, agent
+#: title-page read) — editable, and batch harvest may enrich it. ``manual``: a
+#: human touched it — editable, and machines never overwrite it without
+#: explicit consent (per-article sync). Editable is derived: ``!= "doi"``.
+PROVENANCE_VALUES = ("doi", "auto", "manual")
 
 
 def title_from_filename(stem: str) -> str:
@@ -43,7 +42,7 @@ def title_from_filename(stem: str) -> str:
 
     Words that already contain capitals (acronyms, CamelCase) are preserved;
     all-lowercase words are capitalized. The result seeds an *editable*
-    ``metadata_source: filename`` title — it does not need to be perfect.
+    ``metadata_source: auto`` title — it does not need to be perfect.
     """
     text = re.sub(r"[-_]+", " ", stem)
     text = re.sub(r"\s+", " ", text).strip()

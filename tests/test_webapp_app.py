@@ -43,28 +43,28 @@ def test_article_meta_returns_provenance_and_editability(tmp_path) -> None:
                 "title": "T",
                 "authors": ["Jane Smith"],
                 "year": 2024,
-                "metadata_source": "openalex",
+                "metadata_source": "doi",
             },
         },
     )
     meta = webapp._article_meta(cfg, "a")
     assert meta["title"] == "T"
     assert meta["authors"] == ["Jane Smith"]
-    assert meta["metadata_source"] == "openalex"
+    assert meta["metadata_source"] == "doi"
     assert meta["editable"] is False
 
 
 def test_article_meta_marks_filename_editable_and_ignores_legacy_keys(tmp_path) -> None:
     cfg = _project_cfg(tmp_path)
     _write_manifest(
-        cfg, "f", {"id": "f", "source_metadata": {"title": "T", "metadata_source": "filename"}}
+        cfg, "f", {"id": "f", "source_metadata": {"title": "T", "metadata_source": "auto"}}
     )
     _write_manifest(cfg, "l", {"id": "l", "title": "Old", "year": 2019})
 
     assert webapp._article_meta(cfg, "f")["editable"] is True
     # Legacy top-level bib keys are dead: the manifest reads as an empty
     # editable record, same as any article with no source metadata yet.
-    assert webapp._article_meta(cfg, "l") == {"metadata_source": "filename", "editable": True}
+    assert webapp._article_meta(cfg, "l") == {"metadata_source": "auto", "editable": True}
 
 
 def test_article_meta_identity_only_manifest_is_editable_empty(tmp_path) -> None:
@@ -230,7 +230,7 @@ def teardown_function() -> None:
 def test_put_bibliography_writes_manual_source_metadata(tmp_path) -> None:
     cfg = _project_cfg(tmp_path)
     _write_manifest(
-        cfg, "a", {"id": "a", "source_metadata": {"title": "Seed", "metadata_source": "filename"}}
+        cfg, "a", {"id": "a", "source_metadata": {"title": "Seed", "metadata_source": "auto"}}
     )
     client = _client(cfg)
 

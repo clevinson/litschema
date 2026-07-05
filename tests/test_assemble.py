@@ -295,7 +295,7 @@ def test_assemble_seeds_source_metadata_title_from_filename(tmp_path: Path) -> N
     )
     assert manifest["source_metadata"] == {
         "title": "Carbon Direct Buyer Guide 2024",
-        "metadata_source": "filename",
+        "metadata_source": "auto",
     }
 
 
