@@ -125,11 +125,13 @@ def test_webapp_reads_bibliography_and_pdf_filename_from_article_metadata(
             }
         )
     )
-    # Legacy top-level bib keys are ignored (no back-compat): the article
-    # reads as an empty editable record until source_metadata is written.
+    # Legacy top-level bib keys are ignored (no back-compat) — except the
+    # identity-level DOI, which is surfaced so the header's sync-from-DOI
+    # affordance can lock the record from the registry.
     assert webapp._article_meta(cfg, "smith-2024") == {
         "metadata_source": "auto",
         "editable": True,
+        "doi": "10.1234/example",
     }
     assert webapp._article_pdf_filename(cfg, "smith-2024") == "smith.pdf"
 

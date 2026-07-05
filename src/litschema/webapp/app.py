@@ -28,6 +28,7 @@ from ..articles import (
     read_review_events,
 )
 from ..config import LitSchemaConfig
+from ..ingest.openalex_harvest import sync_article
 from ..schema_resolution import resolve_extraction_schema
 from ..source_metadata import (
     SOURCE_FIELDS,
@@ -75,7 +76,11 @@ def _article_meta(cfg: LitSchemaConfig, article_id: str) -> dict:
         return {}
     meta = read_source_metadata(manifest)
     if not meta:
-        return {"metadata_source": "auto", "editable": True}
+        meta = {"metadata_source": "auto"}
+    # Surface the identity-level DOI so the header (and its sync-from-DOI
+    # affordance) works for manifests whose block doesn't carry one yet.
+    if not meta.get("doi") and manifest.get("doi"):
+        meta["doi"] = manifest["doi"]
     meta["editable"] = meta.get("metadata_source") != "doi"
     return meta
 
@@ -406,6 +411,26 @@ async def put_bibliography(article_id: str, request: Request, cfg: CfgDep):
         raise HTTPException(404, f"Unknown article {article_id}")
     block = update_source_metadata(files, fields, source="manual")
     block["editable"] = True
+    return block
+
+
+@app.post("/api/bibliography/{article_id}/sync")
+async def sync_bibliography(article_id: str, cfg: CfgDep):
+    """Re-fetch the header from the DOI registry and lock it.
+
+    Overwrites ANY provenance, including ``manual`` — the explicit button
+    press (or CLI call) is the consent that batch harvest never has.
+    """
+    files = article_files(cfg, article_id)
+    if not files.metadata.exists():
+        raise HTTPException(404, f"Unknown article {article_id}")
+    try:
+        block = sync_article(cfg, article_id)
+    except LookupError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    if block is None:
+        raise HTTPException(502, f"DOI registry lookup failed for {article_id}")
+    block["editable"] = False
     return block
 
 

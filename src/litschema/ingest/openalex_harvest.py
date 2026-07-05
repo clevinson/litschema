@@ -100,6 +100,34 @@ def _enrich_article(cfg: LitSchemaConfig, article_id: str, extracted: dict) -> b
     return True
 
 
+def sync_article(cfg: LitSchemaConfig, article_id: str, *, email: str | None = None) -> dict | None:
+    """Explicit per-article registry sync — the consent path.
+
+    Fetches the manifest's DOI live and overwrites the block WHATEVER its
+    provenance (unlike batch harvest, which never touches ``manual``): the
+    caller — a verifier button press or CLI invocation — supplies the
+    consent. Returns the new block, or ``None`` when the registry has
+    nothing usable. Raises ``LookupError`` when the article has no DOI.
+    """
+    files = article_files(cfg, article_id)
+    doi = _manifest_doi(files.read_metadata())
+    if not doi:
+        raise LookupError(f"{article_id} has no DOI to sync from")
+    raw = fetch_openalex(doi, email=email)
+    if raw is None:
+        return None
+    extracted = extract_metadata(raw)
+    extracted["_source_doi"] = doi
+    cache_dir = harvest_cache_dir(cfg, "openalex")
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    (cache_dir / f"{doi_to_slug(doi)}.json").write_text(
+        json.dumps(extracted, indent=2, ensure_ascii=False)
+    )
+    if not _enrich_article(cfg, article_id, extracted):
+        return None
+    return read_source_metadata(files.read_metadata())
+
+
 def fetch_openalex(doi: str, email: str | None = None) -> dict | None:
     """Fetch a single work from OpenAlex by DOI."""
     params = {}

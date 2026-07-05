@@ -276,3 +276,61 @@ def test_put_bibliography_rejects_garbage(tmp_path) -> None:
     assert client.put("/api/bibliography/a", json={"hacker": 1}).status_code == 400
     assert client.put("/api/bibliography/a", json={"year": "not-a-year"}).status_code == 400
     assert client.put("/api/bibliography/ghost", json={"title": "T"}).status_code == 404
+
+
+def test_article_meta_surfaces_identity_doi_for_sync(tmp_path) -> None:
+    cfg = _project_cfg(tmp_path)
+    _write_manifest(cfg, "l", {"id": "l", "doi": "10.1234/legacy"})
+    meta = webapp._article_meta(cfg, "l")
+    assert meta["doi"] == "10.1234/legacy"
+    assert meta["editable"] is True
+
+
+def test_sync_bibliography_overwrites_manual_and_locks(tmp_path, monkeypatch) -> None:
+    from litschema.ingest import openalex_harvest
+
+    cfg = _project_cfg(tmp_path)
+    _write_manifest(
+        cfg,
+        "a",
+        {
+            "id": "a",
+            "doi": "10.1234/x",
+            "source_metadata": {"title": "Hand Fixed", "metadata_source": "manual"},
+        },
+    )
+    monkeypatch.setattr(
+        openalex_harvest,
+        "fetch_openalex",
+        lambda doi, email=None: {
+            "id": "https://openalex.org/W1",
+            "doi": f"https://doi.org/{doi}",
+            "title": "Registry Title",
+            "publication_year": 2024,
+        },
+    )
+    client = _client(cfg)
+
+    resp = client.post("/api/bibliography/a/sync")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["title"] == "Registry Title"
+    assert body["metadata_source"] == "doi"
+    assert body["editable"] is False  # explicit consent overwrote manual and locked
+    on_disk = _json.loads((cfg.article_store_dir / "a" / "article-metadata.json").read_text())
+    assert on_disk["source_metadata"]["metadata_source"] == "doi"
+
+
+def test_sync_bibliography_error_paths(tmp_path, monkeypatch) -> None:
+    from litschema.ingest import openalex_harvest
+
+    cfg = _project_cfg(tmp_path)
+    _write_manifest(cfg, "no-doi", {"id": "no-doi"})
+    _write_manifest(cfg, "gone", {"id": "gone", "doi": "10.1234/x"})
+    monkeypatch.setattr(openalex_harvest, "fetch_openalex", lambda doi, email=None: None)
+    client = _client(cfg)
+
+    assert client.post("/api/bibliography/ghost/sync").status_code == 404
+    assert client.post("/api/bibliography/no-doi/sync").status_code == 400
+    assert client.post("/api/bibliography/gone/sync").status_code == 502

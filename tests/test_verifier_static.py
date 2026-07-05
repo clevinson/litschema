@@ -370,6 +370,13 @@ def test_bib_header_has_provenance_badge_and_edit_affordance() -> None:
     assert '"/api/bibliography/"' in html or "`/api/bibliography/" in html
     assert "lastBibMeta" in html
     assert "bibArticleId" in html
+    # Lock model affordances: generic DOI pill, unlock control, per-article sync.
+    assert "✓ from DOI" in html
+    assert "verified via" not in html
+    assert 'id="bib-sync-btn"' in html
+    assert "/sync" in html
+    assert "Unlock to edit" in html
+    assert "Replace your manual edits" in html  # confirm() guards the destructive direction
 
 
 def test_bib_header_title_first_layout_with_corporate_author() -> None:
