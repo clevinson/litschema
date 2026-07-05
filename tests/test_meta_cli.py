@@ -164,6 +164,33 @@ def test_meta_set_requires_some_change_and_known_article(tmp_path: Path, monkeyp
     assert runner.invoke(cli.app, ["meta", "show", "ghost"]).exit_code == 2
 
 
+def test_meta_set_empty_string_clears_and_clear_conflict_errors(
+    tmp_path: Path, monkeypatch
+) -> None:
+    cfg = _project(tmp_path, monkeypatch)
+    _write_manifest(
+        cfg,
+        "a",
+        {"id": "a", "source_metadata": {"title": "T", "url": "http://x", "metadata_source": "manual"}},
+    )
+
+    # Explicit empty string clears, matching the webapp form's convention.
+    result = runner.invoke(cli.app, ["meta", "set", "a", "--source", "manual", "--url", ""])
+    assert result.exit_code == 0, result.output
+    assert "url" not in _block(cfg, "a")
+
+    # A value and --clear for the same field is a contradiction, not a silent clear.
+    conflict = runner.invoke(
+        cli.app, ["meta", "set", "a", "--source", "manual", "--title", "X", "--clear", "title"]
+    )
+    assert conflict.exit_code == 2
+
+
+def test_meta_commands_reject_traversal_ids(tmp_path: Path, monkeypatch) -> None:
+    _project(tmp_path, monkeypatch)
+    assert runner.invoke(cli.app, ["meta", "show", "../escape"]).exit_code == 2
+
+
 # ── meta sync ────────────────────────────────────────────────────────────────
 
 

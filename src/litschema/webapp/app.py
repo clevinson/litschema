@@ -17,11 +17,12 @@ from pathlib import Path
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from linkml_runtime.utils.schemaview import SchemaView
 
 from ..articles import (
+    InvalidArticleIdError,
     article_files,
     iter_article_ids_with_extractions,
     read_article_metadata,
@@ -43,6 +44,11 @@ app = FastAPI(title="ERW Extraction Verifier")
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 ORCID_RE = re.compile(r"^\d{4}-\d{4}-\d{4}-\d{3}[0-9X]$")
+
+
+@app.exception_handler(InvalidArticleIdError)
+async def _invalid_article_id_handler(request: Request, exc: InvalidArticleIdError):
+    return JSONResponse(status_code=404, content={"detail": str(exc)})
 
 
 def get_config() -> LitSchemaConfig:

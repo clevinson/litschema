@@ -470,7 +470,13 @@ _META_SET_FIELDS = (
 
 
 def _require_article(cfg: LitSchemaConfig, article_id: str):
-    files = article_files(cfg, article_id)
+    from .articles import InvalidArticleIdError
+
+    try:
+        files = article_files(cfg, article_id)
+    except InvalidArticleIdError:
+        typer.secho(f"{CROSS} invalid article id: {article_id}", fg=typer.colors.RED)
+        raise typer.Exit(code=2) from None
     if not files.metadata.exists():
         typer.secho(f"{CROSS} unknown article: {article_id}", fg=typer.colors.RED)
         raise typer.Exit(code=2)
@@ -530,14 +536,25 @@ def meta_set(
     files = _require_article(cfg, article_id)
 
     values = (title, authors, corporate_author, year, journal, doi, publisher, url, abstract)
-    fields: dict = {
-        key: value for key, value in zip(_META_SET_FIELDS, values) if value is not None
-    }
+    fields: dict = {}
+    for key, value in zip(_META_SET_FIELDS, values):
+        if value is None:
+            continue
+        # An explicit empty string clears the field (the webapp's convention).
+        fields[key] = None if value == "" else value
     if isinstance(fields.get("authors"), str):
-        fields["authors"] = [n.strip() for n in fields["authors"].split(",") if n.strip()]
+        fields["authors"] = [
+            n.strip() for n in fields["authors"].split(",") if n.strip()
+        ] or None
     for field in clear:
         if field not in _META_SET_FIELDS:
             typer.secho(f"{CROSS} unknown field: {field}", fg=typer.colors.RED)
+            raise typer.Exit(code=2)
+        if fields.get(field) is not None:
+            typer.secho(
+                f"{CROSS} --clear {field} conflicts with the value passed for it",
+                fg=typer.colors.RED,
+            )
             raise typer.Exit(code=2)
         fields[field] = None
     if not fields:

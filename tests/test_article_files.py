@@ -97,3 +97,14 @@ def test_write_article_metadata_is_atomic_and_leaves_no_tmp(tmp_path: Path) -> N
     assert on_disk["doi"] == "10.1234/x"
     # Atomic write: the tmp file never survives.
     assert list(files.article_dir.glob("*.tmp")) == []
+
+
+def test_article_files_rejects_ids_that_escape_the_store(tmp_path: Path) -> None:
+    import pytest
+
+    from litschema.articles import InvalidArticleIdError, article_files
+
+    cfg = _cfg(tmp_path)
+    for bad in ("../other", "a/b", "..\\x", "..", ".", ""):
+        with pytest.raises(InvalidArticleIdError):
+            article_files(cfg, bad)

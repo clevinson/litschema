@@ -60,7 +60,16 @@ class ArticleFiles:
             return {}
 
 
+class InvalidArticleIdError(ValueError):
+    """Raised for article ids that would escape the article store."""
+
+
 def article_files(cfg: LitSchemaConfig, article_id: str) -> ArticleFiles:
+    # Single chokepoint for every article path join: ids minted by assemble
+    # are safe slugs, but ids also arrive from CLI arguments and URL path
+    # segments and must never traverse outside the store.
+    if not article_id or article_id in {".", ".."} or "/" in article_id or "\\" in article_id:
+        raise InvalidArticleIdError(f"invalid article id: {article_id!r}")
     return ArticleFiles(cfg=cfg, article_id=article_id)
 
 

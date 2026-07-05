@@ -286,6 +286,12 @@ def test_article_meta_surfaces_identity_doi_for_sync(tmp_path) -> None:
     assert meta["editable"] is True
 
 
+def test_invalid_article_ids_return_404_not_500(tmp_path) -> None:
+    client = _client(_project_cfg(tmp_path))
+    # backslash survives URL routing as a single path segment
+    assert client.get("/api/bibliography/..%5Cx").status_code == 404
+
+
 def test_cleared_doi_does_not_resurrect_from_legacy_identity(tmp_path) -> None:
     cfg = _project_cfg(tmp_path)
     # Legacy-migrated article: stale top-level doi + a human-edited block.
