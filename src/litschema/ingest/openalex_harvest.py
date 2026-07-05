@@ -44,8 +44,6 @@ class RegistryUnavailableError(Exception):
 
 
 def _metadata_open_access(value: object) -> bool | None:
-    if isinstance(value, bool):
-        return value
     if isinstance(value, dict) and "is_oa" in value:
         return bool(value["is_oa"])
     return None
