@@ -29,7 +29,7 @@ from ..articles import (
     read_review_events,
 )
 from ..config import LitSchemaConfig
-from ..ingest.openalex_harvest import sync_article
+from ..ingest.openalex_harvest import RegistryUnavailableError, sync_article
 from ..schema_resolution import resolve_extraction_schema
 from ..source_metadata import (
     SOURCE_FIELDS,
@@ -428,8 +428,10 @@ async def sync_bibliography(article_id: str, cfg: CfgDep):
         block = sync_article(cfg, article_id)
     except LookupError as exc:
         raise HTTPException(400, str(exc)) from exc
+    except RegistryUnavailableError as exc:
+        raise HTTPException(502, "DOI registry unavailable — try again") from exc
     if block is None:
-        raise HTTPException(502, f"DOI registry lookup failed for {article_id}")
+        raise HTTPException(502, "the registry has no usable record for this DOI")
     block["editable"] = False
     return block
 

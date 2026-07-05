@@ -93,9 +93,14 @@ def _enrich_article(cfg: LitSchemaConfig, article_id: str, extracted: dict) -> b
     authors = [
         a.get("display_name") for a in extracted.get("authors") or [] if a.get("display_name")
     ]
+    # The record's own doi field can be null/mangled even on a 200; fall back
+    # to the DOI the fetch was made with — a locked block must never end up
+    # with LESS than the known-good DOI it was synced by.
     doi = extracted.get("doi")
+    if not (doi and is_valid_doi(str(doi))):
+        doi = extracted.get("_source_doi")
     fields = {
-        "doi": str(doi) if doi and is_valid_doi(str(doi)) else None,
+        "doi": normalize_doi(str(doi)) if doi and is_valid_doi(str(doi)) else None,
         "title": extracted.get("title"),
         "abstract": extracted.get("abstract"),
         "year": extracted.get("publication_year"),
@@ -131,17 +136,16 @@ def sync_article(
     verifier button press or CLI invocation — supplies the consent. The DOI
     comes from ``doi`` when given, else the manifest. Atomic: a failed or
     unusable lookup writes nothing at all — no manifest change, no cache
-    marker — and returns ``None``, so sync stays retryable. Raises
-    ``LookupError`` when no DOI is available.
+    marker — so sync stays retryable. Returns ``None`` when the registry has
+    no usable record for the DOI (permanent until the registry changes);
+    raises ``RegistryUnavailableError`` on transient failures (retry later)
+    and ``LookupError`` when no DOI is available.
     """
     files = article_files(cfg, article_id)
     doi = doi or _manifest_doi(files.read_metadata())
     if not doi:
         raise LookupError(f"{article_id} has no DOI to sync from")
-    try:
-        raw = fetch_openalex(doi, email=email)
-    except RegistryUnavailableError:
-        return None
+    raw = fetch_openalex(doi, email=email)
     if raw is None:
         return None
     extracted = extract_metadata(raw)
@@ -313,7 +317,10 @@ def harvest(
             raw = fetch_openalex(doi, email=email)
         except RegistryUnavailableError:
             # Transient failure: no marker, so the article stays retryable.
+            # Keep the rate-limit pause — a 429/5xx burst must not turn into
+            # zero-delay hammering for the remaining articles.
             stats["errors"] += 1
+            time.sleep(RATE_LIMIT_DELAY)
             continue
         if raw is None:
             stats["not_found"] += 1
@@ -322,8 +329,11 @@ def harvest(
         else:
             extracted = extract_metadata(raw)
             extracted["_source_doi"] = doi
-            out_path.write_text(json.dumps(extracted, indent=2, ensure_ascii=False))
             if _enrich_article(cfg, article_id, extracted):
+                # Cache only usable responses (mirrors sync_article): an
+                # anomalous 200 is re-fetched next run instead of being
+                # permanently counted as unusable from the cache.
+                out_path.write_text(json.dumps(extracted, indent=2, ensure_ascii=False))
                 stats["fetched"] += 1
             else:
                 stats["unusable"] += 1

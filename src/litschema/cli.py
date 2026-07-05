@@ -620,9 +620,15 @@ def meta_sync(
     except LookupError as exc:
         typer.secho(f"{CROSS} {exc}", fg=typer.colors.RED)
         raise typer.Exit(code=1) from exc
+    except openalex_harvest.RegistryUnavailableError:
+        typer.secho(
+            f"{CROSS} DOI registry unavailable — try again later; nothing was recorded",
+            fg=typer.colors.RED,
+        )
+        raise typer.Exit(code=1) from None
     if block is None:
         typer.secho(
-            f"{CROSS} DOI registry lookup failed for {article_id}; nothing was recorded"
+            f"{CROSS} the registry has no usable record for this DOI; nothing was recorded"
             + (
                 f" (use `litschema meta set {article_id} --source manual --doi {normalized}`"
                 " to keep the DOI anyway)"

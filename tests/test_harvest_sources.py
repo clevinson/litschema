@@ -298,8 +298,12 @@ def test_transient_registry_failure_leaves_no_marker(tmp_path: Path, monkeypatch
     cache_dir = cfg.project_root / ".litschema" / "cache" / "openalex"
     assert not list(cache_dir.glob("*.json"))  # no marker written
 
-    # sync_article treats the same failure as a plain miss (manifest untouched)
-    assert openalex_harvest.sync_article(cfg, "smith-2024") is None
+    # sync_article propagates the transient failure (retry later), and the
+    # manifest is untouched either way.
+    import pytest
+
+    with pytest.raises(openalex_harvest.RegistryUnavailableError):
+        openalex_harvest.sync_article(cfg, "smith-2024")
     manifest = json.loads(
         (cfg.article_store_dir / "smith-2024" / "article-metadata.json").read_text()
     )
@@ -329,6 +333,79 @@ def test_unusable_registry_response_is_counted_not_hidden(tmp_path: Path, monkey
 
     assert stats["unusable"] == 1
     assert stats["fetched"] == 0
+
+
+def test_unusable_registry_response_is_not_cached(tmp_path: Path, monkeypatch) -> None:
+    # An anomalous 200 must stay retryable: no cache entry, so the next
+    # default run re-fetches instead of counting it unusable forever.
+    cfg = _cfg(tmp_path)
+    _write_manifest(
+        cfg,
+        "smith-2024",
+        {
+            "id": "smith-2024",
+            "source_metadata": {"doi": "10.1234/example", "metadata_source": "auto"},
+        },
+    )
+    monkeypatch.setattr(openalex_harvest.time, "sleep", lambda _: None)
+    monkeypatch.setattr(
+        openalex_harvest, "fetch_openalex", lambda doi, email=None: {"title": "T"}
+    )
+
+    stats = openalex_harvest.harvest(cfg)
+
+    assert stats["unusable"] == 1
+    cache_dir = cfg.project_root / ".litschema" / "cache" / "openalex"
+    assert not list(cache_dir.glob("*.json"))
+
+
+def test_enrichment_falls_back_to_fetch_doi_when_record_doi_is_mangled(
+    tmp_path: Path, monkeypatch
+) -> None:
+    # A locked block must never end up with LESS than the DOI it was synced
+    # by, even when the registry record's own doi field is null or junk.
+    cfg = _cfg(tmp_path)
+    files = article_files(cfg, "smith-2024")
+    files.article_dir.mkdir(parents=True)
+    files.metadata.write_text(json.dumps({"id": "smith-2024"}))
+    update_source_metadata(
+        files, {"title": "Seed", "doi": "10.1234/example"}, source="auto"
+    )
+    monkeypatch.setattr(
+        openalex_harvest,
+        "fetch_openalex",
+        lambda doi, email=None: {
+            "id": "https://openalex.org/W1",
+            "doi": "not-a-doi",
+            "title": "Registry Title",
+        },
+    )
+
+    block = openalex_harvest.sync_article(cfg, "smith-2024")
+
+    assert block["doi"] == "10.1234/example"  # the fetch DOI, kept
+    assert block["metadata_source"] == "doi"
+
+
+def test_enrichment_normalizes_the_stored_doi(tmp_path: Path, monkeypatch) -> None:
+    cfg = _cfg(tmp_path)
+    files = article_files(cfg, "smith-2024")
+    files.article_dir.mkdir(parents=True)
+    files.metadata.write_text(json.dumps({"id": "smith-2024"}))
+    update_source_metadata(files, {"doi": "10.1234/example"}, source="auto")
+    monkeypatch.setattr(
+        openalex_harvest,
+        "fetch_openalex",
+        lambda doi, email=None: {
+            "id": "https://openalex.org/W1",
+            "doi": "https://doi.org/10.1234/UPPER.",
+            "title": "Registry Title",
+        },
+    )
+
+    block = openalex_harvest.sync_article(cfg, "smith-2024")
+
+    assert block["doi"] == "10.1234/UPPER"  # prefix and trailing dot stripped
 
 
 def test_extract_metadata_tolerates_null_doi() -> None:
