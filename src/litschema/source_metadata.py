@@ -6,7 +6,7 @@ the document *is* (title, authors, venue, ...) — distinct from identity fields
 *says*). The block is provenance-tagged: ``metadata_source`` records where the
 fields came from, and the verify header keys its render mode off that value
 per-article. There is intentionally no LinkML schema here — this is a small,
-fixed manifest convention (design doc §3.5, option B).
+fixed manifest convention (see specs/source-metadata/spec.md).
 """
 
 from __future__ import annotations

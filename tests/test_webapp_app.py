@@ -54,7 +54,7 @@ def test_article_meta_returns_provenance_and_editability(tmp_path) -> None:
     assert meta["editable"] is False
 
 
-def test_article_meta_marks_filename_editable_and_ignores_legacy_keys(tmp_path) -> None:
+def test_article_meta_marks_auto_editable_and_ignores_legacy_keys(tmp_path) -> None:
     cfg = _project_cfg(tmp_path)
     _write_manifest(
         cfg, "f", {"id": "f", "source_metadata": {"title": "T", "metadata_source": "auto"}}

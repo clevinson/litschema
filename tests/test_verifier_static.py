@@ -366,7 +366,9 @@ def test_bib_header_has_provenance_badge_and_edit_affordance() -> None:
     assert 'id="bib-edit-form"' in html
     assert 'id="bib-edit-cancel"' in html
     assert "PROVENANCE_BADGES" in html
-    assert "legacy" not in html  # legacy provenance is gone, badge entry included
+    badge_map = html[html.index("PROVENANCE_BADGES") : html.index("};", html.index("PROVENANCE_BADGES"))]
+    assert "legacy" not in badge_map  # retired provenance values carry no badge
+    assert "openalex" not in badge_map
     assert '"/api/bibliography/"' in html or "`/api/bibliography/" in html
     assert "lastBibMeta" in html
     assert "bibArticleId" in html

@@ -132,9 +132,10 @@ def sync_article(
     Fetches the DOI live and overwrites the block WHATEVER its provenance
     (unlike batch harvest, which never touches ``manual``): the caller — a
     verifier button press or CLI invocation — supplies the consent. The DOI
-    comes from ``doi`` when given, else the manifest. Atomic with respect to
-    the manifest: a failed lookup writes nothing there (only the fetch cache)
-    and returns ``None``. Raises ``LookupError`` when no DOI is available.
+    comes from ``doi`` when given, else the manifest. Atomic: a failed or
+    unusable lookup writes nothing at all — no manifest change, no cache
+    marker — and returns ``None``, so sync stays retryable. Raises
+    ``LookupError`` when no DOI is available.
     """
     files = article_files(cfg, article_id)
     doi = doi or _manifest_doi(files.read_metadata())
@@ -262,11 +263,12 @@ def harvest(
 ) -> dict:
     """Enrich every assembled article whose manifest carries a DOI.
 
-    The DOI is read from the manifest (identity level, with the
-    ``source_metadata`` block as fallback) — there is no registry file to
-    author. Raw responses are cached under ``.litschema/cache``; with
-    ``skip_existing`` (the default) a cached response is applied to the
-    manifest without re-fetching. Returns summary stats dict.
+    The DOI is read from the ``source_metadata`` block (top-level identity
+    ``doi`` is a legacy fallback for pre-block manifests) — there is no
+    registry file to author. Raw responses are cached under
+    ``.litschema/cache``; with ``skip_existing`` (the default) a cached
+    response is applied to the manifest without re-fetching. Returns summary
+    stats dict.
     """
     cache_dir = harvest_cache_dir(cfg, "openalex")
     cache_dir.mkdir(parents=True, exist_ok=True)

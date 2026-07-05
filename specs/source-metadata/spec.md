@@ -22,8 +22,9 @@ in the block — top-level manifest keys are identity, never bibliography. The
 block is a fixed manifest convention, deliberately not a LinkML schema.
 
 **The DOI has a single home: the block.** A top-level manifest `doi` is read
-as a legacy fallback for pre-block manifests only; nothing writes it anymore,
-and it goes inert as soon as the block carries a DOI.
+as a legacy fallback for PRE-BLOCK manifests only; nothing writes it anymore,
+and it goes inert as soon as a block exists — a block without a DOI means the
+article has no DOI (a cleared DOI never resurrects from the legacy copy).
 
 ## The lock model
 
@@ -54,12 +55,17 @@ and it goes inert as soon as the block carries a DOI.
 - `meta set <id> --source auto|manual [field options] [--clear FIELD]...
   [--force]` — per-field merge; comma-split authors; int-coerced year.
   `--source` is required and caller-asserted; `doi` cannot be asserted.
-- `meta sync <id> [--doi 10.x/y]` — explicit per-article registry sync.
-  Uses the manifest's DOI, or `--doi` when given (pass-through; on a registry
-  miss NOTHING is recorded — the error points at `meta set` as the escape
-  hatch). Overwrites any state; locks to `doi`.
-- `meta sync --all` — batch enrichment of every assembled article with a DOI.
-  Supersedes `harvest` for metadata enrichment. Never touches `manual`.
+- `meta sync <id> [--doi 10.x/y] [--email ...]` — explicit per-article
+  registry sync. Uses the block's DOI, or `--doi` when given (pass-through;
+  on a registry miss NOTHING is recorded — no manifest change, no cache
+  marker — and the error points at `meta set` as the escape hatch).
+  Overwrites any state (REPLACE semantics: a `doi` block contains only
+  registry-supplied values); locks to `doi`.
+- `meta sync --all [--refresh] [--email ...]` — batch enrichment of every
+  assembled article with a DOI. Supersedes `harvest` for metadata
+  enrichment. Never touches `manual`; `--refresh` re-fetches past cached
+  responses and `not_found` markers. Transient registry failures are counted
+  (`errors`) and never cached, so affected articles stay retryable.
 - `harvest` — legacy full pipeline (OpenAlex + CrossRef supplement + entity
   resolution for the explore store's author/institution registries). Prefer
   `meta sync --all` for metadata.
@@ -67,7 +73,7 @@ and it goes inert as soon as the block carries a DOI.
 **HTTP API** (verify webapp; in-process library calls, never the CLI):
 
 - `GET /api/bibliography/{id}` — the block + derived `editable`; surfaces the
-  legacy identity DOI when the block has none.
+  legacy identity DOI for pre-block manifests only.
 - `PUT /api/bibliography/{id}` — partial update of `SOURCE_FIELDS`; `null`
   clears a field; stamps `manual`. 400 unknown fields / bad year; 404 unknown
   article.
@@ -87,7 +93,12 @@ have a DOI, with a `confirm()` only when the sync would overwrite `manual`.
 best-guess bibliography with `meta set <id> --source auto ...`; the guard
 enforces that this never overwrites `manual` or `doi`. If a DOI was detected
 on the document, follow up with `meta sync <id>` so registry data supersedes
-the guess.
+the guess. (The bundled extract-article skill update that adopts this
+contract ships with the onboarding PR, #17 — the skill files are deliberately
+untouched on this branch.)
+
+A hand-edited block missing `metadata_source` reads as `manual` — the
+protective default: machines will not touch it.
 
 ## Invariants
 
@@ -99,9 +110,10 @@ the guess.
   encounters a `manual` block, THEN it skips the article. WHEN per-article
   sync is invoked, THEN it may overwrite any state — invoking it IS the
   consent.
-- **Sync is manifest-atomic.** WHEN a registry lookup fails, THEN the manifest
-  is unchanged (only the fetch cache is written) and any `--doi` passed is NOT
-  recorded.
+- **Sync is atomic.** WHEN a per-article registry lookup fails or returns an
+  unusable record, THEN nothing at all is written — no manifest change, no
+  cache marker — and any `--doi` passed is NOT recorded. (Batch harvest caches
+  a `not_found` marker for true 404s only.)
 - **Auto-first enrichment.** Every article gets its best free metadata with
   zero user effort (filename seed → agent backfill → registry upgrade); human
   attention is spent only on corrections, and only those corrections are

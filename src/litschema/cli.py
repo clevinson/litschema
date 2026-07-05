@@ -1,7 +1,7 @@
 """litschema CLI - single entry point for the pipeline.
 
-Verbs: harvest / prepare-text / extract / validate / verify / mcp / status /
-doctor / skills install / init.
+Verbs: assemble / prepare-text / meta (show|set|sync) / validate / verify /
+mcp / status / doctor / skills install / agent / init / harvest (legacy).
 """
 
 from __future__ import annotations
@@ -319,7 +319,7 @@ def prepare_text(
     typer.echo(json.dumps(stats, indent=2))
 
 
-@app.command(help="Assemble article inputs from DOI rows and the PDF inbox.")
+@app.command(help="Assemble article inputs from the PDF inbox.")
 def assemble(ctx: typer.Context):
     project = _require_project(ctx)
     cfg = project.config

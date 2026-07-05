@@ -3,8 +3,9 @@
 Moves PDFs out of the inbox into per-article folders under
 ``data/papers/<article_id>/``, deriving a stable ``article_id`` from each PDF's
 filename. Intake is intentionally offline: no DOI lookup, no OpenAlex/CrossRef,
-no registry. Bibliographic metadata (title, authors, year, ...) is filled in
-later by extraction or by the optional ``litschema harvest`` enrichment flow.
+no registry. Assembly seeds an editable ``auto`` title from the filename;
+richer bibliography arrives later via agent backfill, ``litschema meta set``,
+or registry enrichment (``litschema meta sync [--all]``).
 """
 
 from __future__ import annotations

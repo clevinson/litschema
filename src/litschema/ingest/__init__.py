@@ -1,11 +1,11 @@
-"""ERW Research data ingestion pipeline.
+"""Data ingestion modules.
 
-Pipeline phases:
-  01_openalex_harvest    - Fetch structured metadata from OpenAlex API
-  02_crossref_harvest    - Supplement missing fields from CrossRef
-  04_pdf_to_markdown     - Prepare article markdown from PDFs (pymupdf4llm)
-  06_resolve_entities    - Deduplicate authors and institutions
-  09_llm_extraction      - Extract non-bibliographic fields (via agent skill)
+  article_assembly   - deterministic local-first PDF intake
+  pdf_to_markdown    - prepare article markdown from PDFs (pymupdf4llm)
+  openalex_harvest   - registry enrichment by DOI (`meta sync [--all]`)
+  crossref_harvest   - legacy CrossRef supplement for the OpenAlex cache
+  resolve_entities   - legacy author/institution dedup for the explore store
+  validate_extraction- validate per-article extraction JSON
 """
 
 from __future__ import annotations

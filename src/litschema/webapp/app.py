@@ -391,7 +391,7 @@ async def put_bibliography(article_id: str, request: Request, cfg: CfgDep):
 
     Accepts a partial record of SOURCE_FIELDS. ``null`` clears a field.
     Header metadata lives in the article manifest — review.json is never
-    touched by header edits (distinct layers, design doc §3.6).
+    touched by header edits (distinct layers; see specs/source-metadata/spec.md).
     """
     body = await request.json()
     if not isinstance(body, dict):
