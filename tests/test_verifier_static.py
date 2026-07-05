@@ -377,6 +377,10 @@ def test_bib_header_has_provenance_badge_and_edit_affordance() -> None:
     assert "/sync" in html
     assert "Unlock to edit" in html
     assert "Replace your manual edits" in html  # confirm() guards the destructive direction
+    # Race guard: responses apply by the id captured at request time, and
+    # the header only re-renders when that article is still current.
+    assert "applyBibBlock(id," in html
+    assert "articleId === state.currentId" in html
 
 
 def test_bib_header_title_first_layout_with_corporate_author() -> None:
