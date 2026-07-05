@@ -264,8 +264,7 @@ def harvest(
 ) -> dict:
     """Enrich every assembled article whose manifest carries a DOI.
 
-    The DOI is read from the ``source_metadata`` block (top-level identity
-    ``doi`` is a legacy fallback for pre-block manifests) — there is no
+    The DOI is read from the ``source_metadata`` block — there is no
     registry file to author. Raw responses are cached under
     ``.litschema/cache``; with ``skip_existing`` (the default) a cached
     response is applied to the manifest without re-fetching. Returns summary

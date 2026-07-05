@@ -70,7 +70,7 @@ manifest by extraction.
 
 Optional bibliographic enrichment is `litschema meta sync --all`, which
 queries OpenAlex for every assembled article whose metadata carries a DOI
-(captured during extraction, or edited in the verify header). There is no
+(recorded via `meta set`, or edited in the verify header). There is no
 registry file to author, and articles with human-edited metadata are never
 overwritten by the batch sweep — per-article `meta sync <id>` (or the
 verifier's "⟳ from DOI" button) is the explicit-consent path that may. The

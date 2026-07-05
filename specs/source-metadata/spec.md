@@ -53,8 +53,12 @@ framework.)
 
 - `meta show <id>` — print the block as JSON.
 - `meta set <id> --source auto|manual [field options] [--clear FIELD]...
-  [--force]` — per-field merge; comma-split authors; int-coerced year.
-  `--source` is required and caller-asserted; `doi` cannot be asserted.
+  [--force]` — per-field merge; comma-split authors; int-coerced year; DOIs
+  are validated and normalized (junk is rejected, so the sync affordance is
+  never offered for an unsyncable value). An explicit empty-string value
+  clears a field; `--clear` combined with a value for the same field is an
+  error. `--source` is required and caller-asserted; `doi` cannot be
+  asserted.
 - `meta sync <id> [--doi 10.x/y] [--email ...]` — explicit per-article
   registry sync. Uses the block's DOI, or `--doi` when given (pass-through;
   on a registry miss NOTHING is recorded — no manifest change, no cache
@@ -74,8 +78,8 @@ framework.)
 
 - `GET /api/bibliography/{id}` — the block + derived `editable`.
 - `PUT /api/bibliography/{id}` — partial update of `SOURCE_FIELDS`; `null`
-  clears a field; stamps `manual`. 400 unknown fields / bad year; 404 unknown
-  article.
+  or an empty string clears a field; DOIs validated and normalized; stamps
+  `manual`. 400 unknown fields / bad year / bad DOI; 404 unknown article.
 - `POST /api/bibliography/{id}/sync` — explicit sync; 404 unknown article,
   400 no DOI, 502 registry failure; on success returns the locked block.
 

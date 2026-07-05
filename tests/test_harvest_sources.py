@@ -274,8 +274,6 @@ def test_harvest_not_found_writes_cache_marker_but_not_manifest(
 def test_transient_registry_failure_leaves_no_marker(tmp_path: Path, monkeypatch) -> None:
     # A network blip must not be cached as not_found: the article stays
     # retryable on the next run.
-    import requests
-
     cfg = _cfg(tmp_path)
     _write_manifest(
         cfg,

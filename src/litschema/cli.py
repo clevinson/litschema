@@ -307,6 +307,14 @@ def prepare_text(
         raise typer.Exit(code=2)
 
     project = _require_project(ctx)
+    if article_id is not None:
+        from .articles import InvalidArticleIdError, article_files as _af
+
+        try:
+            _af(project.config, article_id)
+        except InvalidArticleIdError:
+            typer.secho(f"{CROSS} invalid article id: {article_id}", fg=typer.colors.RED)
+            raise typer.Exit(code=2) from None
     from .ingest import pdf_to_markdown
 
     stats = pdf_to_markdown.run(
@@ -456,19 +464,6 @@ meta_app = typer.Typer(
 app.add_typer(meta_app, name="meta")
 
 
-_META_SET_FIELDS = (
-    "title",
-    "authors",
-    "corporate_author",
-    "year",
-    "journal",
-    "doi",
-    "publisher",
-    "url",
-    "abstract",
-)
-
-
 def _require_article(cfg: LitSchemaConfig, article_id: str):
     from .articles import InvalidArticleIdError
 
@@ -498,7 +493,8 @@ def meta_show(ctx: typer.Context, article_id: str):
     "set",
     help="Merge fields into the source-metadata block. Provenance is caller-asserted: "
     "--source auto for machine-inferred values (agents, scripts), --source manual for "
-    "human-authored values. The doi state is earned via `meta sync`, never asserted.",
+    "human-authored values. An explicit empty-string value clears a field. The doi "
+    "state is earned via `meta sync`, never asserted.",
 )
 def meta_set(
     ctx: typer.Context,
@@ -524,7 +520,12 @@ def meta_set(
         False, "--force", help="Let an auto write overwrite manual/doi metadata"
     ),
 ):
-    from .source_metadata import can_overwrite, read_source_metadata, update_source_metadata
+    from .source_metadata import (
+        SOURCE_FIELDS,
+        can_overwrite,
+        read_source_metadata,
+        update_source_metadata,
+    )
 
     if source not in ("auto", "manual"):
         typer.secho(
@@ -537,7 +538,7 @@ def meta_set(
 
     values = (title, authors, corporate_author, year, journal, doi, publisher, url, abstract)
     fields: dict = {}
-    for key, value in zip(_META_SET_FIELDS, values):
+    for key, value in zip(SOURCE_FIELDS, values):
         if value is None:
             continue
         # An explicit empty string clears the field (the webapp's convention).
@@ -555,7 +556,7 @@ def meta_set(
             raise typer.Exit(code=2)
         fields["doi"] = normalized_doi
     for field in clear:
-        if field not in _META_SET_FIELDS:
+        if field not in SOURCE_FIELDS:
             typer.secho(f"{CROSS} unknown field: {field}", fg=typer.colors.RED)
             raise typer.Exit(code=2)
         if fields.get(field) is not None:
@@ -613,6 +614,9 @@ def meta_sync(
         stats = openalex_harvest.harvest(cfg, email=email, skip_existing=not refresh)
         typer.echo(json.dumps(stats, indent=2))
         return
+    if refresh:
+        typer.secho(f"{CROSS} --refresh requires --all", fg=typer.colors.RED)
+        raise typer.Exit(code=2)
     if not article_id:
         typer.secho(f"{CROSS} provide an article id, or --all", fg=typer.colors.RED)
         raise typer.Exit(code=2)
@@ -682,7 +686,13 @@ def agent_record_extraction(
 ):
     project = _require_project(ctx)
     cfg = project.config
-    files = article_files(cfg, article_id)
+    from .articles import InvalidArticleIdError
+
+    try:
+        files = article_files(cfg, article_id)
+    except InvalidArticleIdError:
+        typer.secho(f"{CROSS} invalid article id: {article_id}", fg=typer.colors.RED)
+        raise typer.Exit(code=2) from None
     if not files.article_dir.is_dir():
         typer.secho(f"{CROSS} unknown article: {article_id}", fg=typer.colors.RED)
         raise typer.Exit(code=2)

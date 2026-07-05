@@ -381,7 +381,7 @@ def test_sync_bibliography_error_paths(tmp_path, monkeypatch) -> None:
         cfg,
         "gone",
         {"id": "gone", "source_metadata": {"doi": "10.1234/x", "metadata_source": "auto"}},
-    )
+    )  # valid block doi: exercises the true registry-miss path
     monkeypatch.setattr(openalex_harvest, "fetch_openalex", lambda doi, email=None: None)
     client = _client(cfg)
 
