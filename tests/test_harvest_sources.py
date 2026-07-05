@@ -148,6 +148,34 @@ def test_harvest_overwrites_filename_seed(tmp_path: Path, monkeypatch) -> None:
     assert block["metadata_source"] == "doi"
 
 
+def test_sync_replaces_the_block_wholesale(tmp_path: Path, monkeypatch) -> None:
+    # A doi block asserts registry origin for every field it shows: leftover
+    # manual/agent values the registry did not supply must not survive under
+    # the verified pill.
+    cfg = _cfg(tmp_path)
+    files = article_files(cfg, "smith-2024")
+    files.article_dir.mkdir(parents=True)
+    files.metadata.write_text(json.dumps({"id": "smith-2024"}))
+    update_source_metadata(
+        files,
+        {
+            "title": "Hand Title",
+            "doi": "10.1234/example",
+            "corporate_author": "Acme Institute",
+            "url": "https://example.org/x",
+        },
+        source="manual",
+    )
+    monkeypatch.setattr(openalex_harvest, "fetch_openalex", _fake_fetch)
+
+    block = openalex_harvest.sync_article(cfg, "smith-2024")
+
+    assert block["title"] == "OpenAlex title"
+    assert block["metadata_source"] == "doi"
+    assert "corporate_author" not in block  # registry-absent fields cleared
+    assert "url" not in block
+
+
 def test_harvest_reads_doi_from_source_metadata_block(tmp_path: Path, monkeypatch) -> None:
     # The block is the DOI's single home; harvest resolves from it directly.
     cfg = _cfg(tmp_path)

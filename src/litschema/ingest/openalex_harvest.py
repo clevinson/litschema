@@ -24,7 +24,7 @@ import requests
 from ..article_registry import is_valid_doi, normalize_doi
 from ..articles import article_files, iter_metadata_paths, write_article_metadata
 from ..config import LitSchemaConfig, require_config_or_exit
-from ..source_metadata import read_source_metadata, update_source_metadata
+from ..source_metadata import SOURCE_FIELDS, read_source_metadata, update_source_metadata
 from . import harvest_cache_dir
 
 logger = logging.getLogger(__name__)
@@ -77,7 +77,12 @@ def _manifest_doi(manifest: dict) -> str | None:
 
 
 def _enrich_article(cfg: LitSchemaConfig, article_id: str, extracted: dict) -> bool:
-    """Write identity fields and a locked (``doi``) block from a fetch result."""
+    """Replace the block with a locked (``doi``) one built from a fetch result.
+
+    REPLACE, not merge: a ``doi`` block asserts registry origin for every
+    field it shows, so registry-absent fields are explicitly cleared —
+    leftover guesses or edits must not survive under the verified pill.
+    """
     if not extracted.get("openalex_id"):
         return False
     files = article_files(cfg, article_id)
@@ -103,7 +108,8 @@ def _enrich_article(cfg: LitSchemaConfig, article_id: str, extracted: dict) -> b
     if open_access is not None:
         identity["open_access"] = open_access
     write_article_metadata(files, identity)
-    update_source_metadata(files, fields, source="doi")
+    replacement = {field: fields.get(field) for field in SOURCE_FIELDS}
+    update_source_metadata(files, replacement, source="doi")
     return True
 
 
