@@ -572,6 +572,9 @@ def meta_sync(
     all_articles: bool = typer.Option(
         False, "--all", help="Enrich every assembled article that has a DOI"
     ),
+    refresh: bool = typer.Option(
+        False, "--refresh", help="With --all: re-fetch even when a cached response exists"
+    ),
     email: str | None = typer.Option(None, "--email", help="Email for the OpenAlex polite pool"),
 ):
     from .article_registry import is_valid_doi, normalize_doi
@@ -582,7 +585,7 @@ def meta_sync(
         if article_id or doi:
             typer.secho(f"{CROSS} --all takes no article id or --doi", fg=typer.colors.RED)
             raise typer.Exit(code=2)
-        stats = openalex_harvest.harvest(cfg, email=email)
+        stats = openalex_harvest.harvest(cfg, email=email, skip_existing=not refresh)
         typer.echo(json.dumps(stats, indent=2))
         return
     if not article_id:

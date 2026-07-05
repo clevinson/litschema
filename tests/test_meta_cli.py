@@ -271,3 +271,31 @@ def test_meta_sync_all_is_the_batch_harvest(tmp_path: Path, monkeypatch) -> None
     assert _block(cfg, "fixed")["title"] == "H"
 
     assert runner.invoke(cli.app, ["meta", "sync", "a", "--all"]).exit_code == 2
+
+
+def test_meta_sync_all_refresh_bypasses_cache(tmp_path: Path, monkeypatch) -> None:
+    cfg = _project(tmp_path, monkeypatch)
+    _write_manifest(cfg, "smith-2024", {"id": "smith-2024", "doi": "10.1234/x"})
+    from litschema.ingest import harvest_cache_dir
+
+    cache_dir = harvest_cache_dir(cfg, "openalex")
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    (cache_dir / f"{openalex_harvest.doi_to_slug('10.1234/x')}.json").write_text(
+        json.dumps({"doi": "10.1234/x", "error": "not_found"})
+    )
+    calls = []
+
+    def _fetch(doi: str, email: str | None = None) -> dict:
+        calls.append(doi)
+        return _fake_fetch(doi)
+
+    monkeypatch.setattr(openalex_harvest.time, "sleep", lambda _: None)
+    monkeypatch.setattr(openalex_harvest, "fetch_openalex", _fetch)
+
+    stale = runner.invoke(cli.app, ["meta", "sync", "--all"])
+    assert json.loads(stale.output)["not_found"] == 1  # marker honored by default
+    assert calls == []
+
+    fresh = runner.invoke(cli.app, ["meta", "sync", "--all", "--refresh"])
+    assert json.loads(fresh.output)["fetched"] == 1  # --refresh re-queries
+    assert calls == ["10.1234/x"]

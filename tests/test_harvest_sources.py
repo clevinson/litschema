@@ -65,6 +65,8 @@ def test_harvest_enriches_assembled_article_with_identity_doi(
         "not_found": 0,
         "no_doi": 0,
         "manual": 0,
+        "unusable": 0,
+        "errors": 0,
     }
     manifest = json.loads(
         (cfg.article_store_dir / "smith-2024" / "article-metadata.json").read_text()
@@ -256,6 +258,54 @@ def test_harvest_not_found_writes_cache_marker_but_not_manifest(
         next(Path(cfg.project_root / ".litschema" / "cache" / "openalex").glob("*.json")).read_text()
     )
     assert marker["error"] == "not_found"
+
+
+def test_transient_registry_failure_leaves_no_marker(tmp_path: Path, monkeypatch) -> None:
+    # A network blip must not be cached as not_found: the article stays
+    # retryable on the next run.
+    import requests
+
+    cfg = _cfg(tmp_path)
+    _write_manifest(cfg, "smith-2024", {"id": "smith-2024", "doi": "10.1234/example"})
+
+    def _blip(doi: str, email: str | None = None) -> dict:
+        raise openalex_harvest.RegistryUnavailableError("boom")
+
+    monkeypatch.setattr(openalex_harvest, "fetch_openalex", _blip)
+
+    stats = openalex_harvest.harvest(cfg)
+
+    assert stats["errors"] == 1
+    assert stats["not_found"] == 0
+    cache_dir = cfg.project_root / ".litschema" / "cache" / "openalex"
+    assert not list(cache_dir.glob("*.json"))  # no marker written
+
+    # sync_article treats the same failure as a plain miss (manifest untouched)
+    assert openalex_harvest.sync_article(cfg, "smith-2024") is None
+    manifest = json.loads(files_path := (cfg.article_store_dir / "smith-2024" / "article-metadata.json").read_text())
+    assert "source_metadata" not in manifest
+
+
+def test_unusable_registry_response_is_counted_not_hidden(tmp_path: Path, monkeypatch) -> None:
+    cfg = _cfg(tmp_path)
+    _write_manifest(cfg, "smith-2024", {"id": "smith-2024", "doi": "10.1234/example"})
+    # 200 response with no openalex id: enrichment cannot use it.
+    monkeypatch.setattr(openalex_harvest.time, "sleep", lambda _: None)
+    monkeypatch.setattr(
+        openalex_harvest, "fetch_openalex", lambda doi, email=None: {"title": "T"}
+    )
+
+    stats = openalex_harvest.harvest(cfg)
+
+    assert stats["unusable"] == 1
+    assert stats["fetched"] == 0
+
+
+def test_extract_metadata_tolerates_null_doi() -> None:
+    extracted = openalex_harvest.extract_metadata(
+        {"id": "https://openalex.org/W1", "doi": None, "title": "T"}
+    )
+    assert extracted["doi"] == ""
 
 
 def test_harvest_applies_cached_response_without_fetching(tmp_path: Path, monkeypatch) -> None:

@@ -34,6 +34,15 @@ OPENALEX_API = "https://api.openalex.org/works"
 RATE_LIMIT_DELAY = 0.1  # 100 req/s with polite pool
 
 
+class RegistryUnavailableError(Exception):
+    """Transient registry failure (network error, 5xx) — retryable.
+
+    Distinct from a true 404: only a 404 may be cached as ``not_found``;
+    transient failures must never leave a marker that would exclude the
+    article from future runs.
+    """
+
+
 def _metadata_open_access(value: object) -> bool | None:
     if isinstance(value, bool):
         return value
@@ -133,23 +142,31 @@ def sync_article(
     doi = doi or _manifest_doi(files.read_metadata())
     if not doi:
         raise LookupError(f"{article_id} has no DOI to sync from")
-    raw = fetch_openalex(doi, email=email)
+    try:
+        raw = fetch_openalex(doi, email=email)
+    except RegistryUnavailableError:
+        return None
     if raw is None:
         return None
     extracted = extract_metadata(raw)
     extracted["_source_doi"] = doi
+    if not _enrich_article(cfg, article_id, extracted):
+        return None
     cache_dir = harvest_cache_dir(cfg, "openalex")
     cache_dir.mkdir(parents=True, exist_ok=True)
     (cache_dir / f"{doi_to_slug(doi)}.json").write_text(
         json.dumps(extracted, indent=2, ensure_ascii=False)
     )
-    if not _enrich_article(cfg, article_id, extracted):
-        return None
     return read_source_metadata(files.read_metadata())
 
 
 def fetch_openalex(doi: str, email: str | None = None) -> dict | None:
-    """Fetch a single work from OpenAlex by DOI."""
+    """Fetch a single work from OpenAlex by DOI.
+
+    Returns the work on 200 and ``None`` on a true 404; raises
+    :class:`RegistryUnavailableError` on network errors and other statuses
+    so callers never mistake a transient failure for "not in the registry".
+    """
     params = {}
     if email:
         params["mailto"] = email
@@ -157,24 +174,23 @@ def fetch_openalex(doi: str, email: str | None = None) -> dict | None:
     url = f"{OPENALEX_API}/doi:{doi}"
     try:
         resp = requests.get(url, params=params, timeout=30)
-        if resp.status_code == 200:
-            return resp.json()
-        elif resp.status_code == 404:
-            logger.warning("Not found in OpenAlex: %s", doi)
-            return None
-        else:
-            logger.error("OpenAlex error %d for %s: %s", resp.status_code, doi, resp.text[:200])
-            return None
     except requests.RequestException as e:
         logger.error("Request failed for %s: %s", doi, e)
+        raise RegistryUnavailableError(f"OpenAlex request failed for {doi}: {e}") from e
+    if resp.status_code == 200:
+        return resp.json()
+    if resp.status_code == 404:
+        logger.warning("Not found in OpenAlex: %s", doi)
         return None
+    logger.error("OpenAlex error %d for %s: %s", resp.status_code, doi, resp.text[:200])
+    raise RegistryUnavailableError(f"OpenAlex returned {resp.status_code} for {doi}")
 
 
 def extract_metadata(raw: dict) -> dict:
     """Extract structured metadata from OpenAlex response."""
     result = {
         "openalex_id": raw.get("id"),
-        "doi": raw.get("doi", "").replace("https://doi.org/", ""),
+        "doi": (raw.get("doi") or "").replace("https://doi.org/", ""),
         "title": raw.get("title"),
         "publication_year": raw.get("publication_year"),
         "publication_date": raw.get("publication_date"),
@@ -267,6 +283,8 @@ def harvest(
         "not_found": 0,
         "no_doi": 0,
         "manual": 0,
+        "unusable": 0,
+        "errors": 0,
     }
 
     for metadata_path in manifests:
@@ -288,12 +306,18 @@ def harvest(
             cached = json.loads(out_path.read_text())
             if cached.get("error"):
                 stats["not_found"] += 1
-            else:
-                _enrich_article(cfg, article_id, cached)
+            elif _enrich_article(cfg, article_id, cached):
                 stats["cached"] += 1
+            else:
+                stats["unusable"] += 1
             continue
 
-        raw = fetch_openalex(doi, email=email)
+        try:
+            raw = fetch_openalex(doi, email=email)
+        except RegistryUnavailableError:
+            # Transient failure: no marker, so the article stays retryable.
+            stats["errors"] += 1
+            continue
         if raw is None:
             stats["not_found"] += 1
             # Save a marker so we don't re-query; the manifest is left alone.
@@ -302,8 +326,10 @@ def harvest(
             extracted = extract_metadata(raw)
             extracted["_source_doi"] = doi
             out_path.write_text(json.dumps(extracted, indent=2, ensure_ascii=False))
-            _enrich_article(cfg, article_id, extracted)
-            stats["fetched"] += 1
+            if _enrich_article(cfg, article_id, extracted):
+                stats["fetched"] += 1
+            else:
+                stats["unusable"] += 1
 
         done = stats["fetched"] + stats["not_found"]
         if done and done % 50 == 0:
