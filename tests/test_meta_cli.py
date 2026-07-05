@@ -186,6 +186,21 @@ def test_meta_set_empty_string_clears_and_clear_conflict_errors(
     assert conflict.exit_code == 2
 
 
+def test_meta_set_validates_and_normalizes_doi(tmp_path: Path, monkeypatch) -> None:
+    cfg = _project(tmp_path, monkeypatch)
+    _write_manifest(cfg, "a", {"id": "a"})
+
+    bad = runner.invoke(cli.app, ["meta", "set", "a", "--source", "manual", "--doi", "ISSN:1"])
+    assert bad.exit_code == 2
+
+    ok = runner.invoke(
+        cli.app,
+        ["meta", "set", "a", "--source", "manual", "--doi", "https://doi.org/10.1234/x."],
+    )
+    assert ok.exit_code == 0, ok.output
+    assert _block(cfg, "a")["doi"] == "10.1234/x"
+
+
 def test_meta_commands_reject_traversal_ids(tmp_path: Path, monkeypatch) -> None:
     _project(tmp_path, monkeypatch)
     assert runner.invoke(cli.app, ["meta", "show", "../escape"]).exit_code == 2

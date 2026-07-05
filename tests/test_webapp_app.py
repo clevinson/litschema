@@ -278,6 +278,27 @@ def test_put_bibliography_rejects_garbage(tmp_path) -> None:
     assert client.put("/api/bibliography/ghost", json={"title": "T"}).status_code == 404
 
 
+def test_put_bibliography_validates_doi_and_clears_on_empty_string(tmp_path) -> None:
+    cfg = _project_cfg(tmp_path)
+    _write_manifest(
+        cfg, "a", {"id": "a", "source_metadata": {"title": "T", "metadata_source": "manual"}}
+    )
+    client = _client(cfg)
+
+    # Junk can never enter the block, so the sync dead-end can't be created.
+    assert client.put("/api/bibliography/a", json={"doi": "ISSN:1234-5678"}).status_code == 400
+
+    # Valid but messy DOIs are normalized on the way in.
+    ok = client.put("/api/bibliography/a", json={"doi": "https://doi.org/10.1234/x."})
+    assert ok.status_code == 200
+    assert ok.json()["doi"] == "10.1234/x"
+
+    # Empty string clears (same convention as the CLI and the form).
+    cleared = client.put("/api/bibliography/a", json={"title": ""})
+    assert cleared.status_code == 200
+    assert "title" not in cleared.json()
+
+
 def test_invalid_article_ids_return_404_not_500(tmp_path) -> None:
     client = _client(_project_cfg(tmp_path))
     # backslash survives URL routing as a single path segment

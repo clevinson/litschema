@@ -546,6 +546,14 @@ def meta_set(
         fields["authors"] = [
             n.strip() for n in fields["authors"].split(",") if n.strip()
         ] or None
+    if fields.get("doi") is not None:
+        from .article_registry import is_valid_doi, normalize_doi
+
+        normalized_doi = normalize_doi(str(fields["doi"]))
+        if not is_valid_doi(normalized_doi):
+            typer.secho(f"{CROSS} not a valid DOI: {fields['doi']}", fg=typer.colors.RED)
+            raise typer.Exit(code=2)
+        fields["doi"] = normalized_doi
     for field in clear:
         if field not in _META_SET_FIELDS:
             typer.secho(f"{CROSS} unknown field: {field}", fg=typer.colors.RED)

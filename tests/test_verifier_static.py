@@ -383,6 +383,8 @@ def test_bib_header_has_provenance_badge_and_edit_affordance() -> None:
     # the header only re-renders when that article is still current.
     assert "applyBibBlock(id," in html
     assert "articleId === state.currentId" in html
+    # The article-change handler discards stale fetch batches too.
+    assert "if (id !== state.currentId) return;" in html
 
 
 def test_bib_header_title_first_layout_with_corporate_author() -> None:

@@ -3047,6 +3047,10 @@ $("#article-select").addEventListener("change", async (e) => {
     fetchJson(`/api/annotations/${id}`).catch(() => ({ annotations: [] })),
     fetchJson(`/api/bibliography/${id}`).catch(() => null),
   ]);
+  // Staleness guard: the user may have navigated on while these fetches ran.
+  // Rendering a stale batch would point the header (and its edit form, and
+  // therefore future PUTs) at the wrong article.
+  if (id !== state.currentId) return;
 
   state.markdown = mdData.markdown;
   state.extraction = extraction;
@@ -3133,7 +3137,7 @@ function renderBibHeader(meta) {
   authorsEl.style.display = authorsText ? "inline" : "none";
 
   const metaParts = [];
-  if (meta.journal) metaParts.push(escapeHtml(meta.journal));
+  if (meta.journal) metaParts.push(escapeHtml(String(meta.journal)));
   if (meta.year) metaParts.push(escapeHtml(String(meta.year)));
   $("#bib-meta").innerHTML = metaParts.join(' <span class="bib-sep">&middot;</span> ');
 

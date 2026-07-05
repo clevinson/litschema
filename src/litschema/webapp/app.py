@@ -21,6 +21,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from linkml_runtime.utils.schemaview import SchemaView
 
+from ..article_registry import is_valid_doi, normalize_doi
 from ..articles import (
     InvalidArticleIdError,
     article_files,
@@ -395,16 +396,22 @@ async def put_bibliography(article_id: str, request: Request, cfg: CfgDep):
     if not body:
         raise HTTPException(400, "no fields to update")
 
-    fields = dict(body)
+    # An explicit empty string clears the field (same convention as the CLI).
+    fields = {key: (None if value == "" else value) for key, value in body.items()}
     if isinstance(fields.get("authors"), str):
-        fields["authors"] = [n.strip() for n in fields["authors"].split(",") if n.strip()]
-    if fields.get("year") not in (None, ""):
+        fields["authors"] = [
+            n.strip() for n in fields["authors"].split(",") if n.strip()
+        ] or None
+    if fields.get("year") is not None:
         try:
             fields["year"] = int(fields["year"])
         except (TypeError, ValueError) as exc:
             raise HTTPException(400, "year must be an integer") from exc
-    if fields.get("year") == "":
-        fields["year"] = None
+    if fields.get("doi") is not None:
+        normalized = normalize_doi(str(fields["doi"]))
+        if not is_valid_doi(normalized):
+            raise HTTPException(400, f"not a valid DOI: {fields['doi']}")
+        fields["doi"] = normalized
 
     files = article_files(cfg, article_id)
     if not files.metadata.exists():
