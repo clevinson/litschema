@@ -115,8 +115,10 @@ def test_harvest_never_touches_manual_metadata(tmp_path: Path, monkeypatch) -> N
     cfg = _cfg(tmp_path)
     files = article_files(cfg, "smith-2024")
     files.article_dir.mkdir(parents=True)
-    files.metadata.write_text(json.dumps({"id": "smith-2024", "doi": "10.1234/example"}))
-    update_source_metadata(files, {"title": "Hand Fixed"}, source="manual")
+    files.metadata.write_text(json.dumps({"id": "smith-2024"}))
+    update_source_metadata(
+        files, {"title": "Hand Fixed", "doi": "10.1234/example"}, source="manual"
+    )
     monkeypatch.setattr(openalex_harvest, "fetch_openalex", _no_fetch)
 
     stats = openalex_harvest.harvest(cfg)
@@ -132,8 +134,10 @@ def test_harvest_overwrites_filename_seed(tmp_path: Path, monkeypatch) -> None:
     cfg = _cfg(tmp_path)
     files = article_files(cfg, "smith-2024")
     files.article_dir.mkdir(parents=True)
-    files.metadata.write_text(json.dumps({"id": "smith-2024", "doi": "10.1234/example"}))
-    update_source_metadata(files, {"title": "Smith 2024"}, source="auto")
+    files.metadata.write_text(json.dumps({"id": "smith-2024"}))
+    update_source_metadata(
+        files, {"title": "Smith 2024", "doi": "10.1234/example"}, source="auto"
+    )
     monkeypatch.setattr(openalex_harvest.time, "sleep", lambda _: None)
     monkeypatch.setattr(openalex_harvest, "fetch_openalex", _fake_fetch)
 
@@ -162,6 +166,28 @@ def test_harvest_reads_doi_from_source_metadata_block(tmp_path: Path, monkeypatc
     manifest = json.loads(files.metadata.read_text())
     assert "doi" not in manifest  # nothing writes the legacy identity slot anymore
     assert manifest["source_metadata"]["metadata_source"] == "doi"
+
+
+def test_harvest_does_not_resurrect_doi_cleared_from_block(
+    tmp_path: Path, monkeypatch
+) -> None:
+    # A block without a DOI means the article HAS no DOI — the stale legacy
+    # top-level copy must not be fetched.
+    cfg = _cfg(tmp_path)
+    _write_manifest(
+        cfg,
+        "cleared",
+        {
+            "id": "cleared",
+            "doi": "10.1234/wrong",
+            "source_metadata": {"title": "Fixed", "metadata_source": "auto"},
+        },
+    )
+    monkeypatch.setattr(openalex_harvest, "fetch_openalex", _no_fetch)
+
+    stats = openalex_harvest.harvest(cfg)
+
+    assert stats["no_doi"] == 1
 
 
 def test_harvest_skips_articles_without_valid_doi(tmp_path: Path, monkeypatch) -> None:

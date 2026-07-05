@@ -64,13 +64,15 @@ def _manifest_doi(manifest: dict) -> str | None:
     """Return the article's DOI from the source_metadata block.
 
     The block is the single home for the DOI. A top-level ``doi`` is read
-    only as a legacy fallback for pre-block manifests (nothing writes it
-    anymore); it goes inert as soon as a block carries a DOI.
+    only as a legacy fallback for PRE-BLOCK manifests (nothing writes it
+    anymore); it goes inert as soon as a block exists — a block without a
+    DOI means the article HAS no DOI (e.g. a human cleared a wrong one),
+    and the legacy value must not resurrect it.
     """
     block = read_source_metadata(manifest)
-    for candidate in (block.get("doi"), manifest.get("doi")):
-        if candidate and is_valid_doi(str(candidate)):
-            return normalize_doi(str(candidate))
+    candidate = block.get("doi") if block else manifest.get("doi")
+    if candidate and is_valid_doi(str(candidate)):
+        return normalize_doi(str(candidate))
     return None
 
 

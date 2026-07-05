@@ -183,8 +183,11 @@ def test_meta_sync_locks_from_recorded_doi(tmp_path: Path, monkeypatch) -> None:
         "a",
         {
             "id": "a",
-            "doi": "10.1234/x",
-            "source_metadata": {"title": "Hand Fixed", "metadata_source": "manual"},
+            "source_metadata": {
+                "title": "Hand Fixed",
+                "doi": "10.1234/x",
+                "metadata_source": "manual",
+            },
         },
     )
     monkeypatch.setattr(openalex_harvest, "fetch_openalex", _fake_fetch)
@@ -250,7 +253,10 @@ def test_meta_sync_all_is_the_batch_harvest(tmp_path: Path, monkeypatch) -> None
     _write_manifest(
         cfg,
         "fixed",
-        {"id": "fixed", "doi": "10.1234/y", "source_metadata": {"title": "H", "metadata_source": "manual"}},
+        {
+            "id": "fixed",
+            "source_metadata": {"title": "H", "doi": "10.1234/y", "metadata_source": "manual"},
+        },
     )
     monkeypatch.setattr(openalex_harvest.time, "sleep", lambda _: None)
     monkeypatch.setattr(openalex_harvest, "fetch_openalex", _fake_fetch)

@@ -286,6 +286,34 @@ def test_article_meta_surfaces_identity_doi_for_sync(tmp_path) -> None:
     assert meta["editable"] is True
 
 
+def test_cleared_doi_does_not_resurrect_from_legacy_identity(tmp_path) -> None:
+    cfg = _project_cfg(tmp_path)
+    # Legacy-migrated article: stale top-level doi + a human-edited block.
+    _write_manifest(
+        cfg,
+        "l",
+        {
+            "id": "l",
+            "doi": "10.1234/wrong",
+            "source_metadata": {
+                "title": "Fixed",
+                "doi": "10.1234/wrong",
+                "metadata_source": "manual",
+            },
+        },
+    )
+    client = _client(cfg)
+
+    resp = client.put("/api/bibliography/l", json={"doi": None})
+
+    assert resp.status_code == 200
+    assert "doi" not in resp.json()
+    # GET must agree with PUT: once a block exists, its (absent) DOI is
+    # authoritative — the legacy top-level copy must not resurrect.
+    meta = client.get("/api/bibliography/l").json()
+    assert "doi" not in meta
+
+
 def test_sync_bibliography_overwrites_manual_and_locks(tmp_path, monkeypatch) -> None:
     from litschema.ingest import openalex_harvest
 
@@ -295,8 +323,11 @@ def test_sync_bibliography_overwrites_manual_and_locks(tmp_path, monkeypatch) ->
         "a",
         {
             "id": "a",
-            "doi": "10.1234/x",
-            "source_metadata": {"title": "Hand Fixed", "metadata_source": "manual"},
+            "source_metadata": {
+                "title": "Hand Fixed",
+                "doi": "10.1234/x",
+                "metadata_source": "manual",
+            },
         },
     )
     monkeypatch.setattr(
