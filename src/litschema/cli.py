@@ -239,7 +239,8 @@ def _install_skill_dirs(
 
 @app.command(
     context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
-    help="Enrich assembled articles that have DOIs (OpenAlex + CrossRef by default).",
+    help="Legacy full harvest pipeline (OpenAlex + CrossRef supplement + entity resolution). "
+    "For metadata enrichment alone, prefer `litschema meta sync --all`.",
 )
 def harvest(
     ctx: typer.Context,
@@ -447,6 +448,163 @@ agent_app = typer.Typer(
     help="Agent-facing helper commands used by bundled skills.", no_args_is_help=True
 )
 app.add_typer(agent_app, name="agent")
+
+meta_app = typer.Typer(
+    help="Read and write an article's source metadata (what the document IS).",
+    no_args_is_help=True,
+)
+app.add_typer(meta_app, name="meta")
+
+
+_META_SET_FIELDS = (
+    "title",
+    "authors",
+    "corporate_author",
+    "year",
+    "journal",
+    "doi",
+    "publisher",
+    "url",
+    "abstract",
+)
+
+
+def _require_article(cfg: LitSchemaConfig, article_id: str):
+    files = article_files(cfg, article_id)
+    if not files.metadata.exists():
+        typer.secho(f"{CROSS} unknown article: {article_id}", fg=typer.colors.RED)
+        raise typer.Exit(code=2)
+    return files
+
+
+@meta_app.command("show", help="Print the article's source-metadata block as JSON.")
+def meta_show(ctx: typer.Context, article_id: str):
+    from .source_metadata import read_source_metadata
+
+    cfg = _require_project(ctx).config
+    files = _require_article(cfg, article_id)
+    typer.echo(
+        json.dumps(read_source_metadata(files.read_metadata()), indent=2, ensure_ascii=False)
+    )
+
+
+@meta_app.command(
+    "set",
+    help="Merge fields into the source-metadata block. Provenance is caller-asserted: "
+    "--source auto for machine-inferred values (agents, scripts), --source manual for "
+    "human-authored values. The doi state is earned via `meta sync`, never asserted.",
+)
+def meta_set(
+    ctx: typer.Context,
+    article_id: str,
+    source: str = typer.Option(
+        ..., "--source", help="Who authored the VALUES: auto (machine) or manual (human)"
+    ),
+    title: str | None = typer.Option(None, "--title"),
+    authors: str | None = typer.Option(
+        None, "--authors", help='Comma-separated display names: "Jane Smith, Mo Doe"'
+    ),
+    corporate_author: str | None = typer.Option(None, "--corporate-author"),
+    year: int | None = typer.Option(None, "--year"),
+    journal: str | None = typer.Option(None, "--journal"),
+    doi: str | None = typer.Option(None, "--doi"),
+    publisher: str | None = typer.Option(None, "--publisher"),
+    url: str | None = typer.Option(None, "--url"),
+    abstract: str | None = typer.Option(None, "--abstract"),
+    clear: list[str] = typer.Option(
+        [], "--clear", help="Remove a field from the block (repeatable)"
+    ),
+    force: bool = typer.Option(
+        False, "--force", help="Let an auto write overwrite manual/doi metadata"
+    ),
+):
+    from .source_metadata import can_overwrite, read_source_metadata, update_source_metadata
+
+    if source not in ("auto", "manual"):
+        typer.secho(
+            f"{CROSS} --source must be auto or manual (doi is earned via `meta sync`)",
+            fg=typer.colors.RED,
+        )
+        raise typer.Exit(code=2)
+    cfg = _require_project(ctx).config
+    files = _require_article(cfg, article_id)
+
+    values = (title, authors, corporate_author, year, journal, doi, publisher, url, abstract)
+    fields: dict = {
+        key: value for key, value in zip(_META_SET_FIELDS, values) if value is not None
+    }
+    if isinstance(fields.get("authors"), str):
+        fields["authors"] = [n.strip() for n in fields["authors"].split(",") if n.strip()]
+    for field in clear:
+        if field not in _META_SET_FIELDS:
+            typer.secho(f"{CROSS} unknown field: {field}", fg=typer.colors.RED)
+            raise typer.Exit(code=2)
+        fields[field] = None
+    if not fields:
+        typer.secho(f"{CROSS} nothing to change (pass field options or --clear)", fg=typer.colors.RED)
+        raise typer.Exit(code=2)
+
+    existing = read_source_metadata(files.read_metadata()).get("metadata_source")
+    if not force and not can_overwrite(existing, source):
+        typer.secho(
+            f"{CROSS} refusing: metadata is {existing!r} and auto writes never overwrite "
+            "human or registry data (use --force to override)",
+            fg=typer.colors.RED,
+        )
+        raise typer.Exit(code=1)
+
+    block = update_source_metadata(files, fields, source=source)
+    typer.echo(json.dumps(block, indent=2, ensure_ascii=False))
+
+
+@meta_app.command(
+    "sync",
+    help="Fetch metadata from the DOI registry and lock the block (overwrites any state — "
+    "invoking this IS the consent). Use --all for the batch sweep, which enriches "
+    "machine-seeded records and never touches manual ones.",
+)
+def meta_sync(
+    ctx: typer.Context,
+    article_id: str | None = typer.Argument(None),
+    doi: str | None = typer.Option(
+        None, "--doi", help="Record this DOI on the article first, then sync from it"
+    ),
+    all_articles: bool = typer.Option(
+        False, "--all", help="Enrich every assembled article that has a DOI"
+    ),
+    email: str | None = typer.Option(None, "--email", help="Email for the OpenAlex polite pool"),
+):
+    from .article_registry import is_valid_doi, normalize_doi
+    from .articles import write_article_metadata
+    from .ingest import openalex_harvest
+
+    cfg = _require_project(ctx).config
+    if all_articles:
+        if article_id or doi:
+            typer.secho(f"{CROSS} --all takes no article id or --doi", fg=typer.colors.RED)
+            raise typer.Exit(code=2)
+        stats = openalex_harvest.harvest(cfg, email=email)
+        typer.echo(json.dumps(stats, indent=2))
+        return
+    if not article_id:
+        typer.secho(f"{CROSS} provide an article id, or --all", fg=typer.colors.RED)
+        raise typer.Exit(code=2)
+    files = _require_article(cfg, article_id)
+    if doi:
+        normalized = normalize_doi(doi)
+        if not is_valid_doi(normalized):
+            typer.secho(f"{CROSS} not a valid DOI: {doi}", fg=typer.colors.RED)
+            raise typer.Exit(code=2)
+        write_article_metadata(files, {"doi": normalized})
+    try:
+        block = openalex_harvest.sync_article(cfg, article_id, email=email)
+    except LookupError as exc:
+        typer.secho(f"{CROSS} {exc}", fg=typer.colors.RED)
+        raise typer.Exit(code=1) from exc
+    if block is None:
+        typer.secho(f"{CROSS} DOI registry lookup failed for {article_id}", fg=typer.colors.RED)
+        raise typer.Exit(code=1)
+    typer.echo(json.dumps(block, indent=2, ensure_ascii=False))
 
 
 @agent_app.command("prepare-schema-context", help="Write runtime schema context files.")

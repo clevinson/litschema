@@ -37,6 +37,19 @@ SOURCE_FIELDS = (
 PROVENANCE_VALUES = ("doi", "auto", "manual")
 
 
+def can_overwrite(existing_source: str | None, new_source: str) -> bool:
+    """The never-clobber rule, in one place.
+
+    Machine-authored writes (``auto``) may only replace machine-authored or
+    absent metadata; human-authored (``manual``) and registry-locked
+    (``doi``) blocks require explicit consent (sync, ``--force``).
+    ``manual`` writes always win — a human outranks every machine.
+    """
+    if new_source == "auto":
+        return existing_source in (None, "auto")
+    return True
+
+
 def title_from_filename(stem: str) -> str:
     """Derive a human-readable title from a PDF filename stem.
 
