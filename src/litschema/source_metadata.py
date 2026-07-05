@@ -35,10 +35,11 @@ SOURCE_FIELDS = (
     "abstract",
 )
 
-#: Valid ``metadata_source`` values. ``agent`` marks best-guess bibliographic
-#: fields populated by the extraction agent from the document itself (front
-#: matter, title page) — editable, never rendered as a verified pill.
-PROVENANCE_VALUES = ("openalex", "crossref", "doi", "filename", "manual", "agent")
+#: Valid ``metadata_source`` values — exactly the origins real writers stamp:
+#: harvest (``openalex``), assemble (``filename``), the extraction agent's
+#: best guess from the document itself (``agent``), and human edits
+#: (``manual``). New registry sources earn a value when a writer ships.
+PROVENANCE_VALUES = ("openalex", "filename", "manual", "agent")
 
 #: Provenance values the verify header renders as editable.
 EDITABLE_SOURCES = frozenset({"filename", "manual", "agent"})

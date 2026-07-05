@@ -85,10 +85,10 @@ def test_read_source_metadata_empty_for_identity_only_manifest() -> None:
 
 def test_editable_sources_cover_unverified_provenance_only() -> None:
     assert frozenset({"filename", "manual", "agent"}) == sm.EDITABLE_SOURCES
-    assert "legacy" not in sm.PROVENANCE_VALUES
-    for value in ("openalex", "crossref", "doi"):
-        assert value in sm.PROVENANCE_VALUES
-        assert value not in sm.EDITABLE_SOURCES
+    # The vocabulary names exactly the origins real writers stamp; registry
+    # sources beyond openalex earn a value when a writer ships.
+    assert sm.PROVENANCE_VALUES == ("openalex", "filename", "manual", "agent")
+    assert "openalex" not in sm.EDITABLE_SOURCES
 
 
 def test_source_fields_include_corporate_author_after_authors() -> None:

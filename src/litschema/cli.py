@@ -239,7 +239,7 @@ def _install_skill_dirs(
 
 @app.command(
     context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
-    help="Run bibliographic harvest (OpenAlex + CrossRef by default).",
+    help="Enrich assembled articles that have DOIs (OpenAlex + CrossRef by default).",
 )
 def harvest(
     ctx: typer.Context,

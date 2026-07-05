@@ -66,8 +66,10 @@ needed before running extraction, and bibliographic fields are filled into the
 manifest by extraction.
 
 Optional bibliographic enrichment lives in a separate `litschema harvest`
-command, which reads a user-authored DOI list at `data/sources/articles.csv` and
-queries OpenAlex/CrossRef. It is not part of the core PDF-first flow.
+command, which queries OpenAlex/CrossRef for every assembled article whose
+manifest carries a DOI (captured during extraction, or edited in the verify
+header). There is no registry file to author, and articles with human-edited
+metadata are never overwritten. It is not part of the core PDF-first flow.
 
 ## Project Layout
 
