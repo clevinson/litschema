@@ -575,7 +575,6 @@ def meta_sync(
     email: str | None = typer.Option(None, "--email", help="Email for the OpenAlex polite pool"),
 ):
     from .article_registry import is_valid_doi, normalize_doi
-    from .articles import write_article_metadata
     from .ingest import openalex_harvest
 
     cfg = _require_project(ctx).config
@@ -589,20 +588,29 @@ def meta_sync(
     if not article_id:
         typer.secho(f"{CROSS} provide an article id, or --all", fg=typer.colors.RED)
         raise typer.Exit(code=2)
-    files = _require_article(cfg, article_id)
+    _require_article(cfg, article_id)
+    normalized = None
     if doi:
         normalized = normalize_doi(doi)
         if not is_valid_doi(normalized):
             typer.secho(f"{CROSS} not a valid DOI: {doi}", fg=typer.colors.RED)
             raise typer.Exit(code=2)
-        write_article_metadata(files, {"doi": normalized})
     try:
-        block = openalex_harvest.sync_article(cfg, article_id, email=email)
+        block = openalex_harvest.sync_article(cfg, article_id, doi=normalized, email=email)
     except LookupError as exc:
         typer.secho(f"{CROSS} {exc}", fg=typer.colors.RED)
         raise typer.Exit(code=1) from exc
     if block is None:
-        typer.secho(f"{CROSS} DOI registry lookup failed for {article_id}", fg=typer.colors.RED)
+        typer.secho(
+            f"{CROSS} DOI registry lookup failed for {article_id}; nothing was recorded"
+            + (
+                f" (use `litschema meta set {article_id} --source manual --doi {normalized}`"
+                " to keep the DOI anyway)"
+                if normalized
+                else ""
+            ),
+            fg=typer.colors.RED,
+        )
         raise typer.Exit(code=1)
     typer.echo(json.dumps(block, indent=2, ensure_ascii=False))
 

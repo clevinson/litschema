@@ -61,9 +61,14 @@ def reconstruct_abstract(inverted_index: dict | None) -> str | None:
 
 
 def _manifest_doi(manifest: dict) -> str | None:
-    """Return the article's DOI: identity-level first, source block fallback."""
+    """Return the article's DOI from the source_metadata block.
+
+    The block is the single home for the DOI. A top-level ``doi`` is read
+    only as a legacy fallback for pre-block manifests (nothing writes it
+    anymore); it goes inert as soon as a block carries a DOI.
+    """
     block = read_source_metadata(manifest)
-    for candidate in (manifest.get("doi"), block.get("doi")):
+    for candidate in (block.get("doi"), manifest.get("doi")):
         if candidate and is_valid_doi(str(candidate)):
             return normalize_doi(str(candidate))
     return None
@@ -91,7 +96,7 @@ def _enrich_article(cfg: LitSchemaConfig, article_id: str, extracted: dict) -> b
     if not fields:
         return False
 
-    identity = {"id": article_id, "doi": fields.get("doi")}
+    identity = {"id": article_id}
     open_access = _metadata_open_access(extracted.get("open_access"))
     if open_access is not None:
         identity["open_access"] = open_access
@@ -100,17 +105,24 @@ def _enrich_article(cfg: LitSchemaConfig, article_id: str, extracted: dict) -> b
     return True
 
 
-def sync_article(cfg: LitSchemaConfig, article_id: str, *, email: str | None = None) -> dict | None:
+def sync_article(
+    cfg: LitSchemaConfig,
+    article_id: str,
+    *,
+    doi: str | None = None,
+    email: str | None = None,
+) -> dict | None:
     """Explicit per-article registry sync — the consent path.
 
-    Fetches the manifest's DOI live and overwrites the block WHATEVER its
-    provenance (unlike batch harvest, which never touches ``manual``): the
-    caller — a verifier button press or CLI invocation — supplies the
-    consent. Returns the new block, or ``None`` when the registry has
-    nothing usable. Raises ``LookupError`` when the article has no DOI.
+    Fetches the DOI live and overwrites the block WHATEVER its provenance
+    (unlike batch harvest, which never touches ``manual``): the caller — a
+    verifier button press or CLI invocation — supplies the consent. The DOI
+    comes from ``doi`` when given, else the manifest. Atomic with respect to
+    the manifest: a failed lookup writes nothing there (only the fetch cache)
+    and returns ``None``. Raises ``LookupError`` when no DOI is available.
     """
     files = article_files(cfg, article_id)
-    doi = _manifest_doi(files.read_metadata())
+    doi = doi or _manifest_doi(files.read_metadata())
     if not doi:
         raise LookupError(f"{article_id} has no DOI to sync from")
     raw = fetch_openalex(doi, email=email)

@@ -145,8 +145,7 @@ def test_harvest_overwrites_filename_seed(tmp_path: Path, monkeypatch) -> None:
 
 
 def test_harvest_reads_doi_from_source_metadata_block(tmp_path: Path, monkeypatch) -> None:
-    # An agent backfill may record the DOI in the block before any identity
-    # doi exists; harvest still finds it.
+    # The block is the DOI's single home; harvest resolves from it directly.
     cfg = _cfg(tmp_path)
     files = article_files(cfg, "report-2024")
     files.article_dir.mkdir(parents=True)
@@ -161,7 +160,7 @@ def test_harvest_reads_doi_from_source_metadata_block(tmp_path: Path, monkeypatc
 
     assert stats["fetched"] == 1
     manifest = json.loads(files.metadata.read_text())
-    assert manifest["doi"] == "10.1234/report"  # identity doi backfilled
+    assert "doi" not in manifest  # nothing writes the legacy identity slot anymore
     assert manifest["source_metadata"]["metadata_source"] == "doi"
 
 

@@ -197,7 +197,7 @@ def test_meta_sync_locks_from_recorded_doi(tmp_path: Path, monkeypatch) -> None:
     assert block["metadata_source"] == "doi"
 
 
-def test_meta_sync_doi_flag_records_then_syncs(tmp_path: Path, monkeypatch) -> None:
+def test_meta_sync_doi_flag_is_passthrough_and_atomic(tmp_path: Path, monkeypatch) -> None:
     cfg = _project(tmp_path, monkeypatch)
     _write_manifest(cfg, "a", {"id": "a"})
     monkeypatch.setattr(openalex_harvest, "fetch_openalex", _fake_fetch)
@@ -208,11 +208,28 @@ def test_meta_sync_doi_flag_records_then_syncs(tmp_path: Path, monkeypatch) -> N
 
     assert result.exit_code == 0, result.output
     manifest = json.loads((cfg.article_store_dir / "a" / "article-metadata.json").read_text())
-    assert manifest["doi"] == "10.1234/found"  # normalized and recorded on identity
+    assert "doi" not in manifest  # single home: the block, not the identity level
     assert manifest["source_metadata"]["metadata_source"] == "doi"
+    assert manifest["source_metadata"]["doi"] == "10.1234/found"
 
     bad = runner.invoke(cli.app, ["meta", "sync", "a", "--doi", "not-a-doi"])
     assert bad.exit_code == 2
+
+
+def test_meta_sync_doi_flag_records_nothing_on_registry_miss(
+    tmp_path: Path, monkeypatch
+) -> None:
+    cfg = _project(tmp_path, monkeypatch)
+    _write_manifest(cfg, "a", {"id": "a"})
+    monkeypatch.setattr(openalex_harvest, "fetch_openalex", lambda doi, email=None: None)
+
+    result = runner.invoke(cli.app, ["meta", "sync", "a", "--doi", "10.1234/miss"])
+
+    assert result.exit_code == 1
+    assert "meta set" in result.output  # points at the escape hatch
+    manifest = json.loads((cfg.article_store_dir / "a" / "article-metadata.json").read_text())
+    assert "doi" not in manifest
+    assert "source_metadata" not in manifest  # atomic: the miss wrote nothing
 
 
 def test_meta_sync_errors(tmp_path: Path, monkeypatch) -> None:
