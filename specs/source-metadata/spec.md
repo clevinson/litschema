@@ -21,10 +21,10 @@ abstract`) plus the `metadata_source` provenance tag. Bibliography lives ONLY
 in the block — top-level manifest keys are identity, never bibliography. The
 block is a fixed manifest convention, deliberately not a LinkML schema.
 
-**The DOI has a single home: the block.** A top-level manifest `doi` is read
-as a legacy fallback for PRE-BLOCK manifests only; nothing writes it anymore,
-and it goes inert as soon as a block exists — a block without a DOI means the
-article has no DOI (a cleared DOI never resurrects from the legacy copy).
+**The DOI has a single home: the block.** Nothing reads or writes a
+top-level manifest `doi` — a block without a DOI means the article has no
+DOI. (Alpha policy, `specs/README.md`: no legacy-format awareness in the
+framework.)
 
 ## The lock model
 
@@ -72,8 +72,7 @@ article has no DOI (a cleared DOI never resurrects from the legacy copy).
 
 **HTTP API** (verify webapp; in-process library calls, never the CLI):
 
-- `GET /api/bibliography/{id}` — the block + derived `editable`; surfaces the
-  legacy identity DOI for pre-block manifests only.
+- `GET /api/bibliography/{id}` — the block + derived `editable`.
 - `PUT /api/bibliography/{id}` — partial update of `SOURCE_FIELDS`; `null`
   clears a field; stamps `manual`. 400 unknown fields / bad year; 404 unknown
   article.
@@ -129,11 +128,12 @@ protective default: machines will not touch it.
 
 ## Migration (legacy corpora)
 
-Pre-block manifests (top-level bibliography, e.g. erw-lit) render as editable
-`auto` records with their identity DOI surfaced. One `litschema meta sync
---all` run locks every article whose DOI resolves; legacy top-level keys are
-left in place and go inert. No read-time synthesis of legacy fields is
-performed.
+litschema reads only the block; pre-block manifests render as empty editable
+`auto` records until migrated. Migration is the domain repo's job (alpha
+policy): loop `litschema meta set <id> --source auto --doi <top-level value>`
+(an agent or a small script), then run `litschema meta sync --all` to lock
+everything the registry resolves. Legacy top-level keys are inert junk the
+domain repo may prune at leisure.
 
 ## Code map
 

@@ -278,14 +278,6 @@ def test_put_bibliography_rejects_garbage(tmp_path) -> None:
     assert client.put("/api/bibliography/ghost", json={"title": "T"}).status_code == 404
 
 
-def test_article_meta_surfaces_identity_doi_for_sync(tmp_path) -> None:
-    cfg = _project_cfg(tmp_path)
-    _write_manifest(cfg, "l", {"id": "l", "doi": "10.1234/legacy"})
-    meta = webapp._article_meta(cfg, "l")
-    assert meta["doi"] == "10.1234/legacy"
-    assert meta["editable"] is True
-
-
 def test_invalid_article_ids_return_404_not_500(tmp_path) -> None:
     client = _client(_project_cfg(tmp_path))
     # backslash survives URL routing as a single path segment
@@ -364,7 +356,11 @@ def test_sync_bibliography_error_paths(tmp_path, monkeypatch) -> None:
 
     cfg = _project_cfg(tmp_path)
     _write_manifest(cfg, "no-doi", {"id": "no-doi"})
-    _write_manifest(cfg, "gone", {"id": "gone", "doi": "10.1234/x"})
+    _write_manifest(
+        cfg,
+        "gone",
+        {"id": "gone", "source_metadata": {"doi": "10.1234/x", "metadata_source": "auto"}},
+    )
     monkeypatch.setattr(openalex_harvest, "fetch_openalex", lambda doi, email=None: None)
     client = _client(cfg)
 

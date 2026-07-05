@@ -119,3 +119,21 @@ problem); recording `--doi` before the fetch (provenance puzzle on failure).
 **Decision:** framework capabilities carry their specs in the framework's own
 repo (`specs/`), updated in the same PR as behavior changes. This folder's
 conventions: `specs/README.md`.
+
+## 2026-07-05 — No legacy-format awareness; migrations belong to the domain repo
+
+**Context:** the single-DOI-home decision (above) kept a read-time fallback to
+the legacy top-level `doi` for pre-block manifests, so unmigrated corpora
+could be enriched without a migration step. That fallback bred the
+DOI-resurrection bug, was patched with a subtler conditional, and required a
+paragraph of explanation — the lifecycle of a wart.
+**Decision:** the fallback is removed; litschema reads DOIs from the block,
+period. This supersedes the legacy-fallback portion of the single-DOI-home
+entry. More broadly (alpha policy, now in specs/README.md): until a versioned
+release exists, the framework carries no backwards compatibility or
+migration code — format changes land clean, and existing corpora update
+their data in their own repos (for erw-lit: loop `meta set --source auto
+--doi`, then `meta sync --all`).
+**Rejected:** keeping the narrowed pre-block-only fallback (still legacy
+awareness, still a special case to explain and test); an in-framework
+`migrate` command (same objection, more surface).

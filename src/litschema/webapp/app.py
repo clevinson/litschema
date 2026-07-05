@@ -80,14 +80,7 @@ def _article_meta(cfg: LitSchemaConfig, article_id: str) -> dict:
     manifest = read_article_metadata(article_files(cfg, article_id))
     if not manifest:
         return {}
-    block = read_source_metadata(manifest)
-    meta = block or {"metadata_source": "auto"}
-    # Surface the identity-level DOI for PRE-BLOCK manifests only, so the
-    # header (and its sync-from-DOI affordance) works for legacy corpora.
-    # Once a block exists, its DOI (or absence of one) is authoritative —
-    # a cleared DOI must not resurrect from the legacy top-level copy.
-    if not block and manifest.get("doi"):
-        meta["doi"] = manifest["doi"]
+    meta = read_source_metadata(manifest) or {"metadata_source": "auto"}
     meta["editable"] = meta.get("metadata_source") != "doi"
     return meta
 

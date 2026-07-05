@@ -70,14 +70,11 @@ def reconstruct_abstract(inverted_index: dict | None) -> str | None:
 def _manifest_doi(manifest: dict) -> str | None:
     """Return the article's DOI from the source_metadata block.
 
-    The block is the single home for the DOI. A top-level ``doi`` is read
-    only as a legacy fallback for PRE-BLOCK manifests (nothing writes it
-    anymore); it goes inert as soon as a block exists — a block without a
-    DOI means the article HAS no DOI (e.g. a human cleared a wrong one),
-    and the legacy value must not resurrect it.
+    The block is the DOI's only home — litschema carries no awareness of
+    legacy manifest layouts (alpha policy, specs/README.md); unmigrated
+    corpora update their manifests in their own repo.
     """
-    block = read_source_metadata(manifest)
-    candidate = block.get("doi") if block else manifest.get("doi")
+    candidate = read_source_metadata(manifest).get("doi")
     if candidate and is_valid_doi(str(candidate)):
         return normalize_doi(str(candidate))
     return None

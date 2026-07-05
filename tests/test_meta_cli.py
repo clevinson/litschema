@@ -276,7 +276,14 @@ def test_meta_sync_errors(tmp_path: Path, monkeypatch) -> None:
 
 def test_meta_sync_all_is_the_batch_harvest(tmp_path: Path, monkeypatch) -> None:
     cfg = _project(tmp_path, monkeypatch)
-    _write_manifest(cfg, "smith-2024", {"id": "smith-2024", "doi": "10.1234/x"})
+    _write_manifest(
+        cfg,
+        "smith-2024",
+        {
+            "id": "smith-2024",
+            "source_metadata": {"doi": "10.1234/x", "metadata_source": "auto"},
+        },
+    )
     _write_manifest(
         cfg,
         "fixed",
@@ -302,7 +309,14 @@ def test_meta_sync_all_is_the_batch_harvest(tmp_path: Path, monkeypatch) -> None
 
 def test_meta_sync_all_refresh_bypasses_cache(tmp_path: Path, monkeypatch) -> None:
     cfg = _project(tmp_path, monkeypatch)
-    _write_manifest(cfg, "smith-2024", {"id": "smith-2024", "doi": "10.1234/x"})
+    _write_manifest(
+        cfg,
+        "smith-2024",
+        {
+            "id": "smith-2024",
+            "source_metadata": {"doi": "10.1234/x", "metadata_source": "auto"},
+        },
+    )
     from litschema.ingest import harvest_cache_dir
 
     cache_dir = harvest_cache_dir(cfg, "openalex")

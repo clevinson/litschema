@@ -46,12 +46,18 @@ def _no_fetch(doi: str, email: str | None = None) -> dict:
     raise AssertionError("should not fetch")
 
 
-def test_harvest_enriches_assembled_article_with_identity_doi(
+def test_harvest_enriches_assembled_article_with_block_doi(
     tmp_path: Path, monkeypatch
 ) -> None:
     cfg = _cfg(tmp_path)
     _write_manifest(
-        cfg, "smith-2024", {"id": "smith-2024", "doi": "10.1234/example", "filename": "s.pdf"}
+        cfg,
+        "smith-2024",
+        {
+            "id": "smith-2024",
+            "filename": "s.pdf",
+            "source_metadata": {"doi": "10.1234/example", "metadata_source": "auto"},
+        },
     )
     monkeypatch.setattr(openalex_harvest.time, "sleep", lambda _: None)
     monkeypatch.setattr(openalex_harvest, "fetch_openalex", _fake_fetch)
@@ -81,12 +87,10 @@ def test_harvest_enriches_assembled_article_with_identity_doi(
     }
 
 
-def test_harvest_migrates_legacy_manifest_with_top_level_bibliography(
-    tmp_path: Path, monkeypatch
-) -> None:
-    # Pre-source_metadata manifests (e.g. the erw-lit corpus) carry top-level
-    # bibliographic keys and no block; one harvest run gives them a
-    # provenance-tagged block without touching the legacy keys.
+def test_harvest_ignores_unmigrated_legacy_manifests(tmp_path: Path, monkeypatch) -> None:
+    # Alpha policy (specs/README.md): litschema carries no legacy-format
+    # awareness. Pre-block manifests are the domain repo's to migrate
+    # (`meta set --source auto --doi ...`, then `meta sync --all`).
     cfg = _cfg(tmp_path)
     _write_manifest(
         cfg,
@@ -95,22 +99,18 @@ def test_harvest_migrates_legacy_manifest_with_top_level_bibliography(
             "id": "legacy-2023",
             "doi": "10.1234/legacy",
             "title": "Old top-level title",
-            "journal": "Old Journal",
             "author_ids": ["smith_j"],
         },
     )
-    monkeypatch.setattr(openalex_harvest.time, "sleep", lambda _: None)
-    monkeypatch.setattr(openalex_harvest, "fetch_openalex", _fake_fetch)
+    monkeypatch.setattr(openalex_harvest, "fetch_openalex", _no_fetch)
 
     stats = openalex_harvest.harvest(cfg)
 
-    assert stats["fetched"] == 1
+    assert stats["no_doi"] == 1  # top-level doi is never read
     manifest = json.loads(
         (cfg.article_store_dir / "legacy-2023" / "article-metadata.json").read_text()
     )
-    assert manifest["title"] == "Old top-level title"  # legacy keys untouched
-    assert manifest["source_metadata"]["title"] == "OpenAlex title"
-    assert manifest["source_metadata"]["metadata_source"] == "doi"
+    assert "source_metadata" not in manifest
 
 
 def test_harvest_never_touches_manual_metadata(tmp_path: Path, monkeypatch) -> None:
@@ -201,8 +201,8 @@ def test_harvest_reads_doi_from_source_metadata_block(tmp_path: Path, monkeypatc
 def test_harvest_does_not_resurrect_doi_cleared_from_block(
     tmp_path: Path, monkeypatch
 ) -> None:
-    # A block without a DOI means the article HAS no DOI — the stale legacy
-    # top-level copy must not be fetched.
+    # A block without a DOI means the article HAS no DOI; top-level keys
+    # are never read.
     cfg = _cfg(tmp_path)
     _write_manifest(
         cfg,
@@ -243,7 +243,14 @@ def test_harvest_not_found_writes_cache_marker_but_not_manifest(
     # No row-only fallback: an unresolvable DOI leaves the manifest alone, so
     # a later run (once OpenAlex knows the DOI) can still enrich it.
     cfg = _cfg(tmp_path)
-    _write_manifest(cfg, "smith-2024", {"id": "smith-2024", "doi": "10.1234/example"})
+    _write_manifest(
+        cfg,
+        "smith-2024",
+        {
+            "id": "smith-2024",
+            "source_metadata": {"doi": "10.1234/example", "metadata_source": "auto"},
+        },
+    )
     monkeypatch.setattr(openalex_harvest.time, "sleep", lambda _: None)
     monkeypatch.setattr(openalex_harvest, "fetch_openalex", lambda doi, email=None: None)
 
@@ -253,7 +260,11 @@ def test_harvest_not_found_writes_cache_marker_but_not_manifest(
     manifest = json.loads(
         (cfg.article_store_dir / "smith-2024" / "article-metadata.json").read_text()
     )
-    assert "source_metadata" not in manifest
+    # The block is exactly the pre-harvest seed: nothing was enriched.
+    assert manifest["source_metadata"] == {
+        "doi": "10.1234/example",
+        "metadata_source": "auto",
+    }
     marker = json.loads(
         next(Path(cfg.project_root / ".litschema" / "cache" / "openalex").glob("*.json")).read_text()
     )
@@ -266,7 +277,14 @@ def test_transient_registry_failure_leaves_no_marker(tmp_path: Path, monkeypatch
     import requests
 
     cfg = _cfg(tmp_path)
-    _write_manifest(cfg, "smith-2024", {"id": "smith-2024", "doi": "10.1234/example"})
+    _write_manifest(
+        cfg,
+        "smith-2024",
+        {
+            "id": "smith-2024",
+            "source_metadata": {"doi": "10.1234/example", "metadata_source": "auto"},
+        },
+    )
 
     def _blip(doi: str, email: str | None = None) -> dict:
         raise openalex_harvest.RegistryUnavailableError("boom")
@@ -282,13 +300,25 @@ def test_transient_registry_failure_leaves_no_marker(tmp_path: Path, monkeypatch
 
     # sync_article treats the same failure as a plain miss (manifest untouched)
     assert openalex_harvest.sync_article(cfg, "smith-2024") is None
-    manifest = json.loads(files_path := (cfg.article_store_dir / "smith-2024" / "article-metadata.json").read_text())
-    assert "source_metadata" not in manifest
+    manifest = json.loads(
+        (cfg.article_store_dir / "smith-2024" / "article-metadata.json").read_text()
+    )
+    assert manifest["source_metadata"] == {
+        "doi": "10.1234/example",
+        "metadata_source": "auto",
+    }
 
 
 def test_unusable_registry_response_is_counted_not_hidden(tmp_path: Path, monkeypatch) -> None:
     cfg = _cfg(tmp_path)
-    _write_manifest(cfg, "smith-2024", {"id": "smith-2024", "doi": "10.1234/example"})
+    _write_manifest(
+        cfg,
+        "smith-2024",
+        {
+            "id": "smith-2024",
+            "source_metadata": {"doi": "10.1234/example", "metadata_source": "auto"},
+        },
+    )
     # 200 response with no openalex id: enrichment cannot use it.
     monkeypatch.setattr(openalex_harvest.time, "sleep", lambda _: None)
     monkeypatch.setattr(
@@ -310,7 +340,14 @@ def test_extract_metadata_tolerates_null_doi() -> None:
 
 def test_harvest_applies_cached_response_without_fetching(tmp_path: Path, monkeypatch) -> None:
     cfg = _cfg(tmp_path)
-    _write_manifest(cfg, "smith-2024", {"id": "smith-2024", "doi": "10.1234/example"})
+    _write_manifest(
+        cfg,
+        "smith-2024",
+        {
+            "id": "smith-2024",
+            "source_metadata": {"doi": "10.1234/example", "metadata_source": "auto"},
+        },
+    )
     from litschema.ingest import harvest_cache_dir
 
     cache_dir = harvest_cache_dir(cfg, "openalex")

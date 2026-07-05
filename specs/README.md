@@ -26,6 +26,21 @@ specs/
   the decision, the rationale, and the alternatives rejected. Entries are never
   rewritten — a reversed decision gets a new entry that supersedes the old one.
 
+## Alpha status: no backwards compatibility
+
+litschema is pre-release alpha software. Until a release with a version
+number has been published:
+
+- Specs describe the CURRENT format and behavior only. Capability specs must
+  not document legacy formats, fallbacks, or compatibility shims.
+- Backwards compatibility and in-framework migrations are explicit
+  non-goals. Format changes land clean.
+- Existing corpus data is updated in its own (domain) repo when a format
+  changes — typically agent-driven, using the framework's own CLI as the
+  write surface.
+
+This section is superseded the day a versioned release ships.
+
 ## Process for new features
 
 Start a new capability folder with a draft `spec.md` — the proposal IS the
