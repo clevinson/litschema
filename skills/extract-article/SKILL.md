@@ -62,7 +62,7 @@ to `data/papers/{article_id}/agent-extraction.json`.
 
 **CRITICAL: Extract ONLY from the markdown file provided. Do NOT use any information from memory files, conversation context, prior knowledge about this paper, or other articles. Every extracted value must come from the text of this specific paper.**
 
-Extract ONLY non-bibliographic fields. Bibliographic fields (title, DOI, year, authors, publisher, journal, abstract, keywords) are already captured from APIs — do NOT extract them.
+Extract ONLY non-bibliographic fields. Bibliographic fields (title, DOI, year, authors, publisher, journal, abstract, keywords) are source metadata — what the document IS, not what it SAYS — and are handled by the backfill step at the end of this skill, never by the schema extraction.
 
 ## Output 1: Extraction JSON
 
@@ -129,14 +129,34 @@ date and schema commit when provider/model are omitted.
 
 ## Backfill Bibliographic Metadata
 
-After recording provenance, read `data/papers/{article_id}/article-metadata.json`.
-ONLY IF `source_metadata.metadata_source` is `"filename"` (or the block is missing),
-update the manifest's `source_metadata` block in place with best-guess bibliographic
-fields read from the document itself — front matter, title page: title, authors OR
-corporate_author, year, journal/venue if applicable, url if printed — and set
-`"metadata_source": "agent"`. Never overwrite `manual`, `openalex`, `crossref`,
-`doi`, or `agent` provenance; never invent values not visible in the document —
-omit unknown fields.
+After recording provenance, backfill what the document IS (as opposed to what it
+SAYS — the extraction above). The contract is defined in
+`specs/source-metadata/spec.md`; the short version:
+
+1. Read the bibliographic fields off the document itself — front matter, title
+   page: title, authors OR corporate author, year, journal/venue if applicable,
+   the DOI if one is printed. Never invent values not visible in the document;
+   omit unknown fields.
+2. Write them through the CLI — never edit `article-metadata.json` by hand:
+
+   ```bash
+   $LITSCHEMA meta set {article_id} --source auto \
+     --title "..." --authors "A. Author, B. Author" --year 2024 \
+     --journal "..." --doi 10.1234/example
+   ```
+
+   (Include only the options you have values for.) If the command exits nonzero
+   because the metadata is already human-edited or registry-locked, that is the
+   guard working: skip the backfill silently and do NOT retry with `--force`.
+3. ONLY IF a DOI was visible on the document, follow up with:
+
+   ```bash
+   $LITSCHEMA meta sync {article_id}
+   ```
+
+   so registry data supersedes your reading and locks the metadata. If sync
+   fails (offline, unknown DOI), say so and continue — the DOI stays recorded
+   and a later sweep can retry; nothing downstream breaks.
 
 ## Checklist
 
@@ -144,6 +164,7 @@ Before finishing, verify:
 - [ ] `data/papers/{article_id}/agent-extraction.json` exists and passes extraction validation
 - [ ] `data/papers/{article_id}/agent-reasoning.json` exists and passes reasoning validation
 - [ ] `data/papers/{article_id}/article-metadata.json` has been updated by `agent record-extraction`
+- [ ] Bibliographic backfill was attempted via `meta set --source auto` (and `meta sync` if a DOI was visible)
 - [ ] Every non-identifier leaf field in the extraction has a corresponding reasoning entry
 - [ ] All `source_lines` reference real line numbers from the markdown
 - [ ] No data was extracted from the References/Bibliography section

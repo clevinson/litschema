@@ -141,17 +141,31 @@ def test_onboard_and_extract_skills_delegate_deterministic_pipeline_steps() -> N
     assert "agent record-extraction" in extract
 
 
-def test_extract_skill_backfills_agent_bib_metadata_for_filename_provenance() -> None:
+def test_extract_skill_backfills_bib_metadata_via_meta_cli() -> None:
     extract = (REPO_ROOT / "skills" / "extract-article" / "SKILL.md").read_text()
 
-    # After provenance recording, the skill backfills best-guess bib metadata —
-    # but only when provenance is filename-derived (or absent).
-    assert '"filename"' in extract
-    assert '"metadata_source": "agent"' in extract
-    assert extract.index("record-extraction") < extract.index('"metadata_source": "agent"')
-    # Never overwrite real provenance or invent values.
-    assert "Never overwrite" in extract
-    assert "never invent" in extract
+    # After provenance recording, the skill backfills best-guess bib metadata
+    # through the CLI (the never-clobber guard owns protection) and syncs from
+    # the registry when the document shows a DOI.
+    assert "meta set {article_id} --source auto" in extract
+    assert "meta sync {article_id}" in extract
+    assert extract.index("record-extraction") < extract.index("meta set {article_id}")
+    assert extract.index("meta set {article_id}") < extract.index("meta sync {article_id}")
+    # The guard is respected, values are never invented, manifests never hand-edited.
+    assert "--force" in extract
+    assert "never invent" in extract.lower()
+    assert "never edit" in extract.lower()
+    assert "specs/source-metadata/spec.md" in extract
+
+
+def test_onboard_skill_sweeps_registry_sync_after_batch() -> None:
+    onboard = (REPO_ROOT / "skills" / "litschema-onboard" / "SKILL.md").read_text()
+
+    # The batch sweep runs AFTER extraction (DOIs enter blocks via extraction
+    # backfill), not at intake where fresh repos have none.
+    assert "meta sync --all" in onboard
+    assert onboard.index("extract-article") < onboard.index("meta sync --all")
+    assert "specs/source-metadata/spec.md" in onboard
 
 
 def test_skill_setup_gates_resolve_cli_with_dev_override() -> None:

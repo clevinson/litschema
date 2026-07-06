@@ -64,11 +64,6 @@ reuse or revise it.
 1. Run `$LITSCHEMA assemble`. Report what was assembled.
 2. Run `$LITSCHEMA prepare-text --all` so article text is browsable in the
    verifier before extraction begins.
-3. Run `$LITSCHEMA meta sync --all` so every article whose metadata carries a
-   DOI gets bibliographic metadata fetched from the registry. Articles without
-   DOIs are skipped — this is a no-op for collections that have none. If it
-   fails (offline), say so and continue — metadata stays editable in the
-   verifier; nothing downstream breaks.
 
 ## Phase C — pilot (one article before the whole collection)
 
@@ -91,8 +86,13 @@ reuse or revise it.
    stays small; otherwise run sequentially. Maximum a few in flight at once.
 3. On a per-article failure: retry once; if it still fails, record the id and
    move on. Never abort the batch for one article.
-4. Afterwards run `$LITSCHEMA validate` and `$LITSCHEMA status`; report
-   counts and any failed ids.
+4. Afterwards run `$LITSCHEMA meta sync --all` — extraction already syncs each
+   article whose document shows a DOI, so this is the sweep that catches any
+   article whose sync failed transiently. Articles without DOIs and
+   human-edited metadata are skipped (see `specs/source-metadata/spec.md`). If
+   it fails (offline), say so and continue — nothing downstream breaks.
+5. Finally run `$LITSCHEMA validate` and `$LITSCHEMA status`; report counts
+   and any failed ids.
 
 ## Phase E — handoff
 
