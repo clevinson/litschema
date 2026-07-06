@@ -1,7 +1,7 @@
 """litschema CLI - single entry point for the pipeline.
 
-Verbs: harvest / prepare-text / extract / validate / verify / mcp / status /
-doctor / skills install / init.
+Verbs: assemble / prepare-text / meta (show|set|sync) / validate / verify /
+mcp / status / doctor / skills install / agent / init / harvest (legacy).
 """
 
 from __future__ import annotations
@@ -239,7 +239,8 @@ def _install_skill_dirs(
 
 @app.command(
     context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
-    help="Run bibliographic harvest (OpenAlex + CrossRef by default).",
+    help="Legacy full harvest pipeline (OpenAlex + CrossRef supplement + entity resolution). "
+    "For metadata enrichment alone, prefer `litschema meta sync --all`.",
 )
 def harvest(
     ctx: typer.Context,
@@ -306,6 +307,14 @@ def prepare_text(
         raise typer.Exit(code=2)
 
     project = _require_project(ctx)
+    if article_id is not None:
+        from .articles import InvalidArticleIdError, article_files as _af
+
+        try:
+            _af(project.config, article_id)
+        except InvalidArticleIdError:
+            typer.secho(f"{CROSS} invalid article id: {article_id}", fg=typer.colors.RED)
+            raise typer.Exit(code=2) from None
     from .ingest import pdf_to_markdown
 
     stats = pdf_to_markdown.run(
@@ -318,7 +327,7 @@ def prepare_text(
     typer.echo(json.dumps(stats, indent=2))
 
 
-@app.command(help="Assemble article inputs from DOI rows and the PDF inbox.")
+@app.command(help="Assemble article inputs from the PDF inbox.")
 def assemble(ctx: typer.Context):
     project = _require_project(ctx)
     cfg = project.config
@@ -448,6 +457,201 @@ agent_app = typer.Typer(
 )
 app.add_typer(agent_app, name="agent")
 
+meta_app = typer.Typer(
+    help="Read and write an article's source metadata (what the document IS).",
+    no_args_is_help=True,
+)
+app.add_typer(meta_app, name="meta")
+
+
+def _require_article(cfg: LitSchemaConfig, article_id: str):
+    from .articles import InvalidArticleIdError
+
+    try:
+        files = article_files(cfg, article_id)
+    except InvalidArticleIdError:
+        typer.secho(f"{CROSS} invalid article id: {article_id}", fg=typer.colors.RED)
+        raise typer.Exit(code=2) from None
+    if not files.metadata.exists():
+        typer.secho(f"{CROSS} unknown article: {article_id}", fg=typer.colors.RED)
+        raise typer.Exit(code=2)
+    return files
+
+
+@meta_app.command("show", help="Print the article's source-metadata block as JSON.")
+def meta_show(ctx: typer.Context, article_id: str):
+    from .source_metadata import read_source_metadata
+
+    cfg = _require_project(ctx).config
+    files = _require_article(cfg, article_id)
+    typer.echo(
+        json.dumps(read_source_metadata(files.read_metadata()), indent=2, ensure_ascii=False)
+    )
+
+
+@meta_app.command(
+    "set",
+    help="Merge fields into the source-metadata block. Provenance is caller-asserted: "
+    "--source auto for machine-inferred values (agents, scripts), --source manual for "
+    "human-authored values. An explicit empty-string value clears a field. The doi "
+    "state is earned via `meta sync`, never asserted.",
+)
+def meta_set(
+    ctx: typer.Context,
+    article_id: str,
+    source: str = typer.Option(
+        ..., "--source", help="Who authored the VALUES: auto (machine) or manual (human)"
+    ),
+    title: str | None = typer.Option(None, "--title"),
+    authors: str | None = typer.Option(
+        None, "--authors", help='Comma-separated display names: "Jane Smith, Mo Doe"'
+    ),
+    corporate_author: str | None = typer.Option(None, "--corporate-author"),
+    year: int | None = typer.Option(None, "--year"),
+    journal: str | None = typer.Option(None, "--journal"),
+    doi: str | None = typer.Option(None, "--doi"),
+    publisher: str | None = typer.Option(None, "--publisher"),
+    url: str | None = typer.Option(None, "--url"),
+    abstract: str | None = typer.Option(None, "--abstract"),
+    clear: list[str] = typer.Option(
+        [], "--clear", help="Remove a field from the block (repeatable)"
+    ),
+    force: bool = typer.Option(
+        False, "--force", help="Let an auto write overwrite manual/doi metadata"
+    ),
+):
+    from .source_metadata import (
+        SOURCE_FIELDS,
+        can_overwrite,
+        read_source_metadata,
+        update_source_metadata,
+    )
+
+    if source not in ("auto", "manual"):
+        typer.secho(
+            f"{CROSS} --source must be auto or manual (doi is earned via `meta sync`)",
+            fg=typer.colors.RED,
+        )
+        raise typer.Exit(code=2)
+    cfg = _require_project(ctx).config
+    files = _require_article(cfg, article_id)
+
+    values = (title, authors, corporate_author, year, journal, doi, publisher, url, abstract)
+    fields: dict = {}
+    for key, value in zip(SOURCE_FIELDS, values):
+        if value is None:
+            continue
+        # An explicit empty string clears the field (the webapp's convention).
+        fields[key] = None if value == "" else value
+    if isinstance(fields.get("authors"), str):
+        fields["authors"] = [
+            n.strip() for n in fields["authors"].split(",") if n.strip()
+        ] or None
+    if fields.get("doi") is not None:
+        from .article_registry import is_valid_doi, normalize_doi
+
+        normalized_doi = normalize_doi(str(fields["doi"]))
+        if not is_valid_doi(normalized_doi):
+            typer.secho(f"{CROSS} not a valid DOI: {fields['doi']}", fg=typer.colors.RED)
+            raise typer.Exit(code=2)
+        fields["doi"] = normalized_doi
+    for field in clear:
+        if field not in SOURCE_FIELDS:
+            typer.secho(f"{CROSS} unknown field: {field}", fg=typer.colors.RED)
+            raise typer.Exit(code=2)
+        if fields.get(field) is not None:
+            typer.secho(
+                f"{CROSS} --clear {field} conflicts with the value passed for it",
+                fg=typer.colors.RED,
+            )
+            raise typer.Exit(code=2)
+        fields[field] = None
+    if not fields:
+        typer.secho(f"{CROSS} nothing to change (pass field options or --clear)", fg=typer.colors.RED)
+        raise typer.Exit(code=2)
+
+    existing = read_source_metadata(files.read_metadata()).get("metadata_source")
+    if not force and not can_overwrite(existing, source):
+        typer.secho(
+            f"{CROSS} refusing: metadata is {existing!r} and auto writes never overwrite "
+            "human or registry data (use --force to override)",
+            fg=typer.colors.RED,
+        )
+        raise typer.Exit(code=1)
+
+    block = update_source_metadata(files, fields, source=source)
+    typer.echo(json.dumps(block, indent=2, ensure_ascii=False))
+
+
+@meta_app.command(
+    "sync",
+    help="Fetch metadata from the DOI registry and lock the block (overwrites any state — "
+    "invoking this IS the consent). Use --all for the batch sweep, which enriches "
+    "machine-seeded records and never touches manual ones.",
+)
+def meta_sync(
+    ctx: typer.Context,
+    article_id: str | None = typer.Argument(None),
+    doi: str | None = typer.Option(
+        None, "--doi", help="Record this DOI on the article first, then sync from it"
+    ),
+    all_articles: bool = typer.Option(
+        False, "--all", help="Enrich every assembled article that has a DOI"
+    ),
+    refresh: bool = typer.Option(
+        False, "--refresh", help="With --all: re-fetch even when a cached response exists"
+    ),
+    email: str | None = typer.Option(None, "--email", help="Email for the OpenAlex polite pool"),
+):
+    from .article_registry import is_valid_doi, normalize_doi
+    from .ingest import openalex_harvest
+
+    cfg = _require_project(ctx).config
+    if all_articles:
+        if article_id or doi:
+            typer.secho(f"{CROSS} --all takes no article id or --doi", fg=typer.colors.RED)
+            raise typer.Exit(code=2)
+        stats = openalex_harvest.harvest(cfg, email=email, skip_existing=not refresh)
+        typer.echo(json.dumps(stats, indent=2))
+        return
+    if refresh:
+        typer.secho(f"{CROSS} --refresh requires --all", fg=typer.colors.RED)
+        raise typer.Exit(code=2)
+    if not article_id:
+        typer.secho(f"{CROSS} provide an article id, or --all", fg=typer.colors.RED)
+        raise typer.Exit(code=2)
+    _require_article(cfg, article_id)
+    normalized = None
+    if doi:
+        normalized = normalize_doi(doi)
+        if not is_valid_doi(normalized):
+            typer.secho(f"{CROSS} not a valid DOI: {doi}", fg=typer.colors.RED)
+            raise typer.Exit(code=2)
+    try:
+        block = openalex_harvest.sync_article(cfg, article_id, doi=normalized, email=email)
+    except LookupError as exc:
+        typer.secho(f"{CROSS} {exc}", fg=typer.colors.RED)
+        raise typer.Exit(code=1) from exc
+    except openalex_harvest.RegistryUnavailableError:
+        typer.secho(
+            f"{CROSS} DOI registry unavailable — try again later; nothing was recorded",
+            fg=typer.colors.RED,
+        )
+        raise typer.Exit(code=1) from None
+    if block is None:
+        typer.secho(
+            f"{CROSS} the registry has no usable record for this DOI; nothing was recorded"
+            + (
+                f" (use `litschema meta set {article_id} --source manual --doi {normalized}`"
+                " to keep the DOI anyway)"
+                if normalized
+                else ""
+            ),
+            fg=typer.colors.RED,
+        )
+        raise typer.Exit(code=1)
+    typer.echo(json.dumps(block, indent=2, ensure_ascii=False))
+
 
 @agent_app.command("prepare-schema-context", help="Write runtime schema context files.")
 def agent_prepare_schema_context(ctx: typer.Context):
@@ -482,7 +686,13 @@ def agent_record_extraction(
 ):
     project = _require_project(ctx)
     cfg = project.config
-    files = article_files(cfg, article_id)
+    from .articles import InvalidArticleIdError
+
+    try:
+        files = article_files(cfg, article_id)
+    except InvalidArticleIdError:
+        typer.secho(f"{CROSS} invalid article id: {article_id}", fg=typer.colors.RED)
+        raise typer.Exit(code=2) from None
     if not files.article_dir.is_dir():
         typer.secho(f"{CROSS} unknown article: {article_id}", fg=typer.colors.RED)
         raise typer.Exit(code=2)

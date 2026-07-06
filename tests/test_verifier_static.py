@@ -358,6 +358,61 @@ def test_verifier_edits_values_in_review_table_without_docked_modal() -> None:
     assert "position: relative" in html
 
 
+def test_bib_header_has_provenance_badge_and_edit_affordance() -> None:
+    html = STATIC_HTML.read_text()
+
+    assert 'id="bib-badge"' in html
+    assert 'id="bib-edit-btn"' in html
+    assert 'id="bib-edit-form"' in html
+    assert 'id="bib-edit-cancel"' in html
+    assert "PROVENANCE_BADGES" in html
+    badge_map = html[html.index("PROVENANCE_BADGES") : html.index("};", html.index("PROVENANCE_BADGES"))]
+    assert "legacy" not in badge_map  # retired provenance values carry no badge
+    assert "openalex" not in badge_map
+    assert '"/api/bibliography/"' in html or "`/api/bibliography/" in html
+    assert "lastBibMeta" in html
+    assert "bibArticleId" in html
+    # Lock model affordances: generic DOI pill, unlock control, per-article sync.
+    assert "✓ from DOI" in html
+    assert "verified via" not in html
+    assert 'id="bib-sync-btn"' in html
+    assert "/sync" in html
+    assert "Unlock to edit" in html
+    assert "Replace your manual edits" in html  # confirm() guards the destructive direction
+    # Race guard: responses apply by the id captured at request time, and
+    # the header only re-renders when that article is still current.
+    assert "applyBibBlock(id," in html
+    assert "articleId === state.currentId" in html
+    # The article-change handler discards stale fetch batches too.
+    assert "if (id !== state.currentId) return;" in html
+
+
+def test_bib_header_title_first_layout_with_corporate_author() -> None:
+    html = STATIC_HTML.read_text()
+
+    # corporate_author is editable and rendered when no personal authors exist
+    assert 'name="corporate_author"' in html
+    assert "Organization" in html
+    assert 'placeholder="Acme Institute"' in html
+    assert "meta.corporate_author" in html
+    assert "article.corporate_author" in html
+    # journal input keeps its name but is labelled "Published in"
+    assert 'Published in <input name="journal"' in html
+    # Save/Cancel sit on their own full-width row
+    assert "flex-basis: 100%" in html
+
+
+def test_verifier_index_served_by_app() -> None:
+    from fastapi.testclient import TestClient
+
+    from litschema.webapp.app import app
+
+    client = TestClient(app)
+    resp = client.get("/")
+    assert resp.status_code == 200
+    assert 'id="bib-badge"' in resp.text
+
+
 def test_verifier_moves_source_reasoning_to_left_overlay() -> None:
     html = STATIC_HTML.read_text()
 

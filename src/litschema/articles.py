@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import json
+import os
 from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
@@ -59,7 +60,16 @@ class ArticleFiles:
             return {}
 
 
+class InvalidArticleIdError(ValueError):
+    """Raised for article ids that would escape the article store."""
+
+
 def article_files(cfg: LitSchemaConfig, article_id: str) -> ArticleFiles:
+    # Single chokepoint for every article path join: ids minted by assemble
+    # are safe slugs, but ids also arrive from CLI arguments and URL path
+    # segments and must never traverse outside the store.
+    if not article_id or article_id in {".", ".."} or "/" in article_id or "\\" in article_id:
+        raise InvalidArticleIdError(f"invalid article id: {article_id!r}")
     return ArticleFiles(cfg=cfg, article_id=article_id)
 
 
@@ -115,12 +125,19 @@ def write_article_metadata(files: ArticleFiles, metadata: dict) -> dict:
     enriched in place across the pipeline (assemble writes identity, extraction
     and harvest add bibliographic and provenance fields). Existing keys are
     preserved; ``None`` values in ``metadata`` are ignored.
+
+    The write is atomic (same-directory tmp + rename): the manifest carries
+    human-authored metadata and the ``manual`` protection tag, and a torn
+    write would read back as ``{}`` — silently rebuilding the manifest from
+    scratch on the next write.
     """
     files.article_dir.mkdir(parents=True, exist_ok=True)
     merged = files.read_metadata()
     merged.update({key: value for key, value in metadata.items() if value is not None})
     merged.setdefault("id", files.article_id)
-    files.metadata.write_text(json.dumps(merged, indent=2) + "\n")
+    tmp = files.metadata.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(merged, indent=2) + "\n")
+    os.replace(tmp, files.metadata)
     return merged
 
 

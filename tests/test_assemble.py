@@ -281,6 +281,24 @@ def test_assemble_cli_reports_keyboard_interrupt_without_traceback(
     assert "Traceback" not in result.output
 
 
+# ── source_metadata seeding ──────────────────────────────────────────────────
+
+
+def test_assemble_seeds_source_metadata_title_from_filename(tmp_path: Path) -> None:
+    cfg = _cfg(tmp_path)
+    _drop_pdf(cfg, "Carbon Direct Buyer Guide 2024.pdf", "pdf-bytes")
+
+    article_assembly.assemble(cfg)
+
+    manifest = json.loads(
+        (cfg.article_store_dir / "carbon-direct-buyer-guide-2024" / "article-metadata.json").read_text()
+    )
+    assert manifest["source_metadata"] == {
+        "title": "Carbon Direct Buyer Guide 2024",
+        "metadata_source": "auto",
+    }
+
+
 # ── Extraction provenance lands in the manifest, not a CSV ───────────────────
 
 
