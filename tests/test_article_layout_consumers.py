@@ -125,13 +125,11 @@ def test_webapp_reads_bibliography_and_pdf_filename_from_article_metadata(
             }
         )
     )
-    assert webapp._article_meta(cfg, "smith-2024", author_index={}) == {
-        "title": "Smith example",
-        "year": 2024,
-        "journal": "Example Journal",
-        "doi": "10.1234/example",
-        "publisher": "Example Publisher",
-        "authors": [],
+    # Legacy top-level bib keys (doi included) are never read — alpha
+    # policy: unmigrated corpora update their manifests in the domain repo.
+    assert webapp._article_meta(cfg, "smith-2024") == {
+        "metadata_source": "auto",
+        "editable": True,
     }
     assert webapp._article_pdf_filename(cfg, "smith-2024") == "smith.pdf"
 

@@ -16,20 +16,27 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated
 
-import yaml
 from fastapi import Depends, FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from linkml_runtime.utils.schemaview import SchemaView
 
+from ..article_registry import is_valid_doi, normalize_doi
 from ..articles import (
+    InvalidArticleIdError,
     article_files,
     iter_article_ids_with_extractions,
     read_article_metadata,
     read_review_events,
 )
 from ..config import LitSchemaConfig
+from ..ingest.openalex_harvest import RegistryUnavailableError, sync_article
 from ..schema_resolution import resolve_extraction_schema
+from ..source_metadata import (
+    SOURCE_FIELDS,
+    read_source_metadata,
+    update_source_metadata,
+)
 from .search import strip_references
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -38,6 +45,11 @@ app = FastAPI(title="ERW Extraction Verifier")
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 ORCID_RE = re.compile(r"^\d{4}-\d{4}-\d{4}-\d{3}[0-9X]$")
+
+
+@app.exception_handler(InvalidArticleIdError)
+async def _invalid_article_id_handler(request: Request, exc: InvalidArticleIdError):
+    return JSONResponse(status_code=404, content={"detail": str(exc)})
 
 
 def get_config() -> LitSchemaConfig:
@@ -59,44 +71,19 @@ def get_config() -> LitSchemaConfig:
 CfgDep = Annotated[LitSchemaConfig, Depends(get_config)]
 
 
-def _load_author_index(cfg: LitSchemaConfig) -> dict[str, dict]:
-    """Read ``authors.yaml`` and index it by author id. Empty if missing.
+def _article_meta(cfg: LitSchemaConfig, article_id: str) -> dict:
+    """Return the provenance-tagged source metadata for an article id.
 
-    Callers that resolve many articles per request should call this once
-    and pass the result into :func:`_article_meta`, rather than calling
-    per-article — the read isn't cached.
+    ``editable`` tells the header which render mode to use — everything is
+    editable except registry-locked (``doi``) records; an assembled article
+    with no metadata yet comes back as an empty editable record.
     """
-    authors_path = cfg.data_dir / "authors.yaml"
-    if not authors_path.exists():
+    manifest = read_article_metadata(article_files(cfg, article_id))
+    if not manifest:
         return {}
-    authors = yaml.safe_load(authors_path.read_text()) or []
-    return {a.get("id"): a for a in authors if a.get("id")}
-
-
-def _article_meta(
-    cfg: LitSchemaConfig,
-    article_id: str,
-    author_index: dict[str, dict],
-) -> dict:
-    """Return a compact bibliographic dict for an article id."""
-    a = read_article_metadata(article_files(cfg, article_id))
-    if not a:
-        return {}
-    authors = []
-    for aid in a.get("author_ids") or []:
-        auth = author_index.get(aid)
-        if auth:
-            family = auth.get("family_name") or ""
-            given = auth.get("given_name") or ""
-            authors.append({"family": family, "given": given})
-    return {
-        "title": a.get("title"),
-        "year": a.get("year"),
-        "journal": a.get("journal"),
-        "doi": a.get("doi"),
-        "publisher": a.get("publisher"),
-        "authors": authors,
-    }
+    meta = read_source_metadata(manifest) or {"metadata_source": "auto"}
+    meta["editable"] = meta.get("metadata_source") != "doi"
+    return meta
 
 
 def _article_pdf_filename(cfg: LitSchemaConfig, article_id: str) -> str | None:
@@ -298,7 +285,6 @@ async def index():
 @app.get("/api/articles")
 async def list_articles(cfg: CfgDep):
     """List articles that have both markdown and extraction JSON."""
-    author_index = _load_author_index(cfg)
     articles = []
     for article_id in iter_article_ids_with_extractions(cfg):
         files = article_files(cfg, article_id)
@@ -316,7 +302,7 @@ async def list_articles(cfg: CfgDep):
         annotations = _current_annotations(cfg, article_id)
         progress = _review_progress(data, annotations)
         # Look up bibliographic fields from article metadata.
-        bib = _article_meta(cfg, article_id, author_index)
+        bib = _article_meta(cfg, article_id)
         articles.append(
             {
                 "article_id": article_id,
@@ -331,6 +317,8 @@ async def list_articles(cfg: CfgDep):
                 "year": bib.get("year"),
                 "journal": bib.get("journal"),
                 "authors": bib.get("authors", []),
+                "corporate_author": bib.get("corporate_author"),
+                "metadata_source": bib.get("metadata_source"),
             }
         )
 
@@ -384,11 +372,75 @@ async def get_article(article_id: str, cfg: CfgDep):
 
 @app.get("/api/bibliography/{article_id}")
 async def get_bibliography(article_id: str, cfg: CfgDep):
-    """Return bibliographic metadata (title, year, journal, authors, doi)."""
-    meta = _article_meta(cfg, article_id, _load_author_index(cfg))
+    """Return provenance-tagged source metadata for the verify header."""
+    meta = _article_meta(cfg, article_id)
     if not meta:
-        raise HTTPException(404, f"No bibliographic entry for {article_id}")
+        raise HTTPException(404, f"Unknown article {article_id}")
     return meta
+
+
+@app.put("/api/bibliography/{article_id}")
+async def put_bibliography(article_id: str, request: Request, cfg: CfgDep):
+    """Apply a human edit to the verify header; provenance becomes 'manual'.
+
+    Accepts a partial record of SOURCE_FIELDS. ``null`` clears a field.
+    Header metadata lives in the article manifest — review.json is never
+    touched by header edits (distinct layers; see specs/source-metadata/spec.md).
+    """
+    body = await request.json()
+    if not isinstance(body, dict):
+        raise HTTPException(400, "body must be a JSON object")
+    unknown = set(body) - set(SOURCE_FIELDS)
+    if unknown:
+        raise HTTPException(400, f"unknown fields: {', '.join(sorted(unknown))}")
+    if not body:
+        raise HTTPException(400, "no fields to update")
+
+    # An explicit empty string clears the field (same convention as the CLI).
+    fields = {key: (None if value == "" else value) for key, value in body.items()}
+    if isinstance(fields.get("authors"), str):
+        fields["authors"] = [
+            n.strip() for n in fields["authors"].split(",") if n.strip()
+        ] or None
+    if fields.get("year") is not None:
+        try:
+            fields["year"] = int(fields["year"])
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(400, "year must be an integer") from exc
+    if fields.get("doi") is not None:
+        normalized = normalize_doi(str(fields["doi"]))
+        if not is_valid_doi(normalized):
+            raise HTTPException(400, f"not a valid DOI: {fields['doi']}")
+        fields["doi"] = normalized
+
+    files = article_files(cfg, article_id)
+    if not files.metadata.exists():
+        raise HTTPException(404, f"Unknown article {article_id}")
+    block = update_source_metadata(files, fields, source="manual")
+    block["editable"] = True
+    return block
+
+
+@app.post("/api/bibliography/{article_id}/sync")
+async def sync_bibliography(article_id: str, cfg: CfgDep):
+    """Re-fetch the header from the DOI registry and lock it.
+
+    Overwrites ANY provenance, including ``manual`` — the explicit button
+    press (or CLI call) is the consent that batch harvest never has.
+    """
+    files = article_files(cfg, article_id)
+    if not files.metadata.exists():
+        raise HTTPException(404, f"Unknown article {article_id}")
+    try:
+        block = sync_article(cfg, article_id)
+    except LookupError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except RegistryUnavailableError as exc:
+        raise HTTPException(502, "DOI registry unavailable — try again") from exc
+    if block is None:
+        raise HTTPException(502, "the registry has no usable record for this DOI")
+    block["editable"] = False
+    return block
 
 
 @app.get("/api/markdown/{article_id}")

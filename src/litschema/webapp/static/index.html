@@ -1929,10 +1929,12 @@
   }
 
   .article-bibheader .bib-title {
-    font-size: 15px;
+    display: block;
+    width: 100%;
+    font-size: 22px;
     font-weight: 600;
     color: var(--text);
-    line-height: 1.3;
+    line-height: 1.25;
     max-width: 100%;
     text-wrap: balance;
   }
@@ -1965,6 +1967,84 @@
   }
 
   .article-bibheader .bib-doi:hover { color: var(--accent); }
+
+  .article-bibheader .bib-badge {
+    font-size: 11px;
+    padding: 1px 7px;
+    border-radius: 9px;
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    white-space: nowrap;
+  }
+
+  .article-bibheader .bib-badge.verified {
+    color: var(--green);
+    border-color: currentColor;
+  }
+
+  .article-bibheader .bib-edit-btn {
+    background: none;
+    border: none;
+    padding: 0;
+    font-size: 12px;
+    cursor: pointer;
+    color: var(--text-secondary);
+  }
+
+  .article-bibheader .bib-edit-btn:hover { color: var(--accent); }
+
+  .article-bibheader .bib-edit-form {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    width: 100%;
+    margin-top: 8px;
+  }
+
+  .article-bibheader .bib-edit-form[hidden] { display: none; }
+
+  .article-bibheader .bib-edit-form label {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-size: 11px;
+    color: var(--text-secondary);
+  }
+
+  .article-bibheader .bib-edit-form label:has(input[name="title"]) {
+    flex-basis: 100%;
+  }
+
+  .article-bibheader .bib-edit-form input {
+    padding: 3px 6px;
+    font-size: 12px;
+    color: var(--text);
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+  }
+
+  .article-bibheader .bib-edit-actions {
+    display: flex;
+    align-items: flex-end;
+    gap: 6px;
+    flex-basis: 100%;
+  }
+
+  .article-bibheader .bib-edit-actions button {
+    padding: 3px 10px;
+    font-size: 11px;
+    color: var(--text-secondary);
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    cursor: pointer;
+  }
+
+  .article-bibheader .bib-edit-actions button:hover {
+    color: var(--accent);
+    border-color: var(--accent);
+  }
 
   .source-evidence-overlay {
     display: none;
@@ -2150,8 +2230,9 @@
     }
 
     .article-bibheader .bib-title {
-      min-width: 160px;
-      max-width: 260px;
+      font-size: 17px;
+      min-width: 0;
+      max-width: 100%;
     }
 
     .article-bibheader .bib-authors {
@@ -2320,7 +2401,23 @@ e.g. year >= 2024 && study_types.includes("review")'
           <span class="bib-authors" id="bib-authors"></span>
           <span id="bib-meta"></span>
           <a class="bib-doi" id="bib-doi" target="_blank" rel="noopener" style="display:none"></a>
+          <span class="bib-badge" id="bib-badge" hidden></span>
+          <button class="bib-edit-btn" id="bib-edit-btn" type="button" title="Edit document metadata" hidden>&#9998;</button>
+          <button class="bib-edit-btn" id="bib-sync-btn" type="button" title="Sync metadata from the DOI registry" hidden>&#10227; from DOI</button>
         </span>
+        <form class="bib-edit-form" id="bib-edit-form" hidden>
+          <label>Title <input name="title" type="text"></label>
+          <label>Authors <input name="authors" type="text" placeholder="Jane Smith, Mo Doe"></label>
+          <label>Organization <input name="corporate_author" type="text" placeholder="Acme Institute"></label>
+          <label>Year <input name="year" type="number" min="1500" max="2100"></label>
+          <label>Published in <input name="journal" type="text"></label>
+          <label>DOI <input name="doi" type="text"></label>
+          <label>URL <input name="url" type="url"></label>
+          <div class="bib-edit-actions">
+            <button type="submit">Save</button>
+            <button type="button" id="bib-edit-cancel">Cancel</button>
+          </div>
+        </form>
       </div>
       <div class="panel-header-row search-row" id="search-row" style="display:none">
         <div class="search-container">
@@ -2850,9 +2947,16 @@ function closeFilterHelp() {
 function articleOptionLabel(article) {
   const authors = formatAuthors(article.authors);
   const year = article.year ? ` ${article.year}` : "";
-  const citation = authors ? `${authors}${year}` : (article.article_id || "Untitled article");
-  const title = article.title ? `. ${article.title}` : "";
-  return `${citation}${title}`;
+  if (authors) {
+    return `${authors}${year}${article.title ? `. ${article.title}` : ""}`;
+  }
+  if (article.corporate_author) {
+    return `${article.corporate_author}${year}${article.title ? `. ${article.title}` : ""}`;
+  }
+  if (article.title) {
+    return article.year ? `${article.title} (${article.year})` : article.title;
+  }
+  return article.article_id || "Untitled article";
 }
 
 function populateDropdown() {
@@ -2936,12 +3040,17 @@ $("#article-select").addEventListener("change", async (e) => {
   $("#panel-left").innerHTML = '<div class="loading">Loading...</div>';
   $("#panel-right").innerHTML = '<div class="loading">Loading...</div>';
 
-  const [mdData, extraction, reasoningData, annData] = await Promise.all([
+  const [mdData, extraction, reasoningData, annData, bibData] = await Promise.all([
     fetchJson(`/api/markdown/${id}`),
     fetchJson(`/api/article/${id}`),
     fetchJson(`/api/reasoning/${id}`).catch(() => null),
     fetchJson(`/api/annotations/${id}`).catch(() => ({ annotations: [] })),
+    fetchJson(`/api/bibliography/${id}`).catch(() => null),
   ]);
+  // Staleness guard: the user may have navigated on while these fetches ran.
+  // Rendering a stale batch would point the header (and its edit form, and
+  // therefore future PUTs) at the wrong article.
+  if (id !== state.currentId) return;
 
   state.markdown = mdData.markdown;
   state.extraction = extraction;
@@ -2965,7 +3074,7 @@ $("#article-select").addEventListener("change", async (e) => {
     state.annotations[p] = ann;
   }
 
-  const meta = state.articles.find(a => a.article_id === id);
+  const meta = bibData || state.articles.find(a => a.article_id === id);
   if (meta) renderBibHeader(meta);
 
   $("#btn-pdf").style.display = "flex";
@@ -2978,9 +3087,20 @@ $("#article-select").addEventListener("change", async (e) => {
 });
 
 // ── Bibliographic header ──
+// Only registry-verified provenance earns a pill; human-entered metadata
+// is signaled by the edit affordance alone.
+const PROVENANCE_BADGES = {
+  doi: { label: "✓ from DOI", verified: true },
+};
+
+let lastBibMeta = null;
+let bibArticleId = null;
+
 function formatAuthors(authors) {
   if (!authors || !authors.length) return "";
-  const families = authors.map(a => a.family || a.given || "").filter(Boolean);
+  const families = authors
+    .map(a => typeof a === "string" ? a.trim().split(/\s+/).pop() : (a.family || a.given || ""))
+    .filter(Boolean);
   if (families.length === 0) return "";
   if (families.length === 1) return families[0];
   if (families.length === 2) return `${families[0]} & ${families[1]}`;
@@ -2990,23 +3110,35 @@ function formatAuthors(authors) {
 function renderBibHeader(meta) {
   const bar = $("#article-bibheader");
   if (!bar) return;
-  const hasAny = meta && (meta.title || meta.year || meta.journal);
+  lastBibMeta = meta || null;
+  bibArticleId = (meta && meta.article_id) || state.currentId;
+  $("#bib-edit-form").hidden = true;
+  // Fallback payloads (e.g. the dropdown entry when /api/bibliography fails)
+  // carry no `editable`; derive it from the lock model.
+  const editable = meta
+    ? (meta.editable !== undefined ? meta.editable : meta.metadata_source !== "doi")
+    : false;
+  const hasAny = meta && (
+    meta.title || meta.year || meta.journal || meta.doi || meta.metadata_source
+  );
   if (!hasAny) {
     bar.style.display = "none";
     return;
   }
   bar.style.display = "flex";
-  $("#bib-title").textContent = meta.title || meta.article_id || "";
+  $("#bib-title").textContent = meta.title || meta.article_id || state.currentId || "";
   $("#bib-title").title = meta.title || "";
 
-  const authorsText = formatAuthors(meta.authors);
+  // Person authors win; otherwise show the corporate author verbatim
+  // (organization names must never be last-name-split).
+  const authorsText = formatAuthors(meta.authors) || (meta.corporate_author || "");
   const authorsEl = $("#bib-authors");
   authorsEl.textContent = authorsText;
   authorsEl.style.display = authorsText ? "inline" : "none";
 
   const metaParts = [];
-  if (meta.journal) metaParts.push(escapeHtml(meta.journal));
-  if (meta.year) metaParts.push(String(meta.year));
+  if (meta.journal) metaParts.push(escapeHtml(String(meta.journal)));
+  if (meta.year) metaParts.push(escapeHtml(String(meta.year)));
   $("#bib-meta").innerHTML = metaParts.join(' <span class="bib-sep">&middot;</span> ');
 
   const doiEl = $("#bib-doi");
@@ -3017,7 +3149,93 @@ function renderBibHeader(meta) {
   } else {
     doiEl.style.display = "none";
   }
+
+  const badge = $("#bib-badge");
+  const info = PROVENANCE_BADGES[meta.metadata_source];
+  badge.hidden = !info;
+  if (info) {
+    badge.textContent = info.label;
+    badge.classList.toggle("verified", info.verified);
+  }
+  // Locked (doi) records swap the pencil for an unlock affordance — editing
+  // is always possible, but re-editing registry data is a deliberate act.
+  const editBtn = $("#bib-edit-btn");
+  editBtn.hidden = false;
+  if (editable) {
+    editBtn.innerHTML = "&#9998;";
+    editBtn.title = "Edit document metadata";
+  } else {
+    editBtn.innerHTML = "&#128275;";
+    editBtn.title = "Unlock to edit (saving replaces the registry lock)";
+  }
+  // Sync is offered wherever a DOI exists and the record isn't already locked.
+  $("#bib-sync-btn").hidden = !(editable && meta.doi);
 }
+
+function applyBibBlock(articleId, block) {
+  // articleId is captured at request time: a response must never be applied
+  // to whichever article the user has navigated to since.
+  const entry = state.articles.find(a => a.article_id === articleId);
+  if (entry) {
+    for (const key of ["title", "year", "journal", "doi", "corporate_author"]) entry[key] = block[key] ?? null;
+    entry.authors = block.authors || [];
+    entry.metadata_source = block.metadata_source;
+    populateDropdown();
+  }
+  if (articleId === state.currentId) renderBibHeader(block);
+}
+
+$("#bib-edit-btn").addEventListener("click", () => {
+  const form = $("#bib-edit-form");
+  for (const input of form.querySelectorAll("input")) {
+    const v = lastBibMeta ? lastBibMeta[input.name] : null;
+    input.value = Array.isArray(v) ? v.join(", ") : (v ?? "");
+  }
+  form.hidden = false;
+});
+
+$("#bib-edit-cancel").addEventListener("click", () => { $("#bib-edit-form").hidden = true; });
+
+$("#bib-edit-form").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const id = bibArticleId;  // captured now; the user may navigate mid-flight
+  if (!id) return;
+  const payload = {};
+  for (const input of ev.target.querySelectorAll("input")) {
+    payload[input.name] = input.value.trim() === "" ? null : input.value.trim();
+  }
+  const submitBtn = ev.target.querySelector('button[type="submit"]');
+  if (submitBtn) submitBtn.disabled = true;
+  try {
+    const resp = await fetch("/api/bibliography/" + encodeURIComponent(id), {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!resp.ok) { alert("Could not save metadata"); return; }
+    applyBibBlock(id, await resp.json());
+  } finally {
+    if (submitBtn) submitBtn.disabled = false;
+  }
+});
+
+$("#bib-sync-btn").addEventListener("click", async () => {
+  const id = bibArticleId;  // captured now; the user may navigate mid-flight
+  if (!id) return;
+  if (lastBibMeta && lastBibMeta.metadata_source === "manual" &&
+      !confirm("Replace your manual edits with registry data for this DOI?")) return;
+  const btn = $("#bib-sync-btn");
+  btn.disabled = true;
+  try {
+    const resp = await fetch("/api/bibliography/" + encodeURIComponent(id) + "/sync", {
+      method: "POST",
+    });
+    if (!resp.ok) { alert("Could not sync from the DOI registry"); return; }
+    applyBibBlock(id, await resp.json());
+  } finally {
+    btn.disabled = false;
+  }
+});
 
 // ── Markdown rendering ──
 function renderMarkdown() {
