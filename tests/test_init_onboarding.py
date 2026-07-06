@@ -115,9 +115,11 @@ def test_init_profile_flag_writes_document_profile(tmp_path) -> None:
     assert "litschema harvest" in result.output  # journal next-steps mention harvest
 
 
-def test_init_prompts_for_profile_when_flag_absent(tmp_path) -> None:
+def test_init_prompts_for_profile_when_flag_absent(tmp_path, monkeypatch) -> None:
     from litschema import cli
 
+    # CliRunner stdin is not a TTY; force the interactive path for this test.
+    monkeypatch.setattr(cli, "_stdin_is_interactive", lambda: True)
     runner = CliRunner()
     project = tmp_path / "myreview"
 
@@ -127,6 +129,21 @@ def test_init_prompts_for_profile_when_flag_absent(tmp_path) -> None:
     assert "What kind of documents" in result.output
     assert 'document_profile: "generic"' in (project / "litschema.yaml").read_text()
     assert "litschema harvest" not in result.output  # generic next-steps don't
+
+
+def test_init_without_profile_is_scriptable_when_not_a_tty(tmp_path) -> None:
+    # CI, pipes, and agents call bare `init` with stdin at EOF: no prompt,
+    # no abort — the default profile applies, same as pressing Enter.
+    from litschema import cli
+
+    runner = CliRunner()
+    project = tmp_path / "myreview"
+
+    result = runner.invoke(cli.app, ["init", str(project)])
+
+    assert result.exit_code == 0, result.output
+    assert "What kind of documents" not in result.output
+    assert 'document_profile: "generic"' in (project / "litschema.yaml").read_text()
 
 
 def test_init_rejects_unknown_profile(tmp_path) -> None:

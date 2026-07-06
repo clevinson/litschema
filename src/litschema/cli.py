@@ -76,6 +76,10 @@ def main(
     ctx.obj = config
 
 
+def _stdin_is_interactive() -> bool:
+    return sys.stdin.isatty()
+
+
 def _count_files(path: Path, pattern: str = "*") -> int:
     return len(list(path.glob(pattern))) if path.is_dir() else 0
 
@@ -927,11 +931,16 @@ def init(
     force: bool = typer.Option(False, "--force", help="Allow initializing an existing directory"),
 ):
     if profile is None:
-        typer.echo("What kind of documents is this project about?")
-        typer.echo("  [1] Journal articles with DOIs   (bibliographic metadata auto-fetched)")
-        typer.echo("  [2] Other documents              (reports, theses, policy PDFs, ...)")
-        choice = typer.prompt("Choose 1 or 2", default="2").strip()
-        profile = {"1": "journal_article", "2": "generic"}.get(choice, choice)
+        if not _stdin_is_interactive():
+            # Scripted callers (CI, agents, pipes) get the default instead of
+            # a prompt that would abort on EOF — bare `init` stays scriptable.
+            profile = "generic"
+        else:
+            typer.echo("What kind of documents is this project about?")
+            typer.echo("  [1] Journal articles with DOIs   (bibliographic metadata auto-fetched)")
+            typer.echo("  [2] Other documents              (reports, theses, policy PDFs, ...)")
+            choice = typer.prompt("Choose 1 or 2", default="2").strip()
+            profile = {"1": "journal_article", "2": "generic"}.get(choice, choice)
     if profile not in DOCUMENT_PROFILES:
         typer.secho(
             f"{CROSS} unknown profile {profile!r}; expected journal_article or generic",
