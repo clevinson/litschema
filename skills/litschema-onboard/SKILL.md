@@ -26,9 +26,7 @@ checking extraction quality, and narrating clearly.
    if that fails, fall through to the next option.
 3. Run `$LITSCHEMA status` and `$LITSCHEMA doctor`. Report problems before
    continuing.
-4. Read `litschema.yaml` and note `document_profile`
-   (`journal_article` or `generic`).
-5. If `papers-inbox/` has no PDFs AND `data/papers/` has no articles, ask the
+4. If `papers-inbox/` has no PDFs AND `data/papers/` has no articles, ask the
    user to drop PDFs into `papers-inbox/` and stop until they have.
 
 ## Phase A — draft the schema (the conversation that matters most)
@@ -66,10 +64,11 @@ reuse or revise it.
 1. Run `$LITSCHEMA assemble`. Report what was assembled.
 2. Run `$LITSCHEMA prepare-text --all` so article text is browsable in the
    verifier before extraction begins.
-3. If `document_profile` is `journal_article`: run `$LITSCHEMA harvest` so
-   bibliographic metadata is fetched by DOI. If it fails (offline, no DOIs),
-   say so and continue —
-   metadata stays editable in the verifier; nothing downstream breaks.
+3. Run `$LITSCHEMA meta sync --all` so every article whose metadata carries a
+   DOI gets bibliographic metadata fetched from the registry. Articles without
+   DOIs are skipped — this is a no-op for collections that have none. If it
+   fails (offline), say so and continue — metadata stays editable in the
+   verifier; nothing downstream breaks.
 
 ## Phase C — pilot (one article before the whole collection)
 

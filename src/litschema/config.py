@@ -223,23 +223,6 @@ def require_config_or_exit(
         sys.exit(exit_code)
 
 
-#: Project document profiles. An init-time hint only: shapes init's
-#: next-steps text and whether harvest is surfaced in status/onboarding.
-#: It does NOT fork pipeline or webapp behavior — the verify header is
-#: driven per-article by metadata_source provenance.
-DOCUMENT_PROFILES = ("journal_article", "generic")
-
-
-def document_profile(cfg) -> str:
-    """Return the project's document profile (default ``generic``)."""
-    value = cfg.raw.get("document_profile", "generic")
-    if value not in DOCUMENT_PROFILES:
-        raise ValueError(
-            f"invalid document_profile {value!r}; expected one of {', '.join(DOCUMENT_PROFILES)}"
-        )
-    return value
-
-
 __all__ = [
     "LitSchemaConfig",
     "load_config",
@@ -248,6 +231,4 @@ __all__ = [
     "ConfigNotFoundError",
     "CONFIG_FILENAME",
     "ENV_VAR",
-    "DOCUMENT_PROFILES",
-    "document_profile",
 ]

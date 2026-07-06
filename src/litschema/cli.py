@@ -26,7 +26,7 @@ from .articles import (
     iter_review_paths,
     record_extraction_provenance,
 )
-from .config import DOCUMENT_PROFILES, ConfigNotFoundError, LitSchemaConfig, document_profile
+from .config import ConfigNotFoundError, LitSchemaConfig
 from .ingest import article_assembly, validate_extraction
 from .project import Project
 from .schema_resolution import extraction_schema_path
@@ -74,10 +74,6 @@ def main(
     ),
 ) -> None:
     ctx.obj = config
-
-
-def _stdin_is_interactive() -> bool:
-    return sys.stdin.isatty()
 
 
 def _count_files(path: Path, pattern: str = "*") -> int:
@@ -795,8 +791,6 @@ def status(ctx: typer.Context):
     typer.echo(f"extracted:   {extractions} extractions")
     typer.echo(f"reasoning:   {reasoning} reasoning files")
     typer.echo(f"annotations: {annotations}")
-    if document_profile(cfg) == "journal_article":
-        typer.echo("harvest:     run `litschema harvest` to fill bibliographic metadata by DOI")
 
 
 @app.command(help="Diagnose configuration and dependency issues.")
@@ -920,11 +914,6 @@ def _ensure_gitignore_entries(project: Path) -> None:
 @app.command(help="Scaffold a new litschema project.")
 def init(
     domain: Path = typer.Argument(..., help="Project directory to create"),
-    profile: str | None = typer.Option(
-        None,
-        "--profile",
-        help="Document profile: journal_article or generic (prompted if omitted)",
-    ),
     no_skills: bool = typer.Option(
         False, "--no-skills", help="Skip installing agent skills into the project"
     ),
@@ -950,24 +939,6 @@ def init(
         typer.secho(f"{CROSS} {project} already exists and is not empty", fg=typer.colors.RED)
         raise typer.Exit(code=2)
 
-    if profile is None:
-        if not _stdin_is_interactive():
-            # Scripted callers (CI, agents, pipes) get the default instead of
-            # a prompt that would abort on EOF — bare `init` stays scriptable.
-            profile = "generic"
-        else:
-            typer.echo("What kind of documents is this project about?")
-            typer.echo("  [1] Journal articles with DOIs   (bibliographic metadata auto-fetched)")
-            typer.echo("  [2] Other documents              (reports, theses, policy PDFs, ...)")
-            choice = typer.prompt("Choose 1 or 2", default="2").strip()
-            profile = {"1": "journal_article", "2": "generic"}.get(choice, choice)
-    if profile not in DOCUMENT_PROFILES:
-        typer.secho(
-            f"{CROSS} unknown profile {profile!r}; expected journal_article or generic",
-            fg=typer.colors.RED,
-        )
-        raise typer.Exit(code=2)
-
     project.mkdir(parents=True, exist_ok=True)
     project.joinpath("schema").mkdir(exist_ok=True)
     project.joinpath("data", "papers").mkdir(parents=True, exist_ok=True)
@@ -982,7 +953,6 @@ def init(
         'data_dir: "data"\n'
         'article_store_dir: "data/papers"\n'
         'paper_inbox_dir: "papers-inbox"\n'
-        f'document_profile: "{profile}"\n'
     )
     _write_draft_schema(project)
     _ensure_gitignore_entries(project)
@@ -1000,10 +970,10 @@ def init(
     typer.echo("\nNext steps:")
     typer.echo(f"  1. cd {project}")
     typer.echo("  2. Drop PDFs into papers-inbox/")
-    if profile == "journal_article":
-        typer.echo(
-            "     (after extraction, `litschema harvest` fills bibliographic metadata by DOI)"
-        )
+    typer.echo(
+        "     (documents with DOIs get bibliographic metadata synced automatically"
+        " during onboarding)"
+    )
     typer.echo("  3. Open this project in your agent (e.g. `claude`) and run /litschema-onboard")
     typer.echo("     — it drafts your schema with you, runs intake, and extracts your papers")
     typer.echo("  4. `litschema verify` any time to review what's been extracted")
