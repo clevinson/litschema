@@ -61,29 +61,41 @@ def test_init_refuses_to_overwrite_existing_project_without_force(tmp_path) -> N
     assert project.joinpath("keep.txt").read_text() == "important\n"
 
 
-def test_init_force_preserves_existing_project_files(tmp_path) -> None:
+def test_init_refuses_existing_project_even_with_force(tmp_path) -> None:
+    # Re-init is disallowed outright: an existing litschema.yaml means the
+    # project is managed by editing it (or `litschema skills install`), never
+    # by running init again.
     from litschema import cli
 
     project = tmp_path / "my-review"
-    project.joinpath("schema").mkdir(parents=True)
-    project.joinpath("data", "sources").mkdir(parents=True)
+    project.mkdir()
     project.joinpath("litschema.yaml").write_text("project_root: existing\n")
     project.joinpath("domain_context.md").write_text("existing context\n")
-    project.joinpath("schema", "extraction.yaml").write_text("existing schema\n")
-    project.joinpath("data", "sources", "articles.csv").write_text(
-        "doi,article_id,title\n10.1234/example,smith-2024,Existing\n"
-    )
+
+    result = CliRunner().invoke(cli.app, ["init", str(project), "--profile", "generic", "--force"])
+
+    assert result.exit_code == 2
+    assert "litschema.yaml" in result.output
+    assert project.joinpath("litschema.yaml").read_text() == "project_root: existing\n"
+    assert project.joinpath("domain_context.md").read_text() == "existing context\n"
+    assert not project.joinpath("papers-inbox").exists()
+
+
+def test_init_force_initializes_non_empty_non_project_dir(tmp_path) -> None:
+    # The legitimate --force case: a directory that already has files (a
+    # README, .git, ...) but is not yet a litschema project.
+    from litschema import cli
+
+    project = tmp_path / "my-review"
+    project.mkdir()
+    project.joinpath("keep.txt").write_text("important\n")
     project.joinpath(".gitignore").write_text("custom-ignore\n")
 
     result = CliRunner().invoke(cli.app, ["init", str(project), "--profile", "generic", "--force"])
 
     assert result.exit_code == 0, result.output
-    assert project.joinpath("litschema.yaml").read_text() == "project_root: existing\n"
-    assert project.joinpath("domain_context.md").read_text() == "existing context\n"
-    assert project.joinpath("schema", "extraction.yaml").read_text() == "existing schema\n"
-    assert project.joinpath("data", "sources", "articles.csv").read_text().endswith(
-        "10.1234/example,smith-2024,Existing\n"
-    )
+    assert project.joinpath("keep.txt").read_text() == "important\n"
+    assert 'document_profile: "generic"' in project.joinpath("litschema.yaml").read_text()
     gitignore = project.joinpath(".gitignore").read_text()
     assert "custom-ignore\n" in gitignore
     assert "papers-inbox/.processed/*.pdf" in gitignore

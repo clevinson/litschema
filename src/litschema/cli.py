@@ -928,8 +928,28 @@ def init(
     no_skills: bool = typer.Option(
         False, "--no-skills", help="Skip installing agent skills into the project"
     ),
-    force: bool = typer.Option(False, "--force", help="Allow initializing an existing directory"),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        help="Initialize into a non-empty directory (refused if it is already a litschema project)",
+    ),
 ):
+    project = domain.expanduser().resolve()
+    if project.exists() and not project.is_dir():
+        typer.secho(f"{CROSS} {project} exists and is not a directory", fg=typer.colors.RED)
+        raise typer.Exit(code=2)
+    if project.joinpath("litschema.yaml").exists():
+        typer.secho(
+            f"{CROSS} {project} is already a litschema project (litschema.yaml exists) — "
+            "edit litschema.yaml directly, or run "
+            "'litschema skills install --local --force' to refresh skills",
+            fg=typer.colors.RED,
+        )
+        raise typer.Exit(code=2)
+    if project.exists() and any(project.iterdir()) and not force:
+        typer.secho(f"{CROSS} {project} already exists and is not empty", fg=typer.colors.RED)
+        raise typer.Exit(code=2)
+
     if profile is None:
         if not _stdin_is_interactive():
             # Scripted callers (CI, agents, pipes) get the default instead of
@@ -948,31 +968,22 @@ def init(
         )
         raise typer.Exit(code=2)
 
-    project = domain.expanduser().resolve()
-    if project.exists() and not project.is_dir():
-        typer.secho(f"{CROSS} {project} exists and is not a directory", fg=typer.colors.RED)
-        raise typer.Exit(code=2)
-    if project.exists() and any(project.iterdir()) and not force:
-        typer.secho(f"{CROSS} {project} already exists and is not empty", fg=typer.colors.RED)
-        raise typer.Exit(code=2)
-
     project.mkdir(parents=True, exist_ok=True)
     project.joinpath("schema").mkdir(exist_ok=True)
     project.joinpath("data", "papers").mkdir(parents=True, exist_ok=True)
     project.joinpath("papers-inbox").mkdir(exist_ok=True)
 
-    config_path = project.joinpath("litschema.yaml")
-    if not config_path.exists():
-        config_path.write_text(
-            'project_root: "."\n'
-            'schema_dir: "schema"\n'
-            'schema_root: "extraction.yaml"\n'
-            'extraction_schema_file: "extraction.yaml"\n'
-            'data_dir: "data"\n'
-            'article_store_dir: "data/papers"\n'
-            'paper_inbox_dir: "papers-inbox"\n'
-            f'document_profile: "{profile}"\n'
-        )
+    # The config cannot exist here — init refuses existing projects above.
+    project.joinpath("litschema.yaml").write_text(
+        'project_root: "."\n'
+        'schema_dir: "schema"\n'
+        'schema_root: "extraction.yaml"\n'
+        'extraction_schema_file: "extraction.yaml"\n'
+        'data_dir: "data"\n'
+        'article_store_dir: "data/papers"\n'
+        'paper_inbox_dir: "papers-inbox"\n'
+        f'document_profile: "{profile}"\n'
+    )
     _write_draft_schema(project)
     _ensure_gitignore_entries(project)
 
