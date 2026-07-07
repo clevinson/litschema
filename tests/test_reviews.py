@@ -128,33 +128,19 @@ def test_write_reviews_omits_stamp_without_extraction_file(tmp_path: Path) -> No
     assert on_disk["fields"]["title"]["author"] == "A"
 
 
-# ── legacy reviews.jsonl set-aside ───────────────────────────────────────────
+# ── no legacy awareness ──────────────────────────────────────────────────────
 
 
-def test_leftover_legacy_log_is_renamed_aside_on_first_read(tmp_path: Path) -> None:
+def test_stray_files_in_the_article_dir_are_ignored(tmp_path: Path) -> None:
+    # The framework reads review.json and nothing else; unknown files (e.g. a
+    # leftover reviews.jsonl from a pre-release checkout) are inert and
+    # untouched — cleaning them up is the domain repo's business.
     files = article_files(_cfg(tmp_path), "a")
     files.article_dir.mkdir(parents=True, exist_ok=True)
-    legacy = files.article_dir / "reviews.jsonl"
-    legacy.write_text('{"path": ".title", "status": "verified"}\n')
+    stray = files.article_dir / "reviews.jsonl"
+    stray.write_text('{"path": ".title", "status": "verified"}\n')
 
-    assert reviews.read_reviews(files) == {}        # NOT converted — throwaway data
+    assert reviews.read_reviews(files) == {}
 
-    assert not legacy.exists()
-    assert (files.article_dir / "reviews.jsonl.bak").exists()
-
-
-def test_legacy_log_left_alone_when_review_json_exists(tmp_path: Path) -> None:
-    files = article_files(_cfg(tmp_path), "a")
-    reviews.upsert_review(files, "title", {"author": "A", "signal": "verified", "timestamp": "t9"})
-    legacy = files.article_dir / "reviews.jsonl"
-    legacy.write_text('{"path": ".title", "status": "flagged"}\n')
-
-    fields = reviews.read_reviews(files)
-
-    assert fields["title"]["timestamp"] == "t9"
-    assert legacy.exists()                          # nothing touched
-
-
-def test_migration_noop_without_legacy_file(tmp_path: Path) -> None:
-    files = article_files(_cfg(tmp_path), "a")
-    assert reviews.migrate_legacy_reviews(files) is False
+    assert stray.exists()
+    assert stray.read_text() == '{"path": ".title", "status": "verified"}\n'

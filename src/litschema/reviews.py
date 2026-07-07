@@ -9,10 +9,6 @@ review" — multi-reviewer coordination happens in PR diffs of review.json
 override_value?, timestamp}`` (+ optional ``note``/``source``/``batch_id``).
 The webapp API keeps its historical field names (status/reviewer/
 correct_value) and maps at the endpoint boundary — see ``webapp/app.py``.
-
-The append-only ``reviews.jsonl`` predecessor is set aside lazily and
-one-time: first read renames the event log to ``reviews.jsonl.bak``
-without converting it (pre-review.json logs are throwaway test data).
 """
 
 from __future__ import annotations
@@ -75,12 +71,11 @@ def base_extraction_stale(files: ArticleFiles) -> bool:
 
 
 def read_reviews(files: ArticleFiles) -> dict[str, dict]:
-    """Return the ``fields`` map (path -> entry). Runs the lazy legacy migration first.
+    """Return the ``fields`` map (path -> entry).
 
     Non-dict entry values (e.g. the pre-2026-06-11 list-of-entries shape) are
     ignored — old-shape files are throwaway alpha data, not migrated.
     """
-    migrate_legacy_reviews(files)
     path = files.reviews
     if not path.exists():
         return {}
@@ -134,18 +129,3 @@ def delete_reviews_at(files: ArticleFiles, path: str) -> None:
     fields = read_reviews(files)
     fields.pop(key, None)
     write_reviews(files, fields)
-
-
-def migrate_legacy_reviews(files: ArticleFiles) -> bool:
-    """Set aside a leftover append-only ``reviews.jsonl``.
-
-    Pre-review.json logs are throwaway test data — they are renamed to
-    ``reviews.jsonl.bak`` (not converted) so they can't be mistaken for
-    live review state. Never runs once review.json exists.
-    """
-    legacy = files.reviews_legacy
-    if files.reviews.exists() or not legacy.exists():
-        return False
-    legacy.rename(legacy.with_suffix(".jsonl.bak"))
-    logger.info("Set aside legacy review log for %s", files.article_id)
-    return True

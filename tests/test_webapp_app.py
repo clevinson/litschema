@@ -275,22 +275,6 @@ def test_get_annotations_base_stale_true_after_extraction_changes(tmp_path) -> N
     assert body["annotations"]  # annotations still served alongside the warning
 
 
-def test_get_annotations_sets_aside_legacy_jsonl(tmp_path) -> None:
-    cfg = _project_cfg(tmp_path)
-    _write_extraction(cfg, "a", {"article_id": "a", "title": "T"})
-    article_dir = cfg.article_store_dir / "a"
-    (article_dir / "reviews.jsonl").write_text(
-        _json.dumps({"path": ".title", "status": "verified", "reviewer": "A", "timestamp": "t"}) + "\n"
-    )
-    client = _client(cfg)
-
-    anns = client.get("/api/annotations/a").json()["annotations"]
-
-    assert anns == []                                   # throwaway data, not converted
-    assert not (article_dir / "reviews.jsonl").exists()
-    assert (article_dir / "reviews.jsonl.bak").exists()
-
-
 def test_list_articles_includes_assembled_but_unextracted(tmp_path) -> None:
     cfg = _project_cfg(tmp_path)
     _write_manifest(

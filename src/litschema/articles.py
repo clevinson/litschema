@@ -51,10 +51,6 @@ class ArticleFiles:
     def reviews(self) -> Path:
         return self.article_dir / "review.json"
 
-    @property
-    def reviews_legacy(self) -> Path:
-        return self.article_dir / "reviews.jsonl"
-
     def read_metadata(self) -> dict:
         if not self.metadata.exists():
             return {}
