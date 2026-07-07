@@ -15,7 +15,7 @@ Before running extraction, verify you are in a litschema project by checking for
 
 Do not assume `uv` or `litschema` is available just because this skill is installed. Resolve the command runner for this project, in this order:
 
-1. If a `.litschema/cli` file exists in the project root, set `LITSCHEMA` to its single-line content verbatim (e.g. `uv run --project ../../litschema litschema`). This file is a development override that points at a work-in-progress litschema checkout; it is never required for normal use.
+1. If a `.litschema/cli` file exists in the project root, it names a development override that points at a work-in-progress litschema checkout (e.g. `uv run --project ../../litschema litschema`); it is never required for normal use. Because this file executes whatever it contains, show the user its exact content and get their confirmation BEFORE running it — especially in a project you did not create this session. Once confirmed, set `LITSCHEMA` to the single-line content verbatim.
 2. Otherwise, set `LITSCHEMA` to `uv run litschema` (prefer the project's Python environment when uv is available).
 3. Otherwise, set `LITSCHEMA` to `litschema`.
 
@@ -131,7 +131,8 @@ date and schema commit when provider/model are omitted.
 
 After recording provenance, backfill what the document IS (as opposed to what it
 SAYS — the extraction above). The contract is defined in
-`specs/source-metadata/spec.md`; the short version:
+`specs/source-metadata/spec.md` in the litschema source repository (it is not
+copied into user projects); everything you need is below:
 
 1. Read the bibliographic fields off the document itself — front matter, title
    page: title, authors OR corporate author, year, journal/venue if applicable,
@@ -145,18 +146,25 @@ SAYS — the extraction above). The contract is defined in
      --journal "..." --doi 10.1234/example
    ```
 
-   (Include only the options you have values for.) If the command exits nonzero
-   because the metadata is already human-edited or registry-locked, that is the
-   guard working: skip the backfill silently and do NOT retry with `--force`.
-3. ONLY IF a DOI was visible on the document, follow up with:
+   (Include only the options you have values for.) Two failure modes, treated
+   differently:
+   - The command says it is *refusing to overwrite human or registry data*:
+     that is the guard working. STOP — skip step 3 as well, and
+     do NOT retry with `--force`. The existing metadata outranks your reading.
+   - The command *rejected a value* (e.g. a malformed DOI): drop the offending
+     option and retry once so the good fields still land.
+3. ONLY IF the `meta set` above succeeded AND a DOI was visible on the
+   document, follow up with:
 
    ```bash
    $LITSCHEMA meta sync {article_id}
    ```
 
-   so registry data supersedes your reading and locks the metadata. If sync
-   fails (offline, unknown DOI), say so and continue — the DOI stays recorded
-   and a later sweep can retry; nothing downstream breaks.
+   so registry data supersedes your reading and locks the metadata. Never run
+   sync after a guard refusal — per-article sync overwrites whatever it finds,
+   which would clobber exactly the human edits the guard just protected. If
+   sync fails (offline, unknown DOI), say so and continue — the DOI stays
+   recorded and a later sweep can retry; nothing downstream breaks.
 
 ## Checklist
 

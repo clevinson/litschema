@@ -21,9 +21,11 @@ checking extraction quality, and narrating clearly.
    (e.g. `uv run --project ../../litschema litschema`);
    (2) `uv run litschema`; (3) `litschema`. The `.litschema/cli` file is a
    development override that points at a work-in-progress litschema
-   checkout — it is never required for normal use. Set `$LITSCHEMA` to the
-   resolved command, then confirm it works by running `$LITSCHEMA --help`;
-   if that fails, fall through to the next option.
+   checkout — it is never required for normal use, and because it executes
+   whatever it contains, show the user its exact content and get their
+   confirmation BEFORE running it. Set `$LITSCHEMA` to the resolved command,
+   then confirm it works by running `$LITSCHEMA --help`; if that fails, fall
+   through to the next option.
 3. Run `$LITSCHEMA status` and `$LITSCHEMA doctor`. Report problems before
    continuing.
 4. If `papers-inbox/` has no PDFs AND `data/papers/` has no articles, ask the
@@ -31,9 +33,10 @@ checking extraction quality, and narrating clearly.
 
 ## Phase A — draft the schema (the conversation that matters most)
 
-Skip to Phase B if `schema/extraction.yaml` already defines real fields
-beyond the scaffold's `DraftExtraction.article_id` — ask the user whether to
-reuse or revise it.
+If `schema/extraction.yaml` already defines real fields beyond the scaffold's
+`DraftExtraction.article_id`, ask the user whether to reuse it as-is or revise
+it; only on "reuse" skip to Phase B (still ask them to name 2–3 representative
+documents first — Phase C needs one).
 
 1. **Interview.** Ask what they want to extract — the research question, the
    fields they'd put in a spreadsheet, units, controlled vocabularies. Keep
@@ -67,11 +70,14 @@ reuse or revise it.
 
 ## Phase C — pilot (one article before the whole collection)
 
-1. Pick ONE of the representative articles from Phase A.
-2. Extract it with the project's extract-article skill (follow
-   `.claude/skills/extract-article/SKILL.md`; it handles prepare-text,
-   extraction, reasoning, validation, provenance).
-3. Tell the user to run `litschema verify` and eyeball the pilot against the
+1. Pick ONE of the representative articles from Phase A (if none were named,
+   ask the user to pick one now, or pick one at random and say which).
+2. Extract it with the extract-article skill (its SKILL.md lives under
+   `.claude/skills/` for project-local installs or `~/.claude/skills/` for
+   global ones; it handles prepare-text, extraction, reasoning, validation,
+   provenance).
+3. Tell the user to run `litschema verify` (or `$LITSCHEMA verify` if bare
+   `litschema` is not on their PATH) and eyeball the pilot against the
    PDF: do the fields fit? is anything systematically missing or forced?
 4. If the schema needs changes: revise `schema/extraction.yaml` +
    `domain_context.md`, re-validate (Phase A.5), re-extract the pilot, and
@@ -80,7 +86,9 @@ reuse or revise it.
 
 ## Phase D — batch
 
-1. List remaining articles (in `data/papers/`, no `agent-extraction.json`).
+1. List remaining articles: in `data/papers/` with no `agent-extraction.json`,
+   OR whose `agent-extraction.json` is an error marker (`"error": true`) —
+   failed articles are retried, not counted as done.
 2. Extract each one following the extract-article skill. Dispatch each
    article as its own subagent (Task tool) when available so your context
    stays small; otherwise run sequentially. Maximum a few in flight at once.
@@ -88,9 +96,10 @@ reuse or revise it.
    move on. Never abort the batch for one article.
 4. Afterwards run `$LITSCHEMA meta sync --all` — extraction already syncs each
    article whose document shows a DOI, so this is the sweep that catches any
-   article whose sync failed transiently. Articles without DOIs and
-   human-edited metadata are skipped (see `specs/source-metadata/spec.md`). If
-   it fails (offline), say so and continue — nothing downstream breaks.
+   article whose sync failed transiently. It skips articles without DOIs, and
+   it skips human-edited (`manual`) metadata (the contract is
+   `specs/source-metadata/spec.md` in the litschema source repo). If it fails
+   (offline), say so and continue — nothing downstream breaks.
 5. Finally run `$LITSCHEMA validate` and `$LITSCHEMA status`; report counts
    and any failed ids.
 
@@ -98,7 +107,8 @@ reuse or revise it.
 
 Tell the user:
 
-- `litschema verify` opens the review app: the header shows what each
+- `litschema verify` (or `$LITSCHEMA verify` if bare `litschema` is not on
+  their PATH) opens the review app: the header shows what each
   document IS (verified badge when fetched by DOI, editable otherwise); the
   body is per-field accept / edit / sign-off of what it SAYS.
 - Their dataset lives in `data/papers/<id>/` — extraction, reasoning with
