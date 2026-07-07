@@ -20,7 +20,7 @@ def test_init_scaffolds_standalone_project(tmp_path) -> None:
     # Onboarding is local-PDF-first: no CSV registry is scaffolded.
     assert not (project / "data" / "sources" / "articles.csv").exists()
     assert (project / "papers-inbox").is_dir()
-    assert not (project / ".claude" / "skills").exists()
+    assert (project / ".claude" / "skills" / "extract-article" / "SKILL.md").is_file()
     gitignore = (project / ".gitignore").read_text()
     assert "papers-inbox/*.pdf" in gitignore
     assert "papers-inbox/.processed/*.pdf" in gitignore
@@ -34,21 +34,22 @@ def test_init_scaffolds_standalone_project(tmp_path) -> None:
     assert cfg.paper_inbox_dir == project / "papers-inbox"
     assert "extraction_schema_file: \"extraction.yaml\"" in (project / "litschema.yaml").read_text()
     assert "paper_inbox_dir: \"papers-inbox\"" in (project / "litschema.yaml").read_text()
+    assert "document_profile" not in (project / "litschema.yaml").read_text()
     schema = (project / "schema" / "extraction.yaml").read_text()
     assert "article_id:" in schema
     assert "confidence:" not in schema
     assert "reasoning:" not in schema
     assert "Next steps" in result.output
     assert f"cd {project}" in result.output
-    assert "litschema skills install --local" in result.output
-    assert "/litschema-assemble" in result.output
-    assert "/extract-article <article-id>" in result.output
+    assert "/litschema-onboard" in result.output
+    assert "/litschema-assemble" not in result.output
+    assert "litschema skills install --local" not in result.output
     assert "litschema convert" not in result.output
     assert "/litschema-builder" not in result.output
     assert "papers-inbox/" in result.output
 
 
-def test_init_refuses_to_overwrite_existing_project_without_force(tmp_path) -> None:
+def test_init_refuses_non_empty_directory_without_force(tmp_path) -> None:
     from litschema import cli
 
     project = tmp_path / "my-review"
@@ -58,36 +59,131 @@ def test_init_refuses_to_overwrite_existing_project_without_force(tmp_path) -> N
     result = CliRunner().invoke(cli.app, ["init", str(project)])
 
     assert result.exit_code == 2
+    assert "--force" in result.output  # the refusal names its remedy
     assert project.joinpath("keep.txt").read_text() == "important\n"
 
 
-def test_init_force_preserves_existing_project_files(tmp_path) -> None:
+def test_init_refuses_existing_project_without_force(tmp_path) -> None:
     from litschema import cli
 
     project = tmp_path / "my-review"
-    project.joinpath("schema").mkdir(parents=True)
-    project.joinpath("data", "sources").mkdir(parents=True)
+    project.mkdir()
+    project.joinpath("litschema.yaml").write_text("project_root: existing\n")
+
+    result = CliRunner().invoke(cli.app, ["init", str(project)])
+
+    assert result.exit_code == 2
+    assert "litschema.yaml" in result.output
+    assert project.joinpath("litschema.yaml").read_text() == "project_root: existing\n"
+
+
+def test_init_refuses_dangling_config_symlink(tmp_path) -> None:
+    # exists() follows symlinks, so a dangling litschema.yaml symlink must be
+    # caught explicitly — otherwise init half-scaffolds and then crashes (or
+    # writes the config through the link, outside the project).
+    from litschema import cli
+
+    project = tmp_path / "my-review"
+    project.mkdir()
+    project.joinpath("litschema.yaml").symlink_to(tmp_path / "gone" / "litschema.yaml")
+
+    result = CliRunner().invoke(cli.app, ["init", str(project), "--force"])
+
+    assert result.exit_code == 2
+    assert "litschema.yaml" in result.output
+    assert not (project / "papers-inbox").exists()  # nothing was scaffolded
+
+
+def test_init_refuses_existing_project_even_with_force(tmp_path) -> None:
+    # Re-init is disallowed outright: an existing litschema.yaml means the
+    # project is managed by editing it (or `litschema skills install`), never
+    # by running init again.
+    from litschema import cli
+
+    project = tmp_path / "my-review"
+    project.mkdir()
     project.joinpath("litschema.yaml").write_text("project_root: existing\n")
     project.joinpath("domain_context.md").write_text("existing context\n")
-    project.joinpath("schema", "extraction.yaml").write_text("existing schema\n")
-    project.joinpath("data", "sources", "articles.csv").write_text(
-        "doi,article_id,title\n10.1234/example,smith-2024,Existing\n"
-    )
+
+    result = CliRunner().invoke(cli.app, ["init", str(project), "--force"])
+
+    assert result.exit_code == 2
+    assert "litschema.yaml" in result.output
+    assert project.joinpath("litschema.yaml").read_text() == "project_root: existing\n"
+    assert project.joinpath("domain_context.md").read_text() == "existing context\n"
+    assert not project.joinpath("papers-inbox").exists()
+
+
+def test_init_force_initializes_non_empty_non_project_dir(tmp_path) -> None:
+    # The legitimate --force case: a directory that already has files (a
+    # README, .git, ...) but is not yet a litschema project.
+    from litschema import cli
+
+    project = tmp_path / "my-review"
+    project.mkdir()
+    project.joinpath("keep.txt").write_text("important\n")
     project.joinpath(".gitignore").write_text("custom-ignore\n")
 
     result = CliRunner().invoke(cli.app, ["init", str(project), "--force"])
 
     assert result.exit_code == 0, result.output
-    assert project.joinpath("litschema.yaml").read_text() == "project_root: existing\n"
-    assert project.joinpath("domain_context.md").read_text() == "existing context\n"
-    assert project.joinpath("schema", "extraction.yaml").read_text() == "existing schema\n"
-    assert project.joinpath("data", "sources", "articles.csv").read_text().endswith(
-        "10.1234/example,smith-2024,Existing\n"
-    )
+    assert project.joinpath("keep.txt").read_text() == "important\n"
+    assert 'paper_inbox_dir: "papers-inbox"' in project.joinpath("litschema.yaml").read_text()
     gitignore = project.joinpath(".gitignore").read_text()
     assert "custom-ignore\n" in gitignore
     assert "papers-inbox/.processed/*.pdf" in gitignore
     assert project.joinpath("papers-inbox").is_dir()
+
+
+def test_init_refuses_symlinked_scaffold_targets(tmp_path) -> None:
+    # init must never write through a symlink to somewhere outside the
+    # project (dotfiles-style .gitignore links, dangling links).
+    from litschema import cli
+
+    outside = tmp_path / "dotfiles" / "gitignore"
+    outside.parent.mkdir()
+    outside.write_text("custom\n")
+    project = tmp_path / "my-review"
+    project.mkdir()
+    project.joinpath(".gitignore").symlink_to(outside)
+
+    result = CliRunner().invoke(cli.app, ["init", str(project), "--force"])
+
+    assert result.exit_code == 2
+    assert "symlink" in result.output
+    assert outside.read_text() == "custom\n"  # untouched
+
+    project2 = tmp_path / "review-2"
+    project2.mkdir()
+    project2.joinpath("schema").symlink_to(tmp_path / "nowhere")
+
+    result = CliRunner().invoke(cli.app, ["init", str(project2), "--force"])
+
+    assert result.exit_code == 2
+    assert "symlink" in result.output
+    assert not (project2 / "litschema.yaml").exists()  # nothing scaffolded
+
+
+def test_doctor_ignores_unrelated_skills(tmp_path, monkeypatch) -> None:
+    # Someone else's skills in .claude/skills (or globally) are not a green
+    # light: doctor counts only litschema's bundled skills.
+    from litschema import cli
+
+    runner = CliRunner()
+    project = tmp_path / "myreview"
+    result = runner.invoke(cli.app, ["init", str(project), "--no-skills"])
+    assert result.exit_code == 0, result.output
+
+    unrelated = project / ".claude" / "skills" / "totally-unrelated"
+    unrelated.mkdir(parents=True)
+    unrelated.joinpath("SKILL.md").write_text("something else\n")
+    monkeypatch.setattr(cli, "_agent_skill_destinations", lambda agent: [])
+    monkeypatch.chdir(project)
+
+    result = runner.invoke(cli.app, ["--config", str(project / "litschema.yaml"), "doctor"])
+
+    assert "skills not installed" in result.output
+    assert "totally-unrelated" not in result.output
 
 
 def test_init_no_longer_accepts_source_modes(tmp_path) -> None:
@@ -99,3 +195,63 @@ def test_init_no_longer_accepts_source_modes(tmp_path) -> None:
 
     assert result.exit_code == 2
     assert not project.exists()
+
+
+def test_init_no_longer_accepts_profile(tmp_path) -> None:
+    # document_profile is gone: DOI enrichment is decided per article from
+    # data (meta sync), not declared per project at init time.
+    from litschema import cli
+
+    project = tmp_path / "review"
+
+    result = CliRunner().invoke(cli.app, ["init", str(project), "--profile", "journal_article"])
+
+    assert result.exit_code == 2
+    assert not project.exists()
+
+
+def test_init_installs_skills_project_locally(tmp_path) -> None:
+    from litschema import cli
+
+    runner = CliRunner()
+    project = tmp_path / "myreview"
+
+    result = runner.invoke(cli.app, ["init", str(project)])
+
+    assert result.exit_code == 0
+    assert (project / ".claude" / "skills" / "extract-article" / "SKILL.md").is_file()
+    assert (project / ".claude" / "skills" / "litschema-onboard" / "SKILL.md").is_file()
+
+
+def test_init_no_skills_opts_out(tmp_path) -> None:
+    from litschema import cli
+
+    runner = CliRunner()
+    project = tmp_path / "myreview"
+
+    result = runner.invoke(cli.app, ["init", str(project), "--no-skills"])
+
+    assert result.exit_code == 0
+    assert not (project / ".claude").exists()
+    # Next steps must not advertise a slash command that was not installed:
+    # the install step comes first, the slash command only after it.
+    assert "litschema skills install --local" in result.output
+    assert result.output.index("skills install --local") < result.output.index(
+        "/litschema-onboard"
+    )
+
+
+def test_doctor_recognizes_project_local_skills(tmp_path, monkeypatch) -> None:
+    from litschema import cli
+
+    runner = CliRunner()
+    project = tmp_path / "myreview"
+    result = runner.invoke(cli.app, ["init", str(project)])
+    assert result.exit_code == 0, result.output
+
+    # Doctor must not flag the init-default (project-local) install as missing.
+    monkeypatch.chdir(project)
+    result = runner.invoke(cli.app, ["--config", str(project / "litschema.yaml"), "doctor"])
+
+    assert "agent skills installed (project-local)" in result.output
+    assert "skills not installed" not in result.output

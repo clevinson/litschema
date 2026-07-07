@@ -60,23 +60,27 @@ from each PDF's filename, moves the PDF into `data/papers/{article_id}/`, and
 writes a minimal `article-metadata.json` manifest. No DOI, bibliography file, or
 network access is required to reach extraction.
 
-Extraction is intentionally agent-mediated. Install the bundled skills globally
-with `litschema skills install`, or into one project with
-`litschema skills install --local`, then run `/litschema-assemble` or
-`/extract-article <article-id>` inside an agent CLI from a configured project
-directory. The `/extract-article` skill prepares per-article markdown when
-needed before running extraction, and bibliographic fields are filled into the
-manifest by extraction.
+Extraction is intentionally agent-mediated. `litschema init` installs the
+bundled skills into the project's `.claude/skills/` by default (use
+`litschema skills install` to add them globally), then run
+`/litschema-onboard` for guided first-run onboarding — schema drafting,
+intake, pilot extraction, batch extraction, verifier handoff — or
+`/extract-article <article-id>` directly inside an agent CLI from a configured
+project directory. The `/extract-article` skill prepares per-article markdown
+when needed before running extraction, and bibliographic fields are filled
+into the manifest by extraction.
 
-Optional bibliographic enrichment is `litschema meta sync --all`, which
-queries OpenAlex for every assembled article whose metadata carries a DOI
-(recorded via `meta set`, or edited in the verify header). There is no
-registry file to author, and articles with human-edited metadata are never
-overwritten by the batch sweep — per-article `meta sync <id>` (or the
-verifier's "⟳ from DOI" button) is the explicit-consent path that may. The
-legacy `litschema harvest` command remains for the CrossRef supplement and
-entity-resolution legs. See `specs/source-metadata/spec.md` for the full
-model. None of this is part of the core PDF-first flow.
+Bibliographic enrichment is automatic when a document shows a DOI: extraction
+records it and locks metadata from the registry in one guarded command
+(`meta set <id> --source auto --doi ... --sync`), and the post-batch
+`litschema meta sync --all` sweep retries anything that failed transiently.
+There is no registry file to author, and articles with human-edited metadata
+are never overwritten by the batch sweep — per-article `meta sync <id>` (or
+the verifier's "⟳ from DOI" button) is the explicit-consent path that may.
+The legacy `litschema harvest` command remains for the CrossRef supplement
+and entity-resolution legs. See `specs/source-metadata/spec.md` for the full
+model. A DOI is never a prerequisite — documents without one flow through
+the whole pipeline unchanged.
 
 ## Project Layout
 

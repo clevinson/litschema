@@ -178,7 +178,19 @@ def fetch_openalex(doi: str, email: str | None = None) -> dict | None:
         logger.error("Request failed for %s: %s", doi, e)
         raise RegistryUnavailableError(f"OpenAlex request failed for {doi}: {e}") from e
     if resp.status_code == 200:
-        return resp.json()
+        # A 200 with a non-JSON or non-object body (captive portal, broken
+        # proxy) is a transient failure, not a registry answer.
+        try:
+            body = resp.json()
+        except ValueError as e:
+            logger.error("OpenAlex returned a non-JSON 200 body for %s", doi)
+            raise RegistryUnavailableError(
+                f"OpenAlex returned an unreadable response for {doi}"
+            ) from e
+        if not isinstance(body, dict):
+            logger.error("OpenAlex returned a non-object 200 body for %s", doi)
+            raise RegistryUnavailableError(f"OpenAlex returned an unreadable response for {doi}")
+        return body
     if resp.status_code == 404:
         logger.warning("Not found in OpenAlex: %s", doi)
         return None

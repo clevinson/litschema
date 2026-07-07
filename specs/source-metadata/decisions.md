@@ -137,3 +137,33 @@ their data in their own repos (for erw-lit: loop `meta set --source auto
 **Rejected:** keeping the narrowed pre-block-only fallback (still legacy
 awareness, still a special case to explain and test); an in-framework
 `migrate` command (same objection, more surface).
+
+## 2026-07-07 — `meta set --sync`: registry-first enrichment, one guarded command
+
+**Context:** the agent contract was two commands — `meta set --source auto
+<fields> --doi X`, then `meta sync <id>` — with different consent semantics.
+A review pass caught the hazard (an agent syncing after a guard refusal would
+clobber human edits; patched with skill instructions), and the happy path was
+wasteful: the registry immediately replaced everything the agent had just
+transcribed.
+
+**Decision:** `meta set` gains `--sync`, which REQUIRES `--doi` and FORBIDS
+every other field option and `--clear`. It records the DOI under the caller's
+`--source` tag (guarded like any set) and immediately attempts the registry
+lock. Success → block replaced with registry values, `doi`. Registry failure →
+the DOI stays recorded, unlocked, retryable by per-article sync or the sweep.
+Guard refusal → nothing runs. The agent contract becomes registry-first:
+title-page transcription happens only as an explicit fallback (no DOI, or the
+sync half failed).
+
+**Rationale:** one guard verdict covers both halves, so agent-supplied consent
+escalation is unrepresentable rather than instructed away; nothing is ever
+written that a successful sync would immediately destroy; and the happy path
+skips hand-transcription entirely — cheaper and less error-prone.
+
+**Rejected:** allowing fallback fields alongside `--sync` (dead-on-arrival
+writes, and the half-found-fields clobber question this entry exists to kill);
+spelling it `set --from-doi <doi>` (hides the record-then-attempt two-phase
+and muddles what `--source` tags when the registry fails); making
+`meta sync --doi` record the DOI on a registry miss (breaks sync's
+nothing-on-failure atomicity).

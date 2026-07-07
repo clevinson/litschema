@@ -201,7 +201,7 @@ def _agent_skill_destinations(agent: str) -> list[Path]:
 
 
 def _project_skill_destination(project: Path) -> Path:
-    return project.expanduser().resolve() / ".agents" / "skills"
+    return project.expanduser().resolve() / ".claude" / "skills"
 
 
 def _install_skill_dirs(
@@ -210,6 +210,7 @@ def _install_skill_dirs(
     *,
     copy: bool,
     force: bool,
+    overwrite_hint: str = "use --force to overwrite",
 ) -> tuple[int, list[str]]:
     dest.mkdir(parents=True, exist_ok=True)
     installed = 0
@@ -218,7 +219,7 @@ def _install_skill_dirs(
         target = dest / skill_dir.name
         if target.exists() or target.is_symlink():
             if not force:
-                messages.append(f"{WARN} {target} already exists (use --force to overwrite)")
+                messages.append(f"{WARN} {target} already exists ({overwrite_hint})")
                 continue
             if target.is_symlink() or target.is_file():
                 target.unlink()
@@ -494,7 +495,7 @@ def meta_show(ctx: typer.Context, article_id: str):
     help="Merge fields into the source-metadata block. Provenance is caller-asserted: "
     "--source auto for machine-inferred values (agents, scripts), --source manual for "
     "human-authored values. An explicit empty-string value clears a field. The doi "
-    "state is earned via `meta sync`, never asserted.",
+    "state is earned via `meta sync` (or `meta set --doi ... --sync`), never asserted.",
 )
 def meta_set(
     ctx: typer.Context,
@@ -516,6 +517,13 @@ def meta_set(
     clear: list[str] = typer.Option(
         [], "--clear", help="Remove a field from the block (repeatable)"
     ),
+    sync: bool = typer.Option(
+        False,
+        "--sync",
+        help="After recording the DOI, fetch registry metadata and lock the block. "
+        "Takes ONLY --doi — registry values replace the whole block, so fallback "
+        "values belong in a separate `meta set`.",
+    ),
     force: bool = typer.Option(
         False, "--force", help="Let an auto write overwrite manual/doi metadata"
     ),
@@ -529,10 +537,21 @@ def meta_set(
 
     if source not in ("auto", "manual"):
         typer.secho(
-            f"{CROSS} --source must be auto or manual (doi is earned via `meta sync`)",
+            f"{CROSS} --source must be auto or manual "
+            "(doi is earned via `meta sync` or `meta set --doi ... --sync`)",
             fg=typer.colors.RED,
         )
         raise typer.Exit(code=2)
+    if sync:
+        others = (title, authors, corporate_author, year, journal, publisher, url, abstract)
+        if not doi or any(v is not None for v in others) or clear:
+            typer.secho(
+                f"{CROSS} --sync requires --doi with a value and takes no other field "
+                "options — registry values replace the whole block, so fallback values "
+                "belong in a separate `meta set`",
+                fg=typer.colors.RED,
+            )
+            raise typer.Exit(code=2)
     cfg = _require_project(ctx).config
     files = _require_article(cfg, article_id)
 
@@ -574,13 +593,47 @@ def meta_set(
     if not force and not can_overwrite(existing, source):
         typer.secho(
             f"{CROSS} refusing: metadata is {existing!r} and auto writes never overwrite "
-            "human or registry data (use --force to override)",
+            "human or registry data — this is expected for machine callers; a human who "
+            "wants to override can pass --force",
             fg=typer.colors.RED,
         )
         raise typer.Exit(code=1)
 
     block = update_source_metadata(files, fields, source=source)
-    typer.echo(json.dumps(block, indent=2, ensure_ascii=False))
+    if not sync:
+        typer.echo(json.dumps(block, indent=2, ensure_ascii=False))
+        return
+
+    # --sync: attempt the registry upgrade the write just made possible. The
+    # guard above already ruled on consent — a refused write never gets here.
+    from .ingest import openalex_harvest
+
+    # The batch sweep never touches manual blocks, so only promise it for auto.
+    retry_via = f"`meta sync {article_id}`" + (" or the --all sweep" if source == "auto" else "")
+    retry_hint = f"the DOI is recorded ({source}) and stays retryable via {retry_via}"
+    try:
+        synced = openalex_harvest.sync_article(cfg, article_id)
+    except LookupError as exc:
+        # Unreachable unless the manifest changed under us mid-command.
+        typer.secho(f"{CROSS} {exc}", fg=typer.colors.RED)
+        raise typer.Exit(code=1) from exc
+    except openalex_harvest.RegistryUnavailableError:
+        typer.echo(json.dumps(block, indent=2, ensure_ascii=False))
+        typer.secho(
+            f"{WARN} NOT locked — DOI registry unavailable; {retry_hint}",
+            fg=typer.colors.YELLOW,
+        )
+        return
+    if synced is None:
+        typer.echo(json.dumps(block, indent=2, ensure_ascii=False))
+        typer.secho(
+            f"{WARN} NOT locked — the registry has no usable record for this DOI; "
+            f"{retry_hint}",
+            fg=typer.colors.YELLOW,
+        )
+        return
+    typer.echo(json.dumps(synced, indent=2, ensure_ascii=False))
+    typer.echo(f"{CHECK} synced from registry — metadata locked (was {source})")
 
 
 @meta_app.command(
@@ -715,7 +768,7 @@ def skills_install(
         "auto", "--agent", help="Agent destination: auto, claude, codex, or both"
     ),
     local: bool = typer.Option(
-        False, "--local", help="Install into the current directory's .agents/skills"
+        False, "--local", help="Install into the current directory's .claude/skills"
     ),
     experimental: bool = typer.Option(
         False, "--experimental", help="Also install experimental skills"
@@ -822,17 +875,41 @@ def doctor(ctx: typer.Context):
         typer.echo(f"{CROSS} schema dir missing: {cfg.schema_dir}")
         issues.append(f"create {cfg.schema_dir}")
 
-    # Skills check
-    skills_dirs = _agent_skill_destinations("auto")
-    installed = []
-    for skills_dir in skills_dirs:
-        if skills_dir.is_dir():
-            installed.extend(p.name for p in skills_dir.iterdir() if (p / "SKILL.md").exists())
+    # Skills check — project-local .claude/skills/ is the init default;
+    # global installs are the alternative. Only litschema's bundled skills
+    # count: unrelated skills living in the same directories are not a green
+    # light for this project.
+    bundled = {skill.name for skill in _skill_sources()}
+
+    def _bundled_in(directory: Path) -> list[str]:
+        if not directory.is_dir():
+            return []
+        return [
+            p.name
+            for p in directory.iterdir()
+            if p.is_dir() and p.name in bundled and (p / "SKILL.md").exists()
+        ]
+
+    installed = _bundled_in(cfg.project_root / ".claude" / "skills")
+    where = "project-local"
+    if not installed:
+        where = "global"
+        for skills_dir in _agent_skill_destinations("auto"):
+            installed.extend(_bundled_in(skills_dir))
     if installed:
-        typer.echo(f"{CHECK} global agent skills installed: {', '.join(sorted(set(installed)))}")
+        typer.echo(
+            f"{CHECK} litschema agent skills installed ({where}): "
+            f"{', '.join(sorted(set(installed)))}"
+        )
     else:
-        typer.echo(f"{WARN} global agent skills not installed")
-        issues.append("run `litschema skills install --agent claude` or `--agent codex`")
+        typer.echo(
+            f"{WARN} litschema agent skills not installed "
+            "(looked in ./.claude/skills and the global skill dirs)"
+        )
+        issues.append(
+            "run `litschema skills install --local` from the project "
+            "(or `litschema skills install` for a global install)"
+        )
 
     agent_cli = shutil.which("claude") or shutil.which("codex")
     if agent_cli:
@@ -914,42 +991,110 @@ def _ensure_gitignore_entries(project: Path) -> None:
 @app.command(help="Scaffold a new litschema project.")
 def init(
     domain: Path = typer.Argument(..., help="Project directory to create"),
-    force: bool = typer.Option(False, "--force", help="Allow initializing an existing directory"),
+    no_skills: bool = typer.Option(
+        False, "--no-skills", help="Skip installing agent skills into the project"
+    ),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        help="Initialize into a non-empty directory (refused if it is already a litschema project)",
+    ),
 ):
     project = domain.expanduser().resolve()
     if project.exists() and not project.is_dir():
         typer.secho(f"{CROSS} {project} exists and is not a directory", fg=typer.colors.RED)
         raise typer.Exit(code=2)
-    if project.exists() and any(project.iterdir()) and not force:
-        typer.secho(f"{CROSS} {project} already exists and is not empty", fg=typer.colors.RED)
+    config_path = project.joinpath("litschema.yaml")
+    # is_symlink() catches dangling symlinks, which exists() follows and misses.
+    if config_path.exists() or config_path.is_symlink():
+        typer.secho(
+            f"{CROSS} {project} is already a litschema project (litschema.yaml exists) — "
+            "edit litschema.yaml directly, or run "
+            "'litschema skills install --local --force' from inside the project "
+            "to refresh skills",
+            fg=typer.colors.RED,
+        )
         raise typer.Exit(code=2)
+    if project.exists() and any(project.iterdir()) and not force:
+        typer.secho(
+            f"{CROSS} {project} already exists and is not empty "
+            "(pass --force to initialize here anyway; existing files are never overwritten)",
+            fg=typer.colors.RED,
+        )
+        raise typer.Exit(code=2)
+    # Scaffolding must never write through a symlink to somewhere outside the
+    # project (a symlinked .gitignore in a dotfiles setup, a dangling link).
+    for entry in (
+        "domain_context.md",
+        ".gitignore",
+        "schema",
+        "schema/extraction.yaml",
+        "data",
+        "data/papers",
+        "papers-inbox",
+    ):
+        if project.joinpath(entry).is_symlink():
+            typer.secho(
+                f"{CROSS} {project / entry} is a symlink — init only writes real files "
+                "and directories inside the project",
+                fg=typer.colors.RED,
+            )
+            raise typer.Exit(code=2)
 
     project.mkdir(parents=True, exist_ok=True)
     project.joinpath("schema").mkdir(exist_ok=True)
     project.joinpath("data", "papers").mkdir(parents=True, exist_ok=True)
     project.joinpath("papers-inbox").mkdir(exist_ok=True)
 
-    config_path = project.joinpath("litschema.yaml")
-    if not config_path.exists():
-        config_path.write_text(
-            'project_root: "."\n'
-            'schema_dir: "schema"\n'
-            'schema_root: "extraction.yaml"\n'
-            'extraction_schema_file: "extraction.yaml"\n'
-            'data_dir: "data"\n'
-            'article_store_dir: "data/papers"\n'
-            'paper_inbox_dir: "papers-inbox"\n'
-        )
+    # The config cannot exist here — init refuses existing projects above.
+    config_path.write_text(
+        'project_root: "."\n'
+        'schema_dir: "schema"\n'
+        'schema_root: "extraction.yaml"\n'
+        'extraction_schema_file: "extraction.yaml"\n'
+        'data_dir: "data"\n'
+        'article_store_dir: "data/papers"\n'
+        'paper_inbox_dir: "papers-inbox"\n'
+    )
     _write_draft_schema(project)
     _ensure_gitignore_entries(project)
 
+    if not no_skills:
+        count, messages = _install_skill_dirs(
+            _skill_sources(),
+            _project_skill_destination(project),
+            copy=True,
+            force=False,
+            overwrite_hint="run 'litschema skills install --local --force' "
+            "from inside the project to replace",
+        )
+        for message in messages:
+            typer.echo(message)
+        if count:
+            typer.echo(f"{CHECK} installed {count} agent skill(s) into .claude/skills/")
+
+    onboard_available = (
+        _project_skill_destination(project).joinpath("litschema-onboard", "SKILL.md").exists()
+    )
     typer.echo(f"{CHECK} initialized litschema project at {project}")
     typer.echo("\nNext steps:")
     typer.echo(f"  1. cd {project}")
     typer.echo("  2. Drop PDFs into papers-inbox/")
-    typer.echo("  3. Run `litschema skills install --local` for project-local skills")
-    typer.echo("  4. Open this project in your agent harness and run /litschema-assemble")
-    typer.echo("  5. Run `/extract-article <article-id>` to prepare text and extract data")
+    typer.echo(
+        "     (documents with DOIs get bibliographic metadata synced automatically"
+        " during onboarding)"
+    )
+    if onboard_available:
+        typer.echo(
+            "  3. Open this project in your agent (e.g. `claude`) and run /litschema-onboard"
+        )
+        typer.echo("     — it drafts your schema with you, runs intake, and extracts your papers")
+    else:
+        typer.echo(
+            "  3. Install agent skills (`litschema skills install --local` from the project),"
+        )
+        typer.echo("     then open the project in your agent and run /litschema-onboard")
+    typer.echo("  4. `litschema verify` any time to review what's been extracted")
 
 
 if __name__ == "__main__":

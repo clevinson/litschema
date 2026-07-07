@@ -218,6 +218,186 @@ def _fake_fetch(doi: str, email: str | None = None) -> dict:
     }
 
 
+# ── meta set --sync ──────────────────────────────────────────────────────────
+
+
+def test_meta_set_sync_requires_exactly_a_doi(tmp_path: Path, monkeypatch) -> None:
+    cfg = _project(tmp_path, monkeypatch)
+    _write_manifest(cfg, "a", {"id": "a"})
+
+    base = ["meta", "set", "a", "--source", "auto"]
+    no_doi = runner.invoke(cli.app, [*base, "--sync"])
+    extra_field = runner.invoke(
+        cli.app, [*base, "--doi", "10.1234/x", "--title", "T", "--sync"]
+    )
+    with_clear = runner.invoke(
+        cli.app, [*base, "--doi", "10.1234/x", "--clear", "title", "--sync"]
+    )
+
+    empty_doi = runner.invoke(cli.app, [*base, "--doi", "", "--sync"])
+
+    for result in (no_doi, extra_field, with_clear, empty_doi):
+        assert result.exit_code == 2, result.output
+        assert "--sync requires --doi" in result.output
+    manifest = json.loads((cfg.article_store_dir / "a" / "article-metadata.json").read_text())
+    assert "source_metadata" not in manifest  # the refusals wrote nothing
+
+
+def test_meta_set_sync_locks_from_registry_in_one_command(
+    tmp_path: Path, monkeypatch
+) -> None:
+    cfg = _project(tmp_path, monkeypatch)
+    _write_manifest(
+        cfg, "a", {"id": "a", "source_metadata": {"title": "Seed", "metadata_source": "auto"}}
+    )
+    monkeypatch.setattr(openalex_harvest, "fetch_openalex", _fake_fetch)
+
+    result = runner.invoke(
+        cli.app, ["meta", "set", "a", "--source", "auto", "--doi", "10.1234/x", "--sync"]
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "locked (was auto)" in result.output
+    block = _block(cfg, "a")
+    assert block["metadata_source"] == "doi"
+    assert block["title"] == "Registry Title"
+
+
+def test_meta_set_sync_keeps_doi_retryable_when_registry_has_no_record(
+    tmp_path: Path, monkeypatch
+) -> None:
+    cfg = _project(tmp_path, monkeypatch)
+    _write_manifest(
+        cfg, "a", {"id": "a", "source_metadata": {"title": "Seed", "metadata_source": "auto"}}
+    )
+    monkeypatch.setattr(openalex_harvest, "fetch_openalex", lambda doi, email=None: None)
+
+    result = runner.invoke(
+        cli.app, ["meta", "set", "a", "--source", "auto", "--doi", "10.1234/miss", "--sync"]
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "NOT locked" in result.output
+    block = _block(cfg, "a")
+    assert block["doi"] == "10.1234/miss"  # recorded — the sweep can retry
+    assert block["metadata_source"] == "auto"  # the lock was not earned
+    assert block["title"] == "Seed"  # untouched
+
+
+def test_meta_set_sync_survives_registry_outage(tmp_path: Path, monkeypatch) -> None:
+    cfg = _project(tmp_path, monkeypatch)
+    _write_manifest(cfg, "a", {"id": "a"})
+
+    def _boom(doi: str, email: str | None = None) -> dict:
+        raise openalex_harvest.RegistryUnavailableError("503")
+
+    monkeypatch.setattr(openalex_harvest, "fetch_openalex", _boom)
+
+    result = runner.invoke(
+        cli.app, ["meta", "set", "a", "--source", "auto", "--doi", "10.1234/x", "--sync"]
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "NOT locked" in result.output
+    block = _block(cfg, "a")
+    assert block["doi"] == "10.1234/x"
+    assert block["metadata_source"] == "auto"
+
+
+def test_meta_set_sync_guard_refusal_never_consults_the_registry(
+    tmp_path: Path, monkeypatch
+) -> None:
+    cfg = _project(tmp_path, monkeypatch)
+    _write_manifest(
+        cfg,
+        "a",
+        {"id": "a", "source_metadata": {"title": "Hand Fixed", "metadata_source": "manual"}},
+    )
+    calls: list[str] = []
+
+    def _spy(doi: str, email: str | None = None) -> dict:
+        calls.append(doi)
+        return _fake_fetch(doi)
+
+    monkeypatch.setattr(openalex_harvest, "fetch_openalex", _spy)
+
+    result = runner.invoke(
+        cli.app, ["meta", "set", "a", "--source", "auto", "--doi", "10.1234/x", "--sync"]
+    )
+
+    assert result.exit_code == 1
+    assert calls == []  # one guard verdict covers the write AND the sync
+    block = _block(cfg, "a")
+    assert block["title"] == "Hand Fixed"
+    assert "doi" not in block
+
+
+def test_meta_set_sync_manual_failure_hint_omits_the_sweep(
+    tmp_path: Path, monkeypatch
+) -> None:
+    # The batch sweep never touches manual blocks, so the retry hint must not
+    # promise it for --source manual.
+    cfg = _project(tmp_path, monkeypatch)
+    _write_manifest(cfg, "a", {"id": "a"})
+    monkeypatch.setattr(openalex_harvest, "fetch_openalex", lambda doi, email=None: None)
+
+    result = runner.invoke(
+        cli.app, ["meta", "set", "a", "--source", "manual", "--doi", "10.1234/x", "--sync"]
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "NOT locked" in result.output
+    assert "--all sweep" not in result.output
+    assert _block(cfg, "a")["metadata_source"] == "manual"
+
+
+def test_meta_set_sync_force_demotes_manual_without_the_lock(
+    tmp_path: Path, monkeypatch
+) -> None:
+    # Documented --force semantics composed with --sync: a human forcing an
+    # auto write over manual loses the manual protection even when the
+    # registry is down — the demotion is the --force, not the --sync.
+    cfg = _project(tmp_path, monkeypatch)
+    _write_manifest(
+        cfg,
+        "a",
+        {"id": "a", "source_metadata": {"title": "Hand Fixed", "metadata_source": "manual"}},
+    )
+    monkeypatch.setattr(openalex_harvest, "fetch_openalex", lambda doi, email=None: None)
+
+    result = runner.invoke(
+        cli.app,
+        ["meta", "set", "a", "--source", "auto", "--doi", "10.1234/x", "--sync", "--force"],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "NOT locked" in result.output
+    block = _block(cfg, "a")
+    assert block["metadata_source"] == "auto"  # demoted by --force
+    assert block["doi"] == "10.1234/x"
+    assert block["title"] == "Hand Fixed"  # per-field merge kept the title
+
+
+def test_meta_set_sync_manual_is_explicit_consent(tmp_path: Path, monkeypatch) -> None:
+    cfg = _project(tmp_path, monkeypatch)
+    _write_manifest(
+        cfg,
+        "a",
+        {"id": "a", "source_metadata": {"title": "Hand Fixed", "metadata_source": "manual"}},
+    )
+    monkeypatch.setattr(openalex_harvest, "fetch_openalex", _fake_fetch)
+
+    result = runner.invoke(
+        cli.app, ["meta", "set", "a", "--source", "manual", "--doi", "10.1234/x", "--sync"]
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "locked (was manual)" in result.output  # the transition is narrated
+    block = _block(cfg, "a")
+    assert block["metadata_source"] == "doi"
+    assert block["title"] == "Registry Title"
+
+
 def test_meta_sync_locks_from_recorded_doi(tmp_path: Path, monkeypatch) -> None:
     cfg = _project(tmp_path, monkeypatch)
     _write_manifest(

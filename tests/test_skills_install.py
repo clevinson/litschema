@@ -19,10 +19,12 @@ def test_skills_install_uses_bundled_skills_without_project_config(tmp_path, mon
 
     assert result.exit_code == 0, result.output
     assert (tmp_path / ".claude" / "skills" / "extract-article" / "SKILL.md").is_file()
-    assert (tmp_path / ".claude" / "skills" / "litschema-assemble" / "SKILL.md").is_file()
+    assert (tmp_path / ".claude" / "skills" / "litschema-onboard" / "SKILL.md").is_file()
+    assert not (tmp_path / ".claude" / "skills" / "litschema-assemble" / "SKILL.md").exists()
     assert not (tmp_path / ".claude" / "skills" / "litschema-builder" / "SKILL.md").exists()
     assert "/extract-article" in result.output
-    assert "/litschema-assemble" in result.output
+    assert "/litschema-onboard" in result.output
+    assert "/litschema-assemble" not in result.output
     assert "/litschema-builder" not in result.output
     assert "/validate-articles" not in result.output
 
@@ -61,7 +63,7 @@ def test_skills_install_agent_both_creates_global_destinations(tmp_path, monkeyp
     assert (tmp_path / ".codex" / "skills" / "extract-article" / "SKILL.md").is_file()
 
 
-def test_skills_install_local_uses_project_agent_skills_dir(tmp_path, monkeypatch) -> None:
+def test_skills_install_local_uses_project_claude_skills_dir(tmp_path, monkeypatch) -> None:
     from litschema import cli
 
     monkeypatch.delenv("LITSCHEMA_CONFIG", raising=False)
@@ -73,9 +75,10 @@ def test_skills_install_local_uses_project_agent_skills_dir(tmp_path, monkeypatc
     result = CliRunner().invoke(cli.app, ["skills", "install", "--local"])
 
     assert result.exit_code == 0, result.output
-    assert (project / ".agents" / "skills" / "extract-article" / "SKILL.md").is_file()
-    assert (project / ".agents" / "skills" / "litschema-assemble" / "SKILL.md").is_file()
-    assert not (project / ".agents" / "skills" / "litschema-builder" / "SKILL.md").exists()
+    assert (project / ".claude" / "skills" / "extract-article" / "SKILL.md").is_file()
+    assert (project / ".claude" / "skills" / "litschema-onboard" / "SKILL.md").is_file()
+    assert not (project / ".claude" / "skills" / "litschema-assemble" / "SKILL.md").exists()
+    assert not (project / ".claude" / "skills" / "litschema-builder" / "SKILL.md").exists()
     assert not (tmp_path / "home" / ".claude" / "skills").exists()
     assert "/litschema-builder" not in result.output
 
@@ -121,14 +124,57 @@ def test_bundled_skills_are_included_in_wheel() -> None:
 
     bundled = cli._packaged_skills_dir()
     assert bundled.joinpath("extract-article", "SKILL.md").is_file()
-    assert bundled.joinpath("litschema-assemble", "SKILL.md").is_file()
+    assert bundled.joinpath("litschema-onboard", "SKILL.md").is_file()
+    assert not bundled.joinpath("litschema-assemble", "SKILL.md").exists()
 
 
-def test_assemble_and_extract_skills_delegate_deterministic_pipeline_steps() -> None:
-    assemble = (REPO_ROOT / "skills" / "litschema-assemble" / "SKILL.md").read_text()
+def test_onboard_and_extract_skills_delegate_deterministic_pipeline_steps() -> None:
+    onboard = (REPO_ROOT / "skills" / "litschema-onboard" / "SKILL.md").read_text()
     extract = (REPO_ROOT / "skills" / "extract-article" / "SKILL.md").read_text()
 
-    assert "LITSCHEMA assemble" in assemble
-    assert "LITSCHEMA convert" not in assemble
+    assert "$LITSCHEMA assemble" in onboard
+    assert "$LITSCHEMA prepare-text --all" in onboard
+    assert onboard.index("$LITSCHEMA assemble") < onboard.index("$LITSCHEMA prepare-text --all")
+    assert "$LITSCHEMA convert" not in onboard
+    assert "extract-article" in onboard  # defers extraction mechanics to that skill
     assert "LITSCHEMA prepare-text {article_id}" in extract
     assert "agent record-extraction" in extract
+
+
+def test_extract_skill_backfills_bib_metadata_via_meta_cli() -> None:
+    extract = (REPO_ROOT / "skills" / "extract-article" / "SKILL.md").read_text()
+
+    # Registry-first: with a visible DOI the skill records it and locks from
+    # the registry in ONE guarded command; transcription is only the fallback.
+    assert "meta set {article_id} --source auto --doi 10.1234/example --sync" in extract
+    assert extract.index("record-extraction") < extract.index("--sync")
+    assert extract.index("--sync") < extract.index("--title")
+    # The guard is respected, values are never invented, manifests never hand-edited.
+    assert "do NOT retry with `--force`" in extract
+    assert "never invent" in extract.lower()
+    assert "never edit" in extract.lower()
+    assert "specs/source-metadata/spec.md" in extract
+
+
+def test_onboard_skill_sweeps_registry_sync_after_batch() -> None:
+    onboard = (REPO_ROOT / "skills" / "litschema-onboard" / "SKILL.md").read_text()
+
+    # The batch sweep runs AFTER extraction (DOIs enter blocks via extraction
+    # backfill), not at intake where fresh repos have none.
+    assert "meta sync --all" in onboard
+    assert onboard.index("extract-article") < onboard.index("meta sync --all")
+    assert "specs/source-metadata/spec.md" in onboard
+
+
+def test_skill_setup_gates_resolve_cli_with_dev_override() -> None:
+    onboard = (REPO_ROOT / "skills" / "litschema-onboard" / "SKILL.md").read_text()
+    extract = (REPO_ROOT / "skills" / "extract-article" / "SKILL.md").read_text()
+
+    for skill in (onboard, extract):
+        # Resolution order: .litschema/cli dev override, then uv run, then bare CLI.
+        assert "`.litschema/cli`" in skill
+        assert skill.index("`.litschema/cli`") < skill.index("`uv run litschema`")
+        assert "development override" in skill
+        assert "never required for normal use" in skill
+        # The gate must confirm the resolved command actually works.
+        assert "$LITSCHEMA --help" in skill
