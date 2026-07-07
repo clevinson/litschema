@@ -16,7 +16,7 @@ data/papers/<article-id>/
   article.md
   agent-extraction.json
   agent-reasoning.json
-  reviews.jsonl
+  review.json
 ```
 
 ## Local Install

@@ -6,7 +6,6 @@ Usage:
 
 from __future__ import annotations
 
-import contextlib
 import json
 import re
 import urllib.error
@@ -23,14 +22,22 @@ from linkml_runtime.utils.schemaview import SchemaView
 
 from ..article_registry import is_valid_doi, normalize_doi
 from ..articles import (
+    ArticleFiles,
     InvalidArticleIdError,
     article_files,
-    iter_article_ids_with_extractions,
+    iter_metadata_paths,
     read_article_metadata,
-    read_review_events,
 )
 from ..config import LitSchemaConfig
 from ..ingest.openalex_harvest import RegistryUnavailableError, sync_article
+from ..reviews import (
+    ReviewFileUnreadableError,
+    base_extraction_stale,
+    canonical_review_path,
+    delete_reviews_at,
+    read_reviews,
+    upsert_review,
+)
 from ..schema_resolution import resolve_extraction_schema
 from ..source_metadata import (
     SOURCE_FIELDS,
@@ -114,46 +121,44 @@ def _article_pdf_path(cfg: LitSchemaConfig, article_id: str) -> Path | None:
     return article_pdf
 
 
-def _collapse_review_events(events: list[dict]) -> list[dict]:
-    """Collapse an event stream to at most one entry per path.
-
-    Legacy 'cleared' events drop their path; everything else is last-write-wins.
-    Writes use this as the read-modify-write base so a file's persisted state
-    is always already collapsed (one row per path, no clear markers).
-    """
-    current: dict[str, dict] = {}
-    for event in events:
-        path = event.get("path")
-        if not path:
-            continue
-        if event.get("status") == "cleared":
-            current.pop(path, None)
-        else:
-            current[path] = event
-    return list(current.values())
+def _annotation_from_entry(path: str, entry: dict) -> dict:
+    """Map a review.json entry to the webapp's historical annotation shape."""
+    ann = {
+        "path": path,
+        "status": entry.get("signal"),
+        "reviewer": entry.get("author", ""),
+        "timestamp": entry.get("timestamp"),
+    }
+    if entry.get("override_value") is not None:
+        ann["correct_value"] = entry["override_value"]
+    for key in ("note", "source", "batch_id"):
+        if entry.get(key) is not None:
+            ann[key] = entry[key]
+    return ann
 
 
 def _current_annotations(cfg: LitSchemaConfig, article_id: str) -> list[dict]:
-    """Return latest annotation state per path."""
-    return _collapse_review_events(read_review_events(article_files(cfg, article_id)))
+    """Return the current annotation state: one annotation per field path.
 
-
-def _write_reviews_jsonl(path: Path, entries: list[dict]) -> None:
-    """Atomically replace reviews.jsonl with ``entries``.
-
-    Removes the file entirely when ``entries`` is empty so paper folders
-    don't accumulate 0-byte review files.
+    review.json holds at most one entry per field; ``author`` on the entry is
+    git-diff attribution, and multi-reviewer coordination happens in PR diffs
+    of review.json (specs/reviews/decisions.md, 2026-06-11).
     """
-    if not entries:
-        with contextlib.suppress(FileNotFoundError):
-            path.unlink()
-        return
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    with tmp.open("w") as fh:
-        for e in entries:
-            fh.write(json.dumps(e) + "\n")
-    tmp.replace(path)
+    files = article_files(cfg, article_id)
+    fields = read_reviews(files)
+    return [_annotation_from_entry(path, entry) for path, entry in fields.items()]
+
+
+def _extraction_confidence(files: ArticleFiles) -> float | None:
+    """The extractor's overall self-rated confidence from agent-reasoning.json."""
+    if not files.reasoning.exists():
+        return None
+    try:
+        reasoning = json.loads(files.reasoning.read_bytes())
+    except ValueError:
+        return None
+    value = reasoning.get("confidence") if isinstance(reasoning, dict) else None
+    return value if isinstance(value, (int, float)) else None
 
 
 def _leaf_paths(obj, base_path: str = "") -> list[str]:
@@ -181,13 +186,10 @@ def _review_progress(extraction: dict, annotations: list[dict]) -> dict:
     current: dict[str, dict] = {}
     for annotation in annotations:
         path = annotation.get("path")
-        status = annotation.get("status")
         if not path:
             continue
         path = path.lstrip(".")
-        if status == "cleared":
-            current.pop(path, None)
-        elif path in leaf_paths:
+        if path in leaf_paths:
             current[path] = annotation
 
     n_verified = sum(1 for ann in current.values() if ann.get("status") == "verified")
@@ -202,6 +204,16 @@ def _review_progress(extraction: dict, annotations: list[dict]) -> dict:
         "is_complete": n_fields > 0 and n_reviewed >= n_fields,
         "has_flags": n_flagged > 0,
     }
+
+
+#: LinkML scalar range -> editor "kind" reported by /api/schema/fields.
+_SCALAR_KINDS = {
+    "integer": "integer",
+    "float": "float",
+    "double": "float",
+    "decimal": "float",
+    "boolean": "boolean",
+}
 
 
 def _enum_permissible_values(sv: SchemaView, enum_name: str) -> list[dict]:
@@ -241,6 +253,7 @@ def _schema_field_metadata(cfg: LitSchemaConfig) -> dict:
             slot_range = slot.range
             if slot_range in enums:
                 fields[path_pattern] = {
+                    "kind": "enum",
                     "range": slot_range,
                     "multivalued": bool(slot.multivalued),
                     "permissible_values": _enum_permissible_values(sv, slot_range),
@@ -251,6 +264,12 @@ def _schema_field_metadata(cfg: LitSchemaConfig) -> dict:
                     path_pattern if slot.multivalued else slot_path,
                     (*stack, class_name),
                 )
+            else:
+                fields[path_pattern] = {
+                    "kind": _SCALAR_KINDS.get(slot_range or "string", "string"),
+                    "range": slot_range or "string",
+                    "multivalued": bool(slot.multivalued),
+                }
 
     walk(root_class)
     return {"root_class": root_class, "fields": fields}
@@ -282,45 +301,78 @@ async def index():
     return (STATIC_DIR / "index.html").read_text()
 
 
+def _read_valid_extraction(files: ArticleFiles) -> dict | None:
+    """Return the parsed extraction JSON, or None if absent, invalid, or errored."""
+    if not files.extraction.exists():
+        return None
+    try:
+        data = json.loads(files.extraction.read_text())
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(data, dict) or data.get("error"):
+        return None
+    return data
+
+
 @app.get("/api/articles")
 async def list_articles(cfg: CfgDep):
-    """List articles that have both markdown and extraction JSON."""
+    """List all assembled articles; extracted ones carry review progress.
+
+    Articles without a (valid) extraction still appear so the verifier can
+    show their header and PDF with a "not yet extracted" placeholder.
+    Missing markdown never excludes an article — the PDF tab still works.
+    """
     articles = []
-    for article_id in iter_article_ids_with_extractions(cfg):
+    for metadata_path in iter_metadata_paths(cfg):
+        article_id = metadata_path.parent.name
         files = article_files(cfg, article_id)
-        ext_path = files.extraction
-        md_path = files.markdown
-        if not md_path.exists():
-            continue
-
-        data = json.loads(ext_path.read_text())
-        if data.get("error"):
-            continue
-
-        setups = data.get("experimental_setups") or []
-        # Annotation progress
-        annotations = _current_annotations(cfg, article_id)
-        progress = _review_progress(data, annotations)
         # Look up bibliographic fields from article metadata.
         bib = _article_meta(cfg, article_id)
-        articles.append(
-            {
-                "article_id": article_id,
-                "study_types": data.get("study_types", []),
-                "focus_areas": data.get("focus_areas", []),
-                "document_type": data.get("document_type"),
-                "n_setups": len(setups),
-                "n_annotated": progress["n_reviewed"],
-                **progress,
-                "doi": bib.get("doi"),
-                "title": bib.get("title"),
-                "year": bib.get("year"),
-                "journal": bib.get("journal"),
-                "authors": bib.get("authors", []),
-                "corporate_author": bib.get("corporate_author"),
-                "metadata_source": bib.get("metadata_source"),
-            }
-        )
+        entry = {
+            "article_id": article_id,
+            "doi": bib.get("doi"),
+            "title": bib.get("title"),
+            "year": bib.get("year"),
+            "journal": bib.get("journal"),
+            "authors": bib.get("authors", []),
+            "corporate_author": bib.get("corporate_author"),
+            "metadata_source": bib.get("metadata_source"),
+        }
+
+        data = _read_valid_extraction(files)
+        if data is None:
+            entry.update(
+                {
+                    "has_extraction": False,
+                    "confidence": None,
+                    "n_setups": 0,
+                    "n_annotated": 0,
+                    "n_fields": 0,
+                    "n_reviewed": 0,
+                    "n_verified": 0,
+                    "n_flagged": 0,
+                    "is_complete": False,
+                    "has_flags": False,
+                }
+            )
+        else:
+            setups = data.get("experimental_setups") or []
+            # Annotation progress
+            annotations = _current_annotations(cfg, article_id)
+            progress = _review_progress(data, annotations)
+            entry.update(
+                {
+                    "has_extraction": True,
+                    "confidence": _extraction_confidence(files),
+                    "study_types": data.get("study_types", []),
+                    "focus_areas": data.get("focus_areas", []),
+                    "document_type": data.get("document_type"),
+                    "n_setups": len(setups),
+                    "n_annotated": progress["n_reviewed"],
+                    **progress,
+                }
+            )
+        articles.append(entry)
 
     return {"articles": articles, "total": len(articles)}
 
@@ -476,14 +528,25 @@ async def get_reasoning(article_id: str, cfg: CfgDep):
 
 @app.get("/api/annotations/{article_id}")
 async def get_annotations(article_id: str, cfg: CfgDep):
-    """Return annotations for an article."""
-    return {"article_id": article_id, "annotations": _current_annotations(cfg, article_id)}
+    """Return annotations for an article: one per reviewed field path.
+
+    ``base_stale`` is true when any stored review was written against a
+    different agent-extraction.json than the current one
+    (specs/reviews/spec.md § Staleness).
+    """
+    return {
+        "article_id": article_id,
+        "annotations": _current_annotations(cfg, article_id),
+        "base_stale": base_extraction_stale(article_files(cfg, article_id)),
+    }
 
 
 @app.put("/api/annotations/{article_id}")
 async def put_annotation(article_id: str, request: Request, cfg: CfgDep):
     """Add or update a field annotation."""
     body = await request.json()
+    if not isinstance(body, dict):
+        raise HTTPException(400, "body must be a JSON object")
     field_path = body.get("path")
     status = body.get("status")  # verified | flagged
     reviewer = body.get("reviewer", "")
@@ -494,57 +557,51 @@ async def put_annotation(article_id: str, request: Request, cfg: CfgDep):
 
     if not field_path or not status:
         raise HTTPException(400, "path and status are required")
+    if not isinstance(field_path, str):
+        raise HTTPException(400, "path must be a string")
     if status not in ("verified", "flagged"):
         raise HTTPException(400, "status must be verified or flagged")
     if status == "flagged" and not reviewer:
         raise HTTPException(400, "reviewer ORCID is required for flags")
+    if reviewer:
+        # Author is an ORCID or empty (specs/reviews/spec.md); normalize URLs.
+        reviewer = _normalize_orcid_id(str(reviewer))
 
     entry = {
-        "article_id": article_id,
-        "path": field_path,
-        "status": status,
-        "reviewer": reviewer,
+        "author": reviewer,
+        "signal": status,
         "timestamp": datetime.now(UTC).isoformat(),
     }
     if note:
         entry["note"] = note
     if correct_value is not None:
-        entry["correct_value"] = correct_value
+        entry["override_value"] = correct_value
     if source:
         entry["source"] = source
     if batch_id:
         entry["batch_id"] = batch_id
 
     files = article_files(cfg, article_id)
-    ann_path = files.reviews
-    # Upsert: keep at most one entry per path. The existing log is collapsed
-    # first so legacy duplicates and 'cleared' markers get cleaned up by the
-    # same write that records this annotation.
-    entries = [
-        e for e in _collapse_review_events(read_review_events(files))
-        if e.get("path") != entry["path"]
-    ]
-    entries.append(entry)
-    _write_reviews_jsonl(ann_path, entries)
-    return entry
+    try:
+        entry = upsert_review(files, field_path, entry)
+    except ReviewFileUnreadableError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    return _annotation_from_entry(canonical_review_path(field_path), entry)
 
 
 @app.delete("/api/annotations/{article_id}/{field_path:path}")
 async def delete_annotation(article_id: str, field_path: str, cfg: CfgDep):
-    """Remove an annotation for a specific field.
+    """Remove THE annotation for a specific field, whoever wrote it.
 
-    Drops the matching line from reviews.jsonl rather than appending a
-    'cleared' marker — clearing is not an attributable action and the
-    file is meant to hold at most one entry per path.
+    Drops the entry from review.json rather than recording a 'cleared'
+    marker — clearing is not an attributable action.
     """
-    files = article_files(cfg, article_id)
-    ann_path = files.reviews
-    target_path = f".{field_path}"
-    entries = [
-        e for e in _collapse_review_events(read_review_events(files))
-        if e.get("path") != target_path
-    ]
-    _write_reviews_jsonl(ann_path, entries)
+    if not field_path.strip("."):
+        raise HTTPException(400, "field path is required")
+    try:
+        delete_reviews_at(article_files(cfg, article_id), field_path)
+    except ReviewFileUnreadableError as exc:
+        raise HTTPException(409, str(exc)) from exc
     return {"deleted": field_path}
 
 

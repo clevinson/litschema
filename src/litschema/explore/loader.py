@@ -24,9 +24,9 @@ from ..articles import (
     article_files,
     article_id_from_extraction_path,
     iter_extraction_paths,
-    read_review_events,
 )
 from ..config import LitSchemaConfig
+from ..reviews import read_reviews
 from ..schema_resolution import resolve_extraction_schema
 
 
@@ -41,14 +41,14 @@ class LoadSummary:
     db_path: Path
 
 
-# ── Review-override application (event-stream, latest-wins per field) ─────
+# ── Review-override application (review.json, one entry per field) ────────
 
 
-_PATH_SEG = re.compile(r"\.([A-Za-z_][A-Za-z0-9_]*)|\[(\d+)\]")
+_PATH_SEG = re.compile(r"(?:^|\.)([A-Za-z_][A-Za-z0-9_]*)|\[(\d+)\]")
 
 
 def _parse_path(path: str) -> list[str | int]:
-    """Parse `.a.b[2].c` into ['a', 'b', 2, 'c']."""
+    """Parse `a.b[2].c` (or legacy `.a.b[2].c`) into ['a', 'b', 2, 'c']."""
     segs: list[str | int] = []
     for m in _PATH_SEG.finditer(path):
         if m.group(1) is not None:
@@ -58,8 +58,16 @@ def _parse_path(path: str) -> list[str | int]:
     return segs
 
 
+#: Reviewer sentinel meaning "this field should not exist" (see
+#: specs/reviews/spec.md) — applied as a field removal, never as a value.
+REMOVE_SENTINEL = "__remove__"
+
+
 def _apply_override(record: dict, path: str, value: Any) -> bool:
-    """Set record at path to value. Returns False on path-resolve failure."""
+    """Set record at path to value (or remove the field for the sentinel).
+
+    Returns False on path-resolve failure.
+    """
     segs = _parse_path(path)
     if not segs:
         return False
@@ -71,6 +79,12 @@ def _apply_override(record: dict, path: str, value: Any) -> bool:
             return False
     last = segs[-1]
     try:
+        if value == REMOVE_SENTINEL:
+            if isinstance(cur, dict):
+                cur.pop(last, None)
+            elif isinstance(cur, list) and isinstance(last, int) and last < len(cur):
+                cur[last] = None
+            return True
         cur[last] = value
         return True
     except (KeyError, IndexError, TypeError):
@@ -78,28 +92,30 @@ def _apply_override(record: dict, path: str, value: Any) -> bool:
 
 
 def _build_override_map(cfg: LitSchemaConfig) -> dict[str, list[dict]]:
-    """{article_id: [events sorted by timestamp ascending]}."""
+    """{article_id: [{path, value}, ...]} — one override max per field path."""
     by_article: dict[str, list[dict]] = {}
     for extraction_path in iter_extraction_paths(cfg):
         article_id = article_id_from_extraction_path(extraction_path)
-        for ev in read_review_events(article_files(cfg, article_id)):
-            by_article.setdefault(ev["article_id"], []).append(ev)
-    for events in by_article.values():
-        events.sort(key=lambda e: e.get("timestamp") or "")
+        fields = read_reviews(article_files(cfg, article_id))
+        overrides = [
+            {"path": path, "value": entry["override_value"]}
+            for path, entry in fields.items()
+            if "override_value" in entry
+        ]
+        if overrides:
+            by_article[article_id] = overrides
     return by_article
 
 
 def _apply_overrides_to_extraction(
     extraction: dict,
-    events: list[dict],
+    overrides: list[dict],
 ) -> tuple[dict, int]:
-    """Replay events in chronological order; only events with correct_value mutate."""
+    """Apply review overrides (order is immaterial: one entry per field path)."""
     record = json.loads(json.dumps(extraction))  # deep copy
     count = 0
-    for ev in events:
-        if "correct_value" not in ev:
-            continue
-        if _apply_override(record, ev["path"], ev["correct_value"]):
+    for override in overrides:
+        if _apply_override(record, override["path"], override["value"]):
             count += 1
     return record, count
 
@@ -358,9 +374,9 @@ def build_store(
         # the schema's id_slot isn't `article_id`.
         if id_slot and id_slot not in data:
             data[id_slot] = article_id
-        events = override_map.get(data.get(id_slot or "article_id")) or []
-        if events:
-            data, applied = _apply_overrides_to_extraction(data, events)
+        overrides = override_map.get(article_id) or []
+        if overrides:
+            data, applied = _apply_overrides_to_extraction(data, overrides)
             reviews_applied += 1
             overrides_applied += applied
         records.append(data)

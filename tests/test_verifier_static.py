@@ -66,7 +66,8 @@ def test_verifier_overview_and_json_use_effective_post_edit_values() -> None:
 
     assert "effectiveExtraction" in html
     assert "applyCorrectedValue" in html
-    assert 'ann.status === "flagged" && ann.correct_value !== undefined' in html
+    assert 'ann.status !== "flagged" || ann.correct_value === undefined' in html
+    assert "removeValueAtPath" in html
     assert "renderOverviewView(effectiveExtraction())" in html
     assert "renderJsonView(effectiveExtraction())" in html
 
@@ -402,6 +403,40 @@ def test_bib_header_title_first_layout_with_corporate_author() -> None:
     assert "flex-basis: 100%" in html
 
 
+def test_verifier_surfaces_base_stale_warning() -> None:
+    html = STATIC_HTML.read_text()
+
+    # The staleness API field must have a visible consequence.
+    assert 'id="base-stale-warning"' in html
+    assert "state.baseStale = !!annData.base_stale" in html
+    assert "renderBaseStaleBanner" in html
+    assert "refreshBaseStale" in html
+
+
+def test_annotation_mutations_capture_the_article_id() -> None:
+    html = STATIC_HTML.read_text()
+
+    # Same race rule as the bib handlers: a response landing after the user
+    # navigated away must not mutate the new article's state.
+    save = html[html.index("async function saveAnnotation") :]
+    save = save[: save.index("\n}\n")]
+    clear = html[html.index("async function clearAnnotation") :]
+    clear = clear[: clear.index("\n}\n")]
+    for handler in (save, clear):
+        assert "const id = state.currentId;" in handler
+        assert "id !== state.currentId" in handler
+
+
+def test_verifier_renders_placeholder_for_unextracted_articles() -> None:
+    html = STATIC_HTML.read_text()
+
+    assert "No litschema extraction has been run yet" in html
+    assert "/extract-article" in html
+    assert "renderNoExtractionPlaceholder" in html
+    assert "has_extraction === false" in html
+
+
+
 def test_verifier_index_served_by_app() -> None:
     from fastapi.testclient import TestClient
 
@@ -433,3 +468,44 @@ def test_verifier_moves_source_reasoning_to_left_overlay() -> None:
     assert 'id="selected-field-source"' not in html
     assert 'class="review-action-btn" id="btn-source-evidence-prev"' not in html
     assert 'class="review-action-btn" id="btn-source-evidence-next"' not in html
+
+
+def test_verifier_surfaces_overall_extraction_confidence() -> None:
+    html = STATIC_HTML.read_text()
+
+    # Chip sits next to review-progress in the extraction panel header,
+    # hidden until reasoning supplies a top-level confidence.
+    assert 'id="confidence-chip"' in html
+    assert html.index('id="review-progress"') < html.index('id="confidence-chip"')
+    assert "updateConfidenceChip" in html
+    assert "model confidence" in html
+    assert "confidence_reasoning" in html
+    # Subtle banding: colored dot indicator, text stays muted.
+    assert "confidenceBand" in html
+    assert ".confidence-chip" in html
+    assert ".confidence-low::before { background: var(--red); }" in html
+    assert ".confidence-mid::before { background: var(--yellow); }" in html
+    assert ".confidence-high::before { background: var(--green); }" in html
+
+
+def test_verifier_surfaces_per_field_confidence_in_evidence_overlay() -> None:
+    html = STATIC_HTML.read_text()
+
+    assert 'id="source-evidence-confidence"' in html
+    assert html.index('id="source-evidence-value"') < html.index('id="source-evidence-confidence"')
+    assert "selectedConfidence" in html
+    assert ".source-evidence-confidence" in html
+    assert "typeof entry.confidence" in html
+
+
+def test_inline_edit_has_typed_inputs_and_remove_affordance() -> None:
+    html = STATIC_HTML.read_text()
+
+    assert "buildTypedEditControl" in html
+    assert "inline-edit-number" in html
+    assert "inline-edit-boolean" in html
+    assert "inline-edit-remove" in html
+    assert '"__remove__"' in html
+    assert "schemaField.kind" in html or "schemaField?.kind" in html
+    assert "(removed)" in html
+    assert "removeInlineEdit" in html

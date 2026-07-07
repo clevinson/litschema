@@ -126,7 +126,8 @@ def test_schema_field_metadata_exposes_top_level_enums() -> None:
         "double_blind",
         "triple_blind",
     ]
-    assert "primary_endpoint" not in metadata["fields"]
+    assert metadata["fields"]["blinding"]["kind"] == "enum"
+    assert metadata["fields"]["primary_endpoint"]["kind"] == "string"
 
 
 def test_schema_field_metadata_uses_array_path_patterns_for_nested_enums() -> None:
@@ -154,68 +155,25 @@ def test_main_honors_port_argument(monkeypatch, tmp_path) -> None:
     assert runs == [((webapp.app,), {"host": "127.0.0.1", "port": 8017})]
 
 
-def test_collapse_review_events_dedupes_by_path_last_write_wins() -> None:
-    events = [
-        {"path": ".a", "status": "verified", "timestamp": "t1"},
-        {"path": ".a", "status": "flagged", "timestamp": "t2"},
-        {"path": ".b", "status": "verified", "timestamp": "t3"},
-    ]
+def test_annotation_from_entry_maps_spec_names_to_api_names() -> None:
+    entry = {
+        "author": "0000-0002-1825-0097",
+        "signal": "flagged",
+        "timestamp": "t1",
+        "override_value": "6.5",
+        "note": "n",
+    }
 
-    by_path = {e["path"]: e for e in webapp._collapse_review_events(events)}
+    ann = webapp._annotation_from_entry("experiments[0].ph", entry)
 
-    assert set(by_path) == {".a", ".b"}
-    assert by_path[".a"]["status"] == "flagged"
-    assert by_path[".a"]["timestamp"] == "t2"
-
-
-def test_collapse_review_events_drops_path_after_cleared_event() -> None:
-    events = [
-        {"path": ".a", "status": "verified"},
-        {"path": ".a", "status": "cleared"},
-    ]
-
-    assert webapp._collapse_review_events(events) == []
-
-
-def test_collapse_review_events_drops_events_without_path() -> None:
-    events = [
-        {"status": "verified"},
-        {"path": ".a", "status": "verified"},
-        {"path": "", "status": "flagged"},
-    ]
-
-    out = webapp._collapse_review_events(events)
-    assert [e["path"] for e in out] == [".a"]
-
-
-def test_write_reviews_jsonl_writes_one_line_per_entry(tmp_path) -> None:
-    p = tmp_path / "reviews.jsonl"
-
-    webapp._write_reviews_jsonl(p, [
-        {"path": ".a", "status": "verified"},
-        {"path": ".b", "status": "flagged"},
-    ])
-
-    lines = p.read_text().splitlines()
-    assert len(lines) == 2
-    assert all(line.startswith("{") for line in lines)
-
-
-def test_write_reviews_jsonl_removes_file_when_empty(tmp_path) -> None:
-    p = tmp_path / "reviews.jsonl"
-    p.write_text('{"path": ".x", "status": "verified"}\n')
-
-    webapp._write_reviews_jsonl(p, [])
-
-    assert not p.exists()
-
-
-def test_write_reviews_jsonl_no_op_when_empty_and_missing(tmp_path) -> None:
-    p = tmp_path / "reviews.jsonl"
-
-    webapp._write_reviews_jsonl(p, [])
-
-    assert not p.exists()
+    assert ann == {
+        "path": "experiments[0].ph",
+        "status": "flagged",
+        "reviewer": "0000-0002-1825-0097",
+        "timestamp": "t1",
+        "correct_value": "6.5",
+        "note": "n",
+    }
 
 
 def _client(cfg: LitSchemaConfig) -> TestClient:
@@ -225,6 +183,269 @@ def _client(cfg: LitSchemaConfig) -> TestClient:
 
 def teardown_function() -> None:
     webapp.app.dependency_overrides.clear()
+
+
+def _write_extraction(cfg, article_id: str, extraction: dict) -> None:
+    article_dir = cfg.article_store_dir / article_id
+    article_dir.mkdir(parents=True, exist_ok=True)
+    (article_dir / "agent-extraction.json").write_text(_json.dumps(extraction))
+
+
+def test_put_annotation_round_trip_via_review_json(tmp_path) -> None:
+    cfg = _project_cfg(tmp_path)
+    _write_extraction(cfg, "a", {"article_id": "a", "title": "T"})
+    client = _client(cfg)
+
+    resp = client.put(
+        "/api/annotations/a",
+        json={"path": ".title", "status": "flagged",
+              "reviewer": "0000-0002-1825-0097", "correct_value": "Better"},
+    )
+    assert resp.status_code == 200
+
+    # storage uses the spec shape: one entry object per field path...
+    on_disk = _json.loads((cfg.article_store_dir / "a" / "review.json").read_text())
+    entry = on_disk["fields"]["title"]
+    assert isinstance(entry, dict)
+    assert entry["signal"] == "flagged"
+    assert entry["author"] == "0000-0002-1825-0097"
+    assert entry["override_value"] == "Better"
+    assert "status" not in entry and "correct_value" not in entry
+
+    # ...while the API keeps its historical shape
+    anns = client.get("/api/annotations/a").json()["annotations"]
+    (ann,) = anns
+    assert ann["path"] == "title"
+    assert ann["status"] == "flagged"
+    assert ann["reviewer"] == "0000-0002-1825-0097"
+    assert ann["correct_value"] == "Better"
+
+
+def test_delete_annotation_clears_review_json(tmp_path) -> None:
+    cfg = _project_cfg(tmp_path)
+    _write_extraction(cfg, "a", {"article_id": "a", "title": "T"})
+    client = _client(cfg)
+    client.put("/api/annotations/a", json={"path": ".title", "status": "verified", "reviewer": ""})
+
+    assert client.delete("/api/annotations/a/title").status_code == 200
+    assert client.get("/api/annotations/a").json()["annotations"] == []
+    assert not (cfg.article_store_dir / "a" / "review.json").exists()
+
+
+def test_put_annotation_replaces_across_reviewers(tmp_path) -> None:
+    cfg = _project_cfg(tmp_path)
+    _write_extraction(cfg, "a", {"article_id": "a", "title": "T"})
+    client = _client(cfg)
+    reviewer_a = "0000-0002-1825-0097"
+    reviewer_b = "0000-0001-5109-3700"
+    client.put(
+        "/api/annotations/a", json={"path": "title", "status": "flagged", "reviewer": reviewer_a}
+    )
+    client.put(
+        "/api/annotations/a", json={"path": "title", "status": "verified", "reviewer": reviewer_b}
+    )
+
+    # one review per field: B's save replaced A's, author records the attribution
+    anns = client.get("/api/annotations/a").json()["annotations"]
+    (ann,) = anns
+    assert ann["reviewer"] == reviewer_b
+    assert ann["status"] == "verified"
+
+    # clearing removes THE entry, whoever wrote it
+    assert client.delete("/api/annotations/a/title").status_code == 200
+    assert client.get("/api/annotations/a").json()["annotations"] == []
+
+
+def test_put_annotation_validation_refuses_bad_input(tmp_path) -> None:
+    cfg = _project_cfg(tmp_path)
+    _write_extraction(cfg, "a", {"article_id": "a", "title": "T"})
+    client = _client(cfg)
+
+    ok = {"path": "title", "status": "verified", "reviewer": ""}
+    assert client.put("/api/annotations/a", json=[ok]).status_code == 400  # array body
+    assert client.put("/api/annotations/a", json={**ok, "path": 5}).status_code == 400
+    assert client.put("/api/annotations/a", json={"status": "verified"}).status_code == 400
+    assert client.put("/api/annotations/a", json={"path": "title"}).status_code == 400
+    assert (
+        client.put("/api/annotations/a", json={**ok, "status": "cleared"}).status_code == 400
+    )
+    # Flags need a reviewer, and any reviewer given must be a real ORCID.
+    assert (
+        client.put(
+            "/api/annotations/a", json={"path": "title", "status": "flagged", "reviewer": ""}
+        ).status_code
+        == 400
+    )
+    assert client.put("/api/annotations/a", json={**ok, "reviewer": "bob"}).status_code == 400
+    # ORCID URL forms normalize to the bare id.
+    resp = client.put(
+        "/api/annotations/a",
+        json={**ok, "reviewer": "https://orcid.org/0000-0002-1825-0097"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["reviewer"] == "0000-0002-1825-0097"
+
+
+def test_annotation_writes_refuse_corrupt_review_json_with_409(tmp_path) -> None:
+    cfg = _project_cfg(tmp_path)
+    _write_extraction(cfg, "a", {"article_id": "a", "title": "T"})
+    review_path = cfg.article_store_dir / "a" / "review.json"
+    review_path.write_text("{not json")
+    client = _client(cfg)
+
+    put = client.put(
+        "/api/annotations/a", json={"path": "title", "status": "verified", "reviewer": ""}
+    )
+    delete = client.delete("/api/annotations/a/title")
+
+    assert put.status_code == 409
+    assert delete.status_code == 409
+    assert review_path.read_text() == "{not json"  # evidence intact, file not deleted
+    assert client.get("/api/annotations/a").json()["annotations"] == []  # reads stay lenient
+
+
+def test_delete_annotation_requires_a_field_path(tmp_path) -> None:
+    cfg = _project_cfg(tmp_path)
+    _write_extraction(cfg, "a", {"article_id": "a", "title": "T"})
+    client = _client(cfg)
+
+    assert client.delete("/api/annotations/a/").status_code == 400
+    assert client.delete("/api/annotations/a/%2E").status_code == 400  # dots-only path
+
+
+def test_get_annotations_base_stale_false_on_fresh_write(tmp_path) -> None:
+    cfg = _project_cfg(tmp_path)
+    _write_extraction(cfg, "a", {"article_id": "a", "title": "T"})
+    client = _client(cfg)
+
+    # no reviews yet -> no stamp -> not stale
+    assert client.get("/api/annotations/a").json()["base_stale"] is False
+
+    client.put("/api/annotations/a", json={"path": "title", "status": "verified", "reviewer": ""})
+    assert client.get("/api/annotations/a").json()["base_stale"] is False
+
+
+def test_get_annotations_base_stale_true_after_extraction_changes(tmp_path) -> None:
+    cfg = _project_cfg(tmp_path)
+    _write_extraction(cfg, "a", {"article_id": "a", "title": "T"})
+    client = _client(cfg)
+    client.put("/api/annotations/a", json={"path": "title", "status": "verified", "reviewer": ""})
+
+    _write_extraction(cfg, "a", {"article_id": "a", "title": "T (re-extracted)"})
+
+    body = client.get("/api/annotations/a").json()
+    assert body["base_stale"] is True
+    assert body["annotations"]  # annotations still served alongside the warning
+
+
+def test_list_articles_includes_assembled_but_unextracted(tmp_path) -> None:
+    cfg = _project_cfg(tmp_path)
+    _write_manifest(
+        cfg,
+        "noext",
+        {"id": "noext", "source_metadata": {"title": "Unextracted Title", "metadata_source": "auto"}},
+    )
+    _write_manifest(
+        cfg,
+        "ext",
+        {"id": "ext", "source_metadata": {"title": "Extracted Title", "metadata_source": "auto"}},
+    )
+    _write_extraction(cfg, "ext", {"article_id": "ext", "study_types": ["review"]})
+    client = _client(cfg)
+
+    body = client.get("/api/articles").json()
+
+    by_id = {a["article_id"]: a for a in body["articles"]}
+    assert set(by_id) == {"ext", "noext"}
+    noext = by_id["noext"]
+    assert noext["has_extraction"] is False
+    assert noext["title"] == "Unextracted Title"
+    assert noext["metadata_source"] == "auto"
+    assert noext["n_setups"] == 0
+    assert noext["n_fields"] == 0
+    assert noext["n_reviewed"] == 0
+    assert noext["n_verified"] == 0
+    assert noext["n_flagged"] == 0
+    assert noext["is_complete"] is False
+    assert noext["has_flags"] is False
+    assert by_id["ext"]["has_extraction"] is True
+    assert by_id["ext"]["title"] == "Extracted Title"
+
+
+def test_list_articles_carries_overall_confidence_from_reasoning(tmp_path) -> None:
+    cfg = _project_cfg(tmp_path)
+    _write_manifest(cfg, "conf", {"id": "conf"})
+    _write_extraction(cfg, "conf", {"article_id": "conf", "title": "T"})
+    (cfg.article_store_dir / "conf" / "agent-reasoning.json").write_text(
+        _json.dumps({"confidence": 0.55, "fields": []})
+    )
+    _write_manifest(cfg, "noconf", {"id": "noconf"})
+    _write_extraction(cfg, "noconf", {"article_id": "noconf", "title": "T"})
+
+    by_id = {
+        a["article_id"]: a for a in _client(cfg).get("/api/articles").json()["articles"]
+    }
+
+    assert by_id["conf"]["confidence"] == 0.55  # the queue filter can see it
+    assert by_id["noconf"]["confidence"] is None
+
+
+def test_list_articles_treats_errored_extraction_as_unextracted(tmp_path) -> None:
+    cfg = _project_cfg(tmp_path)
+    _write_manifest(cfg, "bad", {"id": "bad", "source_metadata": {"title": "B", "metadata_source": "manual"}})
+    _write_extraction(cfg, "bad", {"article_id": "bad", "error": "extraction failed"})
+    client = _client(cfg)
+
+    (article,) = client.get("/api/articles").json()["articles"]
+
+    assert article["article_id"] == "bad"
+    assert article["has_extraction"] is False
+
+
+def _write_schema(cfg, text: str) -> None:
+    cfg.schema_dir.mkdir(parents=True, exist_ok=True)
+    (cfg.schema_dir / "extraction.yaml").write_text(text)
+    (cfg.config_path).write_text(
+        'schema_dir: "schema"\nextraction_schema_file: "extraction.yaml"\n'
+        'data_dir: "data"\narticle_store_dir: "data/papers"\npaper_inbox_dir: "papers-inbox"\n'
+    )
+
+
+_TYPED_SCHEMA = """
+id: https://example.org/t
+name: t
+prefixes: {t: "https://example.org/t/", linkml: "https://w3id.org/linkml/"}
+default_prefix: t
+default_range: string
+imports: [linkml:types]
+enums:
+  Mood: {permissible_values: {happy: {}, sad: {}}}
+classes:
+  Root:
+    tree_root: true
+    attributes:
+      article_id: {identifier: true}
+      mood: {range: Mood}
+      score: {range: float}
+      n_samples: {range: integer}
+      replicated: {range: boolean}
+      label: {range: string}
+"""
+
+
+def test_schema_fields_reports_kind_for_every_scalar_slot(tmp_path) -> None:
+    cfg = _project_cfg(tmp_path)
+    _write_schema(cfg, _TYPED_SCHEMA)
+    client = _client(cfg)
+
+    fields = client.get("/api/schema/fields").json()["fields"]
+
+    assert fields["mood"]["kind"] == "enum"
+    assert [v["value"] for v in fields["mood"]["permissible_values"]] == ["happy", "sad"]
+    assert fields["score"]["kind"] == "float"
+    assert fields["n_samples"]["kind"] == "integer"
+    assert fields["replicated"]["kind"] == "boolean"
+    assert fields["label"]["kind"] == "string"
 
 
 def test_put_bibliography_writes_manual_source_metadata(tmp_path) -> None:

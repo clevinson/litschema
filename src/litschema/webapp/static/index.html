@@ -737,6 +737,29 @@
     font-weight: 600;
   }
 
+  .review-progress-row {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  #base-stale-warning {
+    padding: 8px 14px;
+    font-size: 12.5px;
+    line-height: 1.4;
+    background: rgba(234, 179, 8, 0.14);
+    border-bottom: 1px solid var(--yellow);
+  }
+
+  .confidence-chip {
+    font-family: var(--font-sans);
+    font-size: 11px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    cursor: default;
+  }
+
   .review-queue-actions {
     display: flex;
     gap: 8px;
@@ -1397,7 +1420,7 @@
 
   .inline-edit-form {
     display: grid;
-    grid-template-columns: minmax(120px, 1fr) 22px 22px;
+    grid-template-columns: minmax(120px, 1fr) 22px 22px 22px;
     align-items: center;
     gap: 8px;
     width: 100%;
@@ -1432,7 +1455,8 @@
   }
 
   .inline-edit-save,
-  .inline-edit-cancel {
+  .inline-edit-cancel,
+  .inline-edit-remove {
     appearance: none;
     width: 22px;
     height: 22px;
@@ -1455,6 +1479,11 @@
   .inline-edit-cancel:hover,
   .inline-edit-cancel:focus-visible {
     color: var(--text);
+  }
+
+  .inline-edit-remove:hover,
+  .inline-edit-remove:focus-visible {
+    color: var(--red);
   }
 
   .table-ann-btn {
@@ -1897,6 +1926,40 @@
     gap: 10px;
   }
 
+  .no-extraction-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    gap: 8px;
+    padding: 24px;
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 14px;
+    line-height: 1.6;
+  }
+
+  .no-extraction-state strong {
+    color: var(--text);
+  }
+
+  .no-extraction-state code {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    background: var(--bg-overlay);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 2px 8px;
+    color: var(--text-secondary);
+  }
+
+  .no-extraction-state code.no-extraction-cmd {
+    font-size: 13px;
+    padding: 6px 12px;
+    color: var(--text);
+  }
+
   /* ── Search clear button ── */
   .search-clear {
     background: var(--text-dim);
@@ -2199,6 +2262,29 @@
     line-height: 1.45;
   }
 
+  .source-evidence-confidence {
+    font-family: var(--font-sans);
+    font-size: 11px;
+    color: var(--text-secondary);
+  }
+
+  /* Confidence banding — text stays muted; the band shows as a small
+     colored dot so high confidence doesn't shout in green text. */
+  .confidence-low::before,
+  .confidence-mid::before,
+  .confidence-high::before {
+    content: "";
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    margin-right: 5px;
+    vertical-align: 1px;
+  }
+  .confidence-low::before { background: var(--red); }
+  .confidence-mid::before { background: var(--yellow); }
+  .confidence-high::before { background: var(--green); }
+
   @media (max-width: 760px) {
     body {
       font-size: 12px;
@@ -2452,15 +2538,24 @@ e.g. year >= 2024 && study_types.includes("review")'
         <span class="source-evidence-value-label" id="source-evidence-value-label">Value</span>
         <span class="source-evidence-value-slot" id="source-evidence-value-text"></span>
       </div>
+      <div class="source-evidence-confidence" id="source-evidence-confidence" style="display:none"></div>
       <div class="source-evidence-reasoning" id="source-evidence-reasoning"></div>
     </div>
   </div>
   <div class="panel panel-right">
+    <div id="base-stale-warning" style="display:none">
+      &#9888; Reviews below were written against an earlier extraction of this
+      article &mdash; field paths may no longer line up. Re-verify or clear the
+      affected fields; the warning clears itself once none remain stale.
+    </div>
     <div class="panel-header" id="extraction-panel-header">
       <div class="panel-header-row review-panel-top">
         <div class="review-title-group">
           <h3 id="extraction-panel-title">Extraction Review</h3>
-          <span class="review-progress" id="review-progress" aria-live="polite"></span>
+          <div class="review-progress-row">
+            <span class="review-progress" id="review-progress" aria-live="polite"></span>
+            <span class="confidence-chip" id="confidence-chip" style="display:none"></span>
+          </div>
         </div>
         <div class="review-actions" id="review-actions">
           <div class="view-mode-toggle overview-mode-toggle" aria-label="Overview display mode">
@@ -2491,6 +2586,8 @@ e.g. year >= 2024 && study_types.includes("review")'
 
 <script>
 const $ = (sel) => document.querySelector(sel);
+// Sentinel correct_value meaning "the extraction was wrong to include this field".
+const REMOVE_VALUE = "__remove__";
 const state = {
   articles: [],
   viewMode: "review",
@@ -2888,8 +2985,8 @@ const FILTER_HELP_FIELDS = [
   { name: "confidence",     type: "number?",  note: "Extractor self-rated confidence 0–1; null when unset." },
   { name: "n_setups",       type: "number",   note: "Count of experimental_setups. 0 typically means review/perspective." },
   { name: "n_fields",       type: "number",   note: "Total leaf fields in the extraction (denominator for progress)." },
-  { name: "n_reviewed",     type: "number",   note: "Fields with a verified or flagged review event." },
-  { name: "n_verified",     type: "number",   note: "Fields with a verified review event." },
+  { name: "n_reviewed",     type: "number",   note: "Fields with a verified or flagged review." },
+  { name: "n_verified",     type: "number",   note: "Fields with a verified review." },
   { name: "n_flagged",      type: "number",   note: "Fields currently flagged for correction." },
   { name: "n_annotated",    type: "number",   note: "Alias for n_reviewed (kept for compatibility)." },
   { name: "is_complete",    type: "boolean",  note: "True when n_reviewed >= n_fields and n_fields > 0." },
@@ -3040,11 +3137,19 @@ $("#article-select").addEventListener("change", async (e) => {
   $("#panel-left").innerHTML = '<div class="loading">Loading...</div>';
   $("#panel-right").innerHTML = '<div class="loading">Loading...</div>';
 
+  // Assembled-but-unextracted articles have no extraction JSON yet —
+  // /api/article would 404, so skip the extraction-side fetches and let
+  // renderExtractionPanel() show the no-extraction placeholder.
+  const summary = state.articles.find(a => a.article_id === id);
+  const hasExtraction = !summary || summary.has_extraction !== false;
+
   const [mdData, extraction, reasoningData, annData, bibData] = await Promise.all([
-    fetchJson(`/api/markdown/${id}`),
-    fetchJson(`/api/article/${id}`),
-    fetchJson(`/api/reasoning/${id}`).catch(() => null),
-    fetchJson(`/api/annotations/${id}`).catch(() => ({ annotations: [] })),
+    fetchJson(`/api/markdown/${id}`).catch(() => null),
+    hasExtraction ? fetchJson(`/api/article/${id}`) : Promise.resolve(null),
+    hasExtraction ? fetchJson(`/api/reasoning/${id}`).catch(() => null) : Promise.resolve(null),
+    hasExtraction
+      ? fetchJson(`/api/annotations/${id}`).catch(() => ({ annotations: [] }))
+      : Promise.resolve({ annotations: [] }),
     fetchJson(`/api/bibliography/${id}`).catch(() => null),
   ]);
   // Staleness guard: the user may have navigated on while these fetches ran.
@@ -3052,7 +3157,7 @@ $("#article-select").addEventListener("change", async (e) => {
   // therefore future PUTs) at the wrong article.
   if (id !== state.currentId) return;
 
-  state.markdown = mdData.markdown;
+  state.markdown = mdData ? mdData.markdown : null;
   state.extraction = extraction;
   state.reasoning = reasoningData;
 
@@ -3073,6 +3178,8 @@ $("#article-select").addEventListener("change", async (e) => {
     p = p.replace(/\.(\d+)(?=\.|$)/g, "[$1]");
     state.annotations[p] = ann;
   }
+  state.baseStale = !!annData.base_stale;
+  renderBaseStaleBanner();
 
   const meta = bibData || state.articles.find(a => a.article_id === id);
   if (meta) renderBibHeader(meta);
@@ -3084,6 +3191,7 @@ $("#article-select").addEventListener("change", async (e) => {
   renderMarkdown();
   renderExtractionPanel();
   updateStats();
+  updateConfidenceChip();
 });
 
 // ── Bibliographic header ──
@@ -3967,13 +4075,12 @@ function buildInlineEditForm(path, value = getValueAtPath(state.extraction, path
     ? ann.correct_value
     : value;
   const schemaField = schemaFieldForPath(path);
-  const controlHtml = schemaField
-    ? buildEnumEditSelect(path, current, schemaField)
-    : `<input class="inline-edit-input" data-path="${path}" value="${escapeHtml(displayFieldValue(current))}" aria-label="Edit value">`;
+  const controlHtml = buildTypedEditControl(path, current, schemaField);
   return `<span class="inline-edit-form" data-path="${path}">` +
     controlHtml +
     `<button type="button" class="inline-edit-save" data-path="${path}" aria-label="Save edit" title="Save edit">&#10003;</button>` +
     `<button type="button" class="inline-edit-cancel" data-path="${path}" aria-label="Cancel edit" title="Cancel edit">&#10005;</button>` +
+    `<button type="button" class="inline-edit-remove" data-path="${path}" aria-label="Remove field" title="Remove this field (extraction was wrong to include it)">&#9003;</button>` +
     `</span>`;
 }
 
@@ -3983,6 +4090,25 @@ function schemaPathPattern(path) {
 
 function schemaFieldForPath(path) {
   return state.schemaFields[schemaPathPattern(path)] || null;
+}
+
+function buildTypedEditControl(path, current, schemaField) {
+  if (schemaField && schemaField.permissible_values) {
+    return buildEnumEditSelect(path, current, schemaField);
+  }
+  const kind = schemaField ? schemaField.kind : "string";
+  if (kind === "integer" || kind === "float") {
+    const step = kind === "integer" ? "1" : "any";
+    return `<input type="number" step="${step}" class="inline-edit-input inline-edit-number" data-path="${path}" value="${escapeHtml(displayFieldValue(current))}" aria-label="Edit value">`;
+  }
+  if (kind === "boolean") {
+    const currentValue = displayFieldValue(current);
+    const opts = ["true", "false"].map(v =>
+      `<option value="${v}"${currentValue === v ? " selected" : ""}>${v}</option>`).join("");
+    return `<select class="inline-edit-select inline-edit-boolean" data-path="${path}" aria-label="Edit value">` +
+      `<option value="">Choose...</option>${opts}</select>`;
+  }
+  return `<input class="inline-edit-input" data-path="${path}" value="${escapeHtml(displayFieldValue(current))}" aria-label="Edit value">`;
 }
 
 function buildEnumEditSelect(path, current, schemaField) {
@@ -4002,6 +4128,9 @@ function buildEnumEditSelect(path, current, schemaField) {
 
 function displayFieldValueForPath(path, value = getValueAtPath(state.extraction, path)) {
   const ann = state.annotations[path];
+  if (ann && ann.status === "flagged" && ann.correct_value === REMOVE_VALUE) {
+    return { html: '<span style="color:var(--text-dim)">(removed)</span>', style: "" };
+  }
   if (ann && ann.status === "flagged" && ann.correct_value) {
     return { html: escapeHtml(ann.correct_value), style: "" };
   }
@@ -4277,9 +4406,9 @@ function effectiveExtraction() {
   if (!state.extraction) return null;
   const data = JSON.parse(JSON.stringify(state.extraction));
   for (const [path, ann] of Object.entries(state.annotations)) {
-    if (ann.status === "flagged" && ann.correct_value !== undefined) {
-      applyCorrectedValue(data, path, ann.correct_value);
-    }
+    if (ann.status !== "flagged" || ann.correct_value === undefined) continue;
+    if (ann.correct_value === REMOVE_VALUE) removeValueAtPath(data, path);
+    else applyCorrectedValue(data, path, ann.correct_value);
   }
   return data;
 }
@@ -4293,6 +4422,19 @@ function applyCorrectedValue(obj, path, value) {
     if (current === null || current === undefined) return;
   }
   current[parts[parts.length - 1]] = value;
+}
+
+function removeValueAtPath(obj, path) {
+  const parts = pathToParts(path);
+  if (parts.length === 0) return;
+  let current = obj;
+  for (let i = 0; i < parts.length - 1; i++) {
+    current = current?.[parts[i]];
+    if (current === null || current === undefined) return;
+  }
+  const last = parts[parts.length - 1];
+  if (Array.isArray(current)) current.splice(Number(last), 1);
+  else delete current[last];
 }
 
 function pathToParts(path) {
@@ -4528,6 +4670,17 @@ function selectedReasoning(path) {
   return entry && entry.reasoning ? entry.reasoning : "";
 }
 
+function selectedConfidence(path) {
+  const entry = state.reasoningByPath[path];
+  return entry && typeof entry.confidence === "number" ? entry.confidence : null;
+}
+
+function confidenceBand(value) {
+  if (value < 0.6) return "confidence-low";
+  if (value > 0.85) return "confidence-high";
+  return "confidence-mid";
+}
+
 function openInlineEdit(path) {
   if (!path) return;
   state.selectedPath = path;
@@ -4557,10 +4710,26 @@ async function saveInlineEdit(path) {
   const reviewer = $("#reviewer-id").value.trim();
   if (!reviewer) { alert("Please connect ORCID before editing."); return; }
   const correctValue = control ? control.value.trim() : "";
+  if (correctValue === "" && control && control.classList.contains("inline-edit-number")) {
+    cancelInlineEdit();
+    return;
+  }
   state.editingPath = null;
   const ok = await saveAnnotation(path, "flagged", {
     correct_value: correctValue,
   });
+  if (!ok) {
+    state.editingPath = path;
+    renderExtractionPanel();
+  }
+}
+
+async function removeInlineEdit(path) {
+  if (!path) return;
+  const reviewer = $("#reviewer-id").value.trim();
+  if (!reviewer) { alert("Please connect ORCID before editing."); return; }
+  state.editingPath = null;
+  const ok = await saveAnnotation(path, "flagged", { correct_value: REMOVE_VALUE });
   if (!ok) {
     state.editingPath = path;
     renderExtractionPanel();
@@ -4576,6 +4745,7 @@ function updateSourceEvidenceOverlay() {
   const prev = $("#btn-source-evidence-prev");
   const next = $("#btn-source-evidence-next");
   const reasoning = $("#source-evidence-reasoning");
+  const confidenceEl = $("#source-evidence-confidence");
   const valueBox = $("#source-evidence-value");
   const valueLabel = $("#source-evidence-value-label");
   const valueText = $("#source-evidence-value-text");
@@ -4585,6 +4755,11 @@ function updateSourceEvidenceOverlay() {
     overlay.classList.remove("active");
     if (label) label.textContent = "No field selected";
     if (reasoning) reasoning.textContent = "";
+    if (confidenceEl) {
+      confidenceEl.style.display = "none";
+      confidenceEl.textContent = "";
+      confidenceEl.className = "source-evidence-confidence";
+    }
     if (valueBox) valueBox.style.display = "none";
     if (valueLabel) valueLabel.textContent = "Value";
     if (valueText) {
@@ -4610,6 +4785,18 @@ function updateSourceEvidenceOverlay() {
   }
   const reasoningText = selectedReasoning(state.selectedPath);
   if (reasoning) reasoning.textContent = reasoningText || "No reasoning note for this field.";
+  if (confidenceEl) {
+    const conf = selectedConfidence(state.selectedPath);
+    if (conf === null) {
+      confidenceEl.style.display = "none";
+      confidenceEl.textContent = "";
+      confidenceEl.className = "source-evidence-confidence";
+    } else {
+      confidenceEl.textContent = `confidence ${conf.toFixed(2)}`;
+      confidenceEl.className = `source-evidence-confidence ${confidenceBand(conf)}`;
+      confidenceEl.style.display = "block";
+    }
+  }
 
   if (ranges.length === 0) {
     indexEl.textContent = "0/0";
@@ -4712,6 +4899,13 @@ function wireTableEvents(panel) {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
       cancelInlineEdit();
+    });
+  });
+
+  panel.querySelectorAll(".inline-edit-remove[data-path]").forEach(btn => {
+    btn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      await removeInlineEdit(btn.dataset.path);
     });
   });
 
@@ -5432,6 +5626,28 @@ function updateStats() {
   syncCurrentArticleProgress();
 }
 
+function updateConfidenceChip() {
+  const chip = $("#confidence-chip");
+  if (!chip) return;
+  const reasoning = state.reasoning;
+  const conf = reasoning && typeof reasoning.confidence === "number" ? reasoning.confidence : null;
+  if (conf === null) {
+    chip.style.display = "none";
+    chip.textContent = "";
+    chip.className = "confidence-chip";
+    chip.removeAttribute("title");
+    return;
+  }
+  chip.textContent = `model confidence ${conf.toFixed(2)}`;
+  chip.className = `confidence-chip ${confidenceBand(conf)}`;
+  if (reasoning.confidence_reasoning) {
+    chip.title = reasoning.confidence_reasoning;
+  } else {
+    chip.removeAttribute("title");
+  }
+  chip.style.display = "inline";
+}
+
 function reviewStateCounts() {
   if (!state.extraction) {
     return { total: 0, reviewed: 0, verified: 0, flagged: 0, remaining: 0 };
@@ -5517,6 +5733,7 @@ function annotationEntry(path, status, extra = {}) {
 }
 
 async function saveAnnotation(path, status, extra = {}, options = {}) {
+  const id = state.currentId;  // captured now; the user may navigate mid-flight
   const previous = Object.prototype.hasOwnProperty.call(options, "previous")
     ? options.previous
     : state.annotations[path];
@@ -5529,52 +5746,77 @@ async function saveAnnotation(path, status, extra = {}, options = {}) {
   }
 
   try {
-    const response = await fetch(`/api/annotations/${state.currentId}`, {
+    const response = await fetch(`/api/annotations/${id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(entry),
     });
     if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
     const saved = await response.json();
+    if (id !== state.currentId) return true;  // saved, but this view moved on
     state.annotations[path] = { ...entry, ...saved };
     setSaveStatus("Saved", "saved");
+    refreshBaseStale(id);
     return true;
   } catch (err) {
+    if (id !== state.currentId) return false;
     if (previous) state.annotations[path] = previous;
     else delete state.annotations[path];
     setSaveStatus("Failed to save annotation", "error");
     return false;
   } finally {
-    if (render) {
+    if (render && id === state.currentId) {
       renderReviewState();
     }
   }
 }
 
 async function clearAnnotation(path, options = {}) {
+  const id = state.currentId;  // captured now; the user may navigate mid-flight
   const previous = state.annotations[path];
   if (!previous) return;
   const render = options.render !== false;
   setSaveStatus("Clearing...", "saving");
 
   try {
-    const response = await fetch(`/api/annotations/${state.currentId}/${path}`, { method: "DELETE" });
+    const response = await fetch(`/api/annotations/${id}/${path}`, {
+      method: "DELETE",
+    });
     if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+    if (id !== state.currentId) return true;  // cleared, but this view moved on
     delete state.annotations[path];
     state.suppressClearHoverPaths.delete(path);
     setSaveStatus("Cleared", "saved");
+    refreshBaseStale(id);
     return true;
   } catch (err) {
+    if (id !== state.currentId) return false;
     state.annotations[path] = previous;
     setSaveStatus("Failed to save annotation", "error");
     return false;
   } finally {
-    if (render) {
+    if (render && id === state.currentId) {
       renderExtractionPanel();
       updateStats();
       updateSelectedFieldBar(state.selectedPath);
     }
   }
+}
+
+function renderBaseStaleBanner() {
+  const el = $("#base-stale-warning");
+  if (!el) return;
+  el.style.display = state.baseStale ? "block" : "none";
+}
+
+function refreshBaseStale(id) {
+  // Staleness can clear when the last stale entry is re-saved or removed;
+  // re-ask the server rather than guessing. Responses apply by captured id.
+  fetchJson(`/api/annotations/${id}`).then(d => {
+    if (id !== state.currentId) return;
+    state.baseStale = !!(d && d.base_stale);
+    renderBaseStaleBanner();
+  }).catch(() => {});
 }
 
 async function toggleFieldVerification(path) {
@@ -5947,7 +6189,22 @@ $("#btn-orcid-cancel").addEventListener("click", closeOrcidModal);
 initReviewerIdentity();
 
 // ── Extraction rendering ──
+function renderNoExtractionPlaceholder() {
+  const id = state.currentId || "";
+  $("#panel-right").innerHTML = `
+    <div class="no-extraction-state">
+      <p>No litschema extraction has been run yet for this document.</p>
+      <p>Open this project in your agent (e.g. Claude, or Codex) and run:</p>
+      <p><code class="no-extraction-cmd">/extract-article ${escapeHtml(id)}</code></p>
+    </div>`;
+}
+
 function renderExtractionPanel() {
+  const summary = state.articles.find(a => a.article_id === state.currentId);
+  if (summary && summary.has_extraction === false) {
+    renderNoExtractionPlaceholder();
+    return;
+  }
   syncViewControls();
   if (state.viewMode === "overview" && state.overviewMode === "json") {
     renderJsonView(effectiveExtraction());
