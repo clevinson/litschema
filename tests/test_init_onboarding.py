@@ -49,7 +49,7 @@ def test_init_scaffolds_standalone_project(tmp_path) -> None:
     assert "papers-inbox/" in result.output
 
 
-def test_init_refuses_to_overwrite_existing_project_without_force(tmp_path) -> None:
+def test_init_refuses_non_empty_directory_without_force(tmp_path) -> None:
     from litschema import cli
 
     project = tmp_path / "my-review"
@@ -59,7 +59,39 @@ def test_init_refuses_to_overwrite_existing_project_without_force(tmp_path) -> N
     result = CliRunner().invoke(cli.app, ["init", str(project)])
 
     assert result.exit_code == 2
+    assert "--force" in result.output  # the refusal names its remedy
     assert project.joinpath("keep.txt").read_text() == "important\n"
+
+
+def test_init_refuses_existing_project_without_force(tmp_path) -> None:
+    from litschema import cli
+
+    project = tmp_path / "my-review"
+    project.mkdir()
+    project.joinpath("litschema.yaml").write_text("project_root: existing\n")
+
+    result = CliRunner().invoke(cli.app, ["init", str(project)])
+
+    assert result.exit_code == 2
+    assert "litschema.yaml" in result.output
+    assert project.joinpath("litschema.yaml").read_text() == "project_root: existing\n"
+
+
+def test_init_refuses_dangling_config_symlink(tmp_path) -> None:
+    # exists() follows symlinks, so a dangling litschema.yaml symlink must be
+    # caught explicitly — otherwise init half-scaffolds and then crashes (or
+    # writes the config through the link, outside the project).
+    from litschema import cli
+
+    project = tmp_path / "my-review"
+    project.mkdir()
+    project.joinpath("litschema.yaml").symlink_to(tmp_path / "gone" / "litschema.yaml")
+
+    result = CliRunner().invoke(cli.app, ["init", str(project), "--force"])
+
+    assert result.exit_code == 2
+    assert "litschema.yaml" in result.output
+    assert not (project / "papers-inbox").exists()  # nothing was scaffolded
 
 
 def test_init_refuses_existing_project_even_with_force(tmp_path) -> None:
@@ -150,3 +182,25 @@ def test_init_no_skills_opts_out(tmp_path) -> None:
 
     assert result.exit_code == 0
     assert not (project / ".claude").exists()
+    # Next steps must not advertise a slash command that was not installed:
+    # the install step comes first, the slash command only after it.
+    assert "litschema skills install --local" in result.output
+    assert result.output.index("skills install --local") < result.output.index(
+        "/litschema-onboard"
+    )
+
+
+def test_doctor_recognizes_project_local_skills(tmp_path, monkeypatch) -> None:
+    from litschema import cli
+
+    runner = CliRunner()
+    project = tmp_path / "myreview"
+    result = runner.invoke(cli.app, ["init", str(project)])
+    assert result.exit_code == 0, result.output
+
+    # Doctor must not flag the init-default (project-local) install as missing.
+    monkeypatch.chdir(project)
+    result = runner.invoke(cli.app, ["--config", str(project / "litschema.yaml"), "doctor"])
+
+    assert "agent skills installed (project-local)" in result.output
+    assert "skills not installed" not in result.output

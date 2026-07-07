@@ -210,6 +210,7 @@ def _install_skill_dirs(
     *,
     copy: bool,
     force: bool,
+    overwrite_hint: str = "use --force to overwrite",
 ) -> tuple[int, list[str]]:
     dest.mkdir(parents=True, exist_ok=True)
     installed = 0
@@ -218,7 +219,7 @@ def _install_skill_dirs(
         target = dest / skill_dir.name
         if target.exists() or target.is_symlink():
             if not force:
-                messages.append(f"{WARN} {target} already exists (use --force to overwrite)")
+                messages.append(f"{WARN} {target} already exists ({overwrite_hint})")
                 continue
             if target.is_symlink() or target.is_file():
                 target.unlink()
@@ -574,7 +575,8 @@ def meta_set(
     if not force and not can_overwrite(existing, source):
         typer.secho(
             f"{CROSS} refusing: metadata is {existing!r} and auto writes never overwrite "
-            "human or registry data (use --force to override)",
+            "human or registry data — this is expected for machine callers; a human who "
+            "wants to override can pass --force",
             fg=typer.colors.RED,
         )
         raise typer.Exit(code=1)
@@ -822,17 +824,30 @@ def doctor(ctx: typer.Context):
         typer.echo(f"{CROSS} schema dir missing: {cfg.schema_dir}")
         issues.append(f"create {cfg.schema_dir}")
 
-    # Skills check
-    skills_dirs = _agent_skill_destinations("auto")
+    # Skills check — project-local .claude/skills/ is the init default;
+    # global installs are the alternative.
+    local_skills = cfg.project_root / ".claude" / "skills"
     installed = []
-    for skills_dir in skills_dirs:
-        if skills_dir.is_dir():
-            installed.extend(p.name for p in skills_dir.iterdir() if (p / "SKILL.md").exists())
+    where = "project-local"
+    if local_skills.is_dir():
+        installed = [p.name for p in local_skills.iterdir() if (p / "SKILL.md").exists()]
+    if not installed:
+        where = "global"
+        for skills_dir in _agent_skill_destinations("auto"):
+            if skills_dir.is_dir():
+                installed.extend(
+                    p.name for p in skills_dir.iterdir() if (p / "SKILL.md").exists()
+                )
     if installed:
-        typer.echo(f"{CHECK} global agent skills installed: {', '.join(sorted(set(installed)))}")
+        typer.echo(
+            f"{CHECK} agent skills installed ({where}): {', '.join(sorted(set(installed)))}"
+        )
     else:
-        typer.echo(f"{WARN} global agent skills not installed")
-        issues.append("run `litschema skills install --agent claude` or `--agent codex`")
+        typer.echo(f"{WARN} agent skills not installed (no .claude/skills/ here, none global)")
+        issues.append(
+            "run `litschema skills install --local` from the project "
+            "(or `litschema skills install` for a global install)"
+        )
 
     agent_cli = shutil.which("claude") or shutil.which("codex")
     if agent_cli:
@@ -927,16 +942,23 @@ def init(
     if project.exists() and not project.is_dir():
         typer.secho(f"{CROSS} {project} exists and is not a directory", fg=typer.colors.RED)
         raise typer.Exit(code=2)
-    if project.joinpath("litschema.yaml").exists():
+    config_path = project.joinpath("litschema.yaml")
+    # is_symlink() catches dangling symlinks, which exists() follows and misses.
+    if config_path.exists() or config_path.is_symlink():
         typer.secho(
             f"{CROSS} {project} is already a litschema project (litschema.yaml exists) — "
             "edit litschema.yaml directly, or run "
-            "'litschema skills install --local --force' to refresh skills",
+            "'litschema skills install --local --force' from inside the project "
+            "to refresh skills",
             fg=typer.colors.RED,
         )
         raise typer.Exit(code=2)
     if project.exists() and any(project.iterdir()) and not force:
-        typer.secho(f"{CROSS} {project} already exists and is not empty", fg=typer.colors.RED)
+        typer.secho(
+            f"{CROSS} {project} already exists and is not empty "
+            "(pass --force to initialize here anyway; existing files are never overwritten)",
+            fg=typer.colors.RED,
+        )
         raise typer.Exit(code=2)
 
     project.mkdir(parents=True, exist_ok=True)
@@ -945,7 +967,7 @@ def init(
     project.joinpath("papers-inbox").mkdir(exist_ok=True)
 
     # The config cannot exist here — init refuses existing projects above.
-    project.joinpath("litschema.yaml").write_text(
+    config_path.write_text(
         'project_root: "."\n'
         'schema_dir: "schema"\n'
         'schema_root: "extraction.yaml"\n'
@@ -959,13 +981,21 @@ def init(
 
     if not no_skills:
         count, messages = _install_skill_dirs(
-            _skill_sources(), _project_skill_destination(project), copy=True, force=False
+            _skill_sources(),
+            _project_skill_destination(project),
+            copy=True,
+            force=False,
+            overwrite_hint="run 'litschema skills install --local --force' "
+            "from inside the project to replace",
         )
         for message in messages:
             typer.echo(message)
         if count:
             typer.echo(f"{CHECK} installed {count} agent skill(s) into .claude/skills/")
 
+    onboard_available = (
+        _project_skill_destination(project).joinpath("litschema-onboard", "SKILL.md").exists()
+    )
     typer.echo(f"{CHECK} initialized litschema project at {project}")
     typer.echo("\nNext steps:")
     typer.echo(f"  1. cd {project}")
@@ -974,8 +1004,16 @@ def init(
         "     (documents with DOIs get bibliographic metadata synced automatically"
         " during onboarding)"
     )
-    typer.echo("  3. Open this project in your agent (e.g. `claude`) and run /litschema-onboard")
-    typer.echo("     — it drafts your schema with you, runs intake, and extracts your papers")
+    if onboard_available:
+        typer.echo(
+            "  3. Open this project in your agent (e.g. `claude`) and run /litschema-onboard"
+        )
+        typer.echo("     — it drafts your schema with you, runs intake, and extracts your papers")
+    else:
+        typer.echo(
+            "  3. Install agent skills (`litschema skills install --local` from the project),"
+        )
+        typer.echo("     then open the project in your agent and run /litschema-onboard")
     typer.echo("  4. `litschema verify` any time to review what's been extracted")
 
 

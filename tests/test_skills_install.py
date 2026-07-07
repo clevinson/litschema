@@ -152,7 +152,7 @@ def test_extract_skill_backfills_bib_metadata_via_meta_cli() -> None:
     assert extract.index("record-extraction") < extract.index("meta set {article_id}")
     assert extract.index("meta set {article_id}") < extract.index("meta sync {article_id}")
     # The guard is respected, values are never invented, manifests never hand-edited.
-    assert "--force" in extract
+    assert "do NOT retry with `--force`" in extract
     assert "never invent" in extract.lower()
     assert "never edit" in extract.lower()
     assert "specs/source-metadata/spec.md" in extract
