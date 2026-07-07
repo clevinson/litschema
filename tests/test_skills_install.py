@@ -144,18 +144,13 @@ def test_onboard_and_extract_skills_delegate_deterministic_pipeline_steps() -> N
 def test_extract_skill_backfills_bib_metadata_via_meta_cli() -> None:
     extract = (REPO_ROOT / "skills" / "extract-article" / "SKILL.md").read_text()
 
-    # After provenance recording, the skill backfills best-guess bib metadata
-    # through the CLI (the never-clobber guard owns protection) and syncs from
-    # the registry when the document shows a DOI.
-    assert "meta set {article_id} --source auto" in extract
-    assert "meta sync {article_id}" in extract
-    assert extract.index("record-extraction") < extract.index("meta set {article_id}")
-    assert extract.index("meta set {article_id}") < extract.index("meta sync {article_id}")
+    # Registry-first: with a visible DOI the skill records it and locks from
+    # the registry in ONE guarded command; transcription is only the fallback.
+    assert "meta set {article_id} --source auto --doi 10.1234/example --sync" in extract
+    assert extract.index("record-extraction") < extract.index("--sync")
+    assert extract.index("--sync") < extract.index("--title")
     # The guard is respected, values are never invented, manifests never hand-edited.
     assert "do NOT retry with `--force`" in extract
-    # Sync is conditioned on the guard's verdict: after a refusal it must NOT
-    # run, or it would clobber the human edits the guard just protected.
-    assert "succeeded AND a DOI was visible" in extract
     assert "never invent" in extract.lower()
     assert "never edit" in extract.lower()
     assert "specs/source-metadata/spec.md" in extract

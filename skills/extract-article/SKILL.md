@@ -132,39 +132,39 @@ date and schema commit when provider/model are omitted.
 After recording provenance, backfill what the document IS (as opposed to what it
 SAYS — the extraction above). The contract is defined in
 `specs/source-metadata/spec.md` in the litschema source repository (it is not
-copied into user projects); everything you need is below:
+copied into user projects); everything you need is below. Two rules apply
+throughout: never edit `article-metadata.json` by hand, and never invent
+values not visible in the document.
 
-1. Read the bibliographic fields off the document itself — front matter, title
-   page: title, authors OR corporate author, year, journal/venue if applicable,
-   the DOI if one is printed. Never invent values not visible in the document;
-   omit unknown fields.
-2. Write them through the CLI — never edit `article-metadata.json` by hand:
+1. Check the document's front matter / title page for a printed DOI.
+2. **DOI found — registry first.** Record it and lock from the registry in
+   one guarded command; do NOT transcribe bibliography yet:
+
+   ```bash
+   $LITSCHEMA meta set {article_id} --source auto --doi 10.1234/example --sync
+   ```
+
+   - Output says the metadata is **locked** → done; skip step 3 entirely. The
+     registry's values outrank anything you could read off the page.
+   - Output says **NOT locked** (registry down, or no usable record) → the
+     DOI is recorded and a later sweep will retry the lock; continue to
+     step 3 so the record has readable metadata meanwhile.
+   - The command says it is *refusing to overwrite human or registry data* →
+     that is the guard working. STOP — skip step 3 as well, and
+     do NOT retry with `--force`. The existing metadata outranks your reading.
+3. **No DOI on the document, or the sync half failed.** Transcribe the
+   bibliographic fields you can see — title, authors OR corporate author,
+   year, journal/venue if applicable — and write them in one guarded command
+   (include only the options you have values for):
 
    ```bash
    $LITSCHEMA meta set {article_id} --source auto \
-     --title "..." --authors "A. Author, B. Author" --year 2024 \
-     --journal "..." --doi 10.1234/example
+     --title "..." --authors "A. Author, B. Author" --year 2024 --journal "..."
    ```
 
-   (Include only the options you have values for.) Two failure modes, treated
-   differently:
-   - The command says it is *refusing to overwrite human or registry data*:
-     that is the guard working. STOP — skip step 3 as well, and
-     do NOT retry with `--force`. The existing metadata outranks your reading.
-   - The command *rejected a value* (e.g. a malformed DOI): drop the offending
-     option and retry once so the good fields still land.
-3. ONLY IF the `meta set` above succeeded AND a DOI was visible on the
-   document, follow up with:
-
-   ```bash
-   $LITSCHEMA meta sync {article_id}
-   ```
-
-   so registry data supersedes your reading and locks the metadata. Never run
-   sync after a guard refusal — per-article sync overwrites whatever it finds,
-   which would clobber exactly the human edits the guard just protected. If
-   sync fails (offline, unknown DOI), say so and continue — the DOI stays
-   recorded and a later sweep can retry; nothing downstream breaks.
+   Same guard rules: a *refusing to overwrite* error means skip silently
+   (never `--force`); a *rejected value* (e.g. malformed input) means drop
+   the offending option and retry once so the good fields still land.
 
 ## Checklist
 
@@ -172,7 +172,7 @@ Before finishing, verify:
 - [ ] `data/papers/{article_id}/agent-extraction.json` exists and passes extraction validation
 - [ ] `data/papers/{article_id}/agent-reasoning.json` exists and passes reasoning validation
 - [ ] `data/papers/{article_id}/article-metadata.json` has been updated by `agent record-extraction`
-- [ ] Bibliographic backfill was attempted via `meta set --source auto` (and `meta sync` if a DOI was visible)
+- [ ] Bibliographic backfill was attempted via `meta set --source auto` (with `--doi ... --sync` when a DOI was visible; transcription only as the fallback)
 - [ ] Every non-identifier leaf field in the extraction has a corresponding reasoning entry
 - [ ] All `source_lines` reference real line numbers from the markdown
 - [ ] No data was extracted from the References/Bibliography section

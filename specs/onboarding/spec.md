@@ -80,9 +80,9 @@ at these moments:
 |---|---|---|
 | `init` | nothing — no metadata exists | — |
 | `assemble` | block seeded `{title}` from the PDF filename | `auto` |
-| extraction backfill | agent reads the title page, writes via `meta set <id> --source auto ...` (including `--doi` if printed on the document) | `auto` |
-| post-extraction sync | ONLY IF a DOI was visible: `meta sync <id>` replaces the block with registry values | `doi` (locked) |
-| post-batch sweep | `meta sync --all` catches articles whose per-article sync failed transiently | `doi` where it resolves |
+| extraction enrichment | if a DOI is printed on the document: `meta set <id> --source auto --doi ... --sync` records the DOI and locks from the registry in one guarded command | `doi` on success; `auto` (DOI recorded, retryable) on registry failure |
+| fallback transcription | only when there is no DOI or the sync half failed: agent reads the title page, `meta set <id> --source auto ...` | `auto` |
+| post-batch sweep | `meta sync --all` catches articles whose lock attempt failed transiently | `doi` where it resolves |
 | verifier edits | human corrections via the header form | `manual` (protected) |
 
 Documents without DOIs simply never sync: their metadata is the agent's

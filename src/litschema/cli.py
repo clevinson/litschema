@@ -495,7 +495,7 @@ def meta_show(ctx: typer.Context, article_id: str):
     help="Merge fields into the source-metadata block. Provenance is caller-asserted: "
     "--source auto for machine-inferred values (agents, scripts), --source manual for "
     "human-authored values. An explicit empty-string value clears a field. The doi "
-    "state is earned via `meta sync`, never asserted.",
+    "state is earned via `meta sync` (or `meta set --doi ... --sync`), never asserted.",
 )
 def meta_set(
     ctx: typer.Context,
@@ -517,6 +517,13 @@ def meta_set(
     clear: list[str] = typer.Option(
         [], "--clear", help="Remove a field from the block (repeatable)"
     ),
+    sync: bool = typer.Option(
+        False,
+        "--sync",
+        help="After recording the DOI, fetch registry metadata and lock the block. "
+        "Takes ONLY --doi — registry values replace the whole block, so fallback "
+        "values belong in a separate `meta set`.",
+    ),
     force: bool = typer.Option(
         False, "--force", help="Let an auto write overwrite manual/doi metadata"
     ),
@@ -534,6 +541,15 @@ def meta_set(
             fg=typer.colors.RED,
         )
         raise typer.Exit(code=2)
+    if sync:
+        others = (title, authors, corporate_author, year, journal, publisher, url, abstract)
+        if not doi or any(v is not None for v in others) or clear:
+            typer.secho(
+                f"{CROSS} --sync takes only --doi — registry values replace the whole "
+                "block, so fallback values belong in a separate `meta set`",
+                fg=typer.colors.RED,
+            )
+            raise typer.Exit(code=2)
     cfg = _require_project(ctx).config
     files = _require_article(cfg, article_id)
 
@@ -582,7 +598,37 @@ def meta_set(
         raise typer.Exit(code=1)
 
     block = update_source_metadata(files, fields, source=source)
-    typer.echo(json.dumps(block, indent=2, ensure_ascii=False))
+    if not sync:
+        typer.echo(json.dumps(block, indent=2, ensure_ascii=False))
+        return
+
+    # --sync: attempt the registry upgrade the write just made possible. The
+    # guard above already ruled on consent — a refused write never gets here.
+    from .ingest import openalex_harvest
+
+    retry_hint = (
+        f"the DOI is recorded ({source}) and stays retryable via "
+        f"`meta sync {article_id}` or the --all sweep"
+    )
+    try:
+        synced = openalex_harvest.sync_article(cfg, article_id)
+    except openalex_harvest.RegistryUnavailableError:
+        typer.echo(json.dumps(block, indent=2, ensure_ascii=False))
+        typer.secho(
+            f"{WARN} NOT locked — DOI registry unavailable; {retry_hint}",
+            fg=typer.colors.YELLOW,
+        )
+        return
+    if synced is None:
+        typer.echo(json.dumps(block, indent=2, ensure_ascii=False))
+        typer.secho(
+            f"{WARN} NOT locked — the registry has no usable record for this DOI; "
+            f"{retry_hint}",
+            fg=typer.colors.YELLOW,
+        )
+        return
+    typer.echo(json.dumps(synced, indent=2, ensure_ascii=False))
+    typer.echo(f"{CHECK} synced from registry — metadata locked (was {source})")
 
 
 @meta_app.command(

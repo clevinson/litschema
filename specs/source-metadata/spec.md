@@ -59,6 +59,15 @@ framework.)
   clears a field; `--clear` combined with a value for the same field is an
   error. `--source` is required and caller-asserted; `doi` cannot be
   asserted.
+- `meta set <id> --source auto|manual --doi 10.x/y --sync` — record the DOI
+  (guarded, tagged by `--source`) and immediately attempt the registry lock,
+  in one command. `--sync` takes ONLY `--doi`: registry values replace the
+  whole block, so fallback values belong in a separate `meta set` (passing
+  any other field or `--clear` with `--sync` is an error). On registry
+  failure the DOI stays recorded under the caller's tag — unlocked,
+  retryable by per-article sync or the batch sweep — and the command says
+  so. A guard refusal runs nothing: one verdict covers the write and the
+  sync.
 - `meta sync <id> [--doi 10.x/y] [--email ...]` — explicit per-article
   registry sync. Uses the block's DOI, or `--doi` when given (pass-through;
   on a registry miss NOTHING is recorded — no manifest change, no cache
@@ -92,14 +101,16 @@ have a DOI, with a `confirm()` only when the sync would overwrite `manual`.
 (`auto`). The extraction agent backfills bibliography read off the document
 (`auto` — see agent contract). `harvest` / sync write registry data (`doi`).
 
-**Agent contract** (for bundled skills, e.g. extract-article): backfill
-best-guess bibliography with `meta set <id> --source auto ...`; the guard
-enforces that this never overwrites `manual` or `doi`. If a DOI was detected
-on the document AND the auto write was accepted, follow up with
-`meta sync <id>` so registry data supersedes the guess. After a guard refusal
-the agent must NOT sync — per-article sync overwrites any state, and that
-consent belongs to humans. The bundled extract-article skill implements this
-contract.
+**Agent contract** (for bundled skills, e.g. extract-article) is
+registry-first: if a DOI is printed on the document, run
+`meta set <id> --source auto --doi <doi> --sync` — one guarded command that
+records the DOI and attempts the lock; nothing is transcribed that the
+registry would immediately replace. Transcribe bibliography off the title
+page (`meta set <id> --source auto ...`) only when the document has no DOI
+or the sync half failed (the recorded DOI stays retryable by the sweep).
+The guard covers everything: on a refusal the agent writes nothing and never
+syncs — per-article sync's overwrite-anything consent belongs to humans. The
+bundled extract-article skill implements this contract.
 
 A hand-edited block missing `metadata_source` reads as `manual` — the
 protective default: machines will not touch it.
