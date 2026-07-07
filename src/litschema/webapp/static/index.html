@@ -2481,6 +2481,7 @@ e.g. year >= 2024 && study_types.includes("review")'
           <a class="bib-doi" id="bib-doi" target="_blank" rel="noopener" style="display:none"></a>
           <span class="bib-badge" id="bib-badge" hidden></span>
           <button class="bib-edit-btn" id="bib-edit-btn" type="button" title="Edit document metadata" hidden>&#9998;</button>
+          <button class="bib-edit-btn" id="bib-sync-btn" type="button" title="Sync metadata from the DOI registry" hidden>&#10227; from DOI</button>
         </span>
         <form class="bib-edit-form" id="bib-edit-form" hidden>
           <label>Title <input name="title" type="text"></label>
@@ -3138,6 +3139,10 @@ $("#article-select").addEventListener("change", async (e) => {
       : Promise.resolve({ annotations: [] }),
     fetchJson(`/api/bibliography/${id}`).catch(() => null),
   ]);
+  // Staleness guard: the user may have navigated on while these fetches ran.
+  // Rendering a stale batch would point the header (and its edit form, and
+  // therefore future PUTs) at the wrong article.
+  if (id !== state.currentId) return;
 
   state.markdown = mdData ? mdData.markdown : null;
   state.extraction = extraction;
@@ -3178,9 +3183,7 @@ $("#article-select").addEventListener("change", async (e) => {
 // Only registry-verified provenance earns a pill; human-entered metadata
 // is signaled by the edit affordance alone.
 const PROVENANCE_BADGES = {
-  openalex: { label: "✓ verified via OpenAlex", verified: true },
-  crossref: { label: "✓ verified via CrossRef", verified: true },
-  doi:      { label: "✓ verified via DOI", verified: true },
+  doi: { label: "✓ from DOI", verified: true },
 };
 
 let lastBibMeta = null;
@@ -3203,7 +3206,14 @@ function renderBibHeader(meta) {
   lastBibMeta = meta || null;
   bibArticleId = (meta && meta.article_id) || state.currentId;
   $("#bib-edit-form").hidden = true;
-  const hasAny = meta && (meta.title || meta.year || meta.journal || meta.editable);
+  // Fallback payloads (e.g. the dropdown entry when /api/bibliography fails)
+  // carry no `editable`; derive it from the lock model.
+  const editable = meta
+    ? (meta.editable !== undefined ? meta.editable : meta.metadata_source !== "doi")
+    : false;
+  const hasAny = meta && (
+    meta.title || meta.year || meta.journal || meta.doi || meta.metadata_source
+  );
   if (!hasAny) {
     bar.style.display = "none";
     return;
@@ -3220,8 +3230,8 @@ function renderBibHeader(meta) {
   authorsEl.style.display = authorsText ? "inline" : "none";
 
   const metaParts = [];
-  if (meta.journal) metaParts.push(escapeHtml(meta.journal));
-  if (meta.year) metaParts.push(String(meta.year));
+  if (meta.journal) metaParts.push(escapeHtml(String(meta.journal)));
+  if (meta.year) metaParts.push(escapeHtml(String(meta.year)));
   $("#bib-meta").innerHTML = metaParts.join(' <span class="bib-sep">&middot;</span> ');
 
   const doiEl = $("#bib-doi");
@@ -3240,7 +3250,32 @@ function renderBibHeader(meta) {
     badge.textContent = info.label;
     badge.classList.toggle("verified", info.verified);
   }
-  $("#bib-edit-btn").hidden = !meta.editable;
+  // Locked (doi) records swap the pencil for an unlock affordance — editing
+  // is always possible, but re-editing registry data is a deliberate act.
+  const editBtn = $("#bib-edit-btn");
+  editBtn.hidden = false;
+  if (editable) {
+    editBtn.innerHTML = "&#9998;";
+    editBtn.title = "Edit document metadata";
+  } else {
+    editBtn.innerHTML = "&#128275;";
+    editBtn.title = "Unlock to edit (saving replaces the registry lock)";
+  }
+  // Sync is offered wherever a DOI exists and the record isn't already locked.
+  $("#bib-sync-btn").hidden = !(editable && meta.doi);
+}
+
+function applyBibBlock(articleId, block) {
+  // articleId is captured at request time: a response must never be applied
+  // to whichever article the user has navigated to since.
+  const entry = state.articles.find(a => a.article_id === articleId);
+  if (entry) {
+    for (const key of ["title", "year", "journal", "doi", "corporate_author"]) entry[key] = block[key] ?? null;
+    entry.authors = block.authors || [];
+    entry.metadata_source = block.metadata_source;
+    populateDropdown();
+  }
+  if (articleId === state.currentId) renderBibHeader(block);
 }
 
 $("#bib-edit-btn").addEventListener("click", () => {
@@ -3256,26 +3291,43 @@ $("#bib-edit-cancel").addEventListener("click", () => { $("#bib-edit-form").hidd
 
 $("#bib-edit-form").addEventListener("submit", async (ev) => {
   ev.preventDefault();
-  if (!bibArticleId) return;
+  const id = bibArticleId;  // captured now; the user may navigate mid-flight
+  if (!id) return;
   const payload = {};
   for (const input of ev.target.querySelectorAll("input")) {
     payload[input.name] = input.value.trim() === "" ? null : input.value.trim();
   }
-  const resp = await fetch("/api/bibliography/" + encodeURIComponent(bibArticleId), {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  if (!resp.ok) { alert("Could not save metadata"); return; }
-  const block = await resp.json();
-  const entry = state.articles.find(a => a.article_id === bibArticleId);
-  if (entry) {
-    for (const key of ["title", "year", "journal", "doi", "corporate_author"]) entry[key] = block[key] ?? null;
-    entry.authors = block.authors || [];
-    entry.metadata_source = block.metadata_source;
-    populateDropdown();
+  const submitBtn = ev.target.querySelector('button[type="submit"]');
+  if (submitBtn) submitBtn.disabled = true;
+  try {
+    const resp = await fetch("/api/bibliography/" + encodeURIComponent(id), {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!resp.ok) { alert("Could not save metadata"); return; }
+    applyBibBlock(id, await resp.json());
+  } finally {
+    if (submitBtn) submitBtn.disabled = false;
   }
-  renderBibHeader(block);
+});
+
+$("#bib-sync-btn").addEventListener("click", async () => {
+  const id = bibArticleId;  // captured now; the user may navigate mid-flight
+  if (!id) return;
+  if (lastBibMeta && lastBibMeta.metadata_source === "manual" &&
+      !confirm("Replace your manual edits with registry data for this DOI?")) return;
+  const btn = $("#bib-sync-btn");
+  btn.disabled = true;
+  try {
+    const resp = await fetch("/api/bibliography/" + encodeURIComponent(id) + "/sync", {
+      method: "POST",
+    });
+    if (!resp.ok) { alert("Could not sync from the DOI registry"); return; }
+    applyBibBlock(id, await resp.json());
+  } finally {
+    btn.disabled = false;
+  }
 });
 
 // ── Markdown rendering ──

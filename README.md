@@ -45,6 +45,9 @@ litschema status                 # count metadata, markdown, extractions, review
 litschema assemble               # move papers-inbox PDFs -> per-article folders
 litschema prepare-text <id>      # lower-level PDF -> markdown helper for one article
 litschema prepare-text --all     # prepare markdown for every known article
+litschema meta show <id>         # print an article's source metadata (what it IS)
+litschema meta set <id> ...      # write source metadata (--source auto|manual)
+litschema meta sync <id> | --all # lock metadata from the DOI registry
 litschema validate               # validate per-article extraction JSON
 litschema verify --port 8000     # launch local review webapp
 litschema mcp                    # expose DuckDB-backed exploration tools
@@ -57,21 +60,32 @@ from each PDF's filename, moves the PDF into `data/papers/{article_id}/`, and
 writes a minimal `article-metadata.json` manifest. No DOI, bibliography file, or
 network access is required to reach extraction.
 
-Extraction is intentionally agent-mediated. Install the bundled skills globally
-with `litschema skills install`, or into one project with
-`litschema skills install --local`, then run `/litschema-assemble` or
-`/extract-article <article-id>` inside an agent CLI from a configured project
-directory. The `/extract-article` skill prepares per-article markdown when
-needed before running extraction, and bibliographic fields are filled into the
-manifest by extraction.
+Extraction is intentionally agent-mediated. `litschema init` installs the
+bundled skills into the project's `.claude/skills/` by default (use
+`litschema skills install` to add them globally), then run
+`/litschema-onboard` for guided first-run onboarding — schema drafting,
+intake, pilot extraction, batch extraction, verifier handoff — or
+`/extract-article <article-id>` directly inside an agent CLI from a configured
+project directory. The `/extract-article` skill prepares per-article markdown
+when needed before running extraction, and bibliographic fields are filled
+into the manifest by extraction.
 
-Optional bibliographic enrichment lives in a separate `litschema harvest`
-command, which reads a user-authored DOI list at `data/sources/articles.csv` and
-queries OpenAlex/CrossRef. It is not part of the core PDF-first flow.
+Bibliographic enrichment is automatic when a document shows a DOI: extraction
+records it and locks metadata from the registry in one guarded command
+(`meta set <id> --source auto --doi ... --sync`), and the post-batch
+`litschema meta sync --all` sweep retries anything that failed transiently.
+There is no registry file to author, and articles with human-edited metadata
+are never overwritten by the batch sweep — per-article `meta sync <id>` (or
+the verifier's "⟳ from DOI" button) is the explicit-consent path that may.
+The legacy `litschema harvest` command remains for the CrossRef supplement
+and entity-resolution legs. See `specs/source-metadata/spec.md` for the full
+model. A DOI is never a prerequisite — documents without one flow through
+the whole pipeline unchanged.
 
 ## Project Layout
 
 - `src/litschema/` — package code and CLI
+- `specs/` — capability specs (current truth) and decision logs
 - `skills/` — agent instructions for extraction and validation
 - `tests/` — framework tests and small project fixtures
 - `pyproject.toml` — package metadata and dependencies

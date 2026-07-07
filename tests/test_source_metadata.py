@@ -51,10 +51,10 @@ def test_title_from_filename_preserves_existing_capitalization() -> None:
 def test_read_source_metadata_returns_block_when_present() -> None:
     manifest = {
         "id": "a",
-        "source_metadata": {"title": "T", "year": 2024, "metadata_source": "openalex"},
+        "source_metadata": {"title": "T", "year": 2024, "metadata_source": "doi"},
     }
     meta = sm.read_source_metadata(manifest)
-    assert meta == {"title": "T", "year": 2024, "metadata_source": "openalex"}
+    assert meta == {"title": "T", "year": 2024, "metadata_source": "doi"}
 
 
 def test_read_source_metadata_drops_null_values_and_defaults_source() -> None:
@@ -83,12 +83,12 @@ def test_read_source_metadata_empty_for_identity_only_manifest() -> None:
     assert sm.read_source_metadata({}) == {}
 
 
-def test_editable_sources_cover_unverified_provenance_only() -> None:
-    assert frozenset({"filename", "manual", "agent"}) == sm.EDITABLE_SOURCES
-    assert "legacy" not in sm.PROVENANCE_VALUES
-    for value in ("openalex", "crossref", "doi"):
-        assert value in sm.PROVENANCE_VALUES
-        assert value not in sm.EDITABLE_SOURCES
+def test_provenance_is_the_three_state_lock_model() -> None:
+    # doi = registry-locked; auto = machine-seeded (refreshable); manual =
+    # human-touched (machines never overwrite without explicit consent).
+    # Editable is derived (source != "doi") — there is no separate constant.
+    assert sm.PROVENANCE_VALUES == ("doi", "auto", "manual")
+    assert not hasattr(sm, "EDITABLE_SOURCES")
 
 
 def test_source_fields_include_corporate_author_after_authors() -> None:
@@ -102,8 +102,8 @@ def test_source_fields_include_corporate_author_after_authors() -> None:
 
 def test_update_source_metadata_writes_block_and_provenance(tmp_path: Path) -> None:
     files = article_files(_cfg(tmp_path), "a")
-    block = sm.update_source_metadata(files, {"title": "T", "year": 2024}, source="filename")
-    assert block == {"title": "T", "year": 2024, "metadata_source": "filename"}
+    block = sm.update_source_metadata(files, {"title": "T", "year": 2024}, source="auto")
+    assert block == {"title": "T", "year": 2024, "metadata_source": "auto"}
     on_disk = files.read_metadata()
     assert on_disk["source_metadata"] == block
     assert on_disk["id"] == "a"
@@ -111,7 +111,7 @@ def test_update_source_metadata_writes_block_and_provenance(tmp_path: Path) -> N
 
 def test_update_source_metadata_merges_and_retags(tmp_path: Path) -> None:
     files = article_files(_cfg(tmp_path), "a")
-    sm.update_source_metadata(files, {"title": "T", "year": 2024}, source="filename")
+    sm.update_source_metadata(files, {"title": "T", "year": 2024}, source="auto")
     block = sm.update_source_metadata(files, {"title": "Better"}, source="manual")
     assert block["title"] == "Better"
     assert block["year"] == 2024              # untouched fields preserved
@@ -149,33 +149,3 @@ def test_update_source_metadata_ignores_unknown_fields_and_bad_source(tmp_path: 
     assert "hacker" not in block
     with pytest.raises(ValueError):
         sm.update_source_metadata(files, {"title": "T"}, source="carrier-pigeon")
-
-
-# ── meta.yaml sidecar ────────────────────────────────────────────────────────
-
-
-def test_load_sidecar_metadata_reads_known_fields(tmp_path: Path) -> None:
-    pdf = tmp_path / "report.pdf"
-    pdf.write_text("pdf")
-    (tmp_path / "report.meta.yaml").write_text(
-        "title: Annual Report\nyear: 2024\nauthors:\n  - Jane Smith\nnonsense: ignored\n"
-    )
-    fields = sm.load_sidecar_metadata(pdf)
-    assert fields == {"title": "Annual Report", "year": 2024, "authors": ["Jane Smith"]}
-
-
-def test_load_sidecar_metadata_splits_comma_authors(tmp_path: Path) -> None:
-    pdf = tmp_path / "r.pdf"
-    pdf.write_text("pdf")
-    (tmp_path / "r.meta.yaml").write_text("authors: Jane Smith, Mo Doe\n")
-    assert sm.load_sidecar_metadata(pdf) == {"authors": ["Jane Smith", "Mo Doe"]}
-
-
-def test_load_sidecar_metadata_none_when_missing_or_invalid(tmp_path: Path) -> None:
-    pdf = tmp_path / "r.pdf"
-    pdf.write_text("pdf")
-    assert sm.load_sidecar_metadata(pdf) is None
-    (tmp_path / "r.meta.yaml").write_text("just a string")
-    assert sm.load_sidecar_metadata(pdf) is None
-    (tmp_path / "r.meta.yaml").write_text(": not [ yaml")
-    assert sm.load_sidecar_metadata(pdf) is None

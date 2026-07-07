@@ -3,8 +3,9 @@
 Moves PDFs out of the inbox into per-article folders under
 ``data/papers/<article_id>/``, deriving a stable ``article_id`` from each PDF's
 filename. Intake is intentionally offline: no DOI lookup, no OpenAlex/CrossRef,
-no registry. Bibliographic metadata (title, authors, year, ...) is filled in
-later by extraction or by the optional ``litschema harvest`` enrichment flow.
+no registry. Assembly seeds an editable ``auto`` title from the filename;
+richer bibliography arrives later via agent backfill, ``litschema meta set``,
+or registry enrichment (``litschema meta sync [--all]``).
 """
 
 from __future__ import annotations
@@ -19,12 +20,7 @@ from pathlib import Path
 
 from ..articles import ArticleFiles, article_files, write_article_metadata
 from ..config import LitSchemaConfig, require_config_or_exit
-from ..source_metadata import (
-    archive_sidecar,
-    load_sidecar_metadata,
-    title_from_filename,
-    update_source_metadata,
-)
+from ..source_metadata import title_from_filename, update_source_metadata
 
 logger = logging.getLogger(__name__)
 
@@ -131,7 +127,6 @@ def _process_inbox_pdf(
         return "already_assembled", article_id
 
     files.article_dir.mkdir(parents=True, exist_ok=True)
-    sidecar_fields = load_sidecar_metadata(pdf_path)
     shutil.move(str(pdf_path), str(files.pdf))
     write_article_metadata(
         files,
@@ -143,13 +138,9 @@ def _process_inbox_pdf(
             "added_at": datetime.now(UTC).isoformat(),
         },
     )
-    if sidecar_fields:
-        update_source_metadata(files, sidecar_fields, source="manual")
-        archive_sidecar(pdf_path)
-    else:
-        update_source_metadata(
-            files, {"title": title_from_filename(pdf_path.stem)}, source="filename"
-        )
+    update_source_metadata(
+        files, {"title": title_from_filename(pdf_path.stem)}, source="auto"
+    )
     existing_ids.add(article_id)
     return "assembled", article_id
 

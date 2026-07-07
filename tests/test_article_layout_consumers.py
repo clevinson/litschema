@@ -125,10 +125,10 @@ def test_webapp_reads_bibliography_and_pdf_filename_from_article_metadata(
             }
         )
     )
-    # Legacy top-level bib keys are ignored (no back-compat): the article
-    # reads as an empty editable record until source_metadata is written.
+    # Legacy top-level bib keys (doi included) are never read — alpha
+    # policy: unmigrated corpora update their manifests in the domain repo.
     assert webapp._article_meta(cfg, "smith-2024") == {
-        "metadata_source": "filename",
+        "metadata_source": "auto",
         "editable": True,
     }
     assert webapp._article_pdf_filename(cfg, "smith-2024") == "smith.pdf"

@@ -7,6 +7,18 @@ classes:
     description: Per-field evidence and reasoning for one extraction.
     tree_root: true
     attributes:
+      confidence:
+        description: >-
+          Overall confidence in this extraction, 0.0-1.0. Summarizes how well the
+          source supported the extracted values as a whole. Optional.
+        range: float
+        minimum_value: 0.0
+        maximum_value: 1.0
+      confidence_reasoning:
+        description: >-
+          Short explanation of why the overall confidence score was assigned
+          (e.g. sparse source, ambiguous reporting, well-structured methods).
+          Optional.
       fields:
         description: Evidence entries for extracted non-identifier leaf fields.
         range: ReasoningField
@@ -26,3 +38,10 @@ classes:
         required: true
       reasoning:
         description: Short explanation of why the cited lines support the value.
+      confidence:
+        description: >-
+          Confidence in this single field's extracted value, 0.0-1.0. Optional;
+          use it to flag fields that were inferred or weakly supported.
+        range: float
+        minimum_value: 0.0
+        maximum_value: 1.0

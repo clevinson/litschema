@@ -367,10 +367,25 @@ def test_bib_header_has_provenance_badge_and_edit_affordance() -> None:
     assert 'id="bib-edit-form"' in html
     assert 'id="bib-edit-cancel"' in html
     assert "PROVENANCE_BADGES" in html
-    assert "legacy" not in html  # legacy provenance is gone, badge entry included
+    badge_map = html[html.index("PROVENANCE_BADGES") : html.index("};", html.index("PROVENANCE_BADGES"))]
+    assert "legacy" not in badge_map  # retired provenance values carry no badge
+    assert "openalex" not in badge_map
     assert '"/api/bibliography/"' in html or "`/api/bibliography/" in html
     assert "lastBibMeta" in html
     assert "bibArticleId" in html
+    # Lock model affordances: generic DOI pill, unlock control, per-article sync.
+    assert "✓ from DOI" in html
+    assert "verified via" not in html
+    assert 'id="bib-sync-btn"' in html
+    assert "/sync" in html
+    assert "Unlock to edit" in html
+    assert "Replace your manual edits" in html  # confirm() guards the destructive direction
+    # Race guard: responses apply by the id captured at request time, and
+    # the header only re-renders when that article is still current.
+    assert "applyBibBlock(id," in html
+    assert "articleId === state.currentId" in html
+    # The article-change handler discards stale fetch batches too.
+    assert "if (id !== state.currentId) return;" in html
 
 
 def test_bib_header_title_first_layout_with_corporate_author() -> None:
@@ -395,6 +410,7 @@ def test_verifier_renders_placeholder_for_unextracted_articles() -> None:
     assert "/extract-article" in html
     assert "renderNoExtractionPlaceholder" in html
     assert "has_extraction === false" in html
+
 
 
 def test_verifier_index_served_by_app() -> None:

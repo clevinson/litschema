@@ -16,17 +16,20 @@ from pathlib import Path
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from linkml_runtime.utils.schemaview import SchemaView
 
+from ..article_registry import is_valid_doi, normalize_doi
 from ..articles import (
     ArticleFiles,
+    InvalidArticleIdError,
     article_files,
     iter_metadata_paths,
     read_article_metadata,
 )
 from ..config import LitSchemaConfig
+from ..ingest.openalex_harvest import RegistryUnavailableError, sync_article
 from ..reviews import (
     base_extraction_stale,
     canonical_review_path,
@@ -36,7 +39,6 @@ from ..reviews import (
 )
 from ..schema_resolution import resolve_extraction_schema
 from ..source_metadata import (
-    EDITABLE_SOURCES,
     SOURCE_FIELDS,
     read_source_metadata,
     update_source_metadata,
@@ -49,6 +51,11 @@ app = FastAPI(title="ERW Extraction Verifier")
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 ORCID_RE = re.compile(r"^\d{4}-\d{4}-\d{4}-\d{3}[0-9X]$")
+
+
+@app.exception_handler(InvalidArticleIdError)
+async def _invalid_article_id_handler(request: Request, exc: InvalidArticleIdError):
+    return JSONResponse(status_code=404, content={"detail": str(exc)})
 
 
 def get_config() -> LitSchemaConfig:
@@ -73,16 +80,15 @@ CfgDep = Annotated[LitSchemaConfig, Depends(get_config)]
 def _article_meta(cfg: LitSchemaConfig, article_id: str) -> dict:
     """Return the provenance-tagged source metadata for an article id.
 
-    ``editable`` tells the header which render mode to use; an assembled
-    article with no metadata yet comes back as an empty editable record.
+    ``editable`` tells the header which render mode to use — everything is
+    editable except registry-locked (``doi``) records; an assembled article
+    with no metadata yet comes back as an empty editable record.
     """
     manifest = read_article_metadata(article_files(cfg, article_id))
     if not manifest:
         return {}
-    meta = read_source_metadata(manifest)
-    if not meta:
-        return {"metadata_source": "filename", "editable": True}
-    meta["editable"] = meta.get("metadata_source") in EDITABLE_SOURCES
+    meta = read_source_metadata(manifest) or {"metadata_source": "auto"}
+    meta["editable"] = meta.get("metadata_source") != "doi"
     return meta
 
 
@@ -419,7 +425,7 @@ async def put_bibliography(article_id: str, request: Request, cfg: CfgDep):
 
     Accepts a partial record of SOURCE_FIELDS. ``null`` clears a field.
     Header metadata lives in the article manifest — review.json is never
-    touched by header edits (distinct layers, design doc §3.6).
+    touched by header edits (distinct layers; see specs/source-metadata/spec.md).
     """
     body = await request.json()
     if not isinstance(body, dict):
@@ -430,22 +436,50 @@ async def put_bibliography(article_id: str, request: Request, cfg: CfgDep):
     if not body:
         raise HTTPException(400, "no fields to update")
 
-    fields = dict(body)
+    # An explicit empty string clears the field (same convention as the CLI).
+    fields = {key: (None if value == "" else value) for key, value in body.items()}
     if isinstance(fields.get("authors"), str):
-        fields["authors"] = [n.strip() for n in fields["authors"].split(",") if n.strip()]
-    if fields.get("year") not in (None, ""):
+        fields["authors"] = [
+            n.strip() for n in fields["authors"].split(",") if n.strip()
+        ] or None
+    if fields.get("year") is not None:
         try:
             fields["year"] = int(fields["year"])
         except (TypeError, ValueError) as exc:
             raise HTTPException(400, "year must be an integer") from exc
-    if fields.get("year") == "":
-        fields["year"] = None
+    if fields.get("doi") is not None:
+        normalized = normalize_doi(str(fields["doi"]))
+        if not is_valid_doi(normalized):
+            raise HTTPException(400, f"not a valid DOI: {fields['doi']}")
+        fields["doi"] = normalized
 
     files = article_files(cfg, article_id)
     if not files.metadata.exists():
         raise HTTPException(404, f"Unknown article {article_id}")
     block = update_source_metadata(files, fields, source="manual")
     block["editable"] = True
+    return block
+
+
+@app.post("/api/bibliography/{article_id}/sync")
+async def sync_bibliography(article_id: str, cfg: CfgDep):
+    """Re-fetch the header from the DOI registry and lock it.
+
+    Overwrites ANY provenance, including ``manual`` — the explicit button
+    press (or CLI call) is the consent that batch harvest never has.
+    """
+    files = article_files(cfg, article_id)
+    if not files.metadata.exists():
+        raise HTTPException(404, f"Unknown article {article_id}")
+    try:
+        block = sync_article(cfg, article_id)
+    except LookupError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except RegistryUnavailableError as exc:
+        raise HTTPException(502, "DOI registry unavailable — try again") from exc
+    if block is None:
+        raise HTTPException(502, "the registry has no usable record for this DOI")
+    block["editable"] = False
     return block
 
 

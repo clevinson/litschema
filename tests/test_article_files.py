@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from litschema.articles import (
@@ -75,3 +76,31 @@ def test_iter_artifact_paths_read_per_article_store(tmp_path: Path) -> None:
     assert list(iter_markdown_paths(cfg)) == [paper_dir / "article.md"]
     assert list(iter_reasoning_paths(cfg)) == [paper_dir / "agent-reasoning.json"]
     assert list(iter_review_paths(cfg)) == [paper_dir / "review.json"]
+
+
+def test_write_article_metadata_is_atomic_and_leaves_no_tmp(tmp_path: Path) -> None:
+    from litschema.articles import write_article_metadata
+
+    cfg = _cfg(tmp_path)
+    files = article_files(cfg, "smith-2024")
+
+    merged = write_article_metadata(files, {"filename": "smith-2024.pdf"})
+    write_article_metadata(files, {"doi": "10.1234/x"})
+
+    assert merged["id"] == "smith-2024"
+    on_disk = json.loads(files.metadata.read_text())
+    assert on_disk["filename"] == "smith-2024.pdf"  # earlier keys preserved
+    assert on_disk["doi"] == "10.1234/x"
+    # Atomic write: the tmp file never survives.
+    assert list(files.article_dir.glob("*.tmp")) == []
+
+
+def test_article_files_rejects_ids_that_escape_the_store(tmp_path: Path) -> None:
+    import pytest
+
+    from litschema.articles import InvalidArticleIdError, article_files
+
+    cfg = _cfg(tmp_path)
+    for bad in ("../other", "a/b", "..\\x", "..", ".", ""):
+        with pytest.raises(InvalidArticleIdError):
+            article_files(cfg, bad)
