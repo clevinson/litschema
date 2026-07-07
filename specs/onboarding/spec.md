@@ -50,9 +50,10 @@ below and `decisions.md`).
 One skill owns the whole first run; every deterministic step is a CLI call and
 the agent's job is the judgment between them:
 
-- **Setup gate** — verify the project, resolve the CLI (dev override →
-  `uv run litschema` → `litschema`), run `status` + `doctor`, stop early if
-  the inbox is empty.
+- **Setup gate** — verify the project, resolve the CLI (dev override, which
+  requires user confirmation before it is executed → `uv run litschema` →
+  `litschema`), run `status` + `doctor`, stop early if there is nothing to
+  process (no inbox PDFs and no assembled articles).
 - **Phase A: schema drafting** — the conversation that matters most.
   Interview for fields; offer to seed from an existing structure (JSON
   Schema, spreadsheet, codebook); read 2–3 user-named representative PDFs

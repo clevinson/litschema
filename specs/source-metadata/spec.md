@@ -95,10 +95,11 @@ have a DOI, with a `confirm()` only when the sync would overwrite `manual`.
 **Agent contract** (for bundled skills, e.g. extract-article): backfill
 best-guess bibliography with `meta set <id> --source auto ...`; the guard
 enforces that this never overwrites `manual` or `doi`. If a DOI was detected
-on the document, follow up with `meta sync <id>` so registry data supersedes
-the guess. (The bundled extract-article skill update that adopts this
-contract ships with the onboarding PR, #17 — the skill files are deliberately
-untouched on this branch.)
+on the document AND the auto write was accepted, follow up with
+`meta sync <id>` so registry data supersedes the guess. After a guard refusal
+the agent must NOT sync — per-article sync overwrites any state, and that
+consent belongs to humans. The bundled extract-article skill implements this
+contract.
 
 A hand-edited block missing `metadata_source` reads as `manual` — the
 protective default: machines will not touch it.
