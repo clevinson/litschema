@@ -73,3 +73,52 @@ never asked for.
 
 **Rejected:** keeping the rename as a safety net (a special case with no
 remaining trigger); converting old logs (throwaway data, alpha policy).
+
+## 2026-07-07 — Staleness stamps move onto each entry
+
+**Context:** the stamp was file-level, recomputed on every write. An
+adversarial review reproduced the consequence: review a field, re-extract
+(warning on), verify one unrelated field — the write re-stamped the file
+with the new hash and silently disarmed the warning for the entries actually
+written against the old extraction. A save while the extraction file was
+absent likewise erased the stamp permanently.
+
+**Decision:** each entry carries `base_extraction_sha256` from ITS write
+time; `base_stale` is true when any entry's stamp mismatches the current
+extraction. Older entries keep their stamps, so saves cannot disarm the
+warning for entries they did not touch, and the warning self-heals as stale
+fields are re-reviewed or cleared.
+
+**Rejected:** preserving the file-level stamp across writes (the warning
+would then never clear, and fresh post-re-extraction reviews would be
+wrongly flagged stale); blocking writes while stale (reviewers re-verify
+immediately after re-extraction — that is the healing path).
+
+## 2026-07-07 — Corrupt review.json refuses writes instead of being destroyed
+
+**Context:** reads treat an unreadable review.json as empty and leave it in
+place — but the write paths built on that same lenient read: a PUT rebuilt
+the file from the empty map (destroying the evidence), and a DELETE removed
+the file entirely via the empty-means-absent rule.
+
+**Decision:** write paths read strictly: an unreadable file (bad JSON, bad
+encoding, wrong shape) raises, and the API answers 409 telling the user to
+fix or remove the file by hand. Reads stay lenient.
+
+**Rejected:** quarantine-and-continue (renaming a user's file as a side
+effect of a write is the same overreach in a different costume).
+
+## 2026-07-07 — Canonical paths only strip the leading dot
+
+**Context:** `canonical_review_path` also rewrote dotted-numeric segments to
+bracket form (`.experiments.0.ph` → `experiments[0].ph`) — a leftover from
+the event-log era. The current frontend always sends bracket-form paths, so
+the rewrite's only remaining effect was a bug: a dict key that happens to be
+digits (`yields.2023`) was misrouted to `yields[2023]`, orphaning the review.
+
+**Decision:** canonicalization is `lstrip(".")`, nothing else. Keys are also
+canonicalized on read, so hand-edited dotted keys round-trip through upsert
+and delete instead of DELETE reporting success while removing nothing.
+
+**Rejected:** shape-aware normalization against the extraction (complexity
+serving only hand-authored path styles the frontend never produces).

@@ -403,6 +403,30 @@ def test_bib_header_title_first_layout_with_corporate_author() -> None:
     assert "flex-basis: 100%" in html
 
 
+def test_verifier_surfaces_base_stale_warning() -> None:
+    html = STATIC_HTML.read_text()
+
+    # The staleness API field must have a visible consequence.
+    assert 'id="base-stale-warning"' in html
+    assert "state.baseStale = !!annData.base_stale" in html
+    assert "renderBaseStaleBanner" in html
+    assert "refreshBaseStale" in html
+
+
+def test_annotation_mutations_capture_the_article_id() -> None:
+    html = STATIC_HTML.read_text()
+
+    # Same race rule as the bib handlers: a response landing after the user
+    # navigated away must not mutate the new article's state.
+    save = html[html.index("async function saveAnnotation") :]
+    save = save[: save.index("\n}\n")]
+    clear = html[html.index("async function clearAnnotation") :]
+    clear = clear[: clear.index("\n}\n")]
+    for handler in (save, clear):
+        assert "const id = state.currentId;" in handler
+        assert "id !== state.currentId" in handler
+
+
 def test_verifier_renders_placeholder_for_unextracted_articles() -> None:
     html = STATIC_HTML.read_text()
 

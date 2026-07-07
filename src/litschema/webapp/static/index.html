@@ -744,6 +744,14 @@
     min-width: 0;
   }
 
+  #base-stale-warning {
+    padding: 8px 14px;
+    font-size: 12.5px;
+    line-height: 1.4;
+    background: rgba(234, 179, 8, 0.14);
+    border-bottom: 1px solid var(--yellow);
+  }
+
   .confidence-chip {
     font-family: var(--font-sans);
     font-size: 11px;
@@ -2535,6 +2543,11 @@ e.g. year >= 2024 && study_types.includes("review")'
     </div>
   </div>
   <div class="panel panel-right">
+    <div id="base-stale-warning" style="display:none">
+      &#9888; Reviews below were written against an earlier extraction of this
+      article &mdash; field paths may no longer line up. Re-verify or clear the
+      affected fields; the warning clears itself once none remain stale.
+    </div>
     <div class="panel-header" id="extraction-panel-header">
       <div class="panel-header-row review-panel-top">
         <div class="review-title-group">
@@ -2972,8 +2985,8 @@ const FILTER_HELP_FIELDS = [
   { name: "confidence",     type: "number?",  note: "Extractor self-rated confidence 0–1; null when unset." },
   { name: "n_setups",       type: "number",   note: "Count of experimental_setups. 0 typically means review/perspective." },
   { name: "n_fields",       type: "number",   note: "Total leaf fields in the extraction (denominator for progress)." },
-  { name: "n_reviewed",     type: "number",   note: "Fields with a verified or flagged review event." },
-  { name: "n_verified",     type: "number",   note: "Fields with a verified review event." },
+  { name: "n_reviewed",     type: "number",   note: "Fields with a verified or flagged review." },
+  { name: "n_verified",     type: "number",   note: "Fields with a verified review." },
   { name: "n_flagged",      type: "number",   note: "Fields currently flagged for correction." },
   { name: "n_annotated",    type: "number",   note: "Alias for n_reviewed (kept for compatibility)." },
   { name: "is_complete",    type: "boolean",  note: "True when n_reviewed >= n_fields and n_fields > 0." },
@@ -3165,6 +3178,8 @@ $("#article-select").addEventListener("change", async (e) => {
     p = p.replace(/\.(\d+)(?=\.|$)/g, "[$1]");
     state.annotations[p] = ann;
   }
+  state.baseStale = !!annData.base_stale;
+  renderBaseStaleBanner();
 
   const meta = bibData || state.articles.find(a => a.article_id === id);
   if (meta) renderBibHeader(meta);
@@ -5718,6 +5733,7 @@ function annotationEntry(path, status, extra = {}) {
 }
 
 async function saveAnnotation(path, status, extra = {}, options = {}) {
+  const id = state.currentId;  // captured now; the user may navigate mid-flight
   const previous = Object.prototype.hasOwnProperty.call(options, "previous")
     ? options.previous
     : state.annotations[path];
@@ -5730,54 +5746,77 @@ async function saveAnnotation(path, status, extra = {}, options = {}) {
   }
 
   try {
-    const response = await fetch(`/api/annotations/${state.currentId}`, {
+    const response = await fetch(`/api/annotations/${id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(entry),
     });
     if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
     const saved = await response.json();
+    if (id !== state.currentId) return true;  // saved, but this view moved on
     state.annotations[path] = { ...entry, ...saved };
     setSaveStatus("Saved", "saved");
+    refreshBaseStale(id);
     return true;
   } catch (err) {
+    if (id !== state.currentId) return false;
     if (previous) state.annotations[path] = previous;
     else delete state.annotations[path];
     setSaveStatus("Failed to save annotation", "error");
     return false;
   } finally {
-    if (render) {
+    if (render && id === state.currentId) {
       renderReviewState();
     }
   }
 }
 
 async function clearAnnotation(path, options = {}) {
+  const id = state.currentId;  // captured now; the user may navigate mid-flight
   const previous = state.annotations[path];
   if (!previous) return;
   const render = options.render !== false;
   setSaveStatus("Clearing...", "saving");
 
   try {
-    const response = await fetch(`/api/annotations/${state.currentId}/${path}`, {
+    const response = await fetch(`/api/annotations/${id}/${path}`, {
       method: "DELETE",
     });
     if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+    if (id !== state.currentId) return true;  // cleared, but this view moved on
     delete state.annotations[path];
     state.suppressClearHoverPaths.delete(path);
     setSaveStatus("Cleared", "saved");
+    refreshBaseStale(id);
     return true;
   } catch (err) {
+    if (id !== state.currentId) return false;
     state.annotations[path] = previous;
     setSaveStatus("Failed to save annotation", "error");
     return false;
   } finally {
-    if (render) {
+    if (render && id === state.currentId) {
       renderExtractionPanel();
       updateStats();
       updateSelectedFieldBar(state.selectedPath);
     }
   }
+}
+
+function renderBaseStaleBanner() {
+  const el = $("#base-stale-warning");
+  if (!el) return;
+  el.style.display = state.baseStale ? "block" : "none";
+}
+
+function refreshBaseStale(id) {
+  // Staleness can clear when the last stale entry is re-saved or removed;
+  // re-ask the server rather than guessing. Responses apply by captured id.
+  fetchJson(`/api/annotations/${id}`).then(d => {
+    if (id !== state.currentId) return;
+    state.baseStale = !!(d && d.base_stale);
+    renderBaseStaleBanner();
+  }).catch(() => {});
 }
 
 async function toggleFieldVerification(path) {

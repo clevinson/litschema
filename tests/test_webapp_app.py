@@ -236,18 +236,81 @@ def test_put_annotation_replaces_across_reviewers(tmp_path) -> None:
     cfg = _project_cfg(tmp_path)
     _write_extraction(cfg, "a", {"article_id": "a", "title": "T"})
     client = _client(cfg)
-    client.put("/api/annotations/a", json={"path": "title", "status": "flagged", "reviewer": "A"})
-    client.put("/api/annotations/a", json={"path": "title", "status": "verified", "reviewer": "B"})
+    reviewer_a = "0000-0002-1825-0097"
+    reviewer_b = "0000-0001-5109-3700"
+    client.put(
+        "/api/annotations/a", json={"path": "title", "status": "flagged", "reviewer": reviewer_a}
+    )
+    client.put(
+        "/api/annotations/a", json={"path": "title", "status": "verified", "reviewer": reviewer_b}
+    )
 
     # one review per field: B's save replaced A's, author records the attribution
     anns = client.get("/api/annotations/a").json()["annotations"]
     (ann,) = anns
-    assert ann["reviewer"] == "B"
+    assert ann["reviewer"] == reviewer_b
     assert ann["status"] == "verified"
 
     # clearing removes THE entry, whoever wrote it
     assert client.delete("/api/annotations/a/title").status_code == 200
     assert client.get("/api/annotations/a").json()["annotations"] == []
+
+
+def test_put_annotation_validation_refuses_bad_input(tmp_path) -> None:
+    cfg = _project_cfg(tmp_path)
+    _write_extraction(cfg, "a", {"article_id": "a", "title": "T"})
+    client = _client(cfg)
+
+    ok = {"path": "title", "status": "verified", "reviewer": ""}
+    assert client.put("/api/annotations/a", json=[ok]).status_code == 400  # array body
+    assert client.put("/api/annotations/a", json={**ok, "path": 5}).status_code == 400
+    assert client.put("/api/annotations/a", json={"status": "verified"}).status_code == 400
+    assert client.put("/api/annotations/a", json={"path": "title"}).status_code == 400
+    assert (
+        client.put("/api/annotations/a", json={**ok, "status": "cleared"}).status_code == 400
+    )
+    # Flags need a reviewer, and any reviewer given must be a real ORCID.
+    assert (
+        client.put(
+            "/api/annotations/a", json={"path": "title", "status": "flagged", "reviewer": ""}
+        ).status_code
+        == 400
+    )
+    assert client.put("/api/annotations/a", json={**ok, "reviewer": "bob"}).status_code == 400
+    # ORCID URL forms normalize to the bare id.
+    resp = client.put(
+        "/api/annotations/a",
+        json={**ok, "reviewer": "https://orcid.org/0000-0002-1825-0097"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["reviewer"] == "0000-0002-1825-0097"
+
+
+def test_annotation_writes_refuse_corrupt_review_json_with_409(tmp_path) -> None:
+    cfg = _project_cfg(tmp_path)
+    _write_extraction(cfg, "a", {"article_id": "a", "title": "T"})
+    review_path = cfg.article_store_dir / "a" / "review.json"
+    review_path.write_text("{not json")
+    client = _client(cfg)
+
+    put = client.put(
+        "/api/annotations/a", json={"path": "title", "status": "verified", "reviewer": ""}
+    )
+    delete = client.delete("/api/annotations/a/title")
+
+    assert put.status_code == 409
+    assert delete.status_code == 409
+    assert review_path.read_text() == "{not json"  # evidence intact, file not deleted
+    assert client.get("/api/annotations/a").json()["annotations"] == []  # reads stay lenient
+
+
+def test_delete_annotation_requires_a_field_path(tmp_path) -> None:
+    cfg = _project_cfg(tmp_path)
+    _write_extraction(cfg, "a", {"article_id": "a", "title": "T"})
+    client = _client(cfg)
+
+    assert client.delete("/api/annotations/a/").status_code == 400
+    assert client.delete("/api/annotations/a/%2E").status_code == 400  # dots-only path
 
 
 def test_get_annotations_base_stale_false_on_fresh_write(tmp_path) -> None:
@@ -307,6 +370,24 @@ def test_list_articles_includes_assembled_but_unextracted(tmp_path) -> None:
     assert noext["has_flags"] is False
     assert by_id["ext"]["has_extraction"] is True
     assert by_id["ext"]["title"] == "Extracted Title"
+
+
+def test_list_articles_carries_overall_confidence_from_reasoning(tmp_path) -> None:
+    cfg = _project_cfg(tmp_path)
+    _write_manifest(cfg, "conf", {"id": "conf"})
+    _write_extraction(cfg, "conf", {"article_id": "conf", "title": "T"})
+    (cfg.article_store_dir / "conf" / "agent-reasoning.json").write_text(
+        _json.dumps({"confidence": 0.55, "fields": []})
+    )
+    _write_manifest(cfg, "noconf", {"id": "noconf"})
+    _write_extraction(cfg, "noconf", {"article_id": "noconf", "title": "T"})
+
+    by_id = {
+        a["article_id"]: a for a in _client(cfg).get("/api/articles").json()["articles"]
+    }
+
+    assert by_id["conf"]["confidence"] == 0.55  # the queue filter can see it
+    assert by_id["noconf"]["confidence"] is None
 
 
 def test_list_articles_treats_errored_extraction_as_unextracted(tmp_path) -> None:

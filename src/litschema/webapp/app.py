@@ -31,6 +31,7 @@ from ..articles import (
 from ..config import LitSchemaConfig
 from ..ingest.openalex_harvest import RegistryUnavailableError, sync_article
 from ..reviews import (
+    ReviewFileUnreadableError,
     base_extraction_stale,
     canonical_review_path,
     delete_reviews_at,
@@ -141,11 +142,23 @@ def _current_annotations(cfg: LitSchemaConfig, article_id: str) -> list[dict]:
 
     review.json holds at most one entry per field; ``author`` on the entry is
     git-diff attribution, and multi-reviewer coordination happens in PR diffs
-    of review.json (decision 2026-06-11).
+    of review.json (specs/reviews/decisions.md, 2026-06-11).
     """
     files = article_files(cfg, article_id)
     fields = read_reviews(files)
     return [_annotation_from_entry(path, entry) for path, entry in fields.items()]
+
+
+def _extraction_confidence(files: ArticleFiles) -> float | None:
+    """The extractor's overall self-rated confidence from agent-reasoning.json."""
+    if not files.reasoning.exists():
+        return None
+    try:
+        reasoning = json.loads(files.reasoning.read_bytes())
+    except ValueError:
+        return None
+    value = reasoning.get("confidence") if isinstance(reasoning, dict) else None
+    return value if isinstance(value, (int, float)) else None
 
 
 def _leaf_paths(obj, base_path: str = "") -> list[str]:
@@ -173,13 +186,10 @@ def _review_progress(extraction: dict, annotations: list[dict]) -> dict:
     current: dict[str, dict] = {}
     for annotation in annotations:
         path = annotation.get("path")
-        status = annotation.get("status")
         if not path:
             continue
         path = path.lstrip(".")
-        if status == "cleared":
-            current.pop(path, None)
-        elif path in leaf_paths:
+        if path in leaf_paths:
             current[path] = annotation
 
     n_verified = sum(1 for ann in current.values() if ann.get("status") == "verified")
@@ -334,6 +344,7 @@ async def list_articles(cfg: CfgDep):
             entry.update(
                 {
                     "has_extraction": False,
+                    "confidence": None,
                     "n_setups": 0,
                     "n_annotated": 0,
                     "n_fields": 0,
@@ -352,6 +363,7 @@ async def list_articles(cfg: CfgDep):
             entry.update(
                 {
                     "has_extraction": True,
+                    "confidence": _extraction_confidence(files),
                     "study_types": data.get("study_types", []),
                     "focus_areas": data.get("focus_areas", []),
                     "document_type": data.get("document_type"),
@@ -518,8 +530,9 @@ async def get_reasoning(article_id: str, cfg: CfgDep):
 async def get_annotations(article_id: str, cfg: CfgDep):
     """Return annotations for an article: one per reviewed field path.
 
-    ``base_stale`` is true when the stored reviews were written against a
-    different agent-extraction.json than the current one (kata 3698).
+    ``base_stale`` is true when any stored review was written against a
+    different agent-extraction.json than the current one
+    (specs/reviews/spec.md § Staleness).
     """
     return {
         "article_id": article_id,
@@ -532,6 +545,8 @@ async def get_annotations(article_id: str, cfg: CfgDep):
 async def put_annotation(article_id: str, request: Request, cfg: CfgDep):
     """Add or update a field annotation."""
     body = await request.json()
+    if not isinstance(body, dict):
+        raise HTTPException(400, "body must be a JSON object")
     field_path = body.get("path")
     status = body.get("status")  # verified | flagged
     reviewer = body.get("reviewer", "")
@@ -542,10 +557,15 @@ async def put_annotation(article_id: str, request: Request, cfg: CfgDep):
 
     if not field_path or not status:
         raise HTTPException(400, "path and status are required")
+    if not isinstance(field_path, str):
+        raise HTTPException(400, "path must be a string")
     if status not in ("verified", "flagged"):
         raise HTTPException(400, "status must be verified or flagged")
     if status == "flagged" and not reviewer:
         raise HTTPException(400, "reviewer ORCID is required for flags")
+    if reviewer:
+        # Author is an ORCID or empty (specs/reviews/spec.md); normalize URLs.
+        reviewer = _normalize_orcid_id(str(reviewer))
 
     entry = {
         "author": reviewer,
@@ -562,7 +582,10 @@ async def put_annotation(article_id: str, request: Request, cfg: CfgDep):
         entry["batch_id"] = batch_id
 
     files = article_files(cfg, article_id)
-    upsert_review(files, field_path, entry)
+    try:
+        entry = upsert_review(files, field_path, entry)
+    except ReviewFileUnreadableError as exc:
+        raise HTTPException(409, str(exc)) from exc
     return _annotation_from_entry(canonical_review_path(field_path), entry)
 
 
@@ -573,7 +596,12 @@ async def delete_annotation(article_id: str, field_path: str, cfg: CfgDep):
     Drops the entry from review.json rather than recording a 'cleared'
     marker — clearing is not an attributable action.
     """
-    delete_reviews_at(article_files(cfg, article_id), field_path)
+    if not field_path.strip("."):
+        raise HTTPException(400, "field path is required")
+    try:
+        delete_reviews_at(article_files(cfg, article_id), field_path)
+    except ReviewFileUnreadableError as exc:
+        raise HTTPException(409, str(exc)) from exc
     return {"deleted": field_path}
 
 

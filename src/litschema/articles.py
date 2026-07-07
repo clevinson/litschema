@@ -105,11 +105,6 @@ def _iter_article_artifact_paths(cfg: LitSchemaConfig, filename: str) -> Iterato
     yield from sorted(cfg.article_store_dir.glob(f"*/{filename}"))
 
 
-def iter_article_ids_with_extractions(cfg: LitSchemaConfig) -> Iterator[str]:
-    for path in iter_extraction_paths(cfg):
-        yield article_id_from_extraction_path(path)
-
-
 def read_article_metadata(files: ArticleFiles) -> dict:
     if not files.metadata.exists():
         return {}

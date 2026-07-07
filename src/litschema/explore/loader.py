@@ -58,8 +58,16 @@ def _parse_path(path: str) -> list[str | int]:
     return segs
 
 
+#: Reviewer sentinel meaning "this field should not exist" (see
+#: specs/reviews/spec.md) — applied as a field removal, never as a value.
+REMOVE_SENTINEL = "__remove__"
+
+
 def _apply_override(record: dict, path: str, value: Any) -> bool:
-    """Set record at path to value. Returns False on path-resolve failure."""
+    """Set record at path to value (or remove the field for the sentinel).
+
+    Returns False on path-resolve failure.
+    """
     segs = _parse_path(path)
     if not segs:
         return False
@@ -71,6 +79,12 @@ def _apply_override(record: dict, path: str, value: Any) -> bool:
             return False
     last = segs[-1]
     try:
+        if value == REMOVE_SENTINEL:
+            if isinstance(cur, dict):
+                cur.pop(last, None)
+            elif isinstance(cur, list) and isinstance(last, int) and last < len(cur):
+                cur[last] = None
+            return True
         cur[last] = value
         return True
     except (KeyError, IndexError, TypeError):
@@ -78,18 +92,17 @@ def _apply_override(record: dict, path: str, value: Any) -> bool:
 
 
 def _build_override_map(cfg: LitSchemaConfig) -> dict[str, list[dict]]:
-    """{article_id: [{path, value, timestamp}, ...] sorted by timestamp ascending}."""
+    """{article_id: [{path, value}, ...]} — one override max per field path."""
     by_article: dict[str, list[dict]] = {}
     for extraction_path in iter_extraction_paths(cfg):
         article_id = article_id_from_extraction_path(extraction_path)
         fields = read_reviews(article_files(cfg, article_id))
         overrides = [
-            {"path": path, "value": entry["override_value"], "timestamp": entry.get("timestamp")}
+            {"path": path, "value": entry["override_value"]}
             for path, entry in fields.items()
             if "override_value" in entry
         ]
         if overrides:
-            overrides.sort(key=lambda o: o["timestamp"] or "")
             by_article[article_id] = overrides
     return by_article
 
@@ -98,7 +111,7 @@ def _apply_overrides_to_extraction(
     extraction: dict,
     overrides: list[dict],
 ) -> tuple[dict, int]:
-    """Apply review overrides in chronological order."""
+    """Apply review overrides (order is immaterial: one entry per field path)."""
     record = json.loads(json.dumps(extraction))  # deep copy
     count = 0
     for override in overrides:
