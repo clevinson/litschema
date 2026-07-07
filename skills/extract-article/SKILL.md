@@ -149,9 +149,13 @@ values not visible in the document.
    - Output says **NOT locked** (registry down, or no usable record) → the
      DOI is recorded and a later sweep will retry the lock; continue to
      step 3 so the record has readable metadata meanwhile.
-   - The command says it is *refusing to overwrite human or registry data* →
-     that is the guard working. STOP — skip step 3 as well, and
-     do NOT retry with `--force`. The existing metadata outranks your reading.
+   - Error starts with **refusing:** (the metadata is human-edited or
+     registry-locked) → that is the guard working. STOP — skip step 3 as
+     well, and do NOT retry with `--force`. The existing metadata outranks
+     your reading.
+   - Error says **not a valid DOI** → re-check your transcription against the
+     document and retry once; if it still fails, treat the document as having
+     no usable DOI and go to step 3 (without `--doi`).
 3. **No DOI on the document, or the sync half failed.** Transcribe the
    bibliographic fields you can see — title, authors OR corporate author,
    year, journal/venue if applicable — and write them in one guarded command
@@ -162,7 +166,7 @@ values not visible in the document.
      --title "..." --authors "A. Author, B. Author" --year 2024 --journal "..."
    ```
 
-   Same guard rules: a *refusing to overwrite* error means skip silently
+   Same guard rules: an error starting with *refusing:* means skip silently
    (never `--force`); a *rejected value* (e.g. malformed input) means drop
    the offending option and retry once so the good fields still land.
 

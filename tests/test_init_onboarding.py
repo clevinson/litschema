@@ -135,6 +135,57 @@ def test_init_force_initializes_non_empty_non_project_dir(tmp_path) -> None:
     assert project.joinpath("papers-inbox").is_dir()
 
 
+def test_init_refuses_symlinked_scaffold_targets(tmp_path) -> None:
+    # init must never write through a symlink to somewhere outside the
+    # project (dotfiles-style .gitignore links, dangling links).
+    from litschema import cli
+
+    outside = tmp_path / "dotfiles" / "gitignore"
+    outside.parent.mkdir()
+    outside.write_text("custom\n")
+    project = tmp_path / "my-review"
+    project.mkdir()
+    project.joinpath(".gitignore").symlink_to(outside)
+
+    result = CliRunner().invoke(cli.app, ["init", str(project), "--force"])
+
+    assert result.exit_code == 2
+    assert "symlink" in result.output
+    assert outside.read_text() == "custom\n"  # untouched
+
+    project2 = tmp_path / "review-2"
+    project2.mkdir()
+    project2.joinpath("schema").symlink_to(tmp_path / "nowhere")
+
+    result = CliRunner().invoke(cli.app, ["init", str(project2), "--force"])
+
+    assert result.exit_code == 2
+    assert "symlink" in result.output
+    assert not (project2 / "litschema.yaml").exists()  # nothing scaffolded
+
+
+def test_doctor_ignores_unrelated_skills(tmp_path, monkeypatch) -> None:
+    # Someone else's skills in .claude/skills (or globally) are not a green
+    # light: doctor counts only litschema's bundled skills.
+    from litschema import cli
+
+    runner = CliRunner()
+    project = tmp_path / "myreview"
+    result = runner.invoke(cli.app, ["init", str(project), "--no-skills"])
+    assert result.exit_code == 0, result.output
+
+    unrelated = project / ".claude" / "skills" / "totally-unrelated"
+    unrelated.mkdir(parents=True)
+    unrelated.joinpath("SKILL.md").write_text("something else\n")
+    monkeypatch.setattr(cli, "_agent_skill_destinations", lambda agent: [])
+    monkeypatch.chdir(project)
+
+    result = runner.invoke(cli.app, ["--config", str(project / "litschema.yaml"), "doctor"])
+
+    assert "skills not installed" in result.output
+    assert "totally-unrelated" not in result.output
+
+
 def test_init_no_longer_accepts_source_modes(tmp_path) -> None:
     from litschema import cli
 

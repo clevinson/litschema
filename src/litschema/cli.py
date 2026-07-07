@@ -537,7 +537,8 @@ def meta_set(
 
     if source not in ("auto", "manual"):
         typer.secho(
-            f"{CROSS} --source must be auto or manual (doi is earned via `meta sync`)",
+            f"{CROSS} --source must be auto or manual "
+            "(doi is earned via `meta sync` or `meta set --doi ... --sync`)",
             fg=typer.colors.RED,
         )
         raise typer.Exit(code=2)
@@ -545,8 +546,9 @@ def meta_set(
         others = (title, authors, corporate_author, year, journal, publisher, url, abstract)
         if not doi or any(v is not None for v in others) or clear:
             typer.secho(
-                f"{CROSS} --sync takes only --doi — registry values replace the whole "
-                "block, so fallback values belong in a separate `meta set`",
+                f"{CROSS} --sync requires --doi with a value and takes no other field "
+                "options — registry values replace the whole block, so fallback values "
+                "belong in a separate `meta set`",
                 fg=typer.colors.RED,
             )
             raise typer.Exit(code=2)
@@ -606,12 +608,15 @@ def meta_set(
     # guard above already ruled on consent — a refused write never gets here.
     from .ingest import openalex_harvest
 
-    retry_hint = (
-        f"the DOI is recorded ({source}) and stays retryable via "
-        f"`meta sync {article_id}` or the --all sweep"
-    )
+    # The batch sweep never touches manual blocks, so only promise it for auto.
+    retry_via = f"`meta sync {article_id}`" + (" or the --all sweep" if source == "auto" else "")
+    retry_hint = f"the DOI is recorded ({source}) and stays retryable via {retry_via}"
     try:
         synced = openalex_harvest.sync_article(cfg, article_id)
+    except LookupError as exc:
+        # Unreachable unless the manifest changed under us mid-command.
+        typer.secho(f"{CROSS} {exc}", fg=typer.colors.RED)
+        raise typer.Exit(code=1) from exc
     except openalex_harvest.RegistryUnavailableError:
         typer.echo(json.dumps(block, indent=2, ensure_ascii=False))
         typer.secho(
@@ -871,25 +876,36 @@ def doctor(ctx: typer.Context):
         issues.append(f"create {cfg.schema_dir}")
 
     # Skills check — project-local .claude/skills/ is the init default;
-    # global installs are the alternative.
-    local_skills = cfg.project_root / ".claude" / "skills"
-    installed = []
+    # global installs are the alternative. Only litschema's bundled skills
+    # count: unrelated skills living in the same directories are not a green
+    # light for this project.
+    bundled = {skill.name for skill in _skill_sources()}
+
+    def _bundled_in(directory: Path) -> list[str]:
+        if not directory.is_dir():
+            return []
+        return [
+            p.name
+            for p in directory.iterdir()
+            if p.is_dir() and p.name in bundled and (p / "SKILL.md").exists()
+        ]
+
+    installed = _bundled_in(cfg.project_root / ".claude" / "skills")
     where = "project-local"
-    if local_skills.is_dir():
-        installed = [p.name for p in local_skills.iterdir() if (p / "SKILL.md").exists()]
     if not installed:
         where = "global"
         for skills_dir in _agent_skill_destinations("auto"):
-            if skills_dir.is_dir():
-                installed.extend(
-                    p.name for p in skills_dir.iterdir() if (p / "SKILL.md").exists()
-                )
+            installed.extend(_bundled_in(skills_dir))
     if installed:
         typer.echo(
-            f"{CHECK} agent skills installed ({where}): {', '.join(sorted(set(installed)))}"
+            f"{CHECK} litschema agent skills installed ({where}): "
+            f"{', '.join(sorted(set(installed)))}"
         )
     else:
-        typer.echo(f"{WARN} agent skills not installed (no .claude/skills/ here, none global)")
+        typer.echo(
+            f"{WARN} litschema agent skills not installed "
+            "(looked in ./.claude/skills and the global skill dirs)"
+        )
         issues.append(
             "run `litschema skills install --local` from the project "
             "(or `litschema skills install` for a global install)"
@@ -1006,6 +1022,24 @@ def init(
             fg=typer.colors.RED,
         )
         raise typer.Exit(code=2)
+    # Scaffolding must never write through a symlink to somewhere outside the
+    # project (a symlinked .gitignore in a dotfiles setup, a dangling link).
+    for entry in (
+        "domain_context.md",
+        ".gitignore",
+        "schema",
+        "schema/extraction.yaml",
+        "data",
+        "data/papers",
+        "papers-inbox",
+    ):
+        if project.joinpath(entry).is_symlink():
+            typer.secho(
+                f"{CROSS} {project / entry} is a symlink — init only writes real files "
+                "and directories inside the project",
+                fg=typer.colors.RED,
+            )
+            raise typer.Exit(code=2)
 
     project.mkdir(parents=True, exist_ok=True)
     project.joinpath("schema").mkdir(exist_ok=True)

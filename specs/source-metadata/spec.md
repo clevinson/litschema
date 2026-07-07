@@ -125,10 +125,13 @@ protective default: machines will not touch it.
   encounters a `manual` block, THEN it skips the article. WHEN per-article
   sync is invoked, THEN it may overwrite any state — invoking it IS the
   consent.
-- **Sync is atomic.** WHEN a per-article registry lookup fails or returns an
-  unusable record, THEN nothing at all is written — no manifest change, no
-  cache marker — and any `--doi` passed is NOT recorded. (Batch harvest caches
-  a `not_found` marker for true 404s only.)
+- **`meta sync` is atomic.** WHEN a `meta sync` registry lookup fails or
+  returns an unusable record, THEN the sync writes nothing at all — no
+  manifest change, no cache marker — and any `--doi` passed to `meta sync` is
+  NOT recorded. (Batch harvest caches a `not_found` marker for true 404s
+  only. `meta set --doi ... --sync` differs by design: the guarded DOI write
+  lands FIRST and survives a failed lookup — that persistence is the point of
+  the flag; the sync half itself still writes nothing on failure.)
 - **Auto-first enrichment.** Every article gets its best free metadata with
   zero user effort (filename seed → agent backfill → registry upgrade); human
   attention is spent only on corrections, and only those corrections are

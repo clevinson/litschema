@@ -87,3 +87,18 @@ first run.
 
 **Rejected:** syncing at both intake and post-batch (a ceremonial no-op on
 the path that matters, implying DOIs should exist before extraction).
+
+## 2026-07-07 — Extraction-time enrichment is `meta set --doi ... --sync` (supersedes the sync-placement entry's mechanism)
+
+**Context:** the entry above named `meta sync <id>` as the per-extraction sync
+moment. The contract was then consolidated: two commands with different
+consent semantics invited agent error, and the happy path transcribed
+bibliography the registry immediately replaced.
+
+**Decision:** the extraction-time command is
+`meta set <id> --source auto --doi <doi> --sync` — one guarded command that
+records the DOI and attempts the registry lock; title-page transcription is
+an explicit fallback (no DOI, or the sync half failed). The placement
+decision above is unchanged: the post-batch `meta sync --all` sweep remains
+the transient-failure net. Full rationale and rejected alternatives:
+`specs/source-metadata/decisions.md` (2026-07-07 entry).

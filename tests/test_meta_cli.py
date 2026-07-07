@@ -234,9 +234,11 @@ def test_meta_set_sync_requires_exactly_a_doi(tmp_path: Path, monkeypatch) -> No
         cli.app, [*base, "--doi", "10.1234/x", "--clear", "title", "--sync"]
     )
 
-    for result in (no_doi, extra_field, with_clear):
+    empty_doi = runner.invoke(cli.app, [*base, "--doi", "", "--sync"])
+
+    for result in (no_doi, extra_field, with_clear, empty_doi):
         assert result.exit_code == 2, result.output
-        assert "--sync takes only --doi" in result.output
+        assert "--sync requires --doi" in result.output
     manifest = json.loads((cfg.article_store_dir / "a" / "article-metadata.json").read_text())
     assert "source_metadata" not in manifest  # the refusals wrote nothing
 
@@ -328,6 +330,52 @@ def test_meta_set_sync_guard_refusal_never_consults_the_registry(
     block = _block(cfg, "a")
     assert block["title"] == "Hand Fixed"
     assert "doi" not in block
+
+
+def test_meta_set_sync_manual_failure_hint_omits_the_sweep(
+    tmp_path: Path, monkeypatch
+) -> None:
+    # The batch sweep never touches manual blocks, so the retry hint must not
+    # promise it for --source manual.
+    cfg = _project(tmp_path, monkeypatch)
+    _write_manifest(cfg, "a", {"id": "a"})
+    monkeypatch.setattr(openalex_harvest, "fetch_openalex", lambda doi, email=None: None)
+
+    result = runner.invoke(
+        cli.app, ["meta", "set", "a", "--source", "manual", "--doi", "10.1234/x", "--sync"]
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "NOT locked" in result.output
+    assert "--all sweep" not in result.output
+    assert _block(cfg, "a")["metadata_source"] == "manual"
+
+
+def test_meta_set_sync_force_demotes_manual_without_the_lock(
+    tmp_path: Path, monkeypatch
+) -> None:
+    # Documented --force semantics composed with --sync: a human forcing an
+    # auto write over manual loses the manual protection even when the
+    # registry is down — the demotion is the --force, not the --sync.
+    cfg = _project(tmp_path, monkeypatch)
+    _write_manifest(
+        cfg,
+        "a",
+        {"id": "a", "source_metadata": {"title": "Hand Fixed", "metadata_source": "manual"}},
+    )
+    monkeypatch.setattr(openalex_harvest, "fetch_openalex", lambda doi, email=None: None)
+
+    result = runner.invoke(
+        cli.app,
+        ["meta", "set", "a", "--source", "auto", "--doi", "10.1234/x", "--sync", "--force"],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "NOT locked" in result.output
+    block = _block(cfg, "a")
+    assert block["metadata_source"] == "auto"  # demoted by --force
+    assert block["doi"] == "10.1234/x"
+    assert block["title"] == "Hand Fixed"  # per-field merge kept the title
 
 
 def test_meta_set_sync_manual_is_explicit_consent(tmp_path: Path, monkeypatch) -> None:
