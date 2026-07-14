@@ -269,7 +269,8 @@ def prepare_text(
 
     project = _require_project(ctx)
     if article_id is not None:
-        from .articles import InvalidArticleIdError, article_files as _af
+        from .articles import InvalidArticleIdError
+        from .articles import article_files as _af
 
         try:
             _af(project.config, article_id)
@@ -552,7 +553,7 @@ def meta_set(
 
     values = (title, authors, corporate_author, year, journal, doi, publisher, url, abstract)
     fields: dict = {}
-    for key, value in zip(SOURCE_FIELDS, values):
+    for key, value in zip(SOURCE_FIELDS, values, strict=True):
         if value is None:
             continue
         # An explicit empty string clears the field (the webapp's convention).

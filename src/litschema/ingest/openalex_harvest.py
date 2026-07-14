@@ -22,7 +22,7 @@ import requests
 
 from ..article_registry import is_valid_doi, normalize_doi
 from ..articles import article_files, iter_metadata_paths, write_article_metadata
-from ..config import LitSchemaConfig, require_config_or_exit
+from ..config import LitSchemaConfig
 from ..source_metadata import SOURCE_FIELDS, read_source_metadata, update_source_metadata
 from . import harvest_cache_dir
 
