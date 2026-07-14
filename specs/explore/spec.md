@@ -1,8 +1,10 @@
 # Capability: explore (experimental)
 
-The queryable projection of the article store: a schema-derived DuckDB
-database served to agents over MCP. `litschema mcp` builds (or reuses) the
-store and serves it.
+The consumable projections of the reviewed truth: `litschema export` writes
+it as flat files (JSONL/CSV), and `litschema mcp` serves a schema-derived
+DuckDB database over MCP. Both are built from the same record definition —
+`load_reviewed_records`: error markers skipped, review overrides applied,
+identifier backfilled.
 
 **Status: experimental — deliberately frozen pending user signal.** The
 thesis (SQL over the reviewed truth) is core to the product, but the right
@@ -42,6 +44,21 @@ is newer than every file under the article store; `--rebuild` forces.
 Schema edits do NOT currently trigger a rebuild (known gap, deferred with
 the freeze — use `--rebuild` after schema changes).
 
+## Export: `litschema export`
+
+`litschema export [--format jsonl|csv] [--output PATH]` writes the reviewed
+records to stdout (pipeable) or a file; a summary line goes to stderr.
+
+- **jsonl** (default): one record per line, keys sorted — ready for pandas,
+  jq, or an agent to read directly.
+- **csv**: the same schema-driven shaping as the DuckDB columns — scalar
+  slots as plain cells, multivalued/class-ranged slots as JSON strings,
+  absent slots empty. Ready for R or a spreadsheet.
+
+Unknown formats and missing/rootless schemas are exit 2 with a one-line
+remedy. This is the stable, dependency-free consumer surface; the SQL layer
+below is the experimental one.
+
 ## The MCP server
 
 `litschema mcp [--rebuild] [--db-path P] [--transport stdio|http] [--port
@@ -67,10 +84,12 @@ the honest enforcement point.
 - **Schema drives shape.** WHEN a slot is multivalued or class-ranged, THEN
   its column is JSON; WHEN scalar, THEN typed; WHEN `identifier`, THEN
   primary key. (`test_loader_scenarios.py`)
-- **Reviewed truth.** WHEN a field has a review `override_value`, THEN the
-  store carries the override (or omits the field, for `__remove__`) — never
-  the raw extracted value. (`test_loader_article_layout.py`,
-  `test_review_overrides.py`)
+- **Reviewed truth, one definition.** WHEN a field has a review
+  `override_value`, THEN the store and every export carry the override (or
+  omit the field, for `__remove__`) — never the raw extracted value; both
+  surfaces share `load_reviewed_records`.
+  (`test_loader_article_layout.py`, `test_review_overrides.py`,
+  `test_export.py`)
 - **Writes are impossible.** WHEN a tool submits INSERT/UPDATE/etc., THEN
   the read-only engine rejects it — no query-parsing gate to bypass.
 - **No dependencies beyond the declared ones.** WHEN litschema is
@@ -79,8 +98,10 @@ the honest enforcement point.
 
 ## Code map
 
-`src/litschema/explore/loader.py` (derivation, overrides, rebuild) ·
+`src/litschema/explore/loader.py` (record definition, derivation,
+overrides, rebuild) · `src/litschema/export.py` (flat-file export) ·
 `src/litschema/explore/server.py` (MCP tools) · `src/litschema/cli.py`
-(`mcp` verb). Tests: `test_loader_scenarios.py`,
-`test_loader_article_layout.py`, `test_review_overrides.py` (server.py is
-untested — accepted under the freeze).
+(`export` and `mcp` verbs). Tests: `test_export.py`,
+`test_loader_scenarios.py`, `test_loader_article_layout.py`,
+`test_review_overrides.py` (server.py is untested — accepted under the
+freeze).

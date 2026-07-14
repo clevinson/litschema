@@ -75,7 +75,7 @@ Validation everywhere is closed-world: unknown properties are rejected.
 | `validate`, `agent *` | yes (except `agent validate-reasoning`) | `specs/extraction` |
 | `meta show/set/sync` | yes | `specs/source-metadata` |
 | `verify` | yes | `specs/verifier` |
-| `mcp` | yes | `specs/explore` |
+| `export`, `mcp` | yes | `specs/explore` |
 | `skills install` | no — standalone | `specs/onboarding` |
 | `extract` | no | stub: exits 2 pointing at the agent skills |
 

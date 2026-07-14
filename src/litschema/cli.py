@@ -403,6 +403,42 @@ def mcp(
         raise typer.Exit(code=2)
 
 
+@app.command(
+    help="Export the reviewed extractions — overrides applied, error markers "
+    "skipped — as JSONL (default) or CSV, to stdout or --output."
+)
+def export(
+    ctx: typer.Context,
+    fmt: str = typer.Option("jsonl", "--format", "-f", help="jsonl | csv"),
+    output: Path | None = typer.Option(
+        None, "--output", "-o", help="Write to a file instead of stdout"
+    ),
+):
+    from .export import FORMATS, export_records
+
+    if fmt not in FORMATS:
+        typer.secho(
+            f"{CROSS} unknown format: {fmt!r} (expected {' | '.join(FORMATS)})",
+            fg=typer.colors.RED,
+        )
+        raise typer.Exit(code=2)
+    cfg = _require_project(ctx).config
+    try:
+        if output is not None:
+            with output.open("w", newline="") as handle:
+                count, with_overrides = export_records(cfg, fmt, handle)
+        else:
+            count, with_overrides = export_records(cfg, fmt, sys.stdout)
+    except (FileNotFoundError, ValueError) as exc:
+        typer.secho(f"{CROSS} {exc}", fg=typer.colors.RED)
+        raise typer.Exit(code=2) from exc
+    typer.echo(
+        f"{CHECK} exported {count} record(s) ({with_overrides} with review overrides)"
+        + (f" → {output}" if output is not None else ""),
+        err=True,
+    )
+
+
 # Docs serving is intentionally *not* a `litschema` CLI command — it's a
 # repo-contributor concern, not a pipeline step. Run `make docs` for that.
 

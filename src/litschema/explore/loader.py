@@ -279,26 +279,7 @@ def build_store(
     columns = _derive_columns(extraction_schema.view, extraction_schema.root_class)
     id_slot = _identifier_slot(extraction_schema.view, extraction_schema.root_class)
 
-    override_map = _build_override_map(cfg)
-
-    records: list[dict] = []
-    reviews_applied = 0
-    overrides_applied = 0
-    for ext_path in iter_extraction_paths(cfg):
-        article_id = article_id_from_extraction_path(ext_path)
-        data = json.loads(ext_path.read_text())
-        if data.get("error"):
-            continue
-        # Honor either an in-record id or fall back to filename stem when
-        # the schema's id_slot isn't `article_id`.
-        if id_slot and id_slot not in data:
-            data[id_slot] = article_id
-        overrides = override_map.get(article_id) or []
-        if overrides:
-            data, applied = _apply_overrides_to_extraction(data, overrides)
-            reviews_applied += 1
-            overrides_applied += applied
-        records.append(data)
+    records, reviews_applied, overrides_applied = load_reviewed_records(cfg, id_slot=id_slot)
 
     if db_path.exists():
         db_path.unlink()
@@ -318,4 +299,39 @@ def build_store(
     )
 
 
-__all__ = ["LoadSummary", "build_store"]
+def load_reviewed_records(
+    cfg: LitSchemaConfig,
+    id_slot: str | None = None,
+) -> tuple[list[dict], int, int]:
+    """The reviewed truth, one dict per article with a valid extraction.
+
+    Error-marked extractions are skipped; review overrides are applied
+    (including the ``__remove__`` sentinel); when ``id_slot`` is given and
+    absent from a record it is backfilled from the article directory name.
+    Returns ``(records, reviews_applied, overrides_applied)``. This is the
+    single definition of "reviewed records" shared by the explore store and
+    ``litschema export``.
+    """
+    override_map = _build_override_map(cfg)
+    records: list[dict] = []
+    reviews_applied = 0
+    overrides_applied = 0
+    for ext_path in iter_extraction_paths(cfg):
+        article_id = article_id_from_extraction_path(ext_path)
+        data = json.loads(ext_path.read_text())
+        if data.get("error"):
+            continue
+        # Honor either an in-record id or fall back to filename stem when
+        # the schema's id_slot isn't `article_id`.
+        if id_slot and id_slot not in data:
+            data[id_slot] = article_id
+        overrides = override_map.get(article_id) or []
+        if overrides:
+            data, applied = _apply_overrides_to_extraction(data, overrides)
+            reviews_applied += 1
+            overrides_applied += applied
+        records.append(data)
+    return records, reviews_applied, overrides_applied
+
+
+__all__ = ["LoadSummary", "build_store", "load_reviewed_records"]

@@ -25,10 +25,14 @@ scripts, and the `jellyfish` dependency). Fix the one crash (plain
 columns, no server test suite, no rebuild-on-schema-edit until a revisit
 trigger fires.
 
-**Revisit triggers:** someone asks a cross-article question that reading
-the JSONs can't answer; a collection crosses ~1k documents; users ask for
-per-experiment tidy tables (which reveals the right projection — likely an
-`export` command for R/pandas rather than more SQL surface).
+Alongside the freeze, `litschema export` (JSONL/CSV of the same reviewed
+records) was added as the cheap bet on the likelier real need — researchers
+reaching for R/pandas/jq — and as the stable consumer surface while the SQL
+projection stays experimental.
+
+**Revisit triggers:** someone asks a cross-article question that flat files
+can't answer; a collection crosses ~1k documents; users ask for
+per-experiment tidy tables (which reveals the right projection).
 
 **Rejected:** deleting the layer entirely (throws away proven loader work
 and leaves review overrides write-only); investing to production quality

@@ -16,7 +16,7 @@ litschema init my-review        # scaffold a project (no questions asked)
   → drop PDFs in papers-inbox/
   → /litschema-onboard          # agent: schema drafting, intake, pilot, batch
   → litschema verify            # you: review what was extracted
-  → litschema mcp               # agents: query the reviewed data over SQL
+  → litschema export            # the reviewed data, ready for analysis
 ```
 
 The source of truth is an article store on disk — one directory per
@@ -60,6 +60,7 @@ litschema meta set <id> ...      # write it (--source auto|manual; --sync locks 
 litschema meta sync <id>|--all   # fetch + lock metadata from the DOI registry
 litschema validate [target]      # validate extractions against the schema (closed-world)
 litschema verify [--port 8000]   # local review webapp (loopback only)
+litschema export [-f jsonl|csv]  # the reviewed data as flat files (pandas/R/jq-ready)
 litschema mcp                    # build the DuckDB store and serve it over MCP (experimental)
 litschema skills install         # install the agent skills globally
 litschema agent ...              # deterministic steps the extraction skill calls
@@ -96,9 +97,12 @@ flag, or override with typed editors. One review per field lives in
 extraction they were written against (re-extraction raises a staleness
 warning until stale fields are re-reviewed).
 
-**Query the reviewed truth.** `litschema mcp` derives a DuckDB database
-from the schema (typed columns, review overrides baked in) and serves it
-read-only over MCP: `run_sql`, `describe_schema`, `get_linkml_schema`.
+**Use the reviewed truth.** `litschema export` writes the review-applied
+extractions as JSONL or CSV for pandas, R, or jq; `litschema mcp`
+(experimental) derives a DuckDB database from the schema and serves it
+read-only over MCP: `run_sql`, `describe_schema`, `get_linkml_schema`. Both
+surfaces produce the same records — overrides applied, error markers
+skipped.
 
 ## Project layout
 
