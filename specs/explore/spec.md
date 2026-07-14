@@ -20,9 +20,9 @@ human-facing query surface) waits for one of the revisit triggers in
 never authoritative — delete it freely; the article store and review files
 are the source of truth.
 
-One table, named after the schema's tree-root class: one row per article
-with a valid extraction (error markers excluded). Columns come from the
-schema's induced slots:
+One table, named `articles` (not derived from the schema's tree-root class
+name): one row per article with a valid extraction (error markers
+excluded). Columns come from the schema's induced slots:
 
 - the `identifier: true` slot → PRIMARY KEY, backfilled from the article
   directory name when absent in the record;

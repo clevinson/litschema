@@ -36,7 +36,7 @@ Unknown keys are preserved on `cfg.raw` (escape hatch for domain repos).
 
 Vestigial keys that still parse but have no consumer — scheduled for
 removal, do not use: `references_dir`, `tracking_xlsx`, `static_site_dir`,
-and `schema_root` (written by older `init` scaffolds; never read).
+and `schema_root` (still written by current `init` scaffolds; never read).
 
 ## Schema resolution
 
