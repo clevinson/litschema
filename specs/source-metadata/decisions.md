@@ -167,3 +167,20 @@ spelling it `set --from-doi <doi>` (hides the record-then-attempt two-phase
 and muddles what `--source` tags when the registry fails); making
 `meta sync --doi` record the DOI on a registry miss (breaks sync's
 nothing-on-failure atomicity).
+
+## 2026-07-14 — Correction: the legacy `harvest` verb is gone, not retained
+
+**Context:** the 2026-07-05 "`meta sync --all` supersedes `harvest`" entry
+said the legacy `litschema harvest` command would remain for its
+CrossRef-supplement and entity-resolution legs. The explore-freeze decision
+(`specs/explore/decisions.md`, 2026-07-07) cut those legs entirely — the
+registries were broken and unconsumed — and the `refactor(explore)!` commit
+removed the `harvest` CLI command along with `crossref_harvest.py` and
+`resolve_entities.py`. That removal was recorded in `specs/explore/decisions.md`
+but never logged here, even though it reverses this capability's own prior
+entry.
+**Decision:** record the correction here. `harvest` no longer exists as a CLI
+verb; `meta sync`/`meta sync --all` are the only enrichment surface.
+**Rejected:** leaving the 2026-07-05 entry's "legacy harvest remains" clause
+uncorrected — append-only means entries aren't rewritten, but a superseded
+claim still needs a follow-up entry pointing at the truth.

@@ -13,7 +13,6 @@ Usage:
 
 from __future__ import annotations
 
-import argparse
 import json
 import logging
 import re
@@ -23,7 +22,7 @@ import requests
 
 from ..article_registry import is_valid_doi, normalize_doi
 from ..articles import article_files, iter_metadata_paths, write_article_metadata
-from ..config import LitSchemaConfig, require_config_or_exit
+from ..config import LitSchemaConfig
 from ..source_metadata import SOURCE_FIELDS, read_source_metadata, update_source_metadata
 from . import harvest_cache_dir
 
@@ -366,24 +365,3 @@ def harvest(
     return stats
 
 
-def main():
-    parser = argparse.ArgumentParser(
-        description="Harvest metadata from OpenAlex for assembled articles with DOIs"
-    )
-    parser.add_argument("--email", help="Email for OpenAlex polite pool (recommended)")
-    parser.add_argument("--no-skip", action="store_true", help="Re-fetch existing files")
-    args = parser.parse_args()
-
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-
-    cfg = require_config_or_exit()
-    stats = harvest(
-        cfg,
-        email=args.email,
-        skip_existing=not args.no_skip,
-    )
-    print(json.dumps(stats, indent=2))
-
-
-if __name__ == "__main__":
-    main()

@@ -1,7 +1,7 @@
 """litschema CLI - single entry point for the pipeline.
 
 Verbs: assemble / prepare-text / meta (show|set|sync) / validate / verify /
-mcp / status / doctor / skills install / agent / init / harvest (legacy).
+mcp / status / doctor / skills install / agent / init.
 """
 
 from __future__ import annotations
@@ -238,46 +238,6 @@ def _install_skill_dirs(
 # ── Pipeline verbs ─────────────────────────────────────────────────────────
 
 
-@app.command(
-    context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
-    help="Legacy full harvest pipeline (OpenAlex + CrossRef supplement + entity resolution). "
-    "For metadata enrichment alone, prefer `litschema meta sync --all`.",
-)
-def harvest(
-    ctx: typer.Context,
-    source: str = typer.Option(
-        "both", "--source", help="Which API to harvest from: openalex | crossref | both"
-    ),
-    resolve: bool = typer.Option(
-        True, "--resolve/--no-resolve", help="Run entity resolution after harvest"
-    ),
-):
-    project = _require_project(ctx)
-    env = os.environ.copy()
-    env["LITSCHEMA_CONFIG"] = str(project.config.config_path)
-    if source in ("openalex", "both"):
-        typer.echo(f"{DIM}→ harvesting OpenAlex...{RESET}")
-        subprocess.run(
-            [sys.executable, "-m", "litschema.ingest.openalex_harvest", *ctx.args],
-            check=True,
-            env=env,
-        )
-    if source in ("crossref", "both"):
-        typer.echo(f"{DIM}→ harvesting CrossRef...{RESET}")
-        subprocess.run(
-            [sys.executable, "-m", "litschema.ingest.crossref_harvest", *ctx.args],
-            check=True,
-            env=env,
-        )
-    if resolve:
-        typer.echo(f"{DIM}→ resolving entities...{RESET}")
-        subprocess.run(
-            [sys.executable, "-m", "litschema.ingest.resolve_entities"],
-            check=True,
-            env=env,
-        )
-
-
 @app.command("prepare-text", help="Prepare article markdown text from PDFs.")
 def prepare_text(
     ctx: typer.Context,
@@ -309,7 +269,8 @@ def prepare_text(
 
     project = _require_project(ctx)
     if article_id is not None:
-        from .articles import InvalidArticleIdError, article_files as _af
+        from .articles import InvalidArticleIdError
+        from .articles import article_files as _af
 
         try:
             _af(project.config, article_id)
@@ -420,7 +381,6 @@ def mcp(
         f" · {summary.reviews_applied} review-override set(s) applied"
         f" ({summary.overrides_applied} field overrides)"
         f" · articles table: {len(summary.article_columns)} columns"
-        f" · {summary.authors_loaded} authors · {summary.institutions_loaded} institutions"
     )
     typer.echo(msg, err=err)
 
@@ -442,6 +402,42 @@ def mcp(
             fg=typer.colors.RED,
         )
         raise typer.Exit(code=2)
+
+
+@app.command(
+    help="Export the reviewed extractions — overrides applied, error markers "
+    "skipped — as JSONL (default) or CSV, to stdout or --output."
+)
+def export(
+    ctx: typer.Context,
+    fmt: str = typer.Option("jsonl", "--format", "-f", help="jsonl | csv"),
+    output: Path | None = typer.Option(
+        None, "--output", "-o", help="Write to a file instead of stdout"
+    ),
+):
+    from .export import FORMATS, export_records
+
+    if fmt not in FORMATS:
+        typer.secho(
+            f"{CROSS} unknown format: {fmt!r} (expected {' | '.join(FORMATS)})",
+            fg=typer.colors.RED,
+        )
+        raise typer.Exit(code=2)
+    cfg = _require_project(ctx).config
+    try:
+        if output is not None:
+            with output.open("w", newline="") as handle:
+                count, with_overrides = export_records(cfg, fmt, handle)
+        else:
+            count, with_overrides = export_records(cfg, fmt, sys.stdout)
+    except (FileNotFoundError, ValueError) as exc:
+        typer.secho(f"{CROSS} {exc}", fg=typer.colors.RED)
+        raise typer.Exit(code=2) from exc
+    typer.echo(
+        f"{CHECK} exported {count} record(s) ({with_overrides} with review overrides)"
+        + (f" → {output}" if output is not None else ""),
+        err=True,
+    )
 
 
 # Docs serving is intentionally *not* a `litschema` CLI command — it's a
@@ -557,7 +553,7 @@ def meta_set(
 
     values = (title, authors, corporate_author, year, journal, doi, publisher, url, abstract)
     fields: dict = {}
-    for key, value in zip(SOURCE_FIELDS, values):
+    for key, value in zip(SOURCE_FIELDS, values, strict=True):
         if value is None:
             continue
         # An explicit empty string clears the field (the webapp's convention).
