@@ -13,7 +13,6 @@ Usage:
 
 from __future__ import annotations
 
-import argparse
 import json
 import logging
 import re
@@ -366,24 +365,3 @@ def harvest(
     return stats
 
 
-def main():
-    parser = argparse.ArgumentParser(
-        description="Harvest metadata from OpenAlex for assembled articles with DOIs"
-    )
-    parser.add_argument("--email", help="Email for OpenAlex polite pool (recommended)")
-    parser.add_argument("--no-skip", action="store_true", help="Re-fetch existing files")
-    args = parser.parse_args()
-
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-
-    cfg = require_config_or_exit()
-    stats = harvest(
-        cfg,
-        email=args.email,
-        skip_existing=not args.no_skip,
-    )
-    print(json.dumps(stats, indent=2))
-
-
-if __name__ == "__main__":
-    main()

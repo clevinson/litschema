@@ -1,7 +1,7 @@
 """litschema CLI - single entry point for the pipeline.
 
 Verbs: assemble / prepare-text / meta (show|set|sync) / validate / verify /
-mcp / status / doctor / skills install / agent / init / harvest (legacy).
+mcp / status / doctor / skills install / agent / init.
 """
 
 from __future__ import annotations
@@ -238,46 +238,6 @@ def _install_skill_dirs(
 # ── Pipeline verbs ─────────────────────────────────────────────────────────
 
 
-@app.command(
-    context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
-    help="Legacy full harvest pipeline (OpenAlex + CrossRef supplement + entity resolution). "
-    "For metadata enrichment alone, prefer `litschema meta sync --all`.",
-)
-def harvest(
-    ctx: typer.Context,
-    source: str = typer.Option(
-        "both", "--source", help="Which API to harvest from: openalex | crossref | both"
-    ),
-    resolve: bool = typer.Option(
-        True, "--resolve/--no-resolve", help="Run entity resolution after harvest"
-    ),
-):
-    project = _require_project(ctx)
-    env = os.environ.copy()
-    env["LITSCHEMA_CONFIG"] = str(project.config.config_path)
-    if source in ("openalex", "both"):
-        typer.echo(f"{DIM}→ harvesting OpenAlex...{RESET}")
-        subprocess.run(
-            [sys.executable, "-m", "litschema.ingest.openalex_harvest", *ctx.args],
-            check=True,
-            env=env,
-        )
-    if source in ("crossref", "both"):
-        typer.echo(f"{DIM}→ harvesting CrossRef...{RESET}")
-        subprocess.run(
-            [sys.executable, "-m", "litschema.ingest.crossref_harvest", *ctx.args],
-            check=True,
-            env=env,
-        )
-    if resolve:
-        typer.echo(f"{DIM}→ resolving entities...{RESET}")
-        subprocess.run(
-            [sys.executable, "-m", "litschema.ingest.resolve_entities"],
-            check=True,
-            env=env,
-        )
-
-
 @app.command("prepare-text", help="Prepare article markdown text from PDFs.")
 def prepare_text(
     ctx: typer.Context,
@@ -420,7 +380,6 @@ def mcp(
         f" · {summary.reviews_applied} review-override set(s) applied"
         f" ({summary.overrides_applied} field overrides)"
         f" · articles table: {len(summary.article_columns)} columns"
-        f" · {summary.authors_loaded} authors · {summary.institutions_loaded} institutions"
     )
     typer.echo(msg, err=err)
 

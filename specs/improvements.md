@@ -22,14 +22,10 @@ shims, no migrations — deletions land clean.
   `manual` protection tag — while `read_article_metadata` raises. Converge
   on raising loudly (the reviews capability already models this: lenient
   reads, refusing writes).
-- **Explore registries are permanently half-NULL**: `resolve_entities.py`
-  writes `ror_id`/`country`/`_openalex_id`; `explore/loader.py` reads
-  `ror`/`country_code`/`openalex_id`. The only producer/consumer pair
-  disagrees on key names and neither side is tested. Align + round-trip
-  test (or resolve via the harvest retirement below).
 - **Explore rebuild ignores schema edits**: `_needs_rebuild` watches the
-  article store and registries but not `schema_dir`, so column shapes go
-  silently stale after schema changes. Add the schema to the source set.
+  article store but not `schema_dir`, so column shapes go silently stale
+  after schema changes (`--rebuild` is the workaround). DEFERRED under the
+  explore freeze (`specs/explore/decisions.md`).
 - **`litschema validate a.json b.json` silently ignores `b.json`** — only
   `args[0]` is consumed. Accept multiple targets or reject extras.
 - **`/api/pdf` joins the manifest `filename` unsanitized** — a hand-edited
@@ -50,22 +46,12 @@ shims, no migrations — deletions land clean.
 
 ## 2. Delete (dead / superseded / broken surface)
 
-- **`harvest` retirement** (the largest single cleanup):
-  `crossref_harvest.py` output has ZERO consumers — delete the file and the
-  `--source crossref` leg outright. Promote the one live leg,
-  `resolve_entities`, to a first-class verb (or fold registry building into
-  the `mcp` store build) and fix its key mismatch on the way. Then delete
-  the `harvest` verb (OpenAlex enrichment is `meta sync --all`), its
-  subprocess plumbing, the three legacy console scripts
-  (`litschema-harvest-openalex`, `-crossref`, `litschema-resolve`), and the
-  `jellyfish` dep if resolve goes.
-- **`litschema-verify` console script is broken** — points at
-  `webapp.app:main`, which does not exist; installing and running it
-  crashes. Delete (the `litschema verify` verb is the real surface).
 - **Dead config keys**: `references_dir`, `tracking_xlsx` (paper-tracking
-  spreadsheet residue), `static_site_dir` — zero consumers. Delete the
-  dataclass fields, shrink every test `_cfg()` helper, and drop `openpyxl`
-  from runtime deps (nothing reads xlsx).
+  spreadsheet residue), `static_site_dir` — zero consumers — and `data_dir`,
+  which nothing reads since the explore-registry cut (it survives as a
+  layout convention only). Delete the dataclass fields, shrink every test
+  `_cfg()` helper, and drop `openpyxl` from runtime deps (nothing reads
+  xlsx).
 - **`schema_root` config key** — written by `init`, present in all
   fixtures, read by NOTHING. Drop from init output and fixtures. While
   there: promote `extraction_schema_file` from `cfg.raw` to a real field
@@ -136,8 +122,8 @@ shims, no migrations — deletions land clean.
   assets.
 - **Explore store carries no override provenance** — reviewed and raw
   values are indistinguishable in SQL, and cache-hit summaries print
-  "0 overrides applied" indistinguishably from truly zero. Add an
-  `overridden_fields` JSON column (or per-run "cached" summary wording).
+  "0 overrides applied" indistinguishably from truly zero. DEFERRED under
+  the explore freeze (`specs/explore/decisions.md`).
 - **`Project.article_dir` bypasses the id guard** — second unguarded
   path-join; delegate to `article_files` or delete the wrapper class.
 - **`agent record-extraction` accepts a bare directory** as a known
@@ -155,14 +141,14 @@ shims, no migrations — deletions land clean.
   `/api/article`, `/api/reasoning` happy paths.
 - `explore/server.py` entirely (tool registration, TSV truncation,
   read-only rejection, error-string contract) and the loader's mtime
-  cache-hit path + registry yaml ingestion.
+  cache-hit path. DEFERRED under the explore freeze.
 - `validate`'s error-marker skip (core skill contract, untested);
   reasoning-confidence bounds rejection (1.5 → invalid).
 - `prepare-text`'s `empty`/`errors`/`missing` paths, inbox-scan fallback,
   and manifest side-effect.
 - Assemble: idempotent re-drop of an already hash-suffixed article; the
   `.processed` archival OSError path.
-- Wheel entry points (would have caught the broken `litschema-verify`).
+- Wheel entry points and console-script importability.
 
 ## 6. Product-shaped (from earlier sessions, still open)
 

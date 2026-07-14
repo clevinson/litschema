@@ -11,7 +11,7 @@ layers, plus review state in its own file:
 
 | layer | keys | writer |
 |---|---|---|
-| identity | `id`, `filename`, `original_filename`, `file_sha256`, `added_at`, `open_access`, `extraction` | assemble, extraction provenance recording, harvest (`open_access` only) |
+| identity | `id`, `filename`, `original_filename`, `file_sha256`, `added_at`, `open_access`, `extraction` | assemble, extraction provenance recording, registry sync (`open_access` only) |
 | source metadata | the `source_metadata` block (below) | see "Writers" |
 | domain extraction | `agent-extraction.json` (sibling file) | the extraction agent |
 
@@ -74,14 +74,11 @@ framework.)
   marker — and the error points at `meta set` as the escape hatch).
   Overwrites any state (REPLACE semantics: a `doi` block contains only
   registry-supplied values); locks to `doi`.
-- `meta sync --all [--refresh] [--email ...]` — batch enrichment of every
-  assembled article with a DOI. Supersedes `harvest` for metadata
-  enrichment. Never touches `manual`; `--refresh` re-fetches past cached
-  responses and `not_found` markers. Transient registry failures are counted
-  (`errors`) and never cached, so affected articles stay retryable.
-- `harvest` — legacy full pipeline (OpenAlex + CrossRef supplement + entity
-  resolution for the explore store's author/institution registries). Prefer
-  `meta sync --all` for metadata.
+- `meta sync --all [--refresh] [--email ...]` — THE batch enrichment
+  surface: enriches every assembled article with a DOI. Never touches
+  `manual`; `--refresh` re-fetches past cached responses and `not_found`
+  markers. Transient registry failures are counted (`errors`) and never
+  cached, so affected articles stay retryable.
 
 **HTTP API** (verify webapp; in-process library calls, never the CLI):
 
@@ -99,7 +96,7 @@ have a DOI, with a `confirm()` only when the sync would overwrite `manual`.
 
 **Pipeline writers:** `assemble` seeds `{title}` from the PDF filename
 (`auto`). The extraction agent backfills bibliography read off the document
-(`auto` — see agent contract). `harvest` / sync write registry data (`doi`).
+(`auto` — see agent contract). Registry sync writes registry data (`doi`).
 
 **Agent contract** (for bundled skills, e.g. extract-article) is
 registry-first: if a DOI is printed on the document, run
@@ -121,14 +118,14 @@ protective default: machines will not touch it.
   `manual` or `doi`, THEN the write is refused (CLI exit 1) unless `--force`.
   WHEN a write carries `--source manual`, THEN it always succeeds — a human
   outranks every machine. (`can_overwrite` in `source_metadata.py`.)
-- **Consent by scope.** WHEN batch enrichment (`meta sync --all` / `harvest`)
+- **Consent by scope.** WHEN batch enrichment (`meta sync --all`)
   encounters a `manual` block, THEN it skips the article. WHEN per-article
   sync is invoked, THEN it may overwrite any state — invoking it IS the
   consent.
 - **`meta sync` is atomic.** WHEN a `meta sync` registry lookup fails or
   returns an unusable record, THEN the sync writes nothing at all — no
   manifest change, no cache marker — and any `--doi` passed to `meta sync` is
-  NOT recorded. (Batch harvest caches a `not_found` marker for true 404s
+  NOT recorded. (The batch sweep caches a `not_found` marker for true 404s
   only. `meta set --doi ... --sync` differs by design: the guarded DOI write
   lands FIRST and survives a failed lookup — that persistence is the point of
   the flag; the sync half itself still writes nothing on failure.)
@@ -157,7 +154,7 @@ domain repo may prune at leisure.
 ## Code map
 
 `src/litschema/source_metadata.py` (model + guard) ·
-`src/litschema/ingest/openalex_harvest.py` (`harvest`, `sync_article`) ·
+`src/litschema/ingest/openalex_harvest.py` (batch sweep, `sync_article`) ·
 `src/litschema/ingest/article_assembly.py` (seeding) ·
 `src/litschema/webapp/app.py` (endpoints) ·
 `src/litschema/webapp/static/index.html` (header) ·

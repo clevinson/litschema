@@ -60,7 +60,7 @@ litschema meta set <id> ...      # write it (--source auto|manual; --sync locks 
 litschema meta sync <id>|--all   # fetch + lock metadata from the DOI registry
 litschema validate [target]      # validate extractions against the schema (closed-world)
 litschema verify [--port 8000]   # local review webapp (loopback only)
-litschema mcp                    # build the DuckDB store and serve it over MCP
+litschema mcp                    # build the DuckDB store and serve it over MCP (experimental)
 litschema skills install         # install the agent skills globally
 litschema agent ...              # deterministic steps the extraction skill calls
 ```

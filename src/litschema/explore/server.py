@@ -120,10 +120,16 @@ def build_server(
             n = con.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]
             out.append(f"## {t} ({n} rows)")
             out.append("\n".join(col_lines))
-            sample = con.execute(f"SELECT * FROM {t} LIMIT 3").fetchdf()
-            if not sample.empty:
+            # fetchall, not fetchdf: pandas is not a runtime dependency.
+            rows = con.execute(f"SELECT * FROM {t} LIMIT 3").fetchall()
+            if rows:
+                header = [r[0] for r in cols_result]
                 out.append("\nsample:")
-                out.append(sample.to_string(index=False, max_colwidth=80))
+                out.append("\t".join(header))
+                for row in rows:
+                    out.append(
+                        "\t".join("" if v is None else str(v)[:80] for v in row)
+                    )
             out.append("")
         return "\n".join(out) or "(no tables)"
 

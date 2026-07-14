@@ -26,7 +26,7 @@ path resolves against the config file's own directory.
 | key | default | role |
 |---|---|---|
 | `project_root` | `.` | display root, git context, `.litschema/` runtime + cache dirs |
-| `data_dir` | `data` | home of the explore registries (`authors.yaml`, `institutions.yaml`) |
+| `data_dir` | `data` | layout convention (parent of the article store); not read directly by the framework |
 | `schema_dir` | `schema` | where the extraction schema lives |
 | `extraction_schema_file` | `extraction.yaml` | the schema file inside `schema_dir` |
 | `article_store_dir` | `data/papers` | the article store (`specs/article-store`) |
@@ -63,8 +63,7 @@ Validation everywhere is closed-world: unknown properties are rejected.
 
 - Exit codes: **0** success, **1** operation/validation failure, **2**
   usage or configuration error, **130** interrupted (resumable).
-- Verbs run in-process (no shelling out to sibling commands); the one
-  exception is the legacy `harvest` pipeline (scheduled for removal).
+- Verbs run in-process (no shelling out to sibling commands).
 - `--config/-c` (or `LITSCHEMA_CONFIG`) applies to every project-scoped
   verb.
 
@@ -79,7 +78,6 @@ Validation everywhere is closed-world: unknown properties are rejected.
 | `mcp` | yes | `specs/explore` |
 | `skills install` | no — standalone | `specs/onboarding` |
 | `extract` | no | stub: exits 2 pointing at the agent skills |
-| `harvest` | yes | legacy, superseded by `meta sync --all`; removal tracked in the improvements backlog |
 
 **`status`** prints counts: schema presence, inbox PDFs, manifests,
 prepared markdown, extractions, reasoning files, reviews (currently labeled

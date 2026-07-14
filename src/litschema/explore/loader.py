@@ -17,7 +17,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-import yaml
 from linkml_runtime.utils.schemaview import SchemaView
 
 from ..articles import (
@@ -35,8 +34,6 @@ class LoadSummary:
     extractions_loaded: int
     reviews_applied: int
     overrides_applied: int
-    authors_loaded: int
-    institutions_loaded: int
     article_columns: list[tuple[str, str]]  # (column_name, sql_type)
     db_path: Path
 
@@ -214,73 +211,6 @@ def _insert_articles(
         con.executemany(sql, rows)
 
 
-def _insert_registries(
-    con: Any,
-    authors: list[dict],
-    institutions: list[dict],
-) -> None:
-    """Generic registries — these classes are part of schema-base, not domain.
-
-    Both tables carry a `_raw JSON` column for any domain-specific
-    fields beyond the well-known scalars.
-    """
-    con.execute("DROP TABLE IF EXISTS authors")
-    con.execute(
-        """
-        CREATE TABLE authors (
-            id            VARCHAR PRIMARY KEY,
-            family_name   VARCHAR,
-            given_name    VARCHAR,
-            orcid         VARCHAR,
-            openalex_id   VARCHAR,
-            _raw          JSON
-        )
-        """
-    )
-    if authors:
-        con.executemany(
-            "INSERT INTO authors VALUES (?, ?, ?, ?, ?, ?)",
-            [
-                (
-                    a.get("id"),
-                    a.get("family_name"),
-                    a.get("given_name"),
-                    a.get("orcid"),
-                    a.get("openalex_id"),
-                    json.dumps(a),
-                )
-                for a in authors
-            ],
-        )
-
-    con.execute("DROP TABLE IF EXISTS institutions")
-    con.execute(
-        """
-        CREATE TABLE institutions (
-            id              VARCHAR PRIMARY KEY,
-            name            VARCHAR,
-            ror             VARCHAR,
-            country_code    VARCHAR,
-            _raw            JSON
-        )
-        """
-    )
-    if institutions:
-        con.executemany(
-            "INSERT INTO institutions VALUES (?, ?, ?, ?, ?)",
-            [
-                (
-                    i.get("id"),
-                    i.get("name"),
-                    i.get("ror"),
-                    i.get("country_code"),
-                    json.dumps(i),
-                )
-                for i in institutions
-            ],
-        )
-
-
 # ── Rebuild detection + main entry ─────────────────────────────────────────
 
 
@@ -313,18 +243,11 @@ def build_store(
     """
     import duckdb
 
-    authors_path = cfg.data_dir / "authors.yaml"
-    institutions_path = cfg.data_dir / "institutions.yaml"
-
     if db_path is None:
         db_path = cfg.project_root / ".litschema" / "explore.duckdb"
     db_path.parent.mkdir(parents=True, exist_ok=True)
 
-    sources = [
-        cfg.article_store_dir,
-        authors_path,
-        institutions_path,
-    ]
+    sources = [cfg.article_store_dir]
     if not force_rebuild and not _needs_rebuild(db_path, sources):
         con = duckdb.connect(str(db_path))
         try:
@@ -336,8 +259,6 @@ def build_store(
                     return 0
 
             n_articles = _count("articles")
-            n_authors = _count("authors")
-            n_institutions = _count("institutions")
             cols = con.execute(
                 "SELECT column_name, data_type FROM information_schema.columns "
                 "WHERE table_name='articles' ORDER BY ordinal_position"
@@ -349,8 +270,6 @@ def build_store(
                 extractions_loaded=n_articles,
                 reviews_applied=0,  # unknown on cache-hit
                 overrides_applied=0,
-                authors_loaded=n_authors,
-                institutions_loaded=n_institutions,
                 article_columns=[(c[0], c[1]) for c in cols],
                 db_path=db_path,
             )
@@ -381,18 +300,12 @@ def build_store(
             overrides_applied += applied
         records.append(data)
 
-    authors = yaml.safe_load(authors_path.read_text()) if authors_path.exists() else []
-    institutions = (
-        yaml.safe_load(institutions_path.read_text()) if institutions_path.exists() else []
-    )
-
     if db_path.exists():
         db_path.unlink()
     con = duckdb.connect(str(db_path))
     try:
         _create_articles_table(con, columns, id_slot)
         _insert_articles(con, columns, records)
-        _insert_registries(con, authors or [], institutions or [])
     finally:
         con.close()
 
@@ -400,8 +313,6 @@ def build_store(
         extractions_loaded=len(records),
         reviews_applied=reviews_applied,
         overrides_applied=overrides_applied,
-        authors_loaded=len(authors or []),
-        institutions_loaded=len(institutions or []),
         article_columns=[(name, sql_type) for name, sql_type, _j in columns],
         db_path=db_path,
     )
