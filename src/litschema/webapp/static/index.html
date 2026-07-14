@@ -5602,7 +5602,8 @@ $("#btn-pdf").addEventListener("click", () => {
   if (!state.currentId) return;
   const meta = state.articles.find(a => a.article_id === state.currentId);
   // Static deploy (no server) uses DOI; local uses PDF API
-  const isStatic = location.protocol === "file:" || !location.origin.includes("localhost");
+  const isLocalHost = location.hostname === "localhost" || location.hostname === "127.0.0.1";
+  const isStatic = location.protocol === "file:" || !isLocalHost;
   if (isStatic && meta && meta.doi) {
     window.open(`https://doi.org/${meta.doi}`, "_blank");
   } else {

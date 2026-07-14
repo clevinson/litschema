@@ -14,6 +14,13 @@ def test_verifier_uses_litschema_verify_branding() -> None:
     assert "ERW Extraction Verifier" not in html
 
 
+def test_verifier_pdf_button_treats_127_0_0_1_as_local() -> None:
+    html = STATIC_HTML.read_text()
+
+    assert 'location.hostname === "127.0.0.1"' in html
+    assert '!location.origin.includes("localhost")' not in html
+
+
 def test_verifier_defaults_to_review_table_with_mode_switcher() -> None:
     html = STATIC_HTML.read_text()
 
