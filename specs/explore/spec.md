@@ -1,107 +1,146 @@
-# Capability: explore (experimental)
+# Capability: explore and export
 
-The consumable projections of the reviewed truth: `litschema export` writes
-it as flat files (JSONL/CSV), and `litschema mcp` serves a schema-derived
-DuckDB database over MCP. Both are built from the same record definition —
-`load_reviewed_records`: error markers skipped, review overrides applied,
-identifier backfilled.
+Status: approved target.
 
-**Status: experimental — deliberately frozen pending user signal.** The
-thesis (SQL over the reviewed truth) is core to the product, but the right
-table projection depends on how people actually query the data, which no
-user has shown us yet. The current shape is kept minimal and correct;
-further investment (provenance columns, per-experiment projections, a
-human-facing query surface) waits for one of the revisit triggers in
-`decisions.md`.
+Export is the stable analysis surface. The experimental DuckDB/MCP projection
+remains deliberately frozen. Both consume the article store; neither becomes an
+authority for runs, reviews, or schema history.
 
-## The store
+## Record resolution
 
-`<project_root>/.litschema/explore.duckdb` (override: `--db-path`). Derived,
-never authoritative — delete it freely; the article store and review files
-are the source of truth.
+For each article, consumers resolve `active-run.json` and read extraction,
+reasoning, metadata, and review from that one run. They never combine artifacts
+from different runs. An article with no active run is skipped and counted. A
+broken active pointer is an integrity error and fails the operation.
 
-One table, named `articles` (not derived from the schema's tree-root class
-name): one row per article with a valid extraction (error markers
-excluded). Columns come from the schema's induced slots:
+The review overlay is applied before projection under
+`specs/reviews/spec.md`. Property and container removal omits the property.
+Array-element removal writes a structural JSON `null` tombstone and never
+splices the array. A whole-array replace establishes a new effective array and
+index basis; otherwise indexes remain those of the raw active-run array. Raw
+values remain in the immutable run artifact.
 
-- the `identifier: true` slot → PRIMARY KEY, backfilled from the article
-  directory name when absent in the record;
-- scalar slots → typed columns (integer → BIGINT, float/double/decimal →
-  DOUBLE, boolean, date/time kinds, everything else VARCHAR — enums are
-  strings);
-- multivalued or class-ranged slots → JSON columns;
-- extraction keys not in the schema are dropped.
+## Export views
 
-**Review overrides are baked in.** Each article's extraction is deep-copied
-and every `override_value` from `review.json` is applied before loading —
-including the `__remove__` sentinel, which deletes dict fields and nulls
-list slots (`specs/reviews/spec.md`). The store therefore reflects the
-reviewed truth, not the raw agent output. There are no provenance columns;
-overridden values are indistinguishable in-store (deferred with the freeze).
+`litschema export --view all|audited [--format jsonl|csv] [--output PATH]
+[--audit-output PATH]` defaults to `--view all`.
 
-**Rebuild semantics**: the store is reused when it exists, is non-empty, and
-is newer than every file under the article store; `--rebuild` forces.
-Schema edits do NOT currently trigger a rebuild (known gap, deferred with
-the freeze — use `--rebuild` after schema changes).
+### All-data
 
-## Export: `litschema export`
+All-data contains every active-run extraction value after applying the review
+overlay. Unreviewed values remain present. An element-level remove therefore
+appears as `null` at its original index; a property remove is absent. Because
+structural tombstones may violate the extraction schema's non-null contract,
+all-data is an analysis projection rather than a replacement run artifact.
 
-`litschema export [--format jsonl|csv] [--output PATH]` writes the reviewed
-records to stdout (pipeable) or a file; a summary line goes to stderr.
+### Audited-data
 
-- **jsonl** (default): one record per line, keys sorted — ready for pandas,
-  jq, or an agent to read directly.
-- **csv**: the same schema-driven shaping as the DuckDB columns — scalar
-  slots as plain cells, multivalued/class-ranged slots as JSON strings,
-  absent slots empty. Ready for R or a spreadsheet.
+Audited-data contains only effectively verified or overridden leaves. Ancestor
+verification includes descendants; a terminal container override contributes
+its complete effective replacement or removal. Necessary containers are
+reconstructed.
 
-Unknown formats and missing/rootless schemas are exit 2 with a one-line
-remedy. This is the stable, dependency-free consumer surface; the SQL layer
-below is the experimental one.
+Arrays use the same effective index basis as all-data. They retain their full
+basis length: an unaudited element and a reviewed element removal both appear as
+structural `null`. The compact audit sidecar distinguishes those cases. A partly
+audited object item contains its audited descendants plus structural identity
+slots.
 
-## The MCP server
+The root `identifier: true` slot and the identifier slot of each included
+class-valued array item are retained using their effective post-replace values.
+The review contract rejects identifier removal, so export never reconstructs a
+missing identity. Retained identifiers, ancestors, and null placeholders do not
+become reviewed state. Audited output is not a schema-valid replacement
+extraction.
+Articles with neither an audited value nor an explicit remove decision are
+omitted and counted. A remove-only article retains its root identifier in data
+output and its remove decision in audit output.
 
-`litschema mcp [--rebuild] [--db-path P] [--transport stdio|http] [--port
-8765] [--max-rows 200]` — builds the store, prints a load summary (to
-stderr under stdio so MCP framing stays clean), then serves three tools:
+## Compact audit output
 
-- `run_sql(query)` — arbitrary SQL, TSV out, truncated at `--max-rows` with
-  a hint line; engine errors return as `ERROR: <type>: <message>` strings
-  rather than raising.
-- `describe_schema()` — tables, columns, row counts, sample rows (plain
-  tab-separated text; no pandas dependency).
-- `get_linkml_schema()` — the project's raw schema YAML, for semantic
-  grounding of column meanings.
+`--audit-output PATH` writes JSONL independently of the data format. Each article included by the selected view has one compact record. Audited
+remove-only articles are included:
 
-Read-only is enforced at the engine level (`duckdb.connect(read_only=True)`)
-— deliberately no query-text filtering, which is documented in the module as
-the honest enforcement point.
+```json
+{
+  "article_id": "beerling-2024",
+  "run_id": "01J2Q4Y7Y9K0M3T6W8X1Z5A9BC",
+  "schema_sha256": "sha256:…",
+  "fields": {
+    "experiments[0]": {},
+    "experiments[0].ph": {
+      "override": {"op": "replace", "value": 6.5}
+    }
+  }
+}
+```
+
+`fields` is the canonical stored review frontier from
+`specs/reviews/spec.md`. Export never expands parent coverage into redundant
+descendant entries. Data output also never embeds per-leaf audit flags. The
+run ID and schema hash make the sidecar reproducible against the local store and
+Git history.
+
+JSONL data records retain schema-root shape and sorted keys. CSV uses
+schema-derived scalar columns and JSON strings for multivalued or class-valued
+slots. A nested or multivalued audited value preserves placeholder positions as
+literal JSON `null` inside that string, such as `[null,{"id":"b"}]`. An empty CSV cell means the top-level slot is absent; it never represents an
+array placeholder. User replace values cannot be null, so a present top-level
+scalar null cannot occur. Structural null is valid only inside serialized
+arrays. The audit sidecar distinguishes unaudited absence from reviewed
+removal. Repeated export against unchanged active selections and reviews is
+byte-deterministic.
+
+## DuckDB and MCP
+
+`.litschema/explore.duckdb` is derived and disposable. The `articles` table
+uses the all-data view: one active run per article, identifier backfilled,
+schema scalar slots typed, and nested slots stored as JSON. Review provenance
+is not added to DuckDB while the experimental freeze remains; audited analysis
+uses export.
+
+`litschema mcp [--rebuild] [--db-path PATH] [--transport stdio|http]
+[--port 8765] [--max-rows 200]` builds or reuses the store, then serves:
+
+- `run_sql(query)`, returning bounded TSV and engine errors as data;
+- `describe_schema()`, returning tables, columns, counts, and samples;
+- `get_linkml_schema()`, returning the current raw schema YAML.
+
+Read-only enforcement belongs at the database connection, not query-text
+filtering. Load summaries stay off stdout under stdio so MCP framing remains
+valid. Schema-edit cache invalidation remains a separate deferred explore
+concern; required schema provenance in `run.json` does not unfreeze it.
 
 ## Invariants
 
-- **Derived, disposable.** WHEN the DuckDB file is deleted, THEN the next
-  `mcp` run rebuilds it losslessly from the store.
-- **Schema drives shape.** WHEN a slot is multivalued or class-ranged, THEN
-  its column is JSON; WHEN scalar, THEN typed; WHEN `identifier`, THEN
-  primary key. (`test_loader_scenarios.py`)
-- **Reviewed truth, one definition.** WHEN a field has a review
-  `override_value`, THEN the store and every export carry the override (or
-  omit the field, for `__remove__`) — never the raw extracted value; both
-  surfaces share `load_reviewed_records`.
-  (`test_loader_article_layout.py`, `test_review_overrides.py`,
-  `test_export.py`)
-- **Writes are impossible.** WHEN a tool submits INSERT/UPDATE/etc., THEN
-  the read-only engine rejects it — no query-parsing gate to bypass.
-- **No dependencies beyond the declared ones.** WHEN litschema is
-  pip-installed, THEN every MCP tool works — nothing in this layer imports
-  packages outside the runtime dependency set.
+- Each record comes from exactly one article's active run.
+- Missing active selection is counted; a broken pointer fails loudly.
+- All-data applies overrides without dropping unreviewed values.
+- Audited-data excludes unreviewed leaves and honors inherited coverage.
+- Raw run artifacts remain unchanged and recoverable.
+- Audit serialization is the compact canonical frontier, never expanded
+  descendant state.
+- Export is deterministic.
+- DuckDB remains derived, read-only, and non-authoritative.
 
-## Code map
+## Test obligations
 
-`src/litschema/explore/loader.py` (record definition, derivation,
-overrides, rebuild) · `src/litschema/export.py` (flat-file export) ·
-`src/litschema/explore/server.py` (MCP tools) · `src/litschema/cli.py`
-(`export` and `mcp` verbs). Tests: `test_export.py`,
-`test_loader_scenarios.py`, `test_loader_article_layout.py`,
-`test_review_overrides.py` (server.py is untested — accepted under the
-freeze).
+Implementation coverage must pin:
+
+- per-article active-run resolution and mixed run IDs across a corpus;
+- skip/count behavior for no active run and failure for broken pointers;
+- refusal to combine extraction, reasoning, or review from different runs;
+- all-data property/container removal, whole-array replacement, element null
+  tombstones, and stable non-splicing indexes;
+- audited inclusion from exact and parent reviews, terminal container
+  overrides, object reconstruction, shared array basis, unaudited-versus-remove
+  nulls, and structural identity slots;
+- omission of articles with no audited decisions and retention of remove-only
+  articles;
+- compact audit sidecars with run/schema provenance and no expanded leaves;
+- deterministic JSONL and CSV, including literal JSON null placeholders, empty
+  top-level cells, identifier replacement and removal refusal, audit-sidecar
+  disambiguation, summaries, and repeated exports;
+- schema-derived CSV/DuckDB shaping;
+- read-only MCP rejection and separation of deferred DuckDB schema staleness
+  from required run provenance.

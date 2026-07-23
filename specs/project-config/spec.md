@@ -1,112 +1,104 @@
-# Capability: project config & CLI shell
+# Capability: project config and CLI shell
 
-How a litschema project is found and described (`litschema.yaml`), how the
-extraction schema is resolved, and the conventions every CLI verb shares.
-Documented as-built from the 2026-07-07 audit.
+Status: approved target.
 
-## Config discovery
+This spec owns project discovery, the one current LinkML extraction schema,
+schema identity, and conventions shared by CLI verbs. Run storage is owned by
+`specs/article-store/spec.md`.
 
-`litschema.yaml` is found in this order (first hit wins):
+## Config discovery and paths
 
-1. An explicit path (`--config/-c` on the CLI).
-2. The `LITSCHEMA_CONFIG` environment variable.
-3. An upward walk from the current directory (every parent is checked).
-4. An upward walk from the installed package's own directory — a fallback
-   for scripts that `cd` elsewhere (flagged for removal: surprising in
-   installed layouts; improvements backlog).
+`litschema.yaml` is found in this order: explicit `--config/-c`,
+`LITSCHEMA_CONFIG`, an upward walk from the current directory, then the current
+installed-package fallback walk. Relative paths resolve against the config
+file, never the caller's working directory. Missing discovery exits 2 with an
+`init` remedy; an invalid explicit path fails directly.
 
-Failures raise `ConfigNotFoundError`; the CLI renders it and exits 2 with a
-"run `litschema init`" hint when discovery (not an explicit path) failed.
-
-## Config keys
-
-All keys are optional; an empty file is a valid project. Every relative
-path resolves against the config file's own directory.
+Core keys and defaults:
 
 | key | default | role |
 |---|---|---|
-| `project_root` | `.` | display root, git context, `.litschema/` runtime + cache dirs |
-| `data_dir` | `data` | layout convention (parent of the article store); not read directly by the framework |
-| `schema_dir` | `schema` | where the extraction schema lives |
-| `extraction_schema_file` | `extraction.yaml` | the schema file inside `schema_dir` |
-| `article_store_dir` | `data/papers` | the article store (`specs/article-store`) |
-| `paper_inbox_dir` | `papers-inbox` | intake drop zone |
+| `project_root` | `.` | Git context and `.litschema/` runtime files |
+| `data_dir` | `data` | layout convention; not read directly |
+| `schema_dir` | `schema` | schema directory |
+| `extraction_schema_file` | `extraction.yaml` | the one current schema file |
+| `article_store_dir` | `data/papers` | article store |
+| `paper_inbox_dir` | `papers-inbox` | PDF intake |
 
-Unknown keys are preserved on `cfg.raw` (escape hatch for domain repos).
+Unknown keys are preserved for domain repositories. `references_dir`,
+`tracking_xlsx`, `static_site_dir`, and `schema_root` still parse but have no
+consumer and must not be used. No config key may select a schema version or
+maintain schema history.
 
-Vestigial keys that still parse but have no consumer — scheduled for
-removal, do not use: `references_dir`, `tracking_xlsx`, `static_site_dir`,
-and `schema_root` (still written by current `init` scaffolds; never read).
+## One current schema
 
-## Schema resolution
+`schema_dir/<extraction_schema_file>` is the project's only current LinkML
+extraction schema. Resolution loads it with the LinkML Python API and requires
+exactly one locally defined class with `tree_root: true`. Validation is
+closed-world. The extraction schema imports no project or framework schema
+files; the configured file is the complete schema identity. Templates may be
+copied into that file as starting material.
 
-The extraction schema is `schema_dir/<extraction_schema_file>`. Resolution
-loads it as a LinkML `SchemaView` and selects the root class: **exactly one
-locally-defined class with `tree_root: true`** — imported classes never
-count, so a base class from a library import must be subclassed (or
-re-asserted) locally to become the root. Zero or multiple roots is an error.
+Git is the schema and domain-context history. Runs record, but do not copy, the
+current schema. Parallel versioned schema files, run-local schema files, and an
+`extraction_class` override are not supported history mechanisms.
 
-Conventions the framework assumes of project schemas:
-
-- one local `tree_root: true` class = the per-document extraction record;
-- an `identifier: true` slot on it (any name; `article_id` by convention) —
-  the explore store makes it the primary key and backfills it from the
-  article directory name;
-- enums for controlled vocabularies (drives the verifier's dropdown
-  editors);
-- scalar slot ranges drive explore column types; multivalued or
-  class-ranged slots become JSON columns.
-
-Validation everywhere is closed-world: unknown properties are rejected.
+Schema identity is the SHA-256 digest of the configured schema file's exact
+bytes, written as `sha256:<hex>`. The full Git commit is recorded only when the
+current bytes match the committed path. An untracked, modified, or unavailable
+Git state records a null commit and `schema_dirty: true`. Equal schema hashes
+define a same-schema rerun; unequal hashes define a schema upgrade. The
+refinement workflow requires a committed schema checkpoint before it can be
+declared complete.
 
 ## CLI conventions
 
-- Exit codes: **0** success, **1** operation/validation failure, **2**
-  usage or configuration error, **130** interrupted (resumable).
-- Verbs run in-process (no shelling out to sibling commands).
-- `--config/-c` (or `LITSCHEMA_CONFIG`) applies to every project-scoped
-  verb.
+- Exit 0: success; 1: operation or validation failure; 2: usage or
+  configuration error; 130: interrupted and resumable.
+- Project-scoped verbs honor `--config/-c` and `LITSCHEMA_CONFIG`.
+- Verbs call shared Python APIs in process rather than shelling out to sibling
+  commands.
+- Missing explicit file targets fail. A no-argument validation command may
+  discover all configured outputs.
 
-| verb | needs a project? | spec |
-|---|---|---|
-| `init` | creates one | `specs/onboarding` |
-| `status`, `doctor` | yes | below |
-| `assemble`, `prepare-text` | yes | `specs/article-store` |
-| `validate`, `agent *` | yes (except `agent validate-reasoning`) | `specs/extraction` |
-| `meta show/set/sync` | yes | `specs/source-metadata` |
-| `verify` | yes | `specs/verifier` |
-| `export`, `mcp` | yes | `specs/explore` |
-| `skills install` | no — standalone | `specs/onboarding` |
-| `extract` | no | stub: exits 2 pointing at the agent skills |
+| verb | normative owner |
+|---|---|
+| `init`, `skills install` | `specs/onboarding` |
+| `assemble`, `prepare-text`, `runs *` | `specs/article-store` |
+| `validate`, `agent *` | `specs/extraction` |
+| `meta *` | `specs/source-metadata` |
+| `verify` | `specs/verifier` |
+| `export`, `mcp` | `specs/explore` |
 
-**`status`** prints counts: schema presence, inbox PDFs, manifests,
-prepared markdown, extractions, reasoning files, reviews (currently labeled
-"annotations" — naming cleanup tracked). Always exit 0.
-
-**`doctor`** checks Python ≥ 3.13, `uv` on PATH, the schema dir, litschema's
-bundled skills (project-local `.claude/skills/` first, then global —
-unrelated skills are not a green light), and an agent CLI on PATH. Exit 1
-with a remediation list when anything fails; 0 otherwise.
+`status` reports schema presence plus inbox, article, prepared-text,
+live-run, active-run, trashed-run, current-schema-active, and reviewed-active
+counts and exits 0. `doctor` checks Python and `uv`, schema resolution,
+project-local then global litschema skills, and an agent CLI. It exits 1 with
+remedies when a check fails. Neither command changes run selection.
 
 ## Invariants
 
-- **Relative paths are config-relative.** WHEN litschema.yaml lives
-  somewhere other than the cwd, THEN its relative paths still resolve
-  against the file, not the invoker. (`test_smoke.py`)
-- **One root class.** WHEN a project schema has zero or multiple local
-  `tree_root` classes, THEN resolution fails loudly rather than guessing.
-  (`test_schema_resolution.py`)
-- **Usage errors are exit 2, never tracebacks.** WHEN a verb is invoked
-  with a bad combination of flags, an unknown article, or no project, THEN
-  it prints a one-line remedy and exits 2.
-- **Doctor counts only litschema's skills.** WHEN unrelated skills live in
-  the same directories, THEN doctor still reports litschema's as missing.
-  (`test_init_onboarding.py`)
+- Relative paths are config-relative.
+- Exactly one local `tree_root: true` class identifies the extraction root.
+- One configured schema file is current; Git is its only history.
+- Schema hashing is deterministic and independent of the working directory.
+- Same-schema and schema-upgrade lineage follow hash equality, not filenames or
+  timestamps.
+- Usage errors are concise exit-2 failures, not tracebacks.
 
-## Code map
+## Test obligations
 
-`src/litschema/config.py` (discovery, keys) · `src/litschema/project.py`
-(thin wrapper) · `src/litschema/schema_resolution.py` ·
-`src/litschema/schema_validation.py` (closed-world validators, atomic JSON
-writes) · `src/litschema/cli.py` (shell). Tests: `test_smoke.py`,
-`test_schema_resolution.py`, `test_configured_schema_cli.py`.
+Implementation coverage must pin:
+
+- discovery precedence and config-relative paths;
+- zero, one, and multiple local tree roots;
+- closed-world validation and missing explicit-target failure;
+- deterministic byte hashing, full clean commit capture, dirty/untracked
+  handling, and Git-unavailable handling;
+- rejection of schema imports, parallel schema-history configuration, and
+  run-local schemas;
+- hash-based same-schema versus upgrade classification;
+- common exit codes and project-scoped config flags;
+- status counts across missing, active, reviewed, trashed, and
+  current-schema-active runs;
+- doctor failures for schema and skill resolution.

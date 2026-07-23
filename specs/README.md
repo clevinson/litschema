@@ -9,32 +9,51 @@ Capability specifications for litschema. Loosely inspired by
 ```
 specs/
   <capability>/
-    spec.md        # CURRENT TRUTH: architecture, user surface, invariants
+    spec.md        # normative contract, with explicit status
     decisions.md   # append-only, dated decision log (ADR-lite)
 ```
 
-- **`spec.md` describes what IS built, not what might be.** It is the canonical
-  reference for a shipped capability: its data model, every user-facing surface
-  (CLI verbs, HTTP endpoints, UI affordances, pipeline writers), and the
-  invariants the implementation upholds. Behavioral requirements use WHEN/THEN
+- **`spec.md` is the normative contract.** A status line says `current`,
+  `approved target`, or `draft`. `current` describes shipped behavior.
+  `approved target` records an accepted behavior change before implementation;
+  its implementation and tests may lag, but competing current prose must be
+  removed. `draft` is not approved. Behavioral requirements use WHEN/THEN
   phrasing where precision matters.
-- **`spec.md` is updated in the same commit/PR as any behavior change.** A PR
-  that changes a capability's surface or invariants without updating its spec
-  is incomplete. The test suite is the executable form of the invariants; the
-  spec is the legible form.
+- **Specs record test obligations.** An approved target must name the behavior
+  that implementation tests will pin. A behavior PR is incomplete until those
+  tests pass and the status becomes `current`.
 - **`decisions.md` records why.** Each entry is dated and states the context,
   the decision, the rationale, and the alternatives rejected. Entries are never
   rewritten — a reversed decision gets a new entry that supersedes the old one.
+
+## Normative ownership
+
+- `article-store`: article identity, run layout, active selection, trash, and
+  run CLI safety;
+- `project-config`: the current schema, schema identity, discovery, and shared
+  CLI rules;
+- `extraction`: extraction/reasoning contents, validation, and publication
+  inputs;
+- `reviews`: stored and effective review state, hierarchy, and reconciliation;
+- `onboarding`: first-run flow;
+- `refinement`: its durable workflow ledger, same-schema reruns, schema
+  upgrades, and `/litschema-refine`;
+- `explore`: export views, audit sidecars, DuckDB, and MCP;
+- `verifier`: web routes, read surfaces, and frontend constraints;
+- `source-metadata`: bibliographic data and provenance.
+
+Other specs cross-link these rules instead of redefining them.
 
 ## Alpha status: no backwards compatibility
 
 litschema is pre-release alpha software. Until a release with a version
 number has been published:
 
-- Specs describe the CURRENT format and behavior only. Capability specs must
-  not document legacy formats, fallbacks, or compatibility shims.
-- Backwards compatibility and in-framework migrations are explicit
-  non-goals. Format changes land clean.
+- Specs describe either current behavior or one explicitly approved target.
+  They do not document legacy fallbacks or runtime compatibility shims.
+- Backwards compatibility and legacy-format migration inside the framework are
+  non-goals. Format changes land clean. Conservative review reconciliation
+  between first-class runs is current product behavior, not legacy support.
 - Existing corpus data is updated in its own (domain) repo when a format
   changes — typically agent-driven, using the framework's own CLI as the
   write surface.
@@ -43,10 +62,9 @@ This section is superseded the day a versioned release ships.
 
 ## Process for new features
 
-Start a new capability folder with a draft `spec.md` — the proposal IS the
-first version of the truth, refined during review, and merged when the
-implementation lands. There is no separate change-proposal tree yet; one will
-be added if parallel in-flight features ever make drafts-vs-truth ambiguous.
+Start a capability folder with a draft `spec.md`. After human approval, mark it
+`approved target`; implementation follows in a later change. Mark it `current`
+only after its test obligations pass. There is no separate proposal tree.
 
 ## For agents
 

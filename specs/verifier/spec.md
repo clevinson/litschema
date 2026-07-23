@@ -1,91 +1,190 @@
 # Capability: verifier
 
-`litschema verify` — the local review webapp. The bibliographic header is
-`specs/source-metadata/spec.md`; the review model, annotation endpoints, and
-typed editors are `specs/reviews/spec.md`. This spec covers everything else:
-the read endpoints, the queue, the filter language and its trust boundary,
-and the launch posture. Documented as-built from the 2026-07-07 audit.
+Status: approved target.
 
-## Launch
+`litschema verify` is the loopback-only human review application. It consumes
+active runs and run-bound reviews but does not own their storage or lifecycle.
+Source metadata is owned by `specs/source-metadata/spec.md`.
 
-`litschema verify [--port/-p 8000]` starts uvicorn bound to **127.0.0.1
-only** (never exposed beyond loopback) and opens the browser once. Config is
-injected via app state; launching the app any other way fails loudly. Every
-endpoint maps traversal-shaped article ids to HTTP 404 via the
-`InvalidArticleIdError` handler.
+## Launch and distribution
 
-## Read endpoints
+`litschema verify [--port/-p 8000]` binds `127.0.0.1` and opens one browser
+window. There is no public-bind flag. Project configuration is injected through
+application state; invalid article and run IDs return 404 rather than escaping
+the store.
 
-- `GET /` — the single-file frontend (`static/index.html`).
-- `GET /api/articles` — the queue. One entry per manifest in the store
-  (sorted by article id), regardless of extraction state:
-  - always: `article_id`, `doi`, `title`, `year`, `journal`, `authors[]`,
-    `corporate_author`, `metadata_source`;
-  - `has_extraction` (false for missing, unparseable, or error-marked
-    extractions), `confidence` (overall, from `agent-reasoning.json`, else
-    null);
-  - extracted articles add `study_types`, `focus_areas`, `document_type`,
-    `n_setups`, and review progress: `n_fields` (extraction leaf count),
-    `n_reviewed`, `n_verified`, `n_flagged`, `is_complete`, `has_flags`
-    (reviews whose paths no longer exist in the extraction are excluded
-    from counts). Several of these fields are ERW-schema passthroughs in a
-    generic surface — cleanup tracked in the improvements backlog.
-- `GET /api/article/{id}` — the raw extraction JSON; 404 when absent.
-- `GET /api/markdown/{id}` — the prepared text with the references section
-  stripped (`strip_references`: truncates from the last references-like
-  heading unless primary-content headings follow it); 404 when absent.
-- `GET /api/reasoning/{id}` — the raw reasoning JSON; 404 when absent.
-- `GET /api/pdf/{id}` — the article PDF: canonical `<id>.pdf` first, then
-  the manifest `filename` under the article dir, then the inbox; 404
-  otherwise.
-- `GET /api/orcid/{orcid_id}` — the app's ONLY outbound network call:
-  resolves a (regex-validated, URL-form-normalized) ORCID iD to a display
-  name via `pub.orcid.org`, 8-second timeout; 400 invalid id, 404 unknown,
-  502 anything else. Used by the reviewer-identity modal.
-- `GET /api/schema/fields` — editor metadata (`specs/reviews/spec.md`).
+The frontend has no framework and no build step. The current static monolith is
+split into native ES modules. Third-party JavaScript, components, fonts, and
+styles previously loaded from CDNs are pinned, vendored with license/source
+records, included in distributions, and served locally. Core summary, document,
+review, and run views work without network access. Explicit ORCID lookup may
+remain an optional outbound action and must fail without breaking offline
+review.
 
-## The frontend
+## Hash routes
 
-Single HTML file, no build step. Layout: toolbar (article picker, prev/next,
-filter, view-mode, theme) over two panels — the document (markdown with line
-numbers, in-document search, PDF button, bibliographic header) and the
-extraction review (review table / overview table / JSON tree) — plus a
-docked evidence overlay showing the selected field's value, confidence dot,
-reasoning, and source-line cycling. View state (`view`, `overview`) and the
-queue filter persist in the URL; unextracted articles render a placeholder
-(`specs/reviews/spec.md`).
+One application shell exposes three route-level pages:
 
-**Queue filter = JavaScript, deliberately.** The filter box compiles its
-expression with `new Function` and runs it against each article's summary
-(deep fields lazy-loaded on first use). This is a power feature for a
-local, single-user tool, and it is NOT a sandbox: **filter expressions are
-code**, they run with full page privileges, and they arrive via the
-shareable `?filter=` URL parameter. The trust boundary is the URL bar — do
-not open verifier links from sources you wouldn't paste into the console.
-(Tightening options tracked in the improvements backlog.)
+| route | purpose |
+|---|---|
+| `#/` | dataset summary and work queue |
+| `#/doc/{article-id}` | one document's active-run review |
+| `#/runs` | minimal run and refinement visibility |
 
-Keyboard: Cmd+]/Cmd+[ cycle articles; n/p or arrow keys cycle evidence for
-the selected field; Enter/Shift+Enter step search hits; Escape clears.
+Routes are deep-linkable and survive reload. Filter, sort, and view state use
+fragment query parameters and travel from the summary to a document route.
+Next/previous follows that encoded queue. A direct document link without queue
+state falls back to article-ID order. If a later filter excludes the open
+article, the document remains open and next/previous enters the new queue.
+Unknown routes render a recoverable not-found view.
+
+### Dataset summary
+
+The summary lists every assembled article, including articles with no active
+run. It reports source metadata, active run ID, active schema hash, extraction
+and reasoning availability, effective review progress, override count, and
+whether the article needs refinement attention. Metrics are schema-derived; no
+ERW field names are hard-coded.
+
+### Progress metrics
+
+`specs/reviews/spec.md` owns effective state for a path. The verifier API owns
+aggregation. It interprets fields with the exact schema bytes associated with
+the displayed active run, using the historical resolution contract in the
+reviews spec. It never substitutes the current project schema for an older run.
+If that schema is unavailable, the API sets `schema_error` and makes field
+counts, progress, completion, and typed editor metadata `null`.
+
+For a valid active run with a resolved schema, it returns:
+
+- `field_paths`: canonical leaf paths in the raw active extraction, excluding
+  every slot marked `identifier: true`; containers are not leaves;
+- `n_fields = len(field_paths)`;
+- `n_verified`: paths controlled by exact or ancestor verification without an
+  override;
+- `n_overridden`: paths controlled by an exact or terminal ancestor
+  replace/remove override;
+- `n_reviewed = n_verified + n_overridden`;
+- `n_unreviewed = n_fields - n_reviewed`;
+- `review_progress = n_reviewed / n_fields` when `n_fields > 0`, otherwise
+  `1.0` for a valid zero-leaf extraction;
+- `is_complete = true` only when a valid active run exists and
+  `n_reviewed == n_fields`.
+
+A note does not affect counts. A parent entry counts each raw descendant leaf
+once. A terminal container override counts the raw leaves under that container;
+replacement-only leaves do not change the denominator. Invalid review paths or
+a corrupt review file set `review_error` and make all review counts, progress,
+and completion `null`; the API never reports them as zero. An article without a
+valid active run reports `n_fields = 0`, review counts `0`, progress `0.0`, and
+`is_complete = false`.
+
+Live refinement metrics come only from the sole nonterminal ledger owned by
+`specs/refinement/spec.md`. When none exists, live refinement metrics are null.
+A completed ledger is displayed only when its refinement ID is explicitly
+selected; the verifier never chooses one by timestamp or directory order:
+
+- `eligible_total`, `excluded_total`, and `added_after_baseline` use ledger
+  scope;
+- `candidate_ready`, `reconciled`, and `activated` count eligible entries in
+  the corresponding recorded state;
+- `cleanup_remaining` counts abandoned candidates not yet `trashed`;
+- `current_schema_coverage = activated / eligible_total`, or `1.0` when the
+  eligible set is empty;
+- `refinement_complete` is the ledger's completion predicate, not a frontend
+  inference.
+
+An eligible article has `needs_refinement_attention` when its ledger entry lacks
+a valid candidate, resolved/omitted reconciliation, or active accepted run, or
+when it owns a pending proposal or cleanup error. Excluded and later-added
+articles display their scope status but do not enter the denominator.
+
+### Document review
+
+The document route shows article metadata, prepared text/PDF, active extraction,
+reasoning evidence, and review controls. It displays the active run ID and
+schema identity prominently. Stored entries and effective inherited review
+state are distinguishable. Replace/remove overrides show both raw and effective
+values; notes do not change state.
+
+Writes identify the displayed run explicitly. If another process changes
+`active-run.json`, the page does not silently retarget a pending edit: it
+requires reload or explicit acknowledgement. Articles without an active run
+retain metadata/PDF access and show a clear extraction placeholder.
+
+### Runs and refinement visibility
+
+`#/runs` shows live and trashed runs, active selection, schema hash and Git
+state, creation time, model, lineage, reviewed/corrupt state, and the sole
+nonterminal refinement ledger's phase, scoped coverage, exclusions, pending
+proposals, and cleanup count. A completed ledger appears only after explicit ID
+selection. The page does not infer ledger selection, phase, or completion.
+
+The page is visibility-oriented. List, activate, trash, restore, purge, and
+reviewed-run confirmation remain `litschema runs` operations. The frontend
+must not add an unprotected mutation path or imply that destructive actions
+succeeded.
+
+## Queue filter trust boundary
+
+The local power-user queue filter may evaluate JavaScript against article
+summaries. It is not a sandbox. A filter typed locally may run immediately. A
+filter loaded from a URL is displayed but never evaluated during navigation;
+the user must explicitly confirm its first execution. Core navigation and
+review do not depend on the filter.
+
+## API ownership
+
+The target read surface retains `GET /api/articles`, `/api/markdown/{id}`,
+`/api/pdf/{id}`, `/api/schema/fields`, and optional ORCID lookup. Extraction and
+reasoning reads accept an explicit run ID; run and refinement summary endpoints
+serve `#/runs`. Review endpoints follow `specs/reviews/spec.md` and always carry
+a run ID. After a review write, the document and summary use server-recomputed
+effective state. Route entry and explicit refresh reread disk state so CLI run
+changes appear without restarting the server. Run mutation endpoints are out of
+scope. Server handlers call Python APIs in process and never shell out to CLI
+commands.
 
 ## Invariants
 
-- **Loopback only.** WHEN the verifier launches, THEN it binds 127.0.0.1;
-  there is no flag to expose it. (`test_webapp_app.py`)
-- **Nothing is hidden from the queue.** WHEN an article has no extraction,
-  no markdown, or an error marker, THEN it still lists (zeroed progress)
-  and renders — only its extraction panel degrades.
-  (`test_webapp_app.py`)
-- **Invalid ids are 404s, never 500s.** WHEN a request path smuggles `..`
-  or separators into an article id, THEN the id guard rejects it and the
-  handler answers 404. (`test_webapp_app.py`)
-- **One outbound call.** WHEN the verifier runs, THEN the ORCID lookup is
-  the only endpoint that touches the network; everything else is local
-  disk.
+- The server binds loopback only.
+- Core UI assets and behavior are local and offline.
+- All assembled articles remain visible, including those without active runs.
+- Each document edit is bound to the run displayed when the edit began.
+- Stored and effective review state are not conflated.
+- The runs page is read-only visibility; CLI protections own mutation.
+- Route state is deep-linkable and recoverable.
+- Traversal-shaped IDs fail as 404s.
 
-## Code map
+## Test obligations
 
-`src/litschema/webapp/app.py` (endpoints, launch) ·
-`src/litschema/webapp/search.py` (`strip_references`) ·
-`src/litschema/webapp/static/index.html` (the app). Tests:
-`test_webapp_app.py`, `test_verifier_static.py`, `test_smoke.py` (CLI
-wiring).
+Implementation coverage must replace brittle source-substring assertions with:
+
+- structural checks for the application shell, native module graph, pinned
+  local assets and licenses, packaged-wheel inclusion, semantic landmarks,
+  labels, and route containers;
+- browser behavior on `#/`, `#/doc/{id}`, and `#/runs`, including direct load,
+  fragment query state, filtered next/previous, exclusion of the open article,
+  navigation, back/forward, and reload;
+- exact active-run schema selection, unavailable-schema errors, and review
+  metric formulas for no-run, zero-leaf, verified, overridden, parent-covered,
+  terminal-container, invalid-path, and corrupt-review cases;
+- ledger-derived eligibility, exclusions, later additions, candidate,
+  reconciliation, activation, cleanup, coverage, completion, and attention
+  metrics;
+- document selection, raw/effective values, inherited parent coverage,
+  replace/remove overrides, notes, and no-active-run placeholders;
+- server-recomputed summaries after review writes, explicit refresh after CLI
+  file changes, and stale displayed-run protection when active selection changes
+  concurrently;
+- live/inactive/trashed lineage visibility without mutation controls;
+- offline startup with external network blocked, zero core external requests,
+  and graceful optional ORCID failure;
+- parity for document loading, typed filters, keyboard navigation, view modes,
+  bibliography editing, review round trips, evidence navigation, PDF/markdown
+  views, theme, and URL persistence;
+- active-run-schema-derived typed editors, refusal to fall back to the current
+  schema, and accessibility-oriented DOM checks;
+- independent API contract tests for IDs, active and explicit run reads, review
+  writes, and absence of run mutation endpoints;
+- loopback CLI wiring and concise launch failures.

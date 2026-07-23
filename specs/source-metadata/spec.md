@@ -1,19 +1,23 @@
 # Capability: source metadata
 
+Status: approved target.
+
 Provenance-locked bibliographic metadata — **what a document IS** (title,
 authors, venue, DOI), as distinct from what it SAYS (the schema-driven
 extraction). Introduced by PR #15 (`feat/source-metadata`).
 
 ## Data model
 
-Each article's `data/papers/<id>/article-metadata.json` manifest has three
-layers, plus review state in its own file:
+Each article's `data/papers/<id>/article-metadata.json` manifest has two
+layers. Extraction, reasoning, and review belong to the selected immutable run
+(`specs/article-store/spec.md`):
 
-| layer | keys | writer |
+| data layer | location or keys | writer |
 |---|---|---|
-| identity | `id`, `filename`, `original_filename`, `file_sha256`, `added_at`, `open_access`, `extraction` | assemble, extraction provenance recording, registry sync (`open_access` only) |
+| identity | `id`, `filename`, `original_filename`, `file_sha256`, `added_at`, `open_access` | assemble, registry sync (`open_access` only) |
 | source metadata | the `source_metadata` block (below) | see "Writers" |
-| domain extraction | `agent-extraction.json` (sibling file) | the extraction agent |
+| domain extraction | active run's `agent-extraction.json` | the extraction agent |
+| review overlay | active run's `review.json` | the verifier or review CLI |
 
 The `source_metadata` block holds only the fields in `SOURCE_FIELDS`
 (`title, authors, corporate_author, year, journal, doi, publisher, url,
@@ -151,13 +155,20 @@ policy): loop `litschema meta set <id> --source auto --doi <top-level value>`
 everything the registry resolves. Legacy top-level keys are inert junk the
 domain repo may prune at leisure.
 
+## Test obligations
+
+Implementation coverage must pin that manifest source-metadata writes do not
+create extraction provenance, modify run artifacts, or change active selection;
+source metadata remains unchanged when active runs switch; and verifier headers
+read the same manifest block on every route.
+
 ## Code map
 
 `src/litschema/source_metadata.py` (model + guard) ·
 `src/litschema/ingest/openalex_harvest.py` (batch sweep, `sync_article`) ·
 `src/litschema/ingest/article_assembly.py` (seeding) ·
 `src/litschema/webapp/app.py` (endpoints) ·
-`src/litschema/webapp/static/index.html` (header) ·
+the verifier's static native ES modules (header) ·
 `src/litschema/cli.py` (`meta` sub-app). Tests: `test_source_metadata.py`,
 `test_harvest_sources.py`, `test_meta_cli.py`, `test_webapp_app.py`,
 `test_verifier_static.py`, `test_assemble.py`.

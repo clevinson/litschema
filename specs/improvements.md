@@ -4,8 +4,12 @@ Point-in-time backlog from the full-surface audit that backfilled the
 capability specs. NOT current-truth documentation: each item is a suggested
 change, ordered by priority within its group. Delete entries as they land
 (this file is the one exception to the append-only rule — it is a to-do
-list, not a record). Alpha policy applies throughout: no compatibility
-shims, no migrations — deletions land clean.
+list, not a record). Alpha policy forbids runtime compatibility shims for
+pre-release formats; run-to-run review reconciliation is a current product
+workflow, not legacy-format support.
+
+Approved MVP obligations live in the capability specs for article store,
+reviews, refinement, verifier, and explore. This backlog must not restate them.
 
 ## 1. Correctness
 
@@ -39,10 +43,6 @@ shims, no migrations — deletions land clean.
   in exception text (`article_assembly.py:51`) — a legit error containing
   the word is misclassified as a cancellation. Walk the `__cause__` chain
   instead.
-- **Re-running `agent record-extraction` wholesale-replaces the
-  `extraction` dict** (shallow manifest merge) — re-recording without
-  `--provider` silently drops the previously recorded provider. Merge
-  per-key or document as intended.
 
 ## 2. Delete (dead / superseded / broken surface)
 
@@ -89,16 +89,6 @@ shims, no migrations — deletions land clean.
   "converted" (spec: prepared text), "domain dir" (spec: project root).
   Also `init`'s argument is named `domain` and the config hint says
   "init <domain-name>". One vocabulary: project, reviews, prepared.
-- **`ArticleFiles.reviews` (plural) → `review.json` (singular)** — rename
-  the property `review`.
-- **Annotation wire shape**: the API speaks `status`/`reviewer`/
-  `correct_value`, storage speaks `signal`/`author`/`override_value`, and a
-  translation layer bridges them for one consumer (our own frontend). Alpha
-  policy: converge the wire on the spec names and delete the mapping.
-- **Two path dialects for the same leaf paths**: reasoning uses jq-style
-  with a leading dot (`.experiments[0].ph`); reviews are canonical without
-  (`experiments[0].ph`). Unify on the canonical form (reasoning writers are
-  our own skills).
 - **`webapp/search.py` contains no search** — it is `strip_references`.
   Rename or fold into the app module.
 - **`mcp` verb hides the explore capability behind a transport name** —
@@ -110,16 +100,8 @@ shims, no migrations — deletions land clean.
 
 ## 4. Harden / decide
 
-- **The queue filter is URL-borne JavaScript** (`?filter=` compiles via
-  `new Function` and runs on page load, in an origin with write APIs). The
-  verifier spec now names the trust boundary; consider requiring a
-  confirmation click before executing URL-sourced expressions, or an
-  interpreted expression grammar.
 - **ORCID lookup blocks the event loop** — sync `urlopen` (8s timeout)
   inside an async handler. Thread-offload it; consider a small cache.
-- **CDN dependencies in a local-first app** — marked, Shoelace, Google
-  Fonts load from CDNs; offline use breaks markdown rendering. Vendor the
-  assets.
 - **Explore store carries no override provenance** — reviewed and raw
   values are indistinguishable in SQL, and cache-hit summaries print
   "0 overrides applied" indistinguishably from truly zero. DEFERRED under
@@ -152,9 +134,5 @@ shims, no migrations — deletions land clean.
 
 ## 6. Product-shaped (from earlier sessions, still open)
 
-- **Schema library**: `init --schema <ref>` importing/extending published
-  LinkML base extraction classes (`specs/onboarding/spec.md` § Future
-  work). The unreachable `templates/agriculture/` demo should either wire
-  into this (`init --template agriculture`) or move to docs/examples.
 - **`--email` (polite pool) is not forwarded by `meta set --sync`** —
   deliberate DOI-only surface; revisit if registry rate limits bite.

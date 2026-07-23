@@ -39,3 +39,36 @@ and leaves review overrides write-only); investing to production quality
 now (every hour is speculation until a real query pattern exists); keeping
 the registries (broken, unconsumed, and the only thing keeping the legacy
 harvest complex alive).
+
+
+## 2026-07-14 — Export active runs as all-data or audited-data
+
+**Context:** one reviewed-record projection cannot serve both exploratory and
+human-audited analysis, and first-class active runs replace article-root
+extraction files.
+
+**Decision:** export resolves one active run per article and offers `all` and
+`audited` views. Both apply the review overlay. Audited-data includes only
+effective reviewed values. Optional audit JSONL stores the canonical review
+frontier once per article with run and schema identity; inherited coverage is
+never expanded. DuckDB remains on the all-data view under the existing freeze.
+
+**Rejected:** combining artifacts across runs; treating absence of review as
+verified; serializing a review flag on every descendant; unfreezing DuckDB
+provenance work.
+
+
+## 2026-07-14 — Export preserves array indexes and structural identity
+
+**Context:** omitting removed or unaudited array elements would renumber paths
+and disconnect data from the canonical audit frontier.
+
+**Decision:** element removal and audited masking preserve the effective array
+basis with JSON null placeholders. All-data and audited-data share those
+indexes. Audited output retains effective LinkML identifier slots as structural
+context without promoting them to reviewed state. CSV serializes placeholders
+as literal JSON null inside nested JSON cells; an empty cell means the
+top-level slot is absent.
+
+**Rejected:** array splicing; resurrecting removed identifiers; treating
+structural identifiers as audited; using empty CSV cells as array placeholders.
