@@ -157,7 +157,7 @@ def test_bundled_skills_use_runtime_schemas() -> None:
     assert "Before running extraction, verify you are in a litschema project" in extract_skill
     assert "Do not assume `uv` or `litschema` is available" in extract_skill
     assert "If `litschema.yaml` is missing" in extract_skill
-    assert "`.litschema/cli`" in extract_skill
+    assert "`.litschema/dev-cli`" in extract_skill
     assert "development override" in extract_skill
     assert "never required for normal use" in extract_skill
     assert "set `LITSCHEMA` to `uv run litschema`" in extract_skill

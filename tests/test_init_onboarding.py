@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from typer.testing import CliRunner
 
 from litschema.config import load_config
@@ -184,6 +186,96 @@ def test_doctor_ignores_unrelated_skills(tmp_path, monkeypatch) -> None:
 
     assert "skills not installed" in result.output
     assert "totally-unrelated" not in result.output
+
+
+def test_doctor_reports_dev_cli_override(tmp_path, monkeypatch) -> None:
+    # A .litschema/dev-cli file is the skills' first CLI resolution choice;
+    # doctor surfaces its content so a stale override is visible.
+    from litschema import cli
+
+    runner = CliRunner()
+    project = tmp_path / "myreview"
+    result = runner.invoke(cli.app, ["init", str(project), "--no-skills"])
+    assert result.exit_code == 0, result.output
+
+    dev_cli = project / ".litschema" / "dev-cli"
+    dev_cli.parent.mkdir(exist_ok=True)
+    dev_cli.write_text("uv run --project ../litschema litschema\n")
+    monkeypatch.chdir(project)
+
+    result = runner.invoke(cli.app, ["--config", str(project / "litschema.yaml"), "doctor"])
+
+    assert "CLI dev override (.litschema/dev-cli)" in result.output
+    assert "uv run --project ../litschema litschema" in result.output
+
+
+def test_doctor_warns_when_skills_cannot_resolve_cli(tmp_path, monkeypatch) -> None:
+    # A data-only project (no pyproject.toml) with no override and no bare
+    # `litschema` on PATH leaves the agent skills nothing to resolve — the
+    # exact trap a returning dev-mode user hits. Doctor must say so and
+    # suggest the dev-cli line.
+    from litschema import cli
+
+    runner = CliRunner()
+    project = tmp_path / "myreview"
+    result = runner.invoke(cli.app, ["init", str(project), "--no-skills"])
+    assert result.exit_code == 0, result.output
+
+    real_which = cli.shutil.which
+    monkeypatch.setattr(
+        cli.shutil, "which", lambda name: None if name == "litschema" else real_which(name)
+    )
+    monkeypatch.chdir(project)
+
+    result = runner.invoke(cli.app, ["--config", str(project / "litschema.yaml"), "doctor"])
+
+    assert "agent skills cannot resolve the litschema CLI" in result.output
+    assert ".litschema/dev-cli" in result.output
+    assert result.exit_code == 1  # surfaced as an actionable issue
+
+
+def test_doctor_distrusts_own_venv_litschema_on_path(tmp_path, monkeypatch) -> None:
+    # Under `uv run --project <checkout>`, the checkout venv's bin dir is on
+    # PATH — a fresh skill shell would not have it. Doctor must not report
+    # that as a resolvable bare CLI.
+    import sys
+
+    from litschema import cli
+
+    runner = CliRunner()
+    project = tmp_path / "myreview"
+    result = runner.invoke(cli.app, ["init", str(project), "--no-skills"])
+    assert result.exit_code == 0, result.output
+
+    venv_cli = Path(sys.prefix) / "bin" / "litschema"
+    real_which = cli.shutil.which
+    monkeypatch.setattr(
+        cli.shutil, "which", lambda name: str(venv_cli) if name == "litschema" else real_which(name)
+    )
+    monkeypatch.chdir(project)
+
+    result = runner.invoke(cli.app, ["--config", str(project / "litschema.yaml"), "doctor"])
+
+    assert "agent skills cannot resolve the litschema CLI" in result.output
+
+
+def test_doctor_flags_legacy_cli_override_name(tmp_path, monkeypatch) -> None:
+    from litschema import cli
+
+    runner = CliRunner()
+    project = tmp_path / "myreview"
+    result = runner.invoke(cli.app, ["init", str(project), "--no-skills"])
+    assert result.exit_code == 0, result.output
+
+    legacy = project / ".litschema" / "cli"
+    legacy.parent.mkdir(exist_ok=True)
+    legacy.write_text("uv run --project ../litschema litschema\n")
+    monkeypatch.chdir(project)
+
+    result = runner.invoke(cli.app, ["--config", str(project / "litschema.yaml"), "doctor"])
+
+    assert "legacy .litschema/cli" in result.output
+    assert "rename .litschema/cli to .litschema/dev-cli" in result.output
 
 
 def test_init_no_longer_accepts_source_modes(tmp_path) -> None:

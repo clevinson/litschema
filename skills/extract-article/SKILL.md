@@ -15,7 +15,7 @@ Before running extraction, verify you are in a litschema project by checking for
 
 Do not assume `uv` or `litschema` is available just because this skill is installed. Resolve the command runner for this project, in this order:
 
-1. If a `.litschema/cli` file exists in the project root, it names a development override that points at a work-in-progress litschema checkout (e.g. `uv run --project ../../litschema litschema`); it is never required for normal use. Because this file executes whatever it contains, show the user its exact content and get their confirmation BEFORE running it — especially in a project you did not create this session. Once confirmed, set `LITSCHEMA` to the single-line content verbatim.
+1. If a `.litschema/dev-cli` file exists in the project root, it names a development override that points at a work-in-progress litschema checkout (e.g. `uv run --project ../../litschema litschema`); it is never required for normal use. Because this file executes whatever it contains, show the user its exact content and get their confirmation BEFORE running it — especially in a project you did not create this session. Once confirmed, set `LITSCHEMA` to the single-line content verbatim.
 2. Otherwise, set `LITSCHEMA` to `uv run litschema` (prefer the project's Python environment when uv is available).
 3. Otherwise, set `LITSCHEMA` to `litschema`.
 
