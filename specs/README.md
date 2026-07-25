@@ -85,3 +85,17 @@ update the spec in the same change.
 Repo-wide conventions that aren't capability behavior — build/test commands,
 project layout, git and PR conventions, issue tracking — live in `AGENTS.md`
 at the repo root, not here.
+
+## v0.1.0 scope
+
+Decided 2026-07-24. The first published release includes the immutable-runs
+format change — `tdv3` (run publish, active selection, `runs list`/`activate`)
+and `2gd1` (reviews v2) — so that the on-disk format is stable before anyone
+installs the package. Under the alpha policy above, a format change after
+publication would break early corpora with no migration path.
+
+Deferred past v0.1.0: `bmwn` (export views), `ka84` (verifier routes), `e7jh`
+(trash/restore/purge), all of `refinement`, and `e48h` (provider-native
+`extract`). Each is additive rather than format-breaking, so shipping them
+later costs nobody a migration. `litschema extract` stays a documented stub
+that directs users to the bundled agent skill.
