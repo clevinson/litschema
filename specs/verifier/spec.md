@@ -1,6 +1,21 @@
 # Capability: verifier
 
-Status: approved target.
+Status: partially current.
+
+## Implementation status
+
+Live today: `litschema verify` serving a single-page app with an article
+dropdown, the `?filter=` queue expression, the Audit/Overview toggle for one
+article's extraction, markdown and PDF panes, review editing against the
+version-1 model, and ORCID lookup. Its read API is the `/api/...` surface named
+under API ownership below.
+
+Pending: the route architecture. There is no hash routing at all today — no
+`#/`, `#/doc/{id}`, or `#/runs`, and therefore no dataset summary, no
+progress-metric aggregation, and no run or refinement visibility. Deep links,
+encoded queue state, and the schema-error/review-error null-out contract are
+part of that pending work. Tracked by `ka84`, blocked on `tdv3` and `2gd1`.
+Live refinement metrics stay null until a ledger exists.
 
 `litschema verify` is the loopback-only human review application. It consumes
 active runs and run-bound reviews but does not own their storage or lifecycle.

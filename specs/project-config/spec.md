@@ -1,10 +1,23 @@
 # Capability: project config and CLI shell
 
-Status: approved target.
+Status: partially current.
 
 This spec owns project discovery, the one current LinkML extraction schema,
 schema identity, and conventions shared by CLI verbs. Run storage is owned by
 `specs/article-store/spec.md`.
+
+## Implementation status
+
+Live today: config discovery and its precedence, config-relative path
+resolution, the core key set, single-schema resolution requiring exactly one
+local `tree_root: true` class, closed-world validation, the CLI exit-code and
+`--config` conventions, `status`, and `doctor`.
+
+Pending: schema identity. Nothing hashes the configured schema file, captures
+its Git commit, sets `schema_dirty`, or classifies same-schema versus
+schema-upgrade lineage — that machinery exists to stamp `run.json`, so it lands
+with `tdv3`. The One current schema section's identity paragraph is target;
+its resolution rules are live.
 
 ## Config discovery and paths
 

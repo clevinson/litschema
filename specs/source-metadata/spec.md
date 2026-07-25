@@ -1,6 +1,6 @@
 # Capability: source metadata
 
-Status: approved target.
+Status: current.
 
 Provenance-locked bibliographic metadata — **what a document IS** (title,
 authors, venue, DOI), as distinct from what it SAYS (the schema-driven

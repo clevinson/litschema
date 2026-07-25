@@ -1,10 +1,20 @@
 # Capability: onboarding
 
-Status: approved target.
+Status: partially current.
 
 Onboarding takes a first-time user from an empty directory and local PDFs to an
 extracted, verifiable collection. It is local-PDF-first and is distinct from
 later refinement.
+
+## Implementation status
+
+Live today: `litschema init`, `skills install`, and the `/litschema-onboard`
+conductor end to end, writing extractions to the article-root layout.
+
+Pending: run-shaped extraction output. Steps 4 and 5 below publish `initial`
+runs and activate them; today they write `agent-extraction.json` at the article
+root and there is no activation step. Tracked by `tdv3`; the conductor's
+user-facing flow does not otherwise change.
 
 ## First-run path
 
@@ -35,19 +45,29 @@ parallel schema versions or import a framework base schema.
 
 ## `/litschema-onboard` conductor
 
-The project-local skill owns the first run:
+The project-local skill owns the first run. This is a first-time user's first
+contact with the tool, so the conductor's surface is deliberately narrow: one
+question per message, no framework vocabulary, and no narration of setup or
+internals. Checks that pass are silent.
 
-1. **Setup:** resolve the project and CLI, run `status` and `doctor`, and stop
-   when there is no inbox or assembled work.
-2. **Schema drafting:** interview for fields, inspect two or three user-selected
-   representative PDFs, edit the single current schema and domain context,
-   prepare runtime schema context, and obtain user approval.
+0. **Silent pre-check:** confirm `litschema.yaml` exists using file reads
+   alone. Do not run `status`, `doctor`, or resolve the CLI yet — none of it is
+   needed to count or skim PDFs, and none of it reaches the user. A missing
+   config is the one setup condition the user hears about.
+1. **Welcome:** open with a short plain-language welcome plus the count of
+   papers found, then branch on that count and skim representative PDFs.
+2. **Schema drafting:** interview for fields one question at a time, offer an
+   existing structure (JSON Schema, spreadsheet, codebook) as a starting point,
+   write the single current schema and domain context silently, validate
+   silently, and confirm the field list with the user.
 3. **Intake:** run offline `assemble` and `prepare-text --all`.
-4. **Pilot:** extract one representative article as an `initial` run, validate
-   it, activate it, and have the user inspect it in the verifier.
+4. **Pilot:** extract one skimmed article as an `initial` run, validate it,
+   activate it, and offer to open the verifier. Revising the schema here
+   returns to drafting.
 5. **Batch:** extract remaining eligible articles into `initial` runs and
-   activate each successful first run. Existing articles with an active run
-   using the current schema are skipped.
+   activate each successful first run, retrying a failed article once before
+   recording it. Existing articles with an active run using the current schema
+   are skipped.
 6. **Finish:** run the post-extraction metadata sweep, validation, and status;
    hand off to `litschema verify`.
 
@@ -99,7 +119,11 @@ Implementation coverage must pin:
 - exact scaffold paths, one current schema, local skills, and copied-template
   behavior without a framework base import;
 - offline assemble and prepare-text;
-- setup/doctor failure and empty-project stop behavior;
+- silent pre-check: missing-config stop, and no `status`/`doctor`/CLI
+  resolution before the welcome message;
+- conductor voice constraints: one question per message, no framework
+  vocabulary in user-facing text, and no narration of passing checks;
+- empty-project stop behavior;
 - representative-document schema drafting and approval gate;
 - one-article pilot publication and activation;
 - batch creation and activation of initial runs;

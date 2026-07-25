@@ -1,10 +1,21 @@
 # Capability: explore and export
 
-Status: approved target.
+Status: partially current.
 
 Export is the stable analysis surface. The experimental DuckDB/MCP projection
 remains deliberately frozen. Both consume the article store; neither becomes an
 authority for runs, reviews, or schema history.
+
+## Implementation status
+
+Live today: `litschema export --format jsonl|csv [--output PATH]` over the
+article-root extractions with review overrides applied, plus the frozen DuckDB
+store and the `litschema mcp` server and its three tools.
+
+Pending: the view split. `--view all|audited` and `--audit-output` do not exist,
+so there is no audited-data projection and no compact audit sidecar. Record
+resolution below is written against per-article active runs, which do not exist
+yet either. Tracked by `bmwn`, blocked on `tdv3` and `2gd1`.
 
 ## Record resolution
 

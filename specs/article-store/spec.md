@@ -1,12 +1,24 @@
 # Capability: article store
 
-Status: approved target.
+Status: partially current.
 
 The on-disk source of truth is one directory per document under
 `data/papers/<article-id>/`. This spec owns article identity, immutable
 extraction runs, active-run selection, and the run CLI lifecycle. Extraction
 contents are defined by `specs/extraction/spec.md`; review entries and
 reconciliation are defined by `specs/reviews/spec.md`.
+
+## Implementation status
+
+Live today: the article directory and its `article-metadata.json` manifest, the
+`ArticleFiles` path chokepoint and ID guards, `assemble`, and `prepare-text`.
+
+Pending — everything run-shaped. Extraction, reasoning, and review files
+currently sit at the article root and are overwritten in place; there is no
+`extraction-runs/`, no `run.json`, no `active-run.json`, and no `runs` command
+group. The Layout, Run boundary, Active selection, and Run CLI sections below
+therefore describe the target, not today. Tracked by `tdv3` (`runs
+list`/`activate`) and `e7jh` (`trash`/`restore`/`purge`).
 
 ## Layout
 

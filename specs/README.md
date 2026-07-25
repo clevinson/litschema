@@ -14,11 +14,15 @@ specs/
 ```
 
 - **`spec.md` is the normative contract.** A status line says `current`,
-  `approved target`, or `draft`. `current` describes shipped behavior.
-  `approved target` records an accepted behavior change before implementation;
-  its implementation and tests may lag, but competing current prose must be
-  removed. `draft` is not approved. Behavioral requirements use WHEN/THEN
-  phrasing where precision matters.
+  `partially current`, `approved target`, or `draft`. `current` describes
+  shipped behavior. `partially current` means some of the contract ships today
+  and some does not; the spec must then carry an **Implementation status**
+  section naming the boundary and the issue tracking the rest — a reader must
+  never have to guess which half they are reading. `approved target` records an
+  accepted behavior change before implementation; its implementation and tests
+  may lag, but competing current prose must be removed. `draft` is not
+  approved. Behavioral requirements use WHEN/THEN phrasing where precision
+  matters.
 - **Specs record test obligations.** An approved target must name the behavior
   that implementation tests will pin. A behavior PR is incomplete until those
   tests pass and the status becomes `current`.
@@ -65,6 +69,12 @@ This section is superseded the day a versioned release ships.
 Start a capability folder with a draft `spec.md`. After human approval, mark it
 `approved target`; implementation follows in a later change. Mark it `current`
 only after its test obligations pass. There is no separate proposal tree.
+
+When implementation lands in stages, move the status to `partially current`
+and keep its Implementation status section accurate in the same change that
+ships the code. The status line and that section are the primary signal of
+what actually works — they are maintained as the code moves, not at release
+boundaries.
 
 ## For agents
 

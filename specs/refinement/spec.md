@@ -2,6 +2,16 @@
 
 Status: approved target.
 
+## Implementation status
+
+None of this spec ships. There is no `refinements/` ledger, no
+`/litschema-refine` skill, and no same-schema rerun or schema-upgrade workflow.
+It is the last capability in the immutable-runs line of work and has no tracked
+issue yet — deliberately, since it is out of scope for v0.1.0 and its shape may
+change once `tdv3` and `2gd1` are built. Consumers that reference a ledger
+(verifier metrics, review-transfer proposals) are specified to degrade to null
+or omission while it does not exist.
+
 Refinement changes an established project's extraction contract without
 rewriting history. The project-local `/litschema-refine` skill pilots schema or
 domain-context changes, reprocesses the frozen eligible corpus into immutable

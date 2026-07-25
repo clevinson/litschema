@@ -7,6 +7,18 @@ owns exact-path entries, effective review state, hierarchy, canonical storage,
 corrupt-review behavior, and conservative transfer between runs. Git diffs and
 pull requests own attribution and conflicting edits.
 
+## Implementation status
+
+None of this spec ships yet. A version-1 review model is live at the article
+root (`review.json` beside the extraction) with a different entry shape —
+`{author, signal: verified|flagged, timestamp, base_extraction_sha256?}` plus
+optional `override_value`/`note`/`source`/`batch_id`, and an
+extraction-hash staleness guard. Version 2 below replaces that model rather
+than extending it: the legacy keys become invalid, verification becomes an
+empty object, overrides move under an `override` key, and staleness is
+superseded by run binding. Tracked by `2gd1`, which is blocked on `tdv3`
+because reviews move inside the run directory.
+
 ## Stored model
 
 Each run may contain `review.json`:

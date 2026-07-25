@@ -1,11 +1,27 @@
 # Capability: extraction
 
-Status: approved target.
+Status: partially current.
 
 The agent-mediated pipeline turns prepared text into a complete immutable run:
 schema-valid structured data, line-cited reasoning, and honest run provenance.
 The framework supplies deterministic tools around the LLM step; the bundled
 `extract-article` skill conducts it.
+
+## Implementation status
+
+Live today: `agent prepare-schema-context`, `agent validate-reasoning`, `agent
+record-extraction`, `litschema validate`, the extraction and reasoning content
+contracts, and the bundled `extract-article` skill that conducts the LLM step.
+
+Pending: run publication. `record-extraction` records provenance into
+`article-metadata.json`; there is no staged-then-published run directory and no
+`run.json`, so the Run outputs framing below describes the target. Tracked by
+`tdv3`.
+
+`litschema extract` remains a deliberate stub that directs users to the bundled
+skill — extraction requires an agent CLI, not a provider API key. Making it a
+provider-native orchestrator is tracked separately by `e48h` and is explicitly
+out of scope for v0.1.0.
 
 ## Runtime schema context
 
