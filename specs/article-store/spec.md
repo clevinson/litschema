@@ -143,6 +143,17 @@ arguments, both modes produce the same candidate and exclusion sets. Purge
 re-evaluates that predicate immediately before deletion.
 Restore fails rather than replacing an existing live run ID.
 
+### Build order
+
+`runs list` and `runs activate` are load-bearing: every consumer (verifier,
+export) resolves an article through `active-run.json`, so a corpus with no way
+to list or select a run has no working read path. `runs trash`, `runs
+restore`, and `runs purge` are disk hygiene — an inactive run left in place is
+inert, not incorrect — and may ship in a later change without blocking a first
+release. Their contract above is unconditional once implemented; nothing here
+permits a partial purge grammar, a simplified confirmation rule, or a
+best-effort dry-run/purge parity.
+
 ## Manifest and intake
 
 `article-metadata.json` owns article identity and source metadata only. Identity

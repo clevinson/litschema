@@ -62,3 +62,24 @@ filesystem change; purge re-evaluation, not a receipt, is authoritative.
 
 **Rejected:** preview receipts or tokens; deletion from a cached candidate set;
 partial input hashing.
+
+
+## 2026-07-24 — MVP build order: list/activate now, trash/restore/purge deferred
+
+**Context:** the full `runs` command group was speced as one unit, but a
+v0.1.0 MVP only needs a working read path — verifier and export resolve every
+article through `active-run.json`, which requires a way to list and activate
+runs. Trash/restore/purge have no read-path dependency, and are also the
+highest-risk commands to rush: destructive by design, with reviewed-run
+protection and dry-run/purge parity rules that are easy to get wrong under
+time pressure.
+
+**Decision:** stage implementation. `runs list` and `runs activate` land
+first and are required for 0.1.0. `runs trash`, `runs restore`, and `runs
+purge` are deferred to a follow-up change. The contract in the spec is
+unconditional once they ship — no partial purge grammar, no unconfirmed
+reviewed-run deletion, no shortcut on dry-run/purge candidate parity.
+
+**Rejected:** cutting trash/restore/purge from the spec (they remain correct,
+just not yet built); shipping a simplified or best-effort purge for 0.1.0 to
+save time.
