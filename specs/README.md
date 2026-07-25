@@ -71,3 +71,7 @@ only after its test obligations pass. There is no separate proposal tree.
 Read the capability's `spec.md` (and skim `decisions.md`) before modifying any
 part of its surface. If your change alters behavior described in the spec,
 update the spec in the same change.
+
+Repo-wide conventions that aren't capability behavior — build/test commands,
+project layout, git and PR conventions, issue tracking — live in `AGENTS.md`
+at the repo root, not here.
