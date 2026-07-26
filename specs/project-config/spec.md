@@ -13,11 +13,10 @@ resolution, the core key set, single-schema resolution requiring exactly one
 local `tree_root: true` class, closed-world validation, the CLI exit-code and
 `--config` conventions, `status`, and `doctor`.
 
-Pending: schema identity. Nothing hashes the configured schema file, captures
-its Git commit, sets `schema_dirty`, or classifies same-schema versus
-schema-upgrade lineage — that machinery exists to stamp `run.json`, so it lands
-with `tdv3`. The One current schema section's identity paragraph is target;
-its resolution rules are live.
+Pending: schema identity. Nothing hashes the configured schema file or
+classifies same-schema versus schema-upgrade reruns — that machinery exists to
+stamp `run.json`, so it lands with `tdv3`. The One current schema section's
+identity paragraph is target; its resolution rules are live.
 
 ## Config discovery and paths
 
@@ -57,12 +56,17 @@ current schema. Parallel versioned schema files, run-local schema files, and an
 `extraction_class` override are not supported history mechanisms.
 
 Schema identity is the SHA-256 digest of the configured schema file's exact
-bytes, written as `sha256:<hex>`. The full Git commit is recorded only when the
-current bytes match the committed path. An untracked, modified, or unavailable
-Git state records a null commit and `schema_dirty: true`. Equal schema hashes
-define a same-schema rerun; unequal hashes define a schema upgrade. The
-refinement workflow requires a committed schema checkpoint before it can be
-declared complete.
+bytes, written as `sha256:<hex>`. The digest alone identifies the schema; a run
+records nothing else about it. Content addressing means a schema is found later
+by searching for its bytes, in the working tree or in Git history, so identity
+works identically inside and outside a repository and no commit pointer can go
+stale or lie.
+
+Equal schema hashes define a same-schema rerun; unequal hashes define a schema
+upgrade. The refinement workflow requires a committed schema checkpoint before
+it can be declared complete — not because runs reference a commit, but because
+an uncommitted schema may become unreconstructable once edited. `doctor` and
+`status` surface an uncommitted current schema; runs do not carry that warning.
 
 ## CLI conventions
 
@@ -95,7 +99,7 @@ remedies when a check fails. Neither command changes run selection.
 - Exactly one local `tree_root: true` class identifies the extraction root.
 - One configured schema file is current; Git is its only history.
 - Schema hashing is deterministic and independent of the working directory.
-- Same-schema and schema-upgrade lineage follow hash equality, not filenames or
+- Same-schema and schema-upgrade reruns follow hash equality, not filenames or
   timestamps.
 - Usage errors are concise exit-2 failures, not tracebacks.
 
@@ -106,8 +110,9 @@ Implementation coverage must pin:
 - discovery precedence and config-relative paths;
 - zero, one, and multiple local tree roots;
 - closed-world validation and missing explicit-target failure;
-- deterministic byte hashing, full clean commit capture, dirty/untracked
-  handling, and Git-unavailable handling;
+- deterministic byte hashing independent of the working directory, and
+  identity resolution inside a repository, outside one, and after the schema
+  file is renamed;
 - rejection of schema imports, parallel schema-history configuration, and
   run-local schemas;
 - hash-based same-schema versus upgrade classification;

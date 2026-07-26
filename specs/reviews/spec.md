@@ -224,27 +224,25 @@ confirmed proposals, then canonicalizes.
 
 ### Historical source schema
 
-The source run's mandatory `schema_sha256` is the identity anchor.
-`schema_git_commit` and `schema_dirty` are provenance hints. Resolution tries,
-in order:
+The source run's mandatory `schema_hash` is the only identity anchor. The run
+records no commit, so resolution searches by content rather than following a
+pointer. It tries, in order:
 
-1. if the recorded commit is reachable, find schema bytes in that commit whose
-   SHA-256 equals `schema_sha256`, preferring the configured schema path;
-2. search reachable Git history for schema-file bytes with the exact hash,
-   including earlier paths after a rename;
-3. use the current configured schema only when its exact bytes match the hash.
+1. the current configured schema, when its exact bytes match the hash;
+2. reachable Git history, for schema-file bytes with the exact hash, including
+   earlier paths after a rename.
 
-Every candidate is rehashed before LinkML loading. A mismatched recorded commit
-is recorded as a provenance warning and does not authorize that schema.
-`schema_dirty: true` or a null commit does not block reconstruction when an
-exact-hash Git blob or current file exists.
+Every candidate is rehashed before LinkML loading, so a match is proven rather
+than asserted. A project with no Git history, or none containing those bytes,
+simply reaches the unavailable case below; being outside a repository is a
+normal state, not an error.
 
 If no exact bytes can be reconstructed, source-schema status is `unavailable`.
 No review entry transfers automatically, including scalars, notes, container
 reviews, or array reviews. A user may confirm a persisted proposal against the
 raw source value and target schema; replace values must validate. Otherwise the
 entry is omitted. The refinement ledger records `resolved` or `unavailable`
-and the commit/blob source used when resolved.
+and the blob source used when resolved.
 
 ### Scalars
 
@@ -397,9 +395,9 @@ Implementation coverage must pin:
   rejection beneath container overrides;
 - corrupt parse/shape/path states, write refusal, activation refusal, active
   consumer errors, lifecycle protection, and confirmed trash/purge;
-- source schema lookup by recorded commit, renamed historical path, history
-  hash, and current exact bytes; commit mismatch; unreachable commit;
-  dirty/null-commit recovery; and unavailable-schema omission;
+- source schema lookup by current exact bytes, by history hash, and across a
+  renamed historical path; rehashing of every candidate before loading;
+  resolution outside a Git repository; and unavailable-schema omission;
 - unchanged scalar transfer and changed/type-coerced/invalid omission;
 - object replace/remove and whole-array replace/remove safe and unsafe cases,
   including mandatory recursive identity for both array operations;

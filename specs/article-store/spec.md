@@ -67,45 +67,56 @@ they cannot become active. Partial directories are never runs.
   "version": 1,
   "run_id": "01J2Q4Y7Y9K0M3T6W8X1Z5A9BC",
   "article_id": "beerling-2024",
-  "created_at": "2026-07-14T21:20:00Z",
-  "schema_sha256": "sha256:…",
-  "schema_git_commit": "0123456789abcdef0123456789abcdef01234567",
-  "schema_dirty": false,
-  "provider": "openai",
-  "model": "model-name",
-  "settings": {
-    "temperature": 0,
-    "prepared_text_sha256": "sha256:…",
-    "domain_context_sha256": "sha256:…",
-    "instructions_sha256": "sha256:…",
-    "tool_contract_sha256": "sha256:…"
+  "created_at": "2026-07-26T18:04:11Z",
+
+  "schema_hash": "sha256:9f2a…",
+
+  "inputs": {
+    "prepared_text": "sha256:c41d…",
+    "domain_context": "sha256:7be0…",
+    "skill": "sha256:1a88…"
   },
-  "lineage": {
-    "kind": "initial",
-    "parent_run_id": null
+
+  "agent": {
+    "harness": "claude-code",
+    "harness_version": "2.1.219",
+    "provider": "anthropic",
+    "model": "claude-opus-5",
+    "effort": "high"
   }
 }
 ```
 
-`schema_sha256` is mandatory and hashes the exact configured schema file bytes.
-`schema_git_commit` is the full commit containing those bytes when one exists;
-otherwise it is `null` and `schema_dirty` is true. Provider and model keys are mandatory and may be `null` only for a run that did
-not invoke a model. `settings` uses RFC 8785 JSON Canonicalization Scheme bytes. Strings retain
-their Unicode code points; numbers follow the scheme's finite JSON-number rules;
-NaN, infinity, duplicate keys, and non-JSON values are rejected. It records
-every effective behavior-affecting model parameter, including provider
-defaults, plus SHA-256 hashes for prepared article text, domain context,
-composed extraction instructions/prompt, tool contract, templates, and any
-other model input not already identified by `schema_sha256`. It excludes
-secrets, timestamps, request IDs, and transport metadata. Publication fails
-when a model ran but the publisher cannot capture the complete effective
-setting and input set.
+Every hash is `<algorithm>:<hex>`. The algorithm lives in the value, never in
+the key, so a key never contradicts what it holds.
 
-`lineage.kind` is `initial`, `same_schema`, or `schema_upgrade`.
-`parent_run_id` is null only for `initial`; otherwise it names the prior run
-from which the attempt was requested. The schema-identity rules in `specs/project-config/spec.md` determine which
-non-initial kind applies. `specs/refinement/spec.md` owns when each kind is
-created.
+### Reproduction versus attribution
+
+The record separates what the framework controls from what it can only report.
+
+`schema_hash` and `inputs` are **reproduction**. They hash bytes the publisher
+reads off disk itself: the configured schema file, the article's prepared text,
+the domain context, and the skill or program that conducted the extraction.
+Publication fails if any of them cannot be computed — an unhashable input means
+the run cannot state what it was run against, which is the one claim this file
+exists to make.
+
+`agent` is **attribution**. It names what produced the extraction and is
+recorded as requested, not as confirmed by a provider. An agent harness cannot
+observe its own sampling parameters, and a model identifier may be resolved
+further downstream than the caller can see, so these values are honest about
+intent rather than measurement. `harness`, `harness_version`, and `effort` come
+from the execution environment when it exposes them. An optional `settings`
+object carries sampling parameters when a caller genuinely has them, such as a
+direct provider API call; it uses RFC 8785 JSON Canonicalization Scheme bytes,
+rejects NaN, infinity, duplicate keys, and non-JSON values, and excludes
+secrets, request IDs, and transport metadata. It is absent rather than empty
+when nothing is observable. `agent` is `null` for a run that invoked no model.
+
+A run records no relationship to any other run. It states what it was, not what
+it came from. Nothing in this release creates a run derived from another one;
+when that workflow exists, `specs/refinement/spec.md` owns the mapping between
+source and candidate runs, and a parent reference may be added here then.
 
 ## Active selection
 
@@ -131,7 +142,7 @@ The command group is `litschema runs`:
 
 | command | contract |
 |---|---|
-| `runs list [<article-id>] [--trash]` | List run ID, active/reviewed/trashed state, schema hash, timestamp, model, and lineage. |
+| `runs list [<article-id>] [--trash]` | List run ID, active/reviewed/trashed state, schema hash, timestamp, and model. |
 | `runs activate <article-id> <run-id>` | Atomically select a complete live run. |
 | `runs trash <article-id> <run-id> [--confirm-reviewed]` | Move an inactive run to `.trash/`. |
 | `runs restore <article-id> <run-id>` | Move a trashed run back to the live run namespace. |
@@ -213,6 +224,9 @@ the inbox. Batch mode also discovers inbox PDFs without manifests. Stats are
   confirmation, THEN the command fails.
 - WHEN the same PDF bytes are assembled twice, THEN no duplicate article is
   created.
+- WHEN an input hash cannot be computed, THEN publication fails.
+- WHEN agent attribution is unavailable, THEN publication still succeeds and
+  the record omits what it cannot observe rather than inventing it.
 
 ## Test obligations
 
@@ -223,10 +237,12 @@ Implementation coverage must pin:
 - guarded article and run IDs;
 - atomic run publication, review writes, and active-pointer replacement;
 - immutable extraction, reasoning, and metadata after publication;
-- required run metadata, RFC 8785 settings, complete effective parameters and
-  model-input hashes, rejection of incomplete capture, honest null provenance,
-  schema hash determinism, and
-  all three lineage kinds;
+- required run metadata; deterministic schema and input hashing independent of
+  the working directory; `<algorithm>:<hex>` hash formatting; publication
+  failure when any input hash cannot be computed; publication success when only
+  agent attribution is unavailable; absent rather than empty `settings`; RFC
+  8785 canonicalization when `settings` is present; and `agent: null` for a run
+  that invoked no model;
 - activation of valid runs and rejection of missing, partial, error, foreign,
   or trashed runs;
 - list output for active, inactive, reviewed, and trashed runs;

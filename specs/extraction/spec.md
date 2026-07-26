@@ -82,8 +82,14 @@ gain framework confidence fields.
 
 After both artifacts validate, the deterministic publisher records the metadata
 required by `specs/article-store/spec.md`: article and run IDs, timestamp,
-schema hash and Git state, provider, model, settings, and lineage. Unknown
-provider/model values remain null; callers never invent them.
+schema hash, input hashes, and agent attribution.
+
+The publisher computes `schema_hash` and every `inputs` hash itself, from the
+files it just read. It never accepts them from the agent, and publication fails
+if any cannot be computed. Agent attribution is the opposite: the caller states
+what it ran, the publisher records that without verification, and an
+unavailable field is omitted rather than invented. A caller that cannot name
+its model still publishes.
 
 `litschema agent record-extraction <article-id> --run-id <run-id>` finalizes a
 staged attempt and publishes the directory atomically. It does not write
@@ -101,8 +107,9 @@ check → extraction from that article's markdown only → write both staged
 artifacts → validate both, with bounded repair attempts → record provenance and
 publish → source-metadata enrichment through its own CLI.
 
-The skill receives explicit lineage intent: `initial`, `same_schema`, or
-`schema_upgrade`. It never overwrites a run, changes `active-run.json`
+The skill declares the model it ran under when the harness makes that
+knowable — a conductor dispatching one subagent per article knows the model it
+requested for each. It never overwrites a run, changes `active-run.json`
 implicitly for a rerun, edits source metadata files directly, or imports facts
 from another article.
 
@@ -114,7 +121,9 @@ from another article.
 - Error attempts stay inactive and retryable.
 - Reasoning and reviews use one canonical path dialect.
 - Confidence lives only in reasoning.
-- Provenance records known values and explicit nulls without invention.
+- The publisher computes every hash; the caller only asserts attribution.
+- Unavailable attribution is omitted, never invented, and never blocks
+  publication.
 - Publication exposes either a complete run or no run.
 
 ## Test obligations
@@ -130,8 +139,9 @@ Implementation coverage must pin:
   extracted-leaf coverage;
 - staged validation before publication and absence of partial runs;
 - immutable published artifacts;
-- honest provider/model/settings and schema provenance recording;
-- initial, same-schema, and schema-upgrade lineage;
+- publisher-computed schema and input hashes, refusal of caller-supplied
+  hashes, and publication failure when one cannot be computed;
+- publication success with partial or absent agent attribution;
 - no manifest provenance write and no implicit rerun activation;
 - bounded skill repair, article-only evidence, deterministic CLI calls, and
   registry-first metadata backfill.

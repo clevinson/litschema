@@ -148,8 +148,8 @@ appear, so a reviewer can always see which values no agent produced.
 
 ### Runs and refinement visibility
 
-`#/runs` shows live and trashed runs, active selection, schema hash and Git
-state, creation time, model, lineage, reviewed/corrupt state, and the sole
+`#/runs` shows live and trashed runs, active selection, schema hash,
+creation time, model, reviewed/corrupt state, and the sole
 nonterminal refinement ledger's phase, scoped coverage, exclusions, pending
 proposals, and cleanup count. A completed ledger appears only after explicit ID
 selection. The page does not infer ledger selection, phase, or completion.
@@ -211,7 +211,7 @@ Implementation coverage must replace brittle source-substring assertions with:
 - server-recomputed summaries after review writes, explicit refresh after CLI
   file changes, and stale displayed-run protection when active selection changes
   concurrently;
-- live/inactive/trashed lineage visibility without mutation controls;
+- live/inactive/trashed run visibility without mutation controls;
 - offline startup with external network blocked, zero core external requests,
   and graceful optional ORCID failure;
 - parity for document loading, typed filters, keyboard navigation, view modes,

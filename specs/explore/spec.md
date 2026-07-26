@@ -76,7 +76,7 @@ remove-only articles are included:
 {
   "article_id": "beerling-2024",
   "run_id": "01J2Q4Y7Y9K0M3T6W8X1Z5A9BC",
-  "schema_sha256": "sha256:…",
+  "schema_hash": "sha256:…",
   "fields": {
     "experiments[0]": {},
     "experiments[0].ph": {

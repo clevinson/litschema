@@ -79,7 +79,7 @@ activation belong to `specs/article-store/spec.md`. Review behavior belongs to
 
 Onboarding establishes a project and its first active runs.
 `/litschema-refine` changes an established schema or domain context, pilots a
-subset, creates lineage children for the full corpus, reconciles existing
+subset, creates candidate runs for the full corpus, reconciles existing
 reviews, activates the accepted runs, and cleans up abandoned runs. It is
 defined only by `specs/refinement/spec.md`. The onboarding skill must not absorb
 or restate that lifecycle.

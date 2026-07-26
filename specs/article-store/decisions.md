@@ -83,3 +83,41 @@ reviewed-run deletion, no shortcut on dry-run/purge candidate parity.
 **Rejected:** cutting trash/restore/purge from the spec (they remain correct,
 just not yet built); shipping a simplified or best-effort purge for 0.1.0 to
 save time.
+
+
+## 2026-07-26 — run.json records reproduction and attribution, nothing else
+
+**Context:** the original run contract required "every effective
+behavior-affecting model parameter, including provider defaults," and failed
+publication when a model ran but capture was incomplete. Investigation showed
+that is unsatisfiable for the only extraction path that exists. A Claude Code
+skill cannot observe its own sampling parameters; the environment exposes the
+harness version and reasoning effort but no model identifier; the model is not
+even a session constant, since a user can switch models mid-run. Roborev solves
+the same problem by declaring the model in configuration and passing it to the
+agent, and backfills token usage from a separate log rather than capturing it
+inline. The record also carried redundancy: hashes keyed `*_sha256` holding
+`sha256:`-prefixed values, a Git commit that reconciliation already treated as
+a non-authoritative hint, a `tool_contract` hash duplicating the schema hash,
+an `instructions` hash over a prompt the framework does not compose, and a
+`lineage.kind` derivable from the parent's schema hash.
+
+**Decision:** the record separates reproduction from attribution.
+`schema_hash` and `inputs` are computed by the publisher from files it reads
+itself, and publication fails if any cannot be computed. `agent` states what
+the caller ran, is recorded without verification, and omits what it cannot
+observe rather than inventing it — a caller that cannot name its model still
+publishes. Hashes carry the algorithm in the value only. `inputs` covers
+prepared text, domain context, and the conducting skill; the tool contract is
+the schema and the composed prompt is not ours to hash. Schema identity is the
+digest alone: a schema is found later by searching for its bytes in the working
+tree or Git history, which works identically outside a repository. Runs record
+no relationship to other runs; the refinement ledger owns that when reruns
+exist.
+
+**Rejected:** a `provenance: declared|measured` discriminator, which answered
+no question once every run is declared; parsing Claude Code's session
+transcript to recover the model, which depends on an undocumented internal
+format; a `schema_dirty` flag, whose warning belongs in `doctor`/`status`
+rather than stamped into every artifact; and retaining `lineage` for a release
+in which no workflow can create a non-initial run.

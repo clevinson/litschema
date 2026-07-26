@@ -20,13 +20,17 @@ candidates.
 
 ## Workflow boundaries
 
-| workflow | schema identity | lineage | activation |
-|---|---|---|---|
-| first-run onboarding | first current schema | `initial` | successful first runs activate |
-| same-schema rerun | unchanged `schema_sha256` | `same_schema` | explicit after inspection |
-| schema upgrade | changed `schema_sha256` | `schema_upgrade` | refinement activation phase |
+| workflow | schema identity | activation |
+|---|---|---|
+| first-run onboarding | first current schema | successful first runs activate |
+| same-schema rerun | unchanged `schema_hash` | explicit after inspection |
+| schema upgrade | changed `schema_hash` | refinement activation phase |
 
-A domain-context-only corpus refinement uses `same_schema` lineage because
+Runs do not label themselves with a workflow kind. Comparing a candidate run's
+`schema_hash` against its source's yields the distinction whenever it is
+needed, and the ledger below records which workflow produced a candidate.
+
+A domain-context-only corpus refinement counts as a same-schema rerun because
 schema identity is hash-based. A one-article same-schema rerun does not invoke
 the corpus refinement lifecycle.
 
@@ -51,9 +55,8 @@ Minimal shape:
   "phase": "reconcile",
   "created_at": "2026-07-14T22:00:00Z",
   "updated_at": "2026-07-14T22:40:00Z",
-  "baseline_schema_sha256": "sha256:…",
-  "target_schema_sha256": "sha256:…",
-  "target_schema_git_commit": "0123456789abcdef0123456789abcdef01234567",
+  "baseline_schema_hash": "sha256:…",
+  "target_schema_hash": "sha256:…",
   "scope": {
     "eligible": {
       "article-a": {
@@ -111,9 +114,9 @@ universe is the validated result. Every baseline ID must then appear exactly
 once under `eligible` or `excluded`.
 
 An article is eligible by default when it has usable prepared text. An active
-run is not required: an article without one receives an `initial` candidate and
-has no review source. An article with an active run receives a
-`same_schema` or `schema_upgrade` child under the schema-identity rules.
+run is not required: an article without one receives a first candidate and has
+no review source. An article with an active run receives a candidate whose
+workflow follows from comparing its `schema_hash` to the source's.
 
 Exclusion requires an explicit user decision and a durable reason before scope
 freeze. Missing or empty prepared text and a documented project-scope rule are
@@ -145,8 +148,8 @@ requires aborting this ledger and starting a new refinement.
 4. **Pilot:** run a user-selected eligible subset. Each iteration creates
    inactive candidates and records rejected candidates as abandoned.
 5. **Approve contract:** record the user's approval and a clean Git checkpoint
-   containing the schema and domain context. Freeze scope, target schema hash,
-   and target commit.
+   containing the schema and domain context. Freeze scope and the target schema
+   hash.
 6. **Reprocess:** create one inactive candidate for each eligible article.
    Existing active selections remain unchanged.
 7. **Reconcile:** apply `specs/reviews/spec.md` to each source/candidate pair.
@@ -189,7 +192,7 @@ A refinement is complete only when all conditions hold:
 - no proposal is pending and no outcome is blocked;
 - every nonaccepted candidate created by this refinement is listed as abandoned
   and has status `trashed`;
-- the current schema bytes and clean Git commit still match the frozen target;
+- the current schema bytes still hash to the frozen target;
 - `completed_at` is written in the same atomic update that sets `phase:
   complete`.
 
@@ -206,7 +209,7 @@ that excluded or later-added articles use the target schema.
 ## Failure and resume
 
 Resume reads the sole nonterminal ledger and validates its referenced runs,
-active pointers, frozen schema hash/commit, source-review state, reconciliation
+active pointers, frozen schema hash, source-review state, reconciliation
 outcomes, proposal decisions, and abandoned candidate state. It continues from
 the first incomplete recorded transition. The workflow never infers completion
 from files alone.
