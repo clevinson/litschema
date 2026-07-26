@@ -37,9 +37,12 @@ def _project(tmp_path: Path) -> Path:
 
 
 def _write_article(project: Path, article_id: str, extraction: dict) -> Path:
+    from .helpers import publish_test_run
+
     paper_dir = project / "data" / "papers" / article_id
     paper_dir.mkdir(parents=True, exist_ok=True)
-    (paper_dir / "agent-extraction.json").write_text(json.dumps(extraction))
+    (paper_dir / "article-metadata.json").write_text(json.dumps({"id": article_id}))
+    publish_test_run(paper_dir, extraction)
     return paper_dir
 
 

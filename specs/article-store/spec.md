@@ -11,13 +11,16 @@ reconciliation are defined by `specs/reviews/spec.md`.
 ## Implementation status
 
 Live today: the article directory and its `article-metadata.json` manifest, the
-`ArticleFiles` path chokepoint and ID guards, `assemble`, and `prepare-text`.
+`ArticleFiles` path chokepoint and ID guards, `assemble`, `prepare-text`, the
+run layout (`extraction-runs/<run-id>/`, `run.json`, `active-run.json`), and
+the publish-activates write path — `agent record-extraction` validates the
+staged artifacts, computes the reproduction hashes, publishes atomically, and
+activates complete non-error runs. Every consumer (verifier, export, validate,
+status) resolves articles through the active run.
 
-Pending — everything run-shaped. Extraction, reasoning, and review files
-currently sit at the article root and are overwritten in place; there is no
-`extraction-runs/`, no `run.json`, and no `active-run.json`. The Layout, Run
-boundary, and Active selection sections below are the 0.1.0 target, tracked by
-`tdv3`, whose write path is publish-activates.
+Pending: `review.json` placement. The layout below shows it inside the run
+directory, but the version-1 review model still lives at the article root; it
+moves into the run with reviews v2 (`2gd1`).
 
 ## Layout
 

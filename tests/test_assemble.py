@@ -299,16 +299,51 @@ def test_assemble_seeds_source_metadata_title_from_filename(tmp_path: Path) -> N
     }
 
 
-# ── Extraction provenance lands in the manifest, not a CSV ───────────────────
+# ── record-extraction publishes an immutable run and activates it ────────────
 
 
-def test_agent_record_extraction_updates_manifest(tmp_path: Path, monkeypatch) -> None:
+def _publishable_project(tmp_path: Path) -> tuple:
+    """A minimal project where record-extraction can actually publish."""
     cfg = _cfg(tmp_path)
+    (tmp_path / "schema").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "schema" / "extraction.yaml").write_text(
+        """id: https://example.org/test
+name: test
+prefixes:
+  linkml: https://w3id.org/linkml/
+imports: [linkml:types]
+default_range: string
+classes:
+  Article:
+    tree_root: true
+    attributes:
+      article_id:
+        identifier: true
+      title: {}
+"""
+    )
+    (tmp_path / "domain_context.md").write_text("# Test context\n")
+    skill_dir = tmp_path / ".claude" / "skills" / "extract-article"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text("# extract-article\n")
     article_dir = cfg.article_store_dir / "smith-2024"
     article_dir.mkdir(parents=True)
     (article_dir / "article-metadata.json").write_text(json.dumps({"id": "smith-2024"}))
+    (article_dir / "article.md").write_text("# Smith 2024\n\nA title.\n")
+    (article_dir / "agent-extraction.json").write_text(
+        json.dumps({"article_id": "smith-2024", "title": "A title"})
+    )
+    (article_dir / "agent-reasoning.json").write_text(
+        json.dumps(
+            {"fields": [{"path": ".title", "source_lines": "L3", "value": "A title"}]}
+        )
+    )
+    return cfg, article_dir
+
+
+def test_agent_record_extraction_publishes_and_activates(tmp_path: Path, monkeypatch) -> None:
+    cfg, article_dir = _publishable_project(tmp_path)
     monkeypatch.setattr(cli, "_require_project", lambda ctx=None: SimpleNamespace(config=cfg))
-    monkeypatch.setattr(cli, "_schema_commit", lambda cfg: "abc1234")
 
     result = CliRunner().invoke(
         cli.app,
@@ -316,11 +351,87 @@ def test_agent_record_extraction_updates_manifest(tmp_path: Path, monkeypatch) -
     )
 
     assert result.exit_code == 0, result.output
+    # The staged files were consumed into an immutable run.
+    assert not (article_dir / "agent-extraction.json").exists()
+    runs = list((article_dir / "extraction-runs").iterdir())
+    assert len(runs) == 1
+    record = json.loads((runs[0] / "run.json").read_text())
+    assert record["schema_hash"].startswith("sha256:")
+    assert set(record["inputs"]) == {"prepared_text", "domain_context", "skill"}
+    assert all(v.startswith("sha256:") for v in record["inputs"].values())
+    assert record["agent"]["provider"] == "codex"
+    assert record["agent"]["model"] == "gpt-5.5"
+    # Publish-activates.
+    pointer = json.loads((article_dir / "active-run.json").read_text())
+    assert pointer == {"run_id": record["run_id"]}
+    # No extraction provenance in the manifest (the run owns it now).
     metadata = json.loads((article_dir / "article-metadata.json").read_text())
-    assert metadata["extraction"]["provider"] == "codex"
-    assert metadata["extraction"]["model"] == "gpt-5.5"
-    assert metadata["extraction"]["schema_commit"] == "abc1234"
-    assert "date" in metadata["extraction"]
+    assert "extraction" not in metadata
+
+
+def test_agent_record_extraction_error_marker_publishes_inactive(
+    tmp_path: Path, monkeypatch
+) -> None:
+    cfg, article_dir = _publishable_project(tmp_path)
+    (article_dir / "agent-extraction.json").write_text(
+        json.dumps({"article_id": "smith-2024", "error": True, "reason": "scan quality"})
+    )
+    (article_dir / "agent-reasoning.json").unlink()
+    monkeypatch.setattr(cli, "_require_project", lambda ctx=None: SimpleNamespace(config=cfg))
+
+    result = CliRunner().invoke(cli.app, ["agent", "record-extraction", "smith-2024"])
+
+    assert result.exit_code == 0, result.output
+    assert "inactive" in result.output
+    assert not (article_dir / "active-run.json").exists()
+    assert len(list((article_dir / "extraction-runs").iterdir())) == 1
+
+
+def test_agent_record_extraction_re_extraction_keeps_prior_run(
+    tmp_path: Path, monkeypatch
+) -> None:
+    cfg, article_dir = _publishable_project(tmp_path)
+    monkeypatch.setattr(cli, "_require_project", lambda ctx=None: SimpleNamespace(config=cfg))
+    runner = CliRunner()
+    assert runner.invoke(cli.app, ["agent", "record-extraction", "smith-2024"]).exit_code == 0
+    first_run = json.loads((article_dir / "active-run.json").read_text())["run_id"]
+    first_bytes = (
+        article_dir / "extraction-runs" / first_run / "agent-extraction.json"
+    ).read_bytes()
+
+    # Stage a second attempt and publish it.
+    (article_dir / "agent-extraction.json").write_text(
+        json.dumps({"article_id": "smith-2024", "title": "Better title"})
+    )
+    (article_dir / "agent-reasoning.json").write_text(
+        json.dumps({"fields": [{"path": ".title", "source_lines": "L3"}]})
+    )
+    assert runner.invoke(cli.app, ["agent", "record-extraction", "smith-2024"]).exit_code == 0
+
+    second_run = json.loads((article_dir / "active-run.json").read_text())["run_id"]
+    assert second_run != first_run
+    # The prior run is intact and unmodified.
+    assert (
+        article_dir / "extraction-runs" / first_run / "agent-extraction.json"
+    ).read_bytes() == first_bytes
+
+
+def test_agent_record_extraction_fails_without_hashable_inputs(
+    tmp_path: Path, monkeypatch
+) -> None:
+    cfg, article_dir = _publishable_project(tmp_path)
+    (tmp_path / "domain_context.md").unlink()
+    monkeypatch.setattr(cli, "_require_project", lambda ctx=None: SimpleNamespace(config=cfg))
+
+    result = CliRunner().invoke(cli.app, ["agent", "record-extraction", "smith-2024"])
+
+    assert result.exit_code == 1
+    assert "domain context" in result.output
+    # Refused publication writes nothing to the run layout.
+    assert not (article_dir / "extraction-runs").exists() or not list(
+        (article_dir / "extraction-runs").iterdir()
+    )
+    assert not (article_dir / "active-run.json").exists()
 
 
 def test_agent_record_extraction_rejects_unknown_article(tmp_path: Path, monkeypatch) -> None:

@@ -44,6 +44,17 @@ def _find_tree_root_class(sv: SchemaView) -> str:
     )
 
 
+def schema_hash(cfg: LitSchemaConfig) -> str:
+    """Schema identity: the SHA-256 of the configured schema file's exact bytes.
+
+    The digest alone identifies the schema (specs/project-config/spec.md);
+    deterministic and independent of the working directory.
+    """
+    import hashlib
+
+    return "sha256:" + hashlib.sha256(extraction_schema_path(cfg).read_bytes()).hexdigest()
+
+
 def resolve_extraction_schema(cfg: LitSchemaConfig) -> ResolvedExtractionSchema:
     schema_path = extraction_schema_path(cfg)
     if not schema_path.exists():

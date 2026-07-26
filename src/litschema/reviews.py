@@ -45,8 +45,16 @@ def canonical_review_path(path: str) -> str:
 
 
 def base_extraction_sha256(files: ArticleFiles) -> str | None:
-    """SHA-256 of the article's agent-extraction.json bytes, or None if absent."""
-    path = files.extraction
+    """SHA-256 of the active run's agent-extraction.json bytes, or None if absent."""
+    from .runs import BrokenActiveRunError, active_run
+
+    try:
+        run = active_run(files)
+    except BrokenActiveRunError:
+        return None
+    if run is None:
+        return None
+    path = run.extraction
     if not path.exists():
         return None
     return hashlib.sha256(path.read_bytes()).hexdigest()

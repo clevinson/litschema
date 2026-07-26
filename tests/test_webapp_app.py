@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import itertools
 import json as _json
 from pathlib import Path
 from types import SimpleNamespace
@@ -185,10 +186,17 @@ def teardown_function() -> None:
     webapp.app.dependency_overrides.clear()
 
 
-def _write_extraction(cfg, article_id: str, extraction: dict) -> None:
+_RUN_SEQ = itertools.count()
+
+
+def _write_extraction(cfg, article_id: str, extraction: dict, reasoning: dict | None = None) -> None:
+    """Publish a fresh run for the article; repeat calls model re-extraction."""
+    from .helpers import publish_test_run
+
     article_dir = cfg.article_store_dir / article_id
     article_dir.mkdir(parents=True, exist_ok=True)
-    (article_dir / "agent-extraction.json").write_text(_json.dumps(extraction))
+    run_id = f"01TESTRUN{next(_RUN_SEQ):015d}XX"
+    publish_test_run(article_dir, extraction, reasoning=reasoning, run_id=run_id)
 
 
 def test_put_annotation_round_trip_via_review_json(tmp_path) -> None:
@@ -375,9 +383,11 @@ def test_list_articles_includes_assembled_but_unextracted(tmp_path) -> None:
 def test_list_articles_carries_overall_confidence_from_reasoning(tmp_path) -> None:
     cfg = _project_cfg(tmp_path)
     _write_manifest(cfg, "conf", {"id": "conf"})
-    _write_extraction(cfg, "conf", {"article_id": "conf", "title": "T"})
-    (cfg.article_store_dir / "conf" / "agent-reasoning.json").write_text(
-        _json.dumps({"confidence": 0.55, "fields": []})
+    _write_extraction(
+        cfg,
+        "conf",
+        {"article_id": "conf", "title": "T"},
+        reasoning={"confidence": 0.55, "fields": []},
     )
     _write_manifest(cfg, "noconf", {"id": "noconf"})
     _write_extraction(cfg, "noconf", {"article_id": "noconf", "title": "T"})

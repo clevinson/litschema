@@ -9,14 +9,16 @@ The framework supplies deterministic tools around the LLM step; the bundled
 
 ## Implementation status
 
-Live today: `agent prepare-schema-context`, `agent validate-reasoning`, `agent
-record-extraction`, `litschema validate`, the extraction and reasoning content
-contracts, and the bundled `extract-article` skill that conducts the LLM step.
+Live today: `agent prepare-schema-context`, `agent validate-reasoning`,
+`litschema validate`, the extraction and reasoning content contracts, the
+bundled `extract-article` skill, and run publication — `agent
+record-extraction` is the deterministic publisher (validate, hash, publish
+atomically, activate).
 
-Pending: run publication. `record-extraction` records provenance into
-`article-metadata.json`; there is no staged-then-published run directory and no
-`run.json`, so the Run outputs framing below describes the target. Tracked by
-`tdv3`.
+Pending: the canonical path dialect. Reasoning files still use jq-style paths
+with a leading dot (`.experiments[0].ph`); the Reasoning section below states
+the target no-leading-dot form, unified with review paths when reviews v2
+lands (`2gd1`).
 
 `litschema extract` remains a deliberate stub that directs users to the bundled
 skill — extraction requires an agent CLI, not a provider API key. Making it a

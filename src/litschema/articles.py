@@ -2,9 +2,13 @@
 
   data/papers/<id>/article-metadata.json
   data/papers/<id>/article.md
-  data/papers/<id>/agent-extraction.json
-  data/papers/<id>/agent-reasoning.json
-  data/papers/<id>/review.json
+  data/papers/<id>/active-run.json
+  data/papers/<id>/extraction-runs/<run-id>/...
+  data/papers/<id>/review.json          (v1 review model, article-bound)
+
+Article-root agent-extraction.json / agent-reasoning.json are STAGING files:
+an extraction attempt writes them, and publication consumes them into an
+immutable run directory (see runs.py).
 """
 
 from __future__ import annotations
@@ -40,11 +44,20 @@ class ArticleFiles:
         return self.article_dir / f"{self.article_id}.pdf"
 
     @property
-    def extraction(self) -> Path:
+    def runs_dir(self) -> Path:
+        return self.article_dir / "extraction-runs"
+
+    @property
+    def active_run_file(self) -> Path:
+        return self.article_dir / "active-run.json"
+
+    @property
+    def staged_extraction(self) -> Path:
+        """Where an extraction attempt stages its output before publication."""
         return self.article_dir / "agent-extraction.json"
 
     @property
-    def reasoning(self) -> Path:
+    def staged_reasoning(self) -> Path:
         return self.article_dir / "agent-reasoning.json"
 
     @property
@@ -74,19 +87,46 @@ def article_files(cfg: LitSchemaConfig, article_id: str) -> ArticleFiles:
 
 
 def article_id_from_extraction_path(path: Path) -> str:
+    """Article id for an extraction path in either run or staging position."""
+    if path.parent.parent.name == "extraction-runs":
+        return path.parent.parent.parent.name
     return path.parent.name
 
 
-def iter_extraction_paths(cfg: LitSchemaConfig) -> Iterator[Path]:
-    yield from _iter_article_artifact_paths(cfg, "agent-extraction.json")
+def iter_article_ids(cfg: LitSchemaConfig) -> Iterator[str]:
+    for metadata_path in iter_metadata_paths(cfg):
+        yield metadata_path.parent.name
+
+
+def iter_active_extraction_paths(cfg: LitSchemaConfig) -> Iterator[Path]:
+    """The active run's extraction per article; skips unextracted articles.
+
+    A broken active pointer raises BrokenActiveRunError (integrity failure,
+    never silently skipped).
+    """
+    from .runs import active_run  # local import: runs builds on articles
+
+    for metadata_path in iter_metadata_paths(cfg):
+        files = article_files(cfg, metadata_path.parent.name)
+        run = active_run(files)
+        if run is not None:
+            yield run.extraction
+
+
+def iter_live_run_extraction_paths(cfg: LitSchemaConfig) -> Iterator[Path]:
+    """Every published run's extraction, active or not (validate discovery)."""
+    if not cfg.article_store_dir.is_dir():
+        return
+    for run_json in sorted(cfg.article_store_dir.glob("*/extraction-runs/*/run.json")):
+        extraction = run_json.parent / "agent-extraction.json"
+        if extraction.is_file():
+            yield extraction
 
 
 def iter_markdown_paths(cfg: LitSchemaConfig) -> Iterator[Path]:
     yield from _iter_article_artifact_paths(cfg, "article.md")
 
 
-def iter_reasoning_paths(cfg: LitSchemaConfig) -> Iterator[Path]:
-    yield from _iter_article_artifact_paths(cfg, "agent-reasoning.json")
 
 
 def iter_review_paths(cfg: LitSchemaConfig) -> Iterator[Path]:
@@ -134,22 +174,3 @@ def write_article_metadata(files: ArticleFiles, metadata: dict) -> dict:
     tmp.write_text(json.dumps(merged, indent=2) + "\n")
     os.replace(tmp, files.metadata)
     return merged
-
-
-def record_extraction_provenance(
-    files: ArticleFiles,
-    *,
-    provider: str | None,
-    model: str | None,
-    extraction_date: str,
-    schema_commit: str | None,
-) -> dict:
-    """Record extraction provenance in the article manifest."""
-    provenance = {"date": extraction_date}
-    if provider:
-        provenance["provider"] = provider
-    if model:
-        provenance["model"] = model
-    if schema_commit:
-        provenance["schema_commit"] = schema_commit
-    return write_article_metadata(files, {"extraction": provenance})

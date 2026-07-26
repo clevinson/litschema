@@ -149,12 +149,28 @@ def _current_annotations(cfg: LitSchemaConfig, article_id: str) -> list[dict]:
     return [_annotation_from_entry(path, entry) for path, entry in fields.items()]
 
 
+def _active_artifact(files: ArticleFiles, name: str):
+    """Path of an artifact inside the active run, or None (broken pointer -> None
+    here; list/read endpoints surface the article as unextracted rather than
+    500ing the whole listing)."""
+    from ..runs import BrokenActiveRunError, active_run
+
+    try:
+        run = active_run(files)
+    except BrokenActiveRunError:
+        return None
+    if run is None:
+        return None
+    return getattr(run, name)
+
+
 def _extraction_confidence(files: ArticleFiles) -> float | None:
     """The extractor's overall self-rated confidence from agent-reasoning.json."""
-    if not files.reasoning.exists():
+    reasoning_path = _active_artifact(files, "reasoning")
+    if reasoning_path is None or not reasoning_path.exists():
         return None
     try:
-        reasoning = json.loads(files.reasoning.read_bytes())
+        reasoning = json.loads(reasoning_path.read_bytes())
     except ValueError:
         return None
     value = reasoning.get("confidence") if isinstance(reasoning, dict) else None
@@ -303,10 +319,11 @@ async def index():
 
 def _read_valid_extraction(files: ArticleFiles) -> dict | None:
     """Return the parsed extraction JSON, or None if absent, invalid, or errored."""
-    if not files.extraction.exists():
+    extraction_path = _active_artifact(files, "extraction")
+    if extraction_path is None or not extraction_path.exists():
         return None
     try:
-        data = json.loads(files.extraction.read_text())
+        data = json.loads(extraction_path.read_text())
     except json.JSONDecodeError:
         return None
     if not isinstance(data, dict) or data.get("error"):
@@ -520,8 +537,8 @@ async def get_pdf(article_id: str, cfg: CfgDep):
 @app.get("/api/reasoning/{article_id}")
 async def get_reasoning(article_id: str, cfg: CfgDep):
     """Return per-field extraction reasoning if it exists."""
-    path = article_files(cfg, article_id).reasoning
-    if not path.exists():
+    path = _active_artifact(article_files(cfg, article_id), "reasoning")
+    if path is None or not path.exists():
         raise HTTPException(404, f"No reasoning for {article_id}")
     return json.loads(path.read_text())
 

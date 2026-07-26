@@ -1,6 +1,6 @@
 # Capability: project config and CLI shell
 
-Status: partially current.
+Status: current.
 
 This spec owns project discovery, the one current LinkML extraction schema,
 schema identity, and conventions shared by CLI verbs. Run storage is owned by
@@ -8,15 +8,10 @@ schema identity, and conventions shared by CLI verbs. Run storage is owned by
 
 ## Implementation status
 
-Live today: config discovery and its precedence, config-relative path
-resolution, the core key set, single-schema resolution requiring exactly one
-local `tree_root: true` class, closed-world validation, the CLI exit-code and
-`--config` conventions, `status`, and `doctor`.
-
-Pending: schema identity. Nothing hashes the configured schema file or
-classifies same-schema versus schema-upgrade reruns — that machinery exists to
-stamp `run.json`, so it lands with `tdv3`. The One current schema section's
-identity paragraph is target; its resolution rules are live.
+Everything below is live: config discovery and precedence, config-relative
+path resolution, the core key set, single-schema resolution requiring exactly
+one local `tree_root: true` class, closed-world validation, the CLI exit-code
+and `--config` conventions, schema identity hashing, `status`, and `doctor`.
 
 ## Config discovery and paths
 
@@ -81,15 +76,15 @@ an uncommitted schema may become unreconstructable once edited. `doctor` and
 | verb | normative owner |
 |---|---|
 | `init`, `skills install` | `specs/onboarding` |
-| `assemble`, `prepare-text`, `runs *` | `specs/article-store` |
+| `assemble`, `prepare-text` | `specs/article-store` |
 | `validate`, `agent *` | `specs/extraction` |
 | `meta *` | `specs/source-metadata` |
 | `verify` | `specs/verifier` |
 | `export`, `mcp` | `specs/explore` |
 
 `status` reports schema presence plus inbox, article, prepared-text,
-live-run, active-run, trashed-run, current-schema-active, and reviewed-active
-counts and exits 0. `doctor` checks Python and `uv`, schema resolution,
+published-run, active-run, and current-schema-active counts, flags broken
+active pointers, and exits 0. `doctor` checks Python and `uv`, schema resolution,
 project-local then global litschema skills, and an agent CLI. It exits 1 with
 remedies when a check fails. Neither command changes run selection.
 
@@ -117,6 +112,6 @@ Implementation coverage must pin:
   run-local schemas;
 - hash-based same-schema versus upgrade classification;
 - common exit codes and project-scoped config flags;
-- status counts across missing, active, reviewed, trashed, and
-  current-schema-active runs;
+- status counts across missing, active, and current-schema-active runs, and
+  broken-pointer flagging;
 - doctor failures for schema and skill resolution.

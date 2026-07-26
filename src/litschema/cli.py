@@ -9,7 +9,6 @@ from __future__ import annotations
 import json
 import os
 import shutil
-import subprocess
 import sys
 from datetime import UTC, datetime
 from importlib import resources
@@ -19,12 +18,9 @@ import typer
 
 from .articles import (
     article_files,
-    iter_extraction_paths,
     iter_markdown_paths,
     iter_metadata_paths,
-    iter_reasoning_paths,
     iter_review_paths,
-    record_extraction_provenance,
 )
 from .config import ConfigNotFoundError, LitSchemaConfig
 from .ingest import article_assembly, validate_extraction
@@ -78,20 +74,6 @@ def main(
 
 def _count_files(path: Path, pattern: str = "*") -> int:
     return len(list(path.glob(pattern))) if path.is_dir() else 0
-
-
-def _schema_commit(cfg: LitSchemaConfig) -> str | None:
-    try:
-        result = subprocess.run(
-            ["git", "rev-parse", "--short", "HEAD"],
-            cwd=cfg.project_root,
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-    except Exception:
-        return None
-    return result.stdout.strip() or None
 
 
 class _AssembleCliReporter:
@@ -725,17 +707,24 @@ def agent_validate_reasoning(ctx: typer.Context):
 
 
 @agent_app.command(
-    "record-extraction", help="Record extraction provenance in article-metadata.json."
+    "record-extraction",
+    help="Publish the staged extraction as an immutable run and activate it.",
 )
 def agent_record_extraction(
     ctx: typer.Context,
     article_id: str = typer.Argument(..., help="Article identifier that was extracted"),
     provider: str | None = typer.Option(None, "--provider", help="Extraction provider, if known"),
     model: str | None = typer.Option(None, "--model", help="Extraction model, if known"),
+    skill_file: Path | None = typer.Option(
+        None, "--skill-file", help="Override the conducting skill file to hash"
+    ),
 ):
     project = _require_project(ctx)
     cfg = project.config
     from .articles import InvalidArticleIdError
+    from .ingest import validate_extraction as _validate_extraction
+    from .runs import RunPublishError, publish_run
+    from .schema_resolution import resolve_extraction_schema as _resolve_schema
 
     try:
         files = article_files(cfg, article_id)
@@ -745,14 +734,45 @@ def agent_record_extraction(
     if not files.article_dir.is_dir():
         typer.secho(f"{CROSS} unknown article: {article_id}", fg=typer.colors.RED)
         raise typer.Exit(code=2)
-    record_extraction_provenance(
-        files,
-        provider=provider,
-        model=model,
-        extraction_date=datetime.now(UTC).isoformat(),
-        schema_commit=_schema_commit(cfg),
+    if not files.staged_extraction.is_file():
+        typer.secho(
+            f"{CROSS} no staged extraction at {files.staged_extraction}", fg=typer.colors.RED
+        )
+        raise typer.Exit(code=1)
+
+    # The deterministic publication gate: both artifacts must validate before
+    # anything is written to the run layout (error markers are legal artifacts
+    # but skip schema validation and never activate).
+    resolved = _resolve_schema(cfg)
+    valid, errors = _validate_extraction.validate_file(
+        files.staged_extraction, resolved.path, resolved.root_class
     )
-    typer.echo(f"{CHECK} recorded extraction provenance for {article_id}")
+    if not valid:
+        typer.secho(f"{CROSS} staged extraction is invalid:", fg=typer.colors.RED)
+        for err in errors[:10]:
+            typer.echo(f"  {err}")
+        raise typer.Exit(code=1)
+    if files.staged_reasoning.is_file():
+        from .agent import validate_reasoning as _validate_reasoning
+
+        if _validate_reasoning.run([str(files.staged_reasoning)]) != 0:
+            typer.secho(f"{CROSS} staged reasoning is invalid", fg=typer.colors.RED)
+            raise typer.Exit(code=1)
+
+    try:
+        run, activated = publish_run(
+            cfg,
+            files,
+            provider=provider,
+            model=model,
+            skill_file=skill_file,
+            created_at=datetime.now(UTC).isoformat(timespec="seconds"),
+        )
+    except RunPublishError as exc:
+        typer.secho(f"{CROSS} {exc}", fg=typer.colors.RED)
+        raise typer.Exit(code=1) from None
+    state = "activated" if activated else "published inactive (error marker)"
+    typer.echo(f"{CHECK} published run {run.run_id} for {article_id} — {state}")
 
 
 @skills_app.command(
@@ -812,11 +832,37 @@ def status(ctx: typer.Context):
     project = _require_project(ctx)
     cfg = project.config
 
+    from .runs import BrokenActiveRunError, active_run, iter_run_ids
+    from .schema_resolution import schema_hash as _schema_hash
+
     metadata = len(list(iter_metadata_paths(cfg)))
     converted = len(list(iter_markdown_paths(cfg)))
-    extractions = len(list(iter_extraction_paths(cfg)))
-    reasoning = len(list(iter_reasoning_paths(cfg)))
     annotations = len(list(iter_review_paths(cfg)))
+
+    live_runs = 0
+    active_runs = 0
+    current_schema_active = 0
+    broken_pointers = 0
+    try:
+        current_hash = _schema_hash(cfg)
+    except OSError:
+        current_hash = None
+    for metadata_path in iter_metadata_paths(cfg):
+        files = article_files(cfg, metadata_path.parent.name)
+        live_runs += len(iter_run_ids(files))
+        try:
+            run = active_run(files)
+        except BrokenActiveRunError:
+            broken_pointers += 1
+            continue
+        if run is None:
+            continue
+        active_runs += 1
+        try:
+            if current_hash and run.read_run_json().get("schema_hash") == current_hash:
+                current_schema_active += 1
+        except (OSError, json.JSONDecodeError):
+            pass
 
     schema_yaml = extraction_schema_path(cfg)
     papers = _count_files(cfg.paper_inbox_dir, "*.pdf")
@@ -837,8 +883,11 @@ def status(ctx: typer.Context):
     typer.echo(f"inbox:       {papers} PDFs in {cfg.paper_inbox_dir.name}/")
     typer.echo(f"articles:    {metadata} metadata files")
     typer.echo(f"converted:   {converted} markdown files")
-    typer.echo(f"extracted:   {extractions} extractions")
-    typer.echo(f"reasoning:   {reasoning} reasoning files")
+    typer.echo(f"runs:        {live_runs} published")
+    typer.echo(f"active:      {active_runs} articles with an active run")
+    typer.echo(f"current:     {current_schema_active} active runs on the current schema")
+    if broken_pointers:
+        typer.echo(f"{CROSS} broken:      {broken_pointers} broken active-run pointers")
     typer.echo(f"annotations: {annotations}")
 
 

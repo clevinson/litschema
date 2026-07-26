@@ -8,6 +8,8 @@ import duckdb
 from litschema.config import load_config
 from litschema.explore.loader import build_store
 
+from .helpers import publish_test_run
+
 
 def test_loader_reads_per_article_folder_and_review_json(
     tmp_path: Path,
@@ -27,15 +29,15 @@ def test_loader_reads_per_article_folder_and_review_json(
         / "agriculture_extraction.yaml"
     )
     (schema_dir / "agriculture_extraction.yaml").write_text(template.read_text())
-    (paper_dir / "agent-extraction.json").write_text(
-        json.dumps(
-            {
-                "article_id": "smith-2024",
-                "study_type": "field_trial",
-                "crops": ["maize"],
-                "sample_size": 12,
-            }
-        )
+    (paper_dir / "article-metadata.json").write_text(json.dumps({"id": "smith-2024"}))
+    publish_test_run(
+        paper_dir,
+        {
+            "article_id": "smith-2024",
+            "study_type": "field_trial",
+            "crops": ["maize"],
+            "sample_size": 12,
+        },
     )
     (paper_dir / "review.json").write_text(
         json.dumps(

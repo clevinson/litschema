@@ -22,7 +22,7 @@ from linkml_runtime.utils.schemaview import SchemaView
 from ..articles import (
     article_files,
     article_id_from_extraction_path,
-    iter_extraction_paths,
+    iter_active_extraction_paths,
 )
 from ..config import LitSchemaConfig
 from ..reviews import read_reviews
@@ -91,7 +91,7 @@ def _apply_override(record: dict, path: str, value: Any) -> bool:
 def _build_override_map(cfg: LitSchemaConfig) -> dict[str, list[dict]]:
     """{article_id: [{path, value}, ...]} — one override max per field path."""
     by_article: dict[str, list[dict]] = {}
-    for extraction_path in iter_extraction_paths(cfg):
+    for extraction_path in iter_active_extraction_paths(cfg):
         article_id = article_id_from_extraction_path(extraction_path)
         fields = read_reviews(article_files(cfg, article_id))
         overrides = [
@@ -316,7 +316,7 @@ def load_reviewed_records(
     records: list[dict] = []
     reviews_applied = 0
     overrides_applied = 0
-    for ext_path in iter_extraction_paths(cfg):
+    for ext_path in iter_active_extraction_paths(cfg):
         article_id = article_id_from_extraction_path(ext_path)
         data = json.loads(ext_path.read_text())
         if data.get("error"):

@@ -112,20 +112,27 @@ If either command exits nonzero, read the errors, fix the JSON, and re-run the f
 
 Do NOT finish until both validation commands exit 0 or you have exhausted retries.
 
-After both validation commands exit 0, record extraction provenance:
+After both validation commands exit 0, publish the run:
 
 ```bash
 $LITSCHEMA agent record-extraction {article_id}
 ```
 
-If you know the exact provider or model for this agent session, include them:
+This consumes the two staged files into an immutable run directory
+(`data/papers/{article_id}/extraction-runs/<run-id>/`), records the schema and
+input hashes in `run.json`, and activates the run (`active-run.json`). If it
+exits nonzero, read the error — publication refuses to proceed rather than
+recording an incomplete run.
+
+If you know the model this extraction actually ran on — for example, you are a
+subagent and the conductor told you your model — include it:
 
 ```bash
-$LITSCHEMA agent record-extraction {article_id} --provider codex --model gpt-5.5
+$LITSCHEMA agent record-extraction {article_id} --provider anthropic --model claude-sonnet-5
 ```
 
-Do not invent provider or model names. The command will still record extraction
-date and schema commit when provider/model are omitted.
+Do not invent provider or model names; omit what you do not know. The run
+publishes either way.
 
 ## Backfill Bibliographic Metadata
 
@@ -173,9 +180,9 @@ values not visible in the document.
 ## Checklist
 
 Before finishing, verify:
-- [ ] `data/papers/{article_id}/agent-extraction.json` exists and passes extraction validation
+- [ ] the staged extraction passed validation before publishing
 - [ ] `data/papers/{article_id}/agent-reasoning.json` exists and passes reasoning validation
-- [ ] `data/papers/{article_id}/article-metadata.json` has been updated by `agent record-extraction`
+- [ ] `agent record-extraction` exited 0 (run published and activated; staged files consumed)
 - [ ] Bibliographic backfill was attempted via `meta set --source auto` (with `--doi ... --sync` when a DOI was visible; transcription only as the fallback)
 - [ ] Every non-identifier leaf field in the extraction has a corresponding reasoning entry
 - [ ] All `source_lines` reference real line numbers from the markdown

@@ -14,7 +14,7 @@ import json
 import sys
 from pathlib import Path
 
-from ..articles import iter_extraction_paths
+from ..articles import iter_live_run_extraction_paths
 from ..config import LitSchemaConfig, require_config_or_exit
 from ..schema_resolution import resolve_extraction_schema
 from ..schema_validation import LinkMLDataValidator, create_linkml_validator
@@ -40,13 +40,13 @@ def validate_file(
 
 def _files_for_args(args: list[str], cfg: LitSchemaConfig) -> list[Path]:
     if not args:
-        return list(iter_extraction_paths(cfg))
+        return list(iter_live_run_extraction_paths(cfg))
 
     target = Path(args[0])
     if not target.exists():
         raise FileNotFoundError(f"Missing extraction target: {target}")
     if target.is_dir():
-        files = sorted(target.glob("*/agent-extraction.json"))
+        files = sorted(target.glob("**/agent-extraction.json"))
         if not files:
             raise FileNotFoundError(f"No agent-extraction.json files found under: {target}")
         return files

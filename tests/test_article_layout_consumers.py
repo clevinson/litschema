@@ -8,6 +8,8 @@ from litschema.config import LitSchemaConfig
 from litschema.ingest import pdf_to_markdown
 from litschema.webapp import app as webapp
 
+from .helpers import publish_test_run
+
 
 def _cfg(project: Path) -> LitSchemaConfig:
     return LitSchemaConfig(
@@ -95,8 +97,9 @@ def test_analysis_loads_extractions_from_article_folders(
     cfg = _cfg(tmp_path)
     article_dir = cfg.article_store_dir / "smith-2024"
     article_dir.mkdir(parents=True)
-    (article_dir / "agent-extraction.json").write_text(
-        json.dumps({"article_id": "smith-2024", "document_type": "journal_article"})
+    (article_dir / "article-metadata.json").write_text(json.dumps({"id": "smith-2024"}))
+    publish_test_run(
+        article_dir, {"article_id": "smith-2024", "document_type": "journal_article"}
     )
     monkeypatch.setattr(analysis, "load_config", lambda: cfg)
 

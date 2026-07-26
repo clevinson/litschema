@@ -8,6 +8,8 @@ from litschema import reviews
 from litschema.articles import article_files
 from litschema.config import LitSchemaConfig
 
+from .helpers import publish_test_run
+
 
 def _cfg(project: Path) -> LitSchemaConfig:
     return LitSchemaConfig(
@@ -104,7 +106,7 @@ def test_read_reviews_ignores_non_dict_entry_values(tmp_path: Path) -> None:
 def test_upsert_stamps_the_entry_with_the_base_extraction_hash(tmp_path: Path) -> None:
     files = article_files(_cfg(tmp_path), "a")
     files.article_dir.mkdir(parents=True, exist_ok=True)
-    files.extraction.write_text(json.dumps({"article_id": "a", "title": "T"}))
+    run_dir = publish_test_run(files.article_dir, {"article_id": "a", "title": "T"})
 
     reviews.upsert_review(files, "title", {"author": "A", "signal": "verified", "timestamp": "t"})
 
@@ -112,7 +114,7 @@ def test_upsert_stamps_the_entry_with_the_base_extraction_hash(tmp_path: Path) -
     assert on_disk["version"] == 1
     assert "base_extraction_sha256" not in on_disk  # the stamp lives on entries
     assert on_disk["fields"]["title"]["base_extraction_sha256"] == hashlib.sha256(
-        files.extraction.read_bytes()
+        (run_dir / "agent-extraction.json").read_bytes()
     ).hexdigest()
 
 
@@ -131,10 +133,13 @@ def test_save_after_reextraction_does_not_disarm_staleness_for_other_entries(
 ) -> None:
     files = article_files(_cfg(tmp_path), "a")
     files.article_dir.mkdir(parents=True, exist_ok=True)
-    files.extraction.write_text(json.dumps({"article_id": "a", "title": "T", "ph": 7}))
+    publish_test_run(files.article_dir, {"article_id": "a", "title": "T", "ph": 7})
     reviews.upsert_review(files, "title", {"author": "A", "signal": "verified", "timestamp": "t1"})
 
-    files.extraction.write_text(json.dumps({"article_id": "a", "title": "T2", "ph": 7}))
+    # Re-extraction: a NEW run is published and activated; the old run stays.
+    publish_test_run(
+        files.article_dir, {"article_id": "a", "title": "T2", "ph": 7}, run_id="01TESTRUN0000000000000000B"
+    )
     assert reviews.base_extraction_stale(files) is True
 
     # A fresh save against the NEW base must not clear the warning for the
@@ -149,15 +154,17 @@ def test_save_after_reextraction_does_not_disarm_staleness_for_other_entries(
 def test_save_while_extraction_absent_preserves_older_stamps(tmp_path: Path) -> None:
     files = article_files(_cfg(tmp_path), "a")
     files.article_dir.mkdir(parents=True, exist_ok=True)
-    files.extraction.write_text(json.dumps({"article_id": "a", "title": "T"}))
+    publish_test_run(files.article_dir, {"article_id": "a", "title": "T"})
     reviews.upsert_review(files, "title", {"author": "A", "signal": "verified", "timestamp": "t1"})
 
-    files.extraction.unlink()
+    files.active_run_file.unlink()
     reviews.upsert_review(files, "year", {"author": "A", "signal": "verified", "timestamp": "t2"})
 
-    # The old entry's stamp survives, so recreating a DIFFERENT extraction
+    # The old entry's stamp survives, so activating a DIFFERENT extraction
     # is still detectable as stale.
-    files.extraction.write_text(json.dumps({"article_id": "a", "title": "CHANGED"}))
+    publish_test_run(
+        files.article_dir, {"article_id": "a", "title": "CHANGED"}, run_id="01TESTRUN0000000000000000B"
+    )
     assert reviews.base_extraction_stale(files) is True
 
 

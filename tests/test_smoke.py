@@ -251,7 +251,8 @@ def test_cli_status_exits_zero() -> None:
     )
     assert result.returncode == 0, result.stderr
     assert "inbox:" in result.stdout
-    assert "extracted:" in result.stdout
+    assert "runs:" in result.stdout
+    assert "active:" in result.stdout
 
 
 def test_status_uses_per_article_store(tmp_path: Path, monkeypatch) -> None:
@@ -325,7 +326,9 @@ def test_prepare_text_calls_python_api_for_one_article(
     def fail_subprocess(*args, **kwargs):
         raise AssertionError("litschema prepare-text should call the Python conversion function")
 
-    monkeypatch.setattr(cli.subprocess, "run", fail_subprocess)
+    import subprocess
+
+    monkeypatch.setattr(subprocess, "run", fail_subprocess)
     monkeypatch.setattr(pdf_to_markdown, "run", fake_prepare_text)
 
     result = CliRunner().invoke(
@@ -461,7 +464,9 @@ def test_verify_calls_webapp_runner_with_explicit_config(
     def fail_subprocess(*args, **kwargs):
         raise AssertionError("litschema verify should call the Python webapp function")
 
-    monkeypatch.setattr(cli.subprocess, "run", fail_subprocess)
+    import subprocess
+
+    monkeypatch.setattr(subprocess, "run", fail_subprocess)
     monkeypatch.setattr(webapp, "run_app", fake_run_app)
 
     result = CliRunner().invoke(
@@ -503,7 +508,9 @@ def test_validate_defaults_to_article_store(
     def fail_subprocess(*args, **kwargs):
         raise AssertionError("litschema validate should call the Python validation function")
 
-    monkeypatch.setattr(cli.subprocess, "run", fail_subprocess)
+    import subprocess
+
+    monkeypatch.setattr(subprocess, "run", fail_subprocess)
     monkeypatch.setattr(validate_extraction, "run", fake_validate)
 
     result = CliRunner().invoke(cli.app, ["validate"])

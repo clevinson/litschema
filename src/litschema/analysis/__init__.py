@@ -19,13 +19,13 @@ from typing import Any
 
 import pandas as pd
 
-from ..articles import iter_extraction_paths
+from ..articles import iter_active_extraction_paths
 from ..config import load_config
 
 
 def _default_extraction_paths() -> list[Path]:
     """Lazy lookup so tests / tooling can override LITSCHEMA_CONFIG."""
-    return list(iter_extraction_paths(load_config()))
+    return list(iter_active_extraction_paths(load_config()))
 
 
 def load_extractions(
