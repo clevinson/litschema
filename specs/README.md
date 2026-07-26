@@ -32,16 +32,15 @@ specs/
 
 ## Normative ownership
 
-- `article-store`: article identity, run layout, active selection, trash, and
-  run CLI safety;
+- `article-store`: article identity, run layout, and active selection;
 - `project-config`: the current schema, schema identity, discovery, and shared
   CLI rules;
 - `extraction`: extraction/reasoning contents, validation, and publication
   inputs;
-- `reviews`: stored and effective review state, hierarchy, and reconciliation;
+- `reviews`: stored and effective review state and hierarchy;
 - `onboarding`: first-run flow;
-- `refinement`: its durable workflow ledger, same-schema reruns, schema
-  upgrades, and `/litschema-refine`;
+- `refinement`: deferred; a conceptual stub here, specified on
+  `feat/multirun`;
 - `explore`: export views, audit sidecars, DuckDB, and MCP;
 - `verifier`: web routes, read surfaces, and frontend constraints;
 - `source-metadata`: bibliographic data and provenance.

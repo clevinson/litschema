@@ -4,8 +4,8 @@ Status: approved target.
 
 A review is a compact, run-bound overlay on immutable extracted data. This spec
 owns exact-path entries, effective review state, hierarchy, canonical storage,
-corrupt-review behavior, and conservative transfer between runs. Git diffs and
-pull requests own attribution and conflicting edits.
+and corrupt-review behavior. Git diffs and pull requests own attribution and
+conflicting edits.
 
 ## Implementation status
 
@@ -20,10 +20,7 @@ superseded by run binding.
 
 The 0.1.0 scope, tracked by `2gd1` (blocked on `tdv3`), is the stored model
 and its user surface: entries, effective state, hierarchy, add, subtree
-unreview, corrupt handling, and the annotation API. Reconciliation between
-runs — the Historical source schema section through Parent coverage and
-notes — is multirun behavior (0.2.0), developed on the `feat/multirun`
-branch; nothing in 0.1.0 creates a second run to reconcile against.
+unreview, corrupt handling, and the annotation API.
 
 ## Stored model
 
@@ -151,10 +148,7 @@ state or carries a note. Canonical redundancy is exact:
   from independently reviewed siblings.
 
 Saving parent verification removes only redundant descendant empty
-verifications. It retains descendant overrides and notes. Reconciliation may
-restore a source parent entry only when the source actually stored that parent
-and every target descendant transfers safely; it does not infer parent intent
-from complete leaf coverage.
+verifications. It retains descendant overrides and notes.
 
 Example:
 
@@ -213,135 +207,18 @@ A valid file with at least one entry is `reviewed`. An unreadable, invalid-shape
 or invalid-path file is `corrupt`. Corrupt state is never treated as empty:
 
 - review writes and deletes fail without changing the file;
-- activating an inactive corrupt-review run fails until the file is repaired or
-  deliberately removed;
 - if an active run's review becomes corrupt, verifier and export surface an
-  error instead of raw or unreviewed data;
-- list and purge preview report `corrupt`;
-- trash and purge treat `corrupt` as reviewed and require
-  `--confirm-reviewed`.
+  error instead of raw or unreviewed data.
 
-## Reconciliation between runs (multirun, 0.2.0)
+## Toward review transfer between runs
 
-Reconciliation copies review state only when source meaning and target mapping
-are proven. It resolves the historical source schema first, writes automatic
-safe transfers, persists ambiguous proposals in the refinement ledger, applies
-confirmed proposals, then canonicalizes.
-
-### Historical source schema
-
-The source run's mandatory `schema_hash` is the only identity anchor. The run
-records no commit, so resolution searches by content rather than following a
-pointer. It tries, in order:
-
-1. the current configured schema, when its exact bytes match the hash;
-2. reachable Git history, for schema-file bytes with the exact hash, including
-   earlier paths after a rename.
-
-Every candidate is rehashed before LinkML loading, so a match is proven rather
-than asserted. A project with no Git history, or none containing those bytes,
-simply reaches the unavailable case below; being outside a repository is a
-normal state, not an error.
-
-If no exact bytes can be reconstructed, source-schema status is `unavailable`.
-No review entry transfers automatically, including scalars, notes, container
-reviews, or array reviews. A user may confirm a persisted proposal against the
-raw source value and target schema; replace values must validate. Otherwise the
-entry is omitted. The refinement ledger records `resolved` or `unavailable`
-and the blob source used when resolved.
-
-### Scalars
-
-A scalar entry transfers automatically only when source and target paths have
-the same resolved LinkML scalar type, raw values are deeply equal with JSON type
-preserved, and any replace value validates against the target field. A scalar
-remove transfers under the same path/type/value conditions. Changed, missing,
-coerced, or invalid values receive no entry.
-
-### Object and array container overrides
-
-Container verification follows the parent-coverage rule. Container overrides
-transfer as a single terminal decision:
-
-- object replace/remove requires the same resolved induced class/subtree
-  signature and deeply equal raw source/target containers; replace also
-  requires target validation;
-- whole-array remove requires the same collection signature and count, complete
-  recursive item identity, and deep equality after identity alignment;
-- whole-array replace requires the same collection signature and count,
-  complete recursive one-to-one identity, raw arrays deeply equal in the same
-  order, and a replacement that validates against the target.
-
-A reorder, structural change, count change, missing source schema, or validation
-failure prevents automatic container-override transfer. The workflow may store
-a proposal for user confirmation; otherwise it omits the override.
-
-### Arrays and nested identity
-
-Array-bound review transfer requires unchanged collection type and item count
-plus a complete one-to-one identity mapping at every array boundary. Identity
-precedence at each boundary is:
-
-1. the item class's `identifier: true` slot, unique in both arrays;
-2. for scalar arrays, the scalar value, unique in both arrays.
-
-The workflow maps an outer element before considering any nested array inside
-it. Each nested array then applies its own type/count/identity rules. Ambiguity
-at an outer boundary blocks all automatic transfer below that element.
-Position alone is never identity. Duplicate or missing identifiers, duplicate
-scalar values, unkeyed object arrays, or incomplete matches are ambiguous.
-
-An array-element replace/remove maps to the identified target element's index.
-A transferred remove produces a null tombstone at that target index; it never
-splices either array. Reordering is safe for element-bound reviews only when the
-recursive mapping is complete.
-
-### Added values
-
-An add exists in no run's raw extraction, so it has no source value to compare.
-Transfer instead turns on whether the target run found what the human supplied.
-Carrying an add forward blindly would duplicate an entity the agent has since
-learned to extract.
-
-An added array element transfers only when its item class declares an
-`identifier: true` slot and the supplied value fills it. That identifier is the
-only evidence available:
-
-- if no target raw element carries that identifier, the target still lacks the
-  entity and the add transfers, appended past the target's own raw basis;
-- if a target raw element carries it, the agent found the entity, so the add is
-  superseded. It does not transfer and does not silently become a replace; the
-  path is left unreviewed so a human compares the agent's version against what
-  they wrote.
-
-An added object property transfers when the target still omits that property
-and its resolved scalar type is unchanged. A target that now populates the
-property supersedes the add on the same terms.
-
-An added array element whose item class has no identifier slot cannot be proven
-either way and never transfers automatically, consistent with omitting any
-unproven mapping. The workflow may persist it as a proposal for confirmation.
-Position is never identity for an add, exactly as it is never identity for a
-mapped element.
-
-For `/litschema-refine`, an ambiguous mapping proposal is stored only in the
-authoritative refinement ledger defined by `specs/refinement/spec.md`. It
-contains source/target run IDs, paths, the complete mapping, and
-`pending|confirmed|rejected`. It is not `review.json` state. Confirmation must
-persist before transfer, and reuse requires identical run IDs and mapping.
-Pending proposals block readiness. Rejection records omission.
-
-A one-article same-schema rerun without a refinement ledger does not persist LLM
-proposals. Ambiguous entries are omitted and the user reviews the target run
-directly.
-
-### Parent coverage and notes
-
-Reconciliation evaluates leaves covered by a source parent. It transfers only
-safe leaves. The source parent reappears on the target only when every target
-descendant transfers safely; otherwise the safe leaves remain explicit. A note
-follows its exact mapped node only when node identity is unambiguous. Review
-state, notes, and identity are never inferred.
+Because a review binds to one immutable run, rerunning an article will one day
+need its reviews carried forward conservatively — copied only where the source
+meaning and target mapping are proven, with everything unproven left for a
+human. That reconciliation workflow is developed on the `feat/multirun` branch
+and is deliberately not specified here; nothing in this release creates a
+second run to reconcile against. Run-bound storage is what makes it possible
+later without changing this format.
 
 ## User surface
 
@@ -367,14 +244,10 @@ review state.
 - Subtree unreview removes target descendants and preserves unaffected sibling
   state without splitting overrides.
 - Corrupt review is explicit and lifecycle-protected.
-- Historical schema resolution requires exact hash equality.
-- Automatic reconciliation omits any unproven mapping.
-- Proposal confirmation is durable before review transfer.
 - Array-element removal preserves indexes with a null tombstone.
 - Absence is never review state; only an add makes an omitted field reviewable.
 - Added values validate against the schema and stay identifiable as
   human-origin.
-- An add never transfers onto a target that already supplies the value.
 
 ## Test obligations
 
@@ -390,26 +263,10 @@ Implementation coverage must pin:
   extraction root, and for a value failing item-class or required-slot
   validation; non-collision of appended indexes with tombstones; and
   human-origin marking;
-- add transfer when the target still omits the value, supersession when the
-  target supplies it, and no automatic transfer for an identifier-less item
-  class;
 - exact canonical redundancy, parent save compaction, no parent synthesis from
   sibling coverage, raw-tree minimal frontier expansion, nested-array sibling
   selection, and stable raw indexes;
 - subtree unreview for objects and nested arrays, descendant override/note
   removal, unaffected sibling preservation, note-discard confirmation, and
   rejection beneath container overrides;
-- corrupt parse/shape/path states, write refusal, activation refusal, active
-  consumer errors, lifecycle protection, and confirmed trash/purge;
-- source schema lookup by current exact bytes, by history hash, and across a
-  renamed historical path; rehashing of every candidate before loading;
-  resolution outside a Git repository; and unavailable-schema omission;
-- unchanged scalar transfer and changed/type-coerced/invalid omission;
-- object replace/remove and whole-array replace/remove safe and unsafe cases,
-  including mandatory recursive identity for both array operations;
-- recursive nested-array identity, outer ambiguity, safe reorder,
-  duplicate/missing identity, and element replace/remove target-index mapping;
-- persisted pending/confirmed/rejected proposals, decision reuse constraints,
-  target validation, and one-article ambiguous omission;
-- source-parent transfer, partial safe-leaf expansion, note mapping, and
-  canonicalization.
+- corrupt parse/shape/path states, write refusal, and active consumer errors.

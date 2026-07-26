@@ -93,10 +93,10 @@ its model still publishes.
 
 `litschema agent record-extraction <article-id> --run-id <run-id>` finalizes a
 staged attempt and publishes the directory atomically. It does not write
-extraction provenance into `article-metadata.json`. In 0.1.0 publishing a
-complete non-error run also activates it; there is no other activation path.
-Selective activation — reruns that stay inactive until chosen — is multirun
-behavior owned by `specs/refinement/spec.md`.
+extraction provenance into `article-metadata.json`. Publishing a complete
+non-error run also activates it; there is no other activation path. Selective
+activation — reruns that stay inactive until chosen — arrives with multirun
+support in a future release.
 
 ## Agent contract
 

@@ -11,16 +11,13 @@ version-1 model, and ORCID lookup. Its read API is the `/api/...` surface named
 under API ownership below.
 
 Pending: the route architecture. There is no hash routing at all today — no
-`#/`, `#/doc/{id}`, or `#/runs`, and therefore no dataset summary, no
-progress-metric aggregation, and no run or refinement visibility. Deep links,
-encoded queue state, and the schema-error/review-error null-out contract are
-part of that pending work.
+`#/` or `#/doc/{id}` — and therefore no dataset summary and no progress-metric
+aggregation. Deep links, encoded queue state, and the
+schema-error/review-error null-out contract are part of that pending work.
 
 The 0.1.0 scope, tracked by `ka84` (blocked on `tdv3` and `2gd1`), is the `#/`
 dataset overview and `#/doc/{id}` document review against the active run, with
-review progress metrics. The `#/runs` route, refinement metrics, and the
-`needs_refinement_attention` flag are multirun (0.2.0), developed on the
-`feat/multirun` branch; in 0.1.0 those metrics are absent, not null-filled.
+review progress metrics.
 
 `litschema verify` is the loopback-only human review application. It consumes
 active runs and run-bound reviews but does not own their storage or lifecycle.
@@ -43,13 +40,17 @@ review.
 
 ## Hash routes
 
-One application shell exposes three route-level pages:
+One application shell exposes two route-level pages:
 
-| route | purpose | since |
-|---|---|---|
-| `#/` | dataset summary and work queue | 0.1.0 |
-| `#/doc/{article-id}` | one document's active-run review | 0.1.0 |
-| `#/runs` | minimal run and refinement visibility | multirun (0.2.0) |
+| route | purpose |
+|---|---|
+| `#/` | dataset summary and work queue |
+| `#/doc/{article-id}` | one document's active-run review |
+
+The hash-route shell is also where future run-level visibility will hang — a
+route showing an article's runs and their states once articles can have more
+than one. That surface is developed on the `feat/multirun` branch and is not
+specified here.
 
 Routes are deep-linkable and survive reload. Filter, sort, and view state use
 fragment query parameters and travel from the summary to a document route.
@@ -62,18 +63,17 @@ Unknown routes render a recoverable not-found view.
 
 The summary lists every assembled article, including articles with no active
 run. It reports source metadata, active run ID, active schema hash, extraction
-and reasoning availability, effective review progress, override count, and
-whether the article needs refinement attention. Metrics are schema-derived; no
-ERW field names are hard-coded.
+and reasoning availability, effective review progress, and override count.
+Metrics are schema-derived; no ERW field names are hard-coded.
 
 ### Progress metrics
 
 `specs/reviews/spec.md` owns effective state for a path. The verifier API owns
-aggregation. It interprets fields with the exact schema bytes associated with
-the displayed active run, using the historical resolution contract in the
-reviews spec. It never substitutes the current project schema for an older run.
-If that schema is unavailable, the API sets `schema_error` and makes field
-counts, progress, completion, and typed editor metadata `null`.
+aggregation. It interprets fields with the schema whose hash the displayed
+active run records; when the current project schema's bytes no longer match
+that hash, the API sets `schema_error` and makes field counts, progress,
+completion, and typed editor metadata `null` rather than silently aggregating
+against the wrong schema.
 
 For a valid active run with a resolved schema, it returns:
 
@@ -101,26 +101,6 @@ a corrupt review file set `review_error` and make all review counts, progress,
 and completion `null`; the API never reports them as zero. An article without a
 valid active run reports `n_fields = 0`, review counts `0`, progress `0.0`, and
 `is_complete = false`.
-
-Live refinement metrics come only from the sole nonterminal ledger owned by
-`specs/refinement/spec.md`. When none exists, live refinement metrics are null.
-A completed ledger is displayed only when its refinement ID is explicitly
-selected; the verifier never chooses one by timestamp or directory order:
-
-- `eligible_total`, `excluded_total`, and `added_after_baseline` use ledger
-  scope;
-- `candidate_ready`, `reconciled`, and `activated` count eligible entries in
-  the corresponding recorded state;
-- `cleanup_remaining` counts abandoned candidates not yet `trashed`;
-- `current_schema_coverage = activated / eligible_total`, or `1.0` when the
-  eligible set is empty;
-- `refinement_complete` is the ledger's completion predicate, not a frontend
-  inference.
-
-An eligible article has `needs_refinement_attention` when its ledger entry lacks
-a valid candidate, resolved/omitted reconciliation, or active accepted run, or
-when it owns a pending proposal or cleanup error. Excluded and later-added
-articles display their scope status but do not enter the denominator.
 
 ### Document review
 
@@ -151,19 +131,6 @@ override under `specs/reviews/spec.md`, appended past the raw basis.
 Added values render as human-origin wherever a raw value would otherwise
 appear, so a reviewer can always see which values no agent produced.
 
-### Runs and refinement visibility (multirun, 0.2.0)
-
-`#/runs` shows live and trashed runs, active selection, schema hash,
-creation time, model, reviewed/corrupt state, and the sole
-nonterminal refinement ledger's phase, scoped coverage, exclusions, pending
-proposals, and cleanup count. A completed ledger appears only after explicit ID
-selection. The page does not infer ledger selection, phase, or completion.
-
-The page is visibility-oriented. List, activate, trash, restore, purge, and
-reviewed-run confirmation remain `litschema runs` operations. The frontend
-must not add an unprotected mutation path or imply that destructive actions
-succeeded.
-
 ## Queue filter trust boundary
 
 The local power-user queue filter may evaluate JavaScript against article
@@ -176,9 +143,8 @@ review do not depend on the filter.
 
 The target read surface retains `GET /api/articles`, `/api/markdown/{id}`,
 `/api/pdf/{id}`, `/api/schema/fields`, and optional ORCID lookup. Extraction and
-reasoning reads accept an explicit run ID; run and refinement summary endpoints
-serve `#/runs`. Review endpoints follow `specs/reviews/spec.md` and always carry
-a run ID. After a review write, the document and summary use server-recomputed
+reasoning reads accept an explicit run ID. Review endpoints follow
+`specs/reviews/spec.md` and always carry a run ID. After a review write, the document and summary use server-recomputed
 effective state. Route entry and explicit refresh reread disk state so CLI run
 changes appear without restarting the server. Run mutation endpoints are out of
 scope. Server handlers call Python APIs in process and never shell out to CLI
@@ -191,7 +157,6 @@ commands.
 - All assembled articles remain visible, including those without active runs.
 - Each document edit is bound to the run displayed when the edit began.
 - Stored and effective review state are not conflated.
-- The runs page is read-only visibility; CLI protections own mutation.
 - Route state is deep-linkable and recoverable.
 - Traversal-shaped IDs fail as 404s.
 
@@ -202,21 +167,17 @@ Implementation coverage must replace brittle source-substring assertions with:
 - structural checks for the application shell, native module graph, pinned
   local assets and licenses, packaged-wheel inclusion, semantic landmarks,
   labels, and route containers;
-- browser behavior on `#/`, `#/doc/{id}`, and `#/runs`, including direct load,
-  fragment query state, filtered next/previous, exclusion of the open article,
+- browser behavior on `#/` and `#/doc/{id}`, including direct load, fragment
+  query state, filtered next/previous, exclusion of the open article,
   navigation, back/forward, and reload;
 - exact active-run schema selection, unavailable-schema errors, and review
   metric formulas for no-run, zero-leaf, verified, overridden, parent-covered,
   terminal-container, invalid-path, and corrupt-review cases;
-- ledger-derived eligibility, exclusions, later additions, candidate,
-  reconciliation, activation, cleanup, coverage, completion, and attention
-  metrics;
 - document selection, raw/effective values, inherited parent coverage,
   replace/remove overrides, notes, and no-active-run placeholders;
 - server-recomputed summaries after review writes, explicit refresh after CLI
   file changes, and stale displayed-run protection when active selection changes
   concurrently;
-- live/inactive/trashed run visibility without mutation controls;
 - offline startup with external network blocked, zero core external requests,
   and graceful optional ORCID failure;
 - parity for document loading, typed filters, keyboard navigation, view modes,
