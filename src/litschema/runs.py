@@ -132,6 +132,54 @@ def _write_active_pointer(files: ArticleFiles, run_id: str) -> None:
     os.replace(tmp, files.active_run_file)
 
 
+class RunActivationError(Exception):
+    """A run could not be activated; the active pointer is unchanged."""
+
+
+def is_error_run(run: RunFiles) -> bool:
+    """True when the run's extraction is an error marker rather than data."""
+    try:
+        data = json.loads(run.extraction.read_text())
+    except (OSError, json.JSONDecodeError):
+        return True
+    return bool(isinstance(data, dict) and data.get("error"))
+
+
+def activate_run(files: ArticleFiles, run_id: str) -> None:
+    """Select a published, complete, non-error run as the article's active run.
+
+    Activation changes only the pointer; neither run is mutated. Selecting the
+    already-active run is a no-op rather than an error.
+    """
+    try:
+        run = run_files(files, run_id)
+    except BrokenActiveRunError as exc:
+        raise RunActivationError(str(exc)) from None
+    if not run.run_json.is_file() or not run.extraction.is_file():
+        raise RunActivationError(f"{run_id} is not a published run of {files.article_id}")
+    if is_error_run(run):
+        raise RunActivationError(f"{run_id} is an error-marker run and cannot be activated")
+    _write_active_pointer(files, run.run_id)
+
+
+def run_summary(run: RunFiles, *, active_run_id: str | None) -> dict:
+    """Display fields for `runs list`, tolerant of an unreadable run.json."""
+    try:
+        record = run.read_run_json()
+    except (OSError, json.JSONDecodeError):
+        record = {}
+    agent = record.get("agent") or {}
+    return {
+        "run_id": run.run_id,
+        "active": run.run_id == active_run_id,
+        "error": is_error_run(run),
+        "created_at": record.get("created_at"),
+        "schema_hash": record.get("schema_hash"),
+        "model": agent.get("model"),
+        "reviewed": run.review.is_file(),
+    }
+
+
 def _hash_file(path: Path, what: str) -> str:
     import hashlib
 

@@ -443,3 +443,83 @@ def test_agent_record_extraction_rejects_unknown_article(tmp_path: Path, monkeyp
 
     assert result.exit_code == 2
     assert "unknown article: nope" in result.output
+
+
+# ── runs list / activate ─────────────────────────────────────────────────────
+
+
+def _publish_second_run(article_dir: Path, run_id: str, *, error: bool = False) -> None:
+    """Add a second published run beside whatever record-extraction wrote."""
+    from tests.helpers import publish_test_run
+
+    payload = (
+        {"article_id": "smith-2024", "error": True, "reason": "bad scan"}
+        if error
+        else {"article_id": "smith-2024", "title": "Second"}
+    )
+    publish_test_run(article_dir, payload, run_id=run_id, activate=False)
+
+
+def test_runs_activate_switches_the_active_pointer(tmp_path: Path, monkeypatch) -> None:
+    cfg, article_dir = _publishable_project(tmp_path)
+    monkeypatch.setattr(cli, "_require_project", lambda ctx=None: SimpleNamespace(config=cfg))
+    runner = CliRunner()
+    assert runner.invoke(cli.app, ["agent", "record-extraction", "smith-2024"]).exit_code == 0
+    first = json.loads((article_dir / "active-run.json").read_text())["run_id"]
+    _publish_second_run(article_dir, "01SECONDRUN00000000000000")
+
+    result = runner.invoke(
+        cli.app, ["runs", "activate", "smith-2024", "01SECONDRUN00000000000000"]
+    )
+
+    assert result.exit_code == 0, result.output
+    assert json.loads((article_dir / "active-run.json").read_text()) == {
+        "run_id": "01SECONDRUN00000000000000"
+    }
+    # Activation mutates neither run.
+    assert (article_dir / "extraction-runs" / first / "run.json").is_file()
+
+
+def test_runs_activate_rejects_unknown_and_error_runs(tmp_path: Path, monkeypatch) -> None:
+    cfg, article_dir = _publishable_project(tmp_path)
+    monkeypatch.setattr(cli, "_require_project", lambda ctx=None: SimpleNamespace(config=cfg))
+    runner = CliRunner()
+    assert runner.invoke(cli.app, ["agent", "record-extraction", "smith-2024"]).exit_code == 0
+    original = (article_dir / "active-run.json").read_text()
+    _publish_second_run(article_dir, "01ERRORRUN000000000000000", error=True)
+
+    missing = runner.invoke(cli.app, ["runs", "activate", "smith-2024", "01NOSUCHRUN00000000000000"])
+    assert missing.exit_code == 1
+    assert "not a published run" in missing.output
+
+    errored = runner.invoke(cli.app, ["runs", "activate", "smith-2024", "01ERRORRUN000000000000000"])
+    assert errored.exit_code == 1
+    assert "error-marker" in errored.output
+
+    traversal = runner.invoke(cli.app, ["runs", "activate", "smith-2024", "../escape"])
+    assert traversal.exit_code == 1
+
+    # Every refusal leaves the pointer untouched.
+    assert (article_dir / "active-run.json").read_text() == original
+
+
+def test_runs_list_marks_active_and_reports_model(tmp_path: Path, monkeypatch) -> None:
+    cfg, article_dir = _publishable_project(tmp_path)
+    monkeypatch.setattr(cli, "_require_project", lambda ctx=None: SimpleNamespace(config=cfg))
+    runner = CliRunner()
+    assert (
+        runner.invoke(
+            cli.app,
+            ["agent", "record-extraction", "smith-2024", "--model", "claude-sonnet-5"],
+        ).exit_code
+        == 0
+    )
+    _publish_second_run(article_dir, "01SECONDRUN00000000000000")
+
+    result = runner.invoke(cli.app, ["runs", "list", "smith-2024"])
+
+    assert result.exit_code == 0, result.output
+    assert "claude-sonnet-5" in result.output
+    assert result.output.count("01SECONDRUN00000000000000") == 1
+    active_lines = [line for line in result.output.splitlines() if "active" in line]
+    assert len(active_lines) == 1  # exactly one run is active

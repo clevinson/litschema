@@ -18,6 +18,8 @@ staged artifacts, computes the reproduction hashes, publishes atomically, and
 activates complete non-error runs. Every consumer (verifier, export, validate,
 status) resolves articles through the active run.
 
+Live today also: `runs list` and `runs activate`.
+
 Pending: `review.json` placement. The layout below shows it inside the run
 directory, but the version-1 review model still lives at the article root; it
 moves into the run with reviews v2 (`2gd1`).
@@ -128,20 +130,39 @@ source and candidate runs, and a parent reference may be added here then.
 The file is written atomically. Absence means that the article has no active
 extraction. Its target must be a complete, non-error run under the same
 article. A broken pointer is an integrity error; consumers must not guess
-another run. The only activation is the publisher's: publishing a complete
-non-error run atomically activates it, and activation changes only this
-pointer, never a run.
+another run. Activation changes only this pointer, never a run.
+
+Publishing a complete non-error run activates it, so the newest successful
+extraction is active by default. `runs activate` reselects an earlier run when
+that default is wrong — a re-extraction that turned out worse than what it
+replaced is otherwise unrecoverable, because a superseded run stays on disk
+but nothing can point at it again.
 
 Verifier and export consumers resolve each article independently.
 
+## Run CLI
+
+| command | contract |
+|---|---|
+| `runs list [<article-id>]` | List each run's ID, timestamp, model, schema hash, and active/error/reviewed state. Without an article, list every article's runs. |
+| `runs activate <article-id> <run-id>` | Atomically select a published, complete, non-error run. |
+
+Activation refuses a run that is not published under this article, an
+error-marker run, and a traversal-shaped ID. Every refusal leaves the active
+pointer unchanged. Reselecting the already-active run succeeds unchanged.
+Neither command mutates a run.
+
+Listing is tolerant where selection is strict: an unreadable `run.json` still
+lists, with its unknown fields blank, so a damaged run remains visible to the
+person who has to deal with it.
+
 ## Toward multiple runs
 
-The run-per-directory layout exists so a future release can hold several runs
-per article — reruns after a schema change, side-by-side candidates, trash and
-restore — without changing this format. That behavior, and the CLI that
-manages it, is developed on the `feat/multirun` branch and is deliberately not
-specified here. In this release the only lifecycle is: publish activates, and
-superseded runs stay inert on disk.
+Deleting runs — trash, restore, and purge — is deliberately absent. A
+superseded run stays on disk, inert but selectable, and nothing in this
+release removes one. That lifecycle, along with reprocessing a corpus after a
+schema change, is developed on the `feat/multirun` branch and is not specified
+here.
 
 ## Manifest and intake
 
@@ -208,6 +229,10 @@ Implementation coverage must pin:
 - publish-activates: a successful publish replaces the active pointer, an
   error-marker publish does not, and a re-extraction leaves the prior run
   directory intact and unmodified;
+- `runs activate` reselection, refusal of unknown/error/traversal run IDs with
+  an unchanged pointer, and mutation of neither run;
+- `runs list` active/error/reviewed marking, model and schema reporting, and
+  tolerance of an unreadable `run.json`;
 - missing active selection as a normal unextracted state and broken selection
   as an integrity failure;
 - assemble idempotence, collision handling, offline operation, and atomic

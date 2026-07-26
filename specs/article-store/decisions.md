@@ -145,3 +145,31 @@ use case); shipping the old article-root layout in 0.1.0 (would force the
 one format migration the alpha policy exists to avoid); auto-trashing
 superseded runs (destructive behavior without lifecycle commands to inspect
 or undo it).
+
+
+## 2026-07-26 — `runs list`/`activate` return to 0.1.0
+
+**Context:** the same-day entry above cut the whole `runs` group from 0.1.0,
+reasoning that with one meaningful run per article there is never a choice to
+make. The first real corpus run disproved it within the hour. Two agents
+extracted one paper concurrently and both runs were valid but materially
+different — 45 measurements versus 5 — and the weaker one won the active
+pointer purely by finishing seventy seconds later. Publish-activates offered
+no way back, and the better run sat on disk unreachable.
+
+The race came from a dispatch bug, but the gap it exposed does not depend on
+one: any re-extraction that turns out worse than what it replaced is
+permanent, because a superseded run remains on disk with nothing able to point
+at it again.
+
+**Decision:** `runs list` and `runs activate` ship in 0.1.0. Activation is
+strict — it refuses unpublished, error-marker, and traversal-shaped run IDs,
+and every refusal leaves the pointer unchanged. Listing is tolerant, showing a
+run with an unreadable `run.json` rather than hiding it. Deletion stays out:
+`trash`, `restore`, and `purge` remain multirun work, so 0.1.0 can select
+among runs but never destroy one.
+
+**Rejected:** shipping `activate` without `list`, which would require reading
+run directories by hand to learn the ID to pass; and auto-selecting the "best"
+run by heuristic such as measurement count, which would substitute a guess for
+the human judgment this exists to enable.

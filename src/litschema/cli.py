@@ -442,6 +442,12 @@ meta_app = typer.Typer(
 )
 app.add_typer(meta_app, name="meta")
 
+runs_app = typer.Typer(
+    help="Inspect an article's extraction runs and choose the active one.",
+    no_args_is_help=True,
+)
+app.add_typer(runs_app, name="runs")
+
 
 def _require_article(cfg: LitSchemaConfig, article_id: str):
     from .articles import InvalidArticleIdError
@@ -455,6 +461,72 @@ def _require_article(cfg: LitSchemaConfig, article_id: str):
         typer.secho(f"{CROSS} unknown article: {article_id}", fg=typer.colors.RED)
         raise typer.Exit(code=2)
     return files
+
+
+@runs_app.command("list", help="List an article's extraction runs, or every article's.")
+def runs_list(
+    ctx: typer.Context,
+    article_id: str | None = typer.Argument(None, help="Article to list; omit for all"),
+):
+    project = _require_project(ctx)
+    cfg = project.config
+    from .articles import iter_metadata_paths
+    from .runs import BrokenActiveRunError, active_run_id, iter_run_ids, run_files, run_summary
+
+    if article_id is not None:
+        article_ids = [_require_article(cfg, article_id).article_id]
+    else:
+        article_ids = [path.parent.name for path in iter_metadata_paths(cfg)]
+
+    total = 0
+    for current_id in article_ids:
+        files = article_files(cfg, current_id)
+        run_ids = iter_run_ids(files)
+        if not run_ids:
+            if article_id is not None:
+                typer.echo(f"{current_id}: no published runs")
+            continue
+        try:
+            selected = active_run_id(files)
+        except BrokenActiveRunError:
+            selected = None
+            typer.secho(f"{CROSS} {current_id}: broken active-run pointer", fg=typer.colors.RED)
+        typer.echo(current_id)
+        for run_id in run_ids:
+            total += 1
+            info = run_summary(run_files(files, run_id), active_run_id=selected)
+            marks = []
+            if info["active"]:
+                marks.append("active")
+            if info["error"]:
+                marks.append("error")
+            if info["reviewed"]:
+                marks.append("reviewed")
+            flags = f"  [{', '.join(marks)}]" if marks else ""
+            created = info["created_at"] or "?"
+            model = info["model"] or "unknown model"
+            schema = (info["schema_hash"] or "sha256:?")[:14]
+            typer.echo(f"  {run_id}  {created}  {model}  {schema}…{flags}")
+    if article_id is None and total == 0:
+        typer.echo("no published runs")
+
+
+@runs_app.command("activate", help="Select a published run as the article's active run.")
+def runs_activate(
+    ctx: typer.Context,
+    article_id: str = typer.Argument(..., help="Article whose active run to change"),
+    run_id: str = typer.Argument(..., help="Run to activate"),
+):
+    project = _require_project(ctx)
+    files = _require_article(project.config, article_id)
+    from .runs import RunActivationError, activate_run
+
+    try:
+        activate_run(files, run_id)
+    except RunActivationError as exc:
+        typer.secho(f"{CROSS} {exc}", fg=typer.colors.RED)
+        raise typer.Exit(code=1) from None
+    typer.echo(f"{CHECK} {article_id} now active: {run_id}")
 
 
 @meta_app.command("show", help="Print the article's source-metadata block as JSON.")

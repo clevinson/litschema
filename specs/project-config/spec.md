@@ -76,7 +76,7 @@ an uncommitted schema may become unreconstructable once edited. `doctor` and
 | verb | normative owner |
 |---|---|
 | `init`, `skills install` | `specs/onboarding` |
-| `assemble`, `prepare-text` | `specs/article-store` |
+| `assemble`, `prepare-text`, `runs *` | `specs/article-store` |
 | `validate`, `agent *` | `specs/extraction` |
 | `meta *` | `specs/source-metadata` |
 | `verify` | `specs/verifier` |
