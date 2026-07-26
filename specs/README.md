@@ -105,16 +105,32 @@ Repo-wide conventions that aren't capability behavior — build/test commands,
 project layout, git and PR conventions, issue tracking — live in `AGENTS.md`
 at the repo root, not here.
 
-## v0.1.0 scope
+## Release plan: 0.1.0 and multirun
 
-Decided 2026-07-24. The first published release includes the immutable-runs
-format change — `tdv3` (run publish, active selection, `runs list`/`activate`)
-and `2gd1` (reviews v2) — so that the on-disk format is stable before anyone
-installs the package. Under the alpha policy above, a format change after
-publication would break early corpora with no migration path.
+Decided 2026-07-26; supersedes the 2026-07-24 scope note. Work runs on two
+branches so the MVP ships without waiting on multi-run behavior:
 
-Deferred past v0.1.0: `bmwn` (export views), `ka84` (verifier routes), `e7jh`
-(trash/restore/purge), all of `refinement`, and `e48h` (provider-native
-`extract`). Each is additive rather than format-breaking, so shipping them
-later costs nobody a migration. `litschema extract` stays a documented stub
-that directs users to the bundled agent skill.
+**0.1.0 — the `release/0.1.0` branch.** The tightest publishable MVP. It
+ships the run-shaped on-disk format so 0.2.0 introduces no breaking layout
+change, but none of the multi-run behavior:
+
+- article store: the `extraction-runs/<run-id>/` layout, the simplified
+  `run.json`, and `active-run.json`. Publishing a complete non-error run
+  activates it; prior runs stay inert on disk. No `runs` command group.
+- reviews v2 — run-bound replace/remove/add — without reconciliation.
+- verifier: dataset overview page and document review. No `#/runs` route and
+  no refinement metrics.
+- CI, the pre-release naming pass, the runnable demo project, and PyPI
+  publishing. `litschema extract` stays a documented stub.
+
+**Multirun — the `feat/multirun` branch, targeting 0.2.0.** Everything that
+exists because an article can have more than one meaningful run: the
+refinement capability and `/litschema-refine`, review reconciliation and
+proposals, the `runs` CLI (`list`/`activate`/`trash`/`restore`/`purge`), the
+verifier `#/runs` route and refinement metrics, and any run-selection
+semantics beyond publish-activates. Developed spec-first and rebased onto the
+0.1.0 line regularly.
+
+Export views (`--view audited` and the audit sidecar) are post-0.1.0 but do
+not depend on multirun. The alpha-policy rationale stands: the 0.1.0 format
+must be one nobody has to migrate away from when multirun lands.

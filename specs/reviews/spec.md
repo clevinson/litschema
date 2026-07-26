@@ -16,8 +16,14 @@ optional `override_value`/`note`/`source`/`batch_id`, and an
 extraction-hash staleness guard. Version 2 below replaces that model rather
 than extending it: the legacy keys become invalid, verification becomes an
 empty object, overrides move under an `override` key, and staleness is
-superseded by run binding. Tracked by `2gd1`, which is blocked on `tdv3`
-because reviews move inside the run directory.
+superseded by run binding.
+
+The 0.1.0 scope, tracked by `2gd1` (blocked on `tdv3`), is the stored model
+and its user surface: entries, effective state, hierarchy, add, subtree
+unreview, corrupt handling, and the annotation API. Reconciliation between
+runs — the Historical source schema section through Parent coverage and
+notes — is multirun behavior (0.2.0), developed on the `feat/multirun`
+branch; nothing in 0.1.0 creates a second run to reconcile against.
 
 ## Stored model
 
@@ -215,7 +221,7 @@ or invalid-path file is `corrupt`. Corrupt state is never treated as empty:
 - trash and purge treat `corrupt` as reviewed and require
   `--confirm-reviewed`.
 
-## Reconciliation between runs
+## Reconciliation between runs (multirun, 0.2.0)
 
 Reconciliation copies review state only when source meaning and target mapping
 are proven. It resolves the historical source schema first, writes automatic

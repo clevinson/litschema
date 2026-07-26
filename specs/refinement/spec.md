@@ -6,11 +6,12 @@ Status: approved target.
 
 None of this spec ships. There is no `refinements/` ledger, no
 `/litschema-refine` skill, and no same-schema rerun or schema-upgrade workflow.
-It is the last capability in the immutable-runs line of work and has no tracked
-issue yet — deliberately, since it is out of scope for v0.1.0 and its shape may
-change once `tdv3` and `2gd1` are built. Consumers that reference a ledger
-(verifier metrics, review-transfer proposals) are specified to degrade to null
-or omission while it does not exist.
+The whole capability is multirun work, targeting 0.2.0 and developed
+spec-first on the `feat/multirun` branch; it is entirely out of scope for
+0.1.0, whose single-run write path never creates a second run to refine.
+Consumers that reference a ledger (verifier metrics, review-transfer
+proposals) are specified to degrade to null or omission while it does not
+exist.
 
 Refinement changes an established project's extraction contract without
 rewriting history. The project-local `/litschema-refine` skill pilots schema or

@@ -121,3 +121,27 @@ transcript to recover the model, which depends on an undocumented internal
 format; a `schema_dirty` flag, whose warning belongs in `doctor`/`status`
 rather than stamped into every artifact; and retaining `lineage` for a release
 in which no workflow can create a non-initial run.
+
+
+## 2026-07-26 — 0.1.0 ships publish-activates and no runs CLI
+
+**Context:** the 2026-07-24 build-order entry kept `runs list`/`activate` in
+0.1.0 as the load-bearing read path. Splitting the release into a tight MVP
+and a separate multirun line showed even that was more surface than the MVP
+needs: with one meaningful run per article, there is never a choice to make,
+so a selection command is a UI for a situation that cannot occur.
+
+**Decision:** 0.1.0 ships the full run-shaped format — layout, `run.json`,
+`active-run.json` — with a single-run write path: publishing a complete
+non-error run atomically activates it, and that is the only activation.
+Re-extraction publishes and activates a new run; prior runs and their
+run-bound reviews stay inert on disk. The whole `runs` command group
+(`list`/`activate`/`trash`/`restore`/`purge`) moves to the multirun branch,
+targeting 0.2.0, with its contract unchanged. This supersedes the 2026-07-24
+entry's build order while keeping its purge-rigor requirements intact.
+
+**Rejected:** shipping `runs list`/`activate` in 0.1.0 (surface without a
+use case); shipping the old article-root layout in 0.1.0 (would force the
+one format migration the alpha policy exists to avoid); auto-trashing
+superseded runs (destructive behavior without lifecycle commands to inspect
+or undo it).

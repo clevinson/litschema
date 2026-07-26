@@ -14,8 +14,13 @@ Pending: the route architecture. There is no hash routing at all today — no
 `#/`, `#/doc/{id}`, or `#/runs`, and therefore no dataset summary, no
 progress-metric aggregation, and no run or refinement visibility. Deep links,
 encoded queue state, and the schema-error/review-error null-out contract are
-part of that pending work. Tracked by `ka84`, blocked on `tdv3` and `2gd1`.
-Live refinement metrics stay null until a ledger exists.
+part of that pending work.
+
+The 0.1.0 scope, tracked by `ka84` (blocked on `tdv3` and `2gd1`), is the `#/`
+dataset overview and `#/doc/{id}` document review against the active run, with
+review progress metrics. The `#/runs` route, refinement metrics, and the
+`needs_refinement_attention` flag are multirun (0.2.0), developed on the
+`feat/multirun` branch; in 0.1.0 those metrics are absent, not null-filled.
 
 `litschema verify` is the loopback-only human review application. It consumes
 active runs and run-bound reviews but does not own their storage or lifecycle.
@@ -40,11 +45,11 @@ review.
 
 One application shell exposes three route-level pages:
 
-| route | purpose |
-|---|---|
-| `#/` | dataset summary and work queue |
-| `#/doc/{article-id}` | one document's active-run review |
-| `#/runs` | minimal run and refinement visibility |
+| route | purpose | since |
+|---|---|---|
+| `#/` | dataset summary and work queue | 0.1.0 |
+| `#/doc/{article-id}` | one document's active-run review | 0.1.0 |
+| `#/runs` | minimal run and refinement visibility | multirun (0.2.0) |
 
 Routes are deep-linkable and survive reload. Filter, sort, and view state use
 fragment query parameters and travel from the summary to a document route.
@@ -146,7 +151,7 @@ override under `specs/reviews/spec.md`, appended past the raw basis.
 Added values render as human-origin wherever a raw value would otherwise
 appear, so a reviewer can always see which values no agent produced.
 
-### Runs and refinement visibility
+### Runs and refinement visibility (multirun, 0.2.0)
 
 `#/runs` shows live and trashed runs, active selection, schema hash,
 creation time, model, reviewed/corrupt state, and the sole

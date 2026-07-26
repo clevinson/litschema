@@ -15,10 +15,10 @@ Live today: the article directory and its `article-metadata.json` manifest, the
 
 Pending — everything run-shaped. Extraction, reasoning, and review files
 currently sit at the article root and are overwritten in place; there is no
-`extraction-runs/`, no `run.json`, no `active-run.json`, and no `runs` command
-group. The Layout, Run boundary, Active selection, and Run CLI sections below
-therefore describe the target, not today. Tracked by `tdv3` (`runs
-list`/`activate`) and `e7jh` (`trash`/`restore`/`purge`).
+`extraction-runs/`, no `run.json`, and no `active-run.json`. The Layout, Run
+boundary, and Active selection sections below are 0.1.0 target, tracked by
+`tdv3`, whose write path is publish-activates. The Run CLI section is multirun
+(0.2.0), tracked by `e7jh` on the `feat/multirun` branch.
 
 ## Layout
 
@@ -130,13 +130,16 @@ The file is written atomically. Absence means that the article has no active
 extraction. Its target must be a complete, non-error, non-trashed run under the
 same article. A broken pointer is an integrity error; consumers must not guess
 another run. Activation changes only this pointer and never mutates either run.
+In 0.1.0 the only activation is the publisher's: publishing a complete
+non-error run atomically activates it. Choosing among runs is multirun
+behavior.
 
 Verifier and export consumers resolve each article independently. A corpus may
 therefore be temporarily mixed during a resumable refinement, but the
 refinement workflow is not complete until every eligible article selects a run
 using the current schema hash.
 
-## Run CLI
+## Run CLI (multirun, 0.2.0)
 
 The command group is `litschema runs`:
 
@@ -166,16 +169,16 @@ arguments, both modes produce the same candidate and exclusion sets. Purge
 re-evaluates that predicate immediately before deletion.
 Restore fails rather than replacing an existing live run ID.
 
-### Build order
+### 0.1.0: no runs CLI
 
-`runs list` and `runs activate` are load-bearing: every consumer (verifier,
-export) resolves an article through `active-run.json`, so a corpus with no way
-to list or select a run has no working read path. `runs trash`, `runs
-restore`, and `runs purge` are disk hygiene — an inactive run left in place is
-inert, not incorrect — and may ship in a later change without blocking a first
-release. Their contract above is unconditional once implemented; nothing here
-permits a partial purge grammar, a simplified confirmation rule, or a
-best-effort dry-run/purge parity.
+The entire command group is multirun behavior and ships with 0.2.0. In 0.1.0
+the publisher activates each complete non-error run it publishes, so no
+selection command is load-bearing: consumers resolve `active-run.json`, which
+always names the newest successful run. Re-extracting an article publishes and
+activates a new run; the prior run and its run-bound review stay inert on disk
+until multirun lifecycle commands exist. The contract above is unconditional
+once implemented; nothing here permits a partial purge grammar, a simplified
+confirmation rule, or a best-effort dry-run/purge parity.
 
 ## Manifest and intake
 

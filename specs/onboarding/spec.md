@@ -130,5 +130,5 @@ Implementation coverage must pin:
 - skip of active current-schema articles and retry of missing/error attempts;
 - interruption before and after publication;
 - source-metadata CLI use and post-batch sync placement;
-- handoff to all three verifier routes;
+- handoff to the verifier;
 - absence of refinement behavior from the onboarding conductor.
