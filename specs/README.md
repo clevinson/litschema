@@ -64,6 +64,25 @@ number has been published:
 
 This section is superseded the day a versioned release ships.
 
+## Scope boundaries
+
+Deliberate non-goals. They are recorded here rather than in a capability spec
+because a gap that belongs to no capability is otherwise invisible — no spec is
+responsible for noticing it is missing.
+
+- **Screening is out of scope.** litschema begins once PDFs are in the inbox.
+  Deciding which papers belong in a review — title/abstract screening,
+  full-text eligibility, PRISMA counts — happens in whatever tool the user
+  already uses. There is consequently no corpus-level exclusion state: an
+  assembled article is in the corpus. Refinement-scope exclusion in
+  `specs/refinement/spec.md` is a different thing, scoped to one refinement
+  pass.
+- **Dual independent review is out of scope for v1.** The stored review model
+  holds at most one entry per path and delegates authorship to Git history, so
+  two reviewers work in separate clones and reconcile by merge. Blind
+  double-extraction with adjudication, which some systematic-review protocols
+  require, cannot be expressed in this model and would need a format change.
+
 ## Process for new features
 
 Start a capability folder with a draft `spec.md`. After human approval, mark it

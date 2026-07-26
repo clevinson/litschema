@@ -63,6 +63,13 @@ absent: the model does not record that a human confirmed an omission, and
 nothing writes `null` or an empty value into the extraction to represent one.
 An omitted field becomes reviewable only when a human supplies it with `add`.
 
+One entry per path also means one reviewer per path. Version 1 keyed entries by
+author and so could hold competing reviews of the same field; version 2
+deliberately does not. Two reviewers work in separate clones and reconcile by
+merging `review.json`. Blind double-extraction with adjudication is a stated
+non-goal for v1 (`specs/README.md` § Scope boundaries) and would require a
+format change, not an additive one.
+
 Legacy `signal`, `author`, `base_extraction_sha256`, `override_value`, and
 `__remove__` fields are invalid in version 2. Pre-release data is rewritten by
 its owning repository; runtime readers do not support both shapes.
