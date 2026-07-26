@@ -171,9 +171,9 @@ def test_skill_setup_gates_resolve_cli_with_dev_override() -> None:
     extract = (REPO_ROOT / "skills" / "extract-article" / "SKILL.md").read_text()
 
     for skill in (onboard, extract):
-        # Resolution order: .litschema/cli dev override, then uv run, then bare CLI.
-        assert "`.litschema/cli`" in skill
-        assert skill.index("`.litschema/cli`") < skill.index("`uv run litschema`")
+        # Resolution order: .litschema/dev-cli override, then uv run, then bare CLI.
+        assert "`.litschema/dev-cli`" in skill
+        assert skill.index("`.litschema/dev-cli`") < skill.index("`uv run litschema`")
         assert "development override" in skill
         assert "never required for normal use" in skill
         # The gate must confirm the resolved command actually works.

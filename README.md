@@ -47,6 +47,16 @@ cd ../my-review
 uv run --project ../litschema litschema status
 ```
 
+Agent skills resolve the CLI the same way you would (dev override, then
+`uv run litschema`, then bare `litschema`). To pin them to a development
+checkout, write the command to `.litschema/dev-cli` in the project root
+(gitignored, machine-local; `doctor` reports what will be resolved):
+
+```bash
+mkdir -p .litschema
+echo 'uv run --project ../litschema litschema' > .litschema/dev-cli
+```
+
 ## Commands
 
 ```bash

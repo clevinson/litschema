@@ -9,47 +9,128 @@ Capability specifications for litschema. Loosely inspired by
 ```
 specs/
   <capability>/
-    spec.md        # CURRENT TRUTH: architecture, user surface, invariants
+    spec.md        # normative contract, with explicit status
     decisions.md   # append-only, dated decision log (ADR-lite)
 ```
 
-- **`spec.md` describes what IS built, not what might be.** It is the canonical
-  reference for a shipped capability: its data model, every user-facing surface
-  (CLI verbs, HTTP endpoints, UI affordances, pipeline writers), and the
-  invariants the implementation upholds. Behavioral requirements use WHEN/THEN
-  phrasing where precision matters.
-- **`spec.md` is updated in the same commit/PR as any behavior change.** A PR
-  that changes a capability's surface or invariants without updating its spec
-  is incomplete. The test suite is the executable form of the invariants; the
-  spec is the legible form.
+- **`spec.md` is the normative contract.** A status line says `current`,
+  `partially current`, `approved target`, or `draft`. `current` describes
+  shipped behavior. `partially current` means some of the contract ships today
+  and some does not; the spec must then carry an **Implementation status**
+  section naming the boundary and the issue tracking the rest — a reader must
+  never have to guess which half they are reading. `approved target` records an
+  accepted behavior change before implementation; its implementation and tests
+  may lag, but competing current prose must be removed. `draft` is not
+  approved. Behavioral requirements use WHEN/THEN phrasing where precision
+  matters.
+- **Specs record test obligations.** An approved target must name the behavior
+  that implementation tests will pin. A behavior PR is incomplete until those
+  tests pass and the status becomes `current`.
 - **`decisions.md` records why.** Each entry is dated and states the context,
   the decision, the rationale, and the alternatives rejected. Entries are never
   rewritten — a reversed decision gets a new entry that supersedes the old one.
+
+## Normative ownership
+
+- `article-store`: article identity, run layout, active selection, trash, and
+  run CLI safety;
+- `project-config`: the current schema, schema identity, discovery, and shared
+  CLI rules;
+- `extraction`: extraction/reasoning contents, validation, and publication
+  inputs;
+- `reviews`: stored and effective review state, hierarchy, and reconciliation;
+- `onboarding`: first-run flow;
+- `refinement`: its durable workflow ledger, same-schema reruns, schema
+  upgrades, and `/litschema-refine`;
+- `explore`: export views, audit sidecars, DuckDB, and MCP;
+- `verifier`: web routes, read surfaces, and frontend constraints;
+- `source-metadata`: bibliographic data and provenance.
+
+Other specs cross-link these rules instead of redefining them.
 
 ## Alpha status: no backwards compatibility
 
 litschema is pre-release alpha software. Until a release with a version
 number has been published:
 
-- Specs describe the CURRENT format and behavior only. Capability specs must
-  not document legacy formats, fallbacks, or compatibility shims.
-- Backwards compatibility and in-framework migrations are explicit
-  non-goals. Format changes land clean.
+- Specs describe either current behavior or one explicitly approved target.
+  They do not document legacy fallbacks or runtime compatibility shims.
+- Backwards compatibility and legacy-format migration inside the framework are
+  non-goals. Format changes land clean. Conservative review reconciliation
+  between first-class runs is current product behavior, not legacy support.
 - Existing corpus data is updated in its own (domain) repo when a format
   changes — typically agent-driven, using the framework's own CLI as the
   write surface.
 
 This section is superseded the day a versioned release ships.
 
+## Scope boundaries
+
+Deliberate non-goals. They are recorded here rather than in a capability spec
+because a gap that belongs to no capability is otherwise invisible — no spec is
+responsible for noticing it is missing.
+
+- **Screening is out of scope.** litschema begins once PDFs are in the inbox.
+  Deciding which papers belong in a review — title/abstract screening,
+  full-text eligibility, PRISMA counts — happens in whatever tool the user
+  already uses. There is consequently no corpus-level exclusion state: an
+  assembled article is in the corpus. Refinement-scope exclusion in
+  `specs/refinement/spec.md` is a different thing, scoped to one refinement
+  pass.
+- **Dual independent review is out of scope for v1.** The stored review model
+  holds at most one entry per path and delegates authorship to Git history, so
+  two reviewers work in separate clones and reconcile by merge. Blind
+  double-extraction with adjudication, which some systematic-review protocols
+  require, cannot be expressed in this model and would need a format change.
+
 ## Process for new features
 
-Start a new capability folder with a draft `spec.md` — the proposal IS the
-first version of the truth, refined during review, and merged when the
-implementation lands. There is no separate change-proposal tree yet; one will
-be added if parallel in-flight features ever make drafts-vs-truth ambiguous.
+Start a capability folder with a draft `spec.md`. After human approval, mark it
+`approved target`; implementation follows in a later change. Mark it `current`
+only after its test obligations pass. There is no separate proposal tree.
+
+When implementation lands in stages, move the status to `partially current`
+and keep its Implementation status section accurate in the same change that
+ships the code. The status line and that section are the primary signal of
+what actually works — they are maintained as the code moves, not at release
+boundaries.
 
 ## For agents
 
 Read the capability's `spec.md` (and skim `decisions.md`) before modifying any
 part of its surface. If your change alters behavior described in the spec,
 update the spec in the same change.
+
+Repo-wide conventions that aren't capability behavior — build/test commands,
+project layout, git and PR conventions, issue tracking — live in `AGENTS.md`
+at the repo root, not here.
+
+## Release plan: 0.1.0 and multirun
+
+Decided 2026-07-26; supersedes the 2026-07-24 scope note. Work runs on two
+branches so the MVP ships without waiting on multi-run behavior:
+
+**0.1.0 — the `release/0.1.0` branch.** The tightest publishable MVP. It
+ships the run-shaped on-disk format so 0.2.0 introduces no breaking layout
+change, but none of the multi-run behavior:
+
+- article store: the `extraction-runs/<run-id>/` layout, the simplified
+  `run.json`, and `active-run.json`. Publishing a complete non-error run
+  activates it; prior runs stay inert on disk. No `runs` command group.
+- reviews v2 — run-bound replace/remove/add — without reconciliation.
+- verifier: dataset overview page and document review. No `#/runs` route and
+  no refinement metrics.
+- CI, the pre-release naming pass, the runnable demo project, and PyPI
+  publishing. `litschema extract` stays a documented stub.
+
+**Multirun — the `feat/multirun` branch, targeting 0.2.0.** Everything that
+exists because an article can have more than one meaningful run: the
+refinement capability and `/litschema-refine`, review reconciliation and
+proposals, the `runs` CLI (`list`/`activate`/`trash`/`restore`/`purge`), the
+verifier `#/runs` route and refinement metrics, and any run-selection
+semantics beyond publish-activates. Developed spec-first and rebased onto the
+0.1.0 line regularly.
+
+Export views (`--view audited` and the audit sidecar) are post-0.1.0 but do
+not depend on multirun. The alpha-policy rationale stands: the 0.1.0 format
+must be one nobody has to migrate away from when multirun lands.

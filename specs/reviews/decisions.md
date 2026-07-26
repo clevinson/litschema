@@ -122,3 +122,81 @@ and delete instead of DELETE reporting success while removing nothing.
 
 **Rejected:** shape-aware normalization against the extraction (complexity
 serving only hand-authored path styles the frontend never produces).
+
+
+## 2026-07-14 — Run-bound path overlays supersede signals and hash staleness
+
+**Context:** immutable extraction runs make an extraction hash stamp a second,
+weaker run identity. The MVP also does not need reviewer stacks or a separate
+flag state; Git and pull requests already record attribution and disagreement.
+
+**Decision:** `review.json` lives inside its run and stores at most one entry per
+exact path. Entry presence without an override means verified; an explicit
+replace or remove means overridden; absence means unreviewed unless an ancestor
+covers the path. Notes are independent. Parent coverage is stored as a compact
+canonical frontier. Reconciliation transfers only deterministic unchanged
+state; ambiguous LLM-proposed mappings require user confirmation.
+
+This supersedes the 2026-06-11 file-level article location, `signal` vocabulary,
+extraction-hash binding, and the 2026-07-07 per-entry staleness stamps. It
+preserves the 2026-06-11 one-review-per-field decision.
+
+**Rejected:** retaining `base_stale` beside first-class run IDs; storing
+multiple reviewers in-app; auto-accepting array mappings; expanding parent
+coverage into redundant leaf entries.
+
+
+## 2026-07-14 — Conservative reconstruction and explicit container semantics
+
+**Context:** review migration was ambiguous when historical schema commits were
+missing, arrays nested, overrides targeted containers, or review files were
+corrupt. Subtree unreview also lacked a precise deletion and compaction rule.
+
+**Decision:** source schemas resolve only from bytes matching the run's schema
+hash, using the recorded commit, Git history, or the exact current file. No
+entry transfers automatically when those bytes are unavailable. Container
+overrides migrate only under explicit structural and equality gates. Array
+identity resolves recursively at every boundary. Element removal uses a
+non-splicing null tombstone. Subtree unreview removes all target descendants,
+expands only verifying ancestor coverage, and never splits a container
+override. Ambiguous proposals persist in the refinement ledger before
+confirmation. Corrupt reviews remain explicit and lifecycle-protected.
+
+**Rejected:** trusting commit labels without rehashing; primitive-type guesses
+without the source schema; positional nested-array mapping; splicing element
+removals; treating corrupt review as empty; implicit proposal confirmation.
+
+
+## 2026-07-25 — An `add` op for omitted values; absence stays unreviewable
+
+**Context:** the extraction contract omits missing values rather than writing
+`null`, review paths had to resolve against the extraction, and the verifier's
+progress denominator counted only raw extraction leaves. Together those made an
+omitted field invisible end to end: not counted, not reviewable, not fillable.
+A reviewer looking at the PDF could see a value the agent missed and had no way
+to record it. Re-extraction is a reliable fix for systematic misses, where the
+schema or domain context was unclear, but not for idiosyncratic ones, where a
+model will miss the same appendix table the same way again.
+
+**Decision:** add a third override op. Its motivating case is a missing array
+entity — structure is missed more often than a slot on structure the agent
+already found, because once the agent is reading an entity it fills that
+entity's slots. Adds validate against the schema exactly as replaces do,
+including required slots, and are refused at a path that already resolves.
+Array adds append past the raw basis so appended indexes never collide with
+tombstones. Added leaves enter the progress denominator; merely revealing
+omitted slots in the UI does not. Reconciliation turns on identity, not
+position: an add transfers only when the target still omits the value, is
+superseded rather than converted when the target now supplies it, and never
+transfers automatically for an item class with no `identifier: true` slot.
+Because no line-cited reasoning stands behind a human-supplied value, adds stay
+identifiable as human-origin through to the export audit sidecar.
+
+**Rejected:** a verified-absent state recording that a human confirmed an
+omission — absence carries no review state, and distinguishing "not reported"
+from "not checked" was judged not worth the model complexity. Also rejected:
+writing `null` or empty values into the extraction so paths would resolve;
+overloading `replace` to reach absent paths, which would make human-supplied
+values indistinguishable from agent corrections without diffing the run;
+hand-authoring nested structure through inline tree editing rather than a
+form over the item class; and positional matching of added elements across runs.

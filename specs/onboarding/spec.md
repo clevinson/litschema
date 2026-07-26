@@ -1,129 +1,134 @@
 # Capability: onboarding
 
-Taking a first-time user from an empty directory and a folder of PDFs to an
-extracted, verifiable collection — with an agent conducting the judgment steps
-and the CLI owning every deterministic one. Introduced by PR #17
-(`feat/onboard-flow`).
+Status: partially current.
 
-Onboarding is **local-PDF-first**: no registry file, no bibliography authoring,
-no network access on the intake path. A DOI, if a document has one, improves
-metadata later — it is never a prerequisite.
+Onboarding takes a first-time user from an empty directory and local PDFs to an
+extracted, verifiable collection. It is local-PDF-first and is distinct from
+later refinement.
 
-## The path
+## Implementation status
 
+Live today: `litschema init`, `skills install`, and the `/litschema-onboard`
+conductor end to end, writing extractions to the article-root layout.
+
+Pending: run-shaped extraction output. Steps 4 and 5 below publish `initial`
+runs and activate them; today they write `agent-extraction.json` at the article
+root and there is no activation step. Tracked by `tdv3`; the conductor's
+user-facing flow does not otherwise change.
+
+## First-run path
+
+```text
+litschema init <dir>
+  → place PDFs in papers-inbox/
+  → /litschema-onboard
+  → litschema verify
 ```
-litschema init <dir>          # scaffold (offline, no questions)
-  → drop PDFs in papers-inbox/
-  → /litschema-onboard        # agent: schema drafting, intake, pilot, batch
-  → litschema verify          # human: review what was extracted
-```
+
+A DOI may improve source metadata later; it is never an intake prerequisite.
 
 ## `litschema init`
 
-Scaffolds a complete project: `litschema.yaml`, `domain_context.md`, a draft
-`schema/extraction.yaml` (one `DraftExtraction` tree-root class with an
-`article_id` identifier — deliberately minimal; the real schema is drafted
-conversationally during onboarding), `data/papers/`, `papers-inbox/`,
-`.gitignore` entries for PDFs and runtime dirs, and the bundled agent skills
-copied project-locally into `.claude/skills/` (`--no-skills` opts out).
+Init creates `litschema.yaml`, `domain_context.md`, the one current
+`schema/extraction.yaml`, `data/papers/`, `papers-inbox/`, ignore entries, and
+project-local agent skills unless `--no-skills` is given. The draft schema has
+one minimal local `tree_root: true` class.
 
-Refusals, in order:
+Init asks no questions and is scriptable. It refuses a file target, refuses any
+directory already containing `litschema.yaml`, and refuses a nonempty
+non-project directory unless `--force` is given. `--force` permits creation
+alongside existing files but never overwrites them. Existing projects are
+managed through config edits and `skills install --local --force`, not re-init.
 
-- WHEN the target exists and is not a directory, THEN exit 2.
-- WHEN the target contains `litschema.yaml`, THEN exit 2 — **always**;
-  `--force` does not override. There is no re-init: an existing project is
-  managed by editing `litschema.yaml` directly and by
-  `litschema skills install --local --force` for skill refresh.
-- WHEN the target is a non-empty directory without a config and `--force` was
-  not given, THEN exit 2. `--force` means "yes, initialize into this non-empty
-  directory" (a fresh git repo with a README) — it never overwrites an
-  existing file.
+Templates may be copied as starting material. Onboarding does not configure
+parallel schema versions or import a framework base schema.
 
-`init` asks no questions: bare `litschema init <dir>` is fully scriptable
-(CI, agents, pipes). There is no document-type question and no
-`document_profile` key — whether a document gets registry enrichment is
-decided per article, from its data, at extraction time (see the lifecycle
-below and `decisions.md`).
+## `/litschema-onboard` conductor
 
-## The conductor (`litschema-onboard` skill)
+The project-local skill owns the first run. This is a first-time user's first
+contact with the tool, so the conductor's surface is deliberately narrow: one
+question per message, no framework vocabulary, and no narration of setup or
+internals. Checks that pass are silent.
 
-One skill owns the whole first run; every deterministic step is a CLI call and
-the agent's job is the judgment between them:
+0. **Silent pre-check:** confirm `litschema.yaml` exists using file reads
+   alone. Do not run `status`, `doctor`, or resolve the CLI yet — none of it is
+   needed to count or skim PDFs, and none of it reaches the user. A missing
+   config is the one setup condition the user hears about.
+1. **Welcome:** open with a short plain-language welcome plus the count of
+   papers found, then branch on that count and skim representative PDFs.
+2. **Schema drafting:** interview for fields one question at a time, offer an
+   existing structure (JSON Schema, spreadsheet, codebook) as a starting point,
+   write the single current schema and domain context silently, validate
+   silently, and confirm the field list with the user.
+3. **Intake:** run offline `assemble` and `prepare-text --all`.
+4. **Pilot:** extract one skimmed article as an `initial` run, validate it,
+   activate it, and offer to open the verifier. Revising the schema here
+   returns to drafting.
+5. **Batch:** extract remaining eligible articles into `initial` runs and
+   activate each successful first run, retrying a failed article once before
+   recording it. Existing articles with an active run using the current schema
+   are skipped.
+6. **Finish:** run the post-extraction metadata sweep, validation, and status;
+   hand off to `litschema verify`.
 
-- **Setup gate** — verify the project, resolve the CLI (dev override, which
-  requires user confirmation before it is executed → `uv run litschema` →
-  `litschema`), run `status` + `doctor`, stop early if there is nothing to
-  process (no inbox PDFs and no assembled articles).
-- **Phase A: schema drafting** — the conversation that matters most.
-  Interview for fields; offer to seed from an existing structure (JSON
-  Schema, spreadsheet, codebook); read 2–3 user-named representative PDFs
-  before finalizing; write `schema/extraction.yaml` + `domain_context.md`;
-  validate with `agent prepare-schema-context`; iterate until approved.
-- **Phase B: intake** — `assemble` (offline: stable id from filename, PDF
-  moved to `data/papers/<id>/`, manifest written), then `prepare-text --all`.
-- **Phase C: pilot** — extract ONE representative article, have the user
-  eyeball it in the verifier, revise the schema while changes are cheap.
-- **Phase D: batch** — extract the rest (subagent per article where
-  available), then `meta sync --all` as the registry sweep, then `validate` +
-  `status`.
-- **Phase E: handoff** — point at `litschema verify` and the on-disk dataset.
+Extraction mechanics belong to `specs/extraction/spec.md`. Run layout and
+activation belong to `specs/article-store/spec.md`. Review behavior belongs to
+`specs/reviews/spec.md`.
 
-Extraction mechanics belong to the `extract-article` skill; the conductor
-never restates them.
+## Onboarding versus refinement
 
-## Metadata during onboarding
+Onboarding establishes a project and its first active runs.
+`/litschema-refine` changes an established schema or domain context, pilots a
+subset, creates candidate runs for the full corpus, reconciles existing
+reviews, activates the accepted runs, and cleans up abandoned runs. It is
+defined only by `specs/refinement/spec.md`. The onboarding skill must not absorb
+or restate that lifecycle.
 
-The full lock model is `specs/source-metadata/spec.md`; onboarding touches it
-at these moments:
+## Source metadata
 
-| moment | what happens | provenance |
-|---|---|---|
-| `init` | nothing — no metadata exists | — |
-| `assemble` | block seeded `{title}` from the PDF filename | `auto` |
-| extraction enrichment | if a DOI is printed on the document: `meta set <id> --source auto --doi ... --sync` records the DOI and locks from the registry in one guarded command | `doi` on success; `auto` (DOI recorded, retryable) on registry failure |
-| fallback transcription | only when there is no DOI or the sync half failed: agent reads the title page, `meta set <id> --source auto ...` | `auto` |
-| post-batch sweep | `meta sync --all` catches articles whose lock attempt failed transiently | `doi` where it resolves |
-| verifier edits | human corrections via the header form | `manual` (protected) |
+Assemble seeds automatic filename metadata. Extraction uses the source-metadata
+CLI for registry-first DOI enrichment or title-page fallback. A post-batch
+`meta sync --all` retries transient registry failures. Skills never edit the
+manifest directly.
 
-Documents without DOIs simply never sync: their metadata is the agent's
-title-page reading until a human touches it. Nothing downstream distinguishes
-the two paths.
+## Interruption and rerun
+
+Onboarding is resumable. Existing intake artifacts remain, complete published
+runs remain immutable, active selections remain valid, and incomplete staging
+does not appear as a run. Rerunning skips accepted active current-schema work
+and retries missing or error-only articles. It does not create a same-schema
+rerun unless the user explicitly requests that separate workflow.
 
 ## Invariants
 
-- **No re-init.** WHEN `init` targets a directory containing
-  `litschema.yaml`, THEN it exits 2 and writes nothing, regardless of flags.
-- **Init never overwrites.** WHEN `init` runs (including `--force`), THEN no
-  existing file is modified — `.gitignore` entries are appended, everything
-  else is create-only.
-- **Scriptable init.** WHEN `init` runs without a TTY or flags, THEN it
-  completes without prompting.
-- **Offline intake.** WHEN `assemble` / `prepare-text` run, THEN no network
-  access occurs; a project with zero DOIs reaches extraction untouched by any
-  registry.
-- **Bibliography flows through the CLI.** WHEN a skill backfills or enriches
-  source metadata, THEN it does so via `meta set` / `meta sync` — never by
-  editing `article-metadata.json` directly — so the never-clobber guard,
-  DOI validation, and atomic writes always apply.
-- **Sync follows extraction.** WHEN the conductor batch-syncs
-  (`meta sync --all`), THEN it does so after the batch extraction — DOIs
-  enter manifests via extraction backfill, so an intake-time sweep would be a
-  no-op on a fresh project.
-- **Safe re-runs.** WHEN onboarding runs on a partially-processed project,
-  THEN `assemble` and extraction skip work that is already done.
+- PDFs enter through `papers-inbox/`.
+- `/litschema-onboard` remains the first-run conductor.
+- Init is offline, noninteractive, create-only, and never re-initializes.
+- The project has one current schema; Git stores its history.
+- First successful extractions become immutable initial runs with per-article
+  active selection.
+- Refinement is not folded into onboarding.
+- Metadata writes use deterministic CLI guards.
+- Interrupted work is resumable without mutating completed runs.
 
-## Future work
+## Test obligations
 
-A **schema library**: `init --schema <ref>` seeding `schema/extraction.yaml`
-by importing/extending a published LinkML base extraction class (standard
-bases in the package, or an external schema by URL), instead of the built-in
-draft scaffold. This is its own capability — deliberately NOT folded into
-onboarding or revived as a "profile" (see `decisions.md`).
+Implementation coverage must pin:
 
-## Code map
-
-`src/litschema/cli.py` (`init`, `status`, `doctor`, `skills install`) ·
-`src/litschema/ingest/article_assembly.py` (`assemble`) ·
-`skills/litschema-onboard/SKILL.md` (conductor) ·
-`skills/extract-article/SKILL.md` (extraction + backfill contract). Tests:
-`test_init_onboarding.py`, `test_skills_install.py`, `test_assemble.py`.
+- init refusal and create-only behavior, including `--force`;
+- exact scaffold paths, one current schema, local skills, and copied-template
+  behavior without a framework base import;
+- offline assemble and prepare-text;
+- silent pre-check: missing-config stop, and no `status`/`doctor`/CLI
+  resolution before the welcome message;
+- conductor voice constraints: one question per message, no framework
+  vocabulary in user-facing text, and no narration of passing checks;
+- empty-project stop behavior;
+- representative-document schema drafting and approval gate;
+- one-article pilot publication and activation;
+- batch creation and activation of initial runs;
+- skip of active current-schema articles and retry of missing/error attempts;
+- interruption before and after publication;
+- source-metadata CLI use and post-batch sync placement;
+- handoff to the verifier;
+- absence of refinement behavior from the onboarding conductor.

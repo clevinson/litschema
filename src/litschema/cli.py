@@ -863,6 +863,33 @@ def doctor(ctx: typer.Context):
         typer.echo(f"{CROSS} uv not on PATH")
         issues.append("uv not installed — see https://docs.astral.sh/uv/")
 
+    # CLI resolution — mirrors the agent skills' resolution order:
+    # .litschema/dev-cli override, then `uv run litschema`, then bare `litschema`.
+    dev_cli = cfg.project_root / ".litschema" / "dev-cli"
+    legacy_dev_cli = cfg.project_root / ".litschema" / "cli"
+    if dev_cli.is_file():
+        override = dev_cli.read_text().strip()
+        typer.echo(f"{CHECK} CLI dev override (.litschema/dev-cli): {override}")
+    elif legacy_dev_cli.is_file():
+        typer.echo(f"{WARN} legacy .litschema/cli found — agent skills now read .litschema/dev-cli")
+        issues.append("rename .litschema/cli to .litschema/dev-cli")
+    elif (cfg.project_root / "pyproject.toml").is_file():
+        typer.echo(f"{CHECK} agent skills will resolve the CLI via `uv run litschema`")
+    elif _bare_cli_on_path():
+        typer.echo(f"{CHECK} litschema on PATH — agent skills will use the bare CLI")
+    else:
+        checkout = _dev_checkout_root()
+        hint = (
+            f"uv run --project {checkout} litschema"
+            if checkout
+            else "uv run --project <path-to-litschema-checkout> litschema"
+        )
+        typer.echo(f"{WARN} agent skills cannot resolve the litschema CLI in this project")
+        issues.append(
+            "write the CLI command to .litschema/dev-cli, e.g. "
+            f"`mkdir -p .litschema && echo '{hint}' > .litschema/dev-cli`"
+        )
+
     typer.echo(f"{CHECK} litschema.yaml at {cfg.config_path}")
 
     if cfg.schema_dir.is_dir():
@@ -922,6 +949,42 @@ def doctor(ctx: typer.Context):
             typer.echo(f"  • {issue}")
         raise typer.Exit(code=1)
     typer.echo("\nEverything looks good.")
+
+
+def _bare_cli_on_path() -> bool:
+    """True when `litschema` on PATH would survive outside this process.
+
+    Under `uv run --project <checkout>`, the checkout venv's bin dir is
+    prepended to PATH, so which() finds a `litschema` that a fresh shell
+    (the shell an agent skill runs in) would not. Ignore hits inside this
+    process's own environment prefix.
+    """
+    found = shutil.which("litschema")
+    if not found:
+        return False
+    try:
+        return not Path(found).resolve().is_relative_to(Path(sys.prefix).resolve())
+    except OSError:
+        return True
+
+
+def _dev_checkout_root() -> Path | None:
+    """Best-effort root of the litschema source checkout this process runs from.
+
+    Walks up from the installed package looking for a pyproject.toml that
+    declares the litschema project. Returns None for site-packages installs,
+    where no checkout exists to point at.
+    """
+    package_dir = Path(__file__).resolve().parent
+    for candidate in package_dir.parents:
+        pyproject = candidate / "pyproject.toml"
+        if pyproject.is_file():
+            try:
+                if 'name = "litschema"' in pyproject.read_text():
+                    return candidate
+            except OSError:
+                pass
+    return None
 
 
 def _write_draft_schema(project: Path) -> None:
