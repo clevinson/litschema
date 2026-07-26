@@ -72,8 +72,11 @@ counts, progress, completion, and typed editor metadata `null`.
 
 For a valid active run with a resolved schema, it returns:
 
-- `field_paths`: canonical leaf paths in the raw active extraction, excluding
-  every slot marked `identifier: true`; containers are not leaves;
+- `field_paths`: canonical leaf paths in the raw active extraction plus the
+  leaves contributed by `add` overrides, excluding every slot marked
+  `identifier: true`; containers are not leaves. Omitted slots a reviewer has
+  not supplied never enter the denominator, so revealing them with the
+  show-all-fields toggle does not change progress;
 - `n_fields = len(field_paths)`;
 - `n_verified`: paths controlled by exact or ancestor verification without an
   override;
@@ -126,6 +129,22 @@ Writes identify the displayed run explicitly. If another process changes
 `active-run.json`, the page does not silently retarget a pending edit: it
 requires reload or explicit acknowledgement. Articles without an active run
 retain metadata/PDF access and show a clear extraction placeholder.
+
+#### Supplying omitted values
+
+The default view shows only what the extraction contains. Omitted fields are
+not review state and do not clutter the reviewer's default surface. A "show all
+fields" toggle reveals every schema-defined slot the extraction omitted,
+derived from the schema field metadata the route already loads.
+
+An array whose items the reviewer may extend offers an explicit add control.
+Adding an entity opens a focused form over the item class rather than inline
+tree editing, so a reviewer fills a labelled set of slots and the client can
+enforce required slots before submitting. The resulting write is an `add`
+override under `specs/reviews/spec.md`, appended past the raw basis.
+
+Added values render as human-origin wherever a raw value would otherwise
+appear, so a reviewer can always see which values no agent produced.
 
 ### Runs and refinement visibility
 

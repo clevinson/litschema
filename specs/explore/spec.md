@@ -81,6 +81,9 @@ remove-only articles are included:
     "experiments[0]": {},
     "experiments[0].ph": {
       "override": {"op": "replace", "value": 6.5}
+    },
+    "experiments[4]": {
+      "override": {"op": "add", "value": {"id": "E5", "ph": 7.1}}
     }
   }
 }
@@ -91,6 +94,13 @@ remove-only articles are included:
 descendant entries. Data output also never embeds per-leaf audit flags. The
 run ID and schema hash make the sidecar reproducible against the local store and
 Git history.
+
+The `add` op is what distinguishes a human-supplied value from an agent value a
+human confirmed or corrected. No agent reasoning stands behind it, so a
+consumer that requires model-produced values with line citations can exclude
+adds using the sidecar alone, without diffing against the run artifact.
+Human-supplied values are otherwise ordinary audited data and appear in
+audited-data output like any override.
 
 JSONL data records retain schema-root shape and sorted keys. CSV uses
 schema-derived scalar columns and JSON strings for multivalued or class-valued

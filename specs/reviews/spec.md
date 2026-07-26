@@ -34,6 +34,10 @@ Each run may contain `review.json`:
     },
     "experiments[1].yield": {
       "override": {"op": "remove"}
+    },
+    "experiments[4]": {
+      "override": {"op": "add", "value": {"id": "E5", "ph": 7.1}},
+      "note": "appendix B trial, missed by the agent"
     }
   }
 }
@@ -41,15 +45,23 @@ Each run may contain `review.json`:
 
 There is at most one entry per exact path. Paths use property segments and
 bracket indices with no leading dot, for example
-`experiments[0].measurements[1].ph`. A path may name a container or leaf and
-must resolve against the extraction in the same run.
+`experiments[0].measurements[1].ph`. A path may name a container or leaf.
+A `replace` or `remove` path must resolve against the extraction in the same
+run; an `add` path must not, and is instead validated against the schema as
+described below.
 
 An entry has optional `override`
-(`{"op":"replace","value":...}` or `{"op":"remove"}`) and optional `note`.
+(`{"op":"replace","value":...}`, `{"op":"remove"}`, or
+`{"op":"add","value":...}`) and optional `note`.
 An empty object means verified. A note may accompany verification or an
 override and does not create another state. Git supplies author and time
 history. Keys sort, writes replace atomically, and a file with no entries is
 absent.
+
+Absence carries no review state. A field the extraction omitted is simply
+absent: the model does not record that a human confirmed an omission, and
+nothing writes `null` or an empty value into the extraction to represent one.
+An omitted field becomes reviewable only when a human supplies it with `add`.
 
 Legacy `signal`, `author`, `base_extraction_sha256`, `override_value`, and
 `__remove__` fields are invalid in version 2. Pre-release data is rewritten by
@@ -60,13 +72,14 @@ its owning repository; runtime readers do not support both shapes.
 | controlling entry | effective state |
 |---|---|
 | exact or nearest verifying ancestor, no override | verified |
-| exact or nearest entry with replace/remove override | overridden |
+| exact or nearest entry with replace/remove/add override | overridden |
 | no exact or ancestor entry | unreviewed |
 
 A more specific entry may refine a verifying ancestor. A replace/remove
 override on an object or array container is terminal: descendant review entries
 beneath that path are invalid. The override defines the complete effective
-container or removes it.
+container or removes it. An `add` is likewise terminal at its path: the added
+value is supplied whole, so descendant entries beneath it are invalid.
 
 Replace uses the supplied value after target-schema validation. A replace value
 cannot be JSON `null`; omission uses remove, and `null` is reserved for
@@ -82,6 +95,35 @@ slot. Other remove operations behave by target kind:
 A property inside an array item deletes only that property. Array-element
 replace changes the value at the same index. A whole-array replace defines a new
 array and its own indexes. Raw extracted values remain in the immutable run.
+
+### Add
+
+`add` supplies a value the extraction omitted. Its motivating case is a missing
+array entity — the agent found four experiments and a human found a fifth in an
+appendix. Structure is missed more often than a field on structure the agent
+already found, because once the agent is reading an entity it fills that
+entity's slots.
+
+An add value cannot be JSON `null` and must validate against the slot or item
+class the path names, exactly as replace does. A partially filled entity that
+omits a required slot fails validation and is refused; the schema decides what
+a complete entity is, not the reviewer.
+
+Add is permitted at:
+
+- an array element one position past the raw basis length, appending in order.
+  Successive adds occupy successive indexes. Appended indexes live above the
+  raw basis, so they never collide with tombstones or raw element indexes;
+- a schema-defined property absent from its parent object, where the parent
+  itself resolves.
+
+Add is refused at a path that already resolves — that is a replace — at any
+path under a terminal override, and at the extraction root. It never splices or
+renumbers an array.
+
+Because a human-supplied value has no line-cited reasoning behind it, an add is
+recorded as human-origin and stays distinguishable from an agent value a human
+merely confirmed. `specs/explore/spec.md` carries that distinction into export.
 
 ## Canonical hierarchy
 
@@ -243,7 +285,33 @@ A transferred remove produces a null tombstone at that target index; it never
 splices either array. Reordering is safe for element-bound reviews only when the
 recursive mapping is complete.
 
-### Proposals and confirmation
+### Added values
+
+An add exists in no run's raw extraction, so it has no source value to compare.
+Transfer instead turns on whether the target run found what the human supplied.
+Carrying an add forward blindly would duplicate an entity the agent has since
+learned to extract.
+
+An added array element transfers only when its item class declares an
+`identifier: true` slot and the supplied value fills it. That identifier is the
+only evidence available:
+
+- if no target raw element carries that identifier, the target still lacks the
+  entity and the add transfers, appended past the target's own raw basis;
+- if a target raw element carries it, the agent found the entity, so the add is
+  superseded. It does not transfer and does not silently become a replace; the
+  path is left unreviewed so a human compares the agent's version against what
+  they wrote.
+
+An added object property transfers when the target still omits that property
+and its resolved scalar type is unchanged. A target that now populates the
+property supersedes the add on the same terms.
+
+An added array element whose item class has no identifier slot cannot be proven
+either way and never transfers automatically, consistent with omitting any
+unproven mapping. The workflow may persist it as a proposal for confirmation.
+Position is never identity for an add, exactly as it is never identity for a
+mapped element.
 
 For `/litschema-refine`, an ambiguous mapping proposal is stored only in the
 authoritative refinement ledger defined by `specs/refinement/spec.md`. It
@@ -275,8 +343,9 @@ Review endpoints are run-explicit:
 - `DELETE /api/annotations/{article-id}/{run-id}/{path}` unreviews the subtree
   and accepts the required note-discard confirmation.
 
-Malformed paths, invalid replacements, terminal-override descendants, and
-writes to trashed runs fail without changing review state.
+Malformed paths, invalid replacements, invalid or misplaced adds,
+terminal-override descendants, and writes to trashed runs fail without changing
+review state.
 
 ## Invariants
 
@@ -291,6 +360,10 @@ writes to trashed runs fail without changing review state.
 - Automatic reconciliation omits any unproven mapping.
 - Proposal confirmation is durable before review transfer.
 - Array-element removal preserves indexes with a null tombstone.
+- Absence is never review state; only an add makes an omitted field reviewable.
+- Added values validate against the schema and stay identifiable as
+  human-origin.
+- An add never transfers onto a target that already supplies the value.
 
 ## Test obligations
 
@@ -301,6 +374,14 @@ Implementation coverage must pin:
 - verified/overridden/unreviewed derivation; non-null replacement;
   identifier-remove refusal; replace/remove by target kind; terminal container
   overrides; and array tombstone index stability;
+- add at an appended array index and at an absent object property; sequential
+  appends; refusal at a resolving path, under a terminal override, at the
+  extraction root, and for a value failing item-class or required-slot
+  validation; non-collision of appended indexes with tombstones; and
+  human-origin marking;
+- add transfer when the target still omits the value, supersession when the
+  target supplies it, and no automatic transfer for an identifier-less item
+  class;
 - exact canonical redundancy, parent save compaction, no parent synthesis from
   sibling coverage, raw-tree minimal frontier expansion, nested-array sibling
   selection, and stable raw indexes;
