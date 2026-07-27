@@ -10,14 +10,13 @@ article's extraction, markdown and PDF panes, review editing against the
 version-1 model, and ORCID lookup. Its read API is the `/api/...` surface named
 under API ownership below.
 
-Pending: the route architecture. There is no hash routing at all today — no
-`#/` or `#/doc/{id}` — and therefore no dataset summary and no progress-metric
-aggregation. Deep links, encoded queue state, and the
-schema-error/review-error null-out contract are part of that pending work.
+Live today: both routes, the dataset overview with progress aggregation, the
+document review against an explicit active run, deep links that survive reload
+and the back button, and explicit surfacing of a corrupt review file.
 
-The 0.1.0 scope, tracked by `ka84` (blocked on `tdv3` and `2gd1`), is the `#/`
-dataset overview and `#/doc/{id}` document review against the active run, with
-review progress metrics.
+Pending: the show-all-fields toggle and the array add control described under
+Supplying omitted values. The `add` op works end to end through the API; only
+its affordance in the document view is unbuilt.
 
 `litschema verify` is the loopback-only human review application. It consumes
 active runs and run-bound reviews but does not own their storage or lifecycle.

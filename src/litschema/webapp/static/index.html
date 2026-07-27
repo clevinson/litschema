@@ -744,7 +744,7 @@
     min-width: 0;
   }
 
-  #base-stale-warning {
+  #review-error-warning {
     padding: 8px 14px;
     font-size: 12.5px;
     line-height: 1.4;
@@ -822,6 +822,29 @@
     margin-right: 6px;
   }
 
+  .overview-route { padding: 28px 32px 48px; overflow-y: auto; height: 100%; }
+  .overview-head { display: flex; align-items: baseline; gap: 16px; margin-bottom: 20px; }
+  .overview-head h1 { font-size: 20px; font-weight: 600; margin: 0; }
+  .overview-totals { color: var(--text-dim); font-size: 13px; }
+  .overview-table-wrap { overflow-x: auto; }
+  .overview-table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  .overview-table th {
+    text-align: left; font-weight: 600; color: var(--text-dim);
+    border-bottom: 1px solid var(--border); padding: 8px 12px; white-space: nowrap;
+  }
+  .overview-table td { padding: 8px 12px; border-bottom: 1px solid var(--border); }
+  .overview-table tbody tr { cursor: pointer; }
+  .overview-table tbody tr:hover { background: var(--hover); }
+  .overview-table .ov-num, .overview-table td.ov-num { text-align: right; font-variant-numeric: tabular-nums; }
+  .ov-title { font-weight: 500; }
+  .ov-sub { color: var(--text-dim); font-size: 12px; margin-top: 2px; }
+  .ov-run code { font-size: 11px; color: var(--text-dim); }
+  .ov-bar { position: relative; width: 120px; height: 6px; border-radius: 3px; background: var(--border); }
+  .ov-bar span { position: absolute; inset: 0 auto 0 0; border-radius: 3px; background: var(--green, #3fb950); }
+  .ov-state { font-size: 12px; color: var(--text-dim); }
+  .ov-state.done { color: var(--green, #3fb950); }
+  .ov-state.problem { color: var(--red, #f85149); }
+  .ov-none td { color: var(--text-dim); font-style: italic; }
   .panel-left {
     border-right: 1px solid var(--border);
     position: relative;
@@ -2468,13 +2491,25 @@ e.g. year >= 2024 && study_types.includes("review")'
   </div>
 </div>
 
-<div class="welcome" id="welcome">
-  <div class="welcome-content">
+<div class="overview-route" id="overview-route">
+  <header class="overview-head">
     <h1>litschema verify</h1>
-    <p>Select an article from the dropdown to begin reviewing extractions.</p>
-    <div class="welcome-shortcuts">
-      <span class="shortcut"><kbd>Cmd</kbd>+<kbd>]</kbd> / <kbd>Cmd</kbd>+<kbd>[</kbd> to cycle articles</span>
-    </div>
+    <div class="overview-totals" id="overview-totals"></div>
+  </header>
+  <div class="overview-table-wrap">
+    <table class="overview-table" id="overview-table">
+      <thead>
+        <tr>
+          <th class="ov-doc">Document</th>
+          <th class="ov-num">Fields</th>
+          <th class="ov-num">Reviewed</th>
+          <th class="ov-num">Edited</th>
+          <th class="ov-prog">Progress</th>
+          <th class="ov-run">Active run</th>
+        </tr>
+      </thead>
+      <tbody id="overview-rows"></tbody>
+    </table>
   </div>
 </div>
 
@@ -2543,11 +2578,7 @@ e.g. year >= 2024 && study_types.includes("review")'
     </div>
   </div>
   <div class="panel panel-right">
-    <div id="base-stale-warning" style="display:none">
-      &#9888; Reviews below were written against an earlier extraction of this
-      article &mdash; field paths may no longer line up. Re-verify or clear the
-      affected fields; the warning clears itself once none remain stale.
-    </div>
+    <div id="review-error-warning" style="display:none"></div>
     <div class="panel-header" id="extraction-panel-header">
       <div class="panel-header-row review-panel-top">
         <div class="review-title-group">
@@ -2586,8 +2617,17 @@ e.g. year >= 2024 && study_types.includes("review")'
 
 <script>
 const $ = (sel) => document.querySelector(sel);
-// Sentinel correct_value meaning "the extraction was wrong to include this field".
-const REMOVE_VALUE = "__remove__";
+
+// Review entries are stored exactly as specs/reviews/spec.md defines them:
+// an empty object is verified; `override` carries replace/remove/add. There is
+// no "flagged" state — you either accept a value, correct it, or remove it.
+const isVerified = (ann) => !!ann && !ann.override;
+const isOverridden = (ann) => !!ann && !!ann.override;
+const overrideOp = (ann) => ann?.override?.op ?? null;
+const isRemoved = (ann) => overrideOp(ann) === "remove";
+// The value a reviewer supplied, or undefined when they only verified.
+const overrideValue = (ann) =>
+  ann?.override && ann.override.op !== "remove" ? ann.override.value : undefined;
 const state = {
   articles: [],
   viewMode: "review",
@@ -2725,6 +2765,122 @@ initTheme();
 // ── Init ──
 state.filteredArticles = [];
 
+// ── Routes ───────────────────────────────────────────────────────────────────
+// Two routes: `#/` is the dataset overview, `#/doc/<article-id>` is one
+// document's review against its active run. Both are deep-linkable, so a
+// reviewer can send a colleague the exact document they are looking at.
+
+function parseRoute(hash = window.location.hash) {
+  const raw = (hash || "").replace(/^#/, "");
+  const [path] = raw.split("?");
+  const parts = path.split("/").filter(Boolean);
+  if (parts[0] === "doc" && parts[1]) {
+    return { name: "doc", articleId: decodeURIComponent(parts.slice(1).join("/")) };
+  }
+  return { name: "overview" };
+}
+
+function routeToDoc(articleId, { replace = false } = {}) {
+  const target = `#/doc/${encodeURIComponent(articleId)}`;
+  if (window.location.hash === target) return;
+  if (replace) window.location.replace(target);
+  else window.location.hash = target;
+}
+
+function showOverview() {
+  $("#panels").style.display = "none";
+  $("#overview-route").style.display = "block";
+  renderOverview();
+}
+
+async function applyRoute() {
+  const route = parseRoute();
+  if (route.name === "doc") {
+    const known = state.articles.some(a => a.article_id === route.articleId);
+    if (!known) {
+      // An unknown id is recoverable, not a dead end: say so and fall back.
+      showOverview();
+      const totals = $("#overview-totals");
+      if (totals) totals.textContent = `No document "${route.articleId}" in this project.`;
+      return;
+    }
+    const select = $("#article-select");
+    if (select && select.value !== route.articleId) {
+      select.value = route.articleId;
+    }
+    if (state.currentId !== route.articleId) await loadArticle(route.articleId);
+    else { $("#overview-route").style.display = "none"; $("#panels").style.display = "flex"; }
+    return;
+  }
+  state.currentId = null;
+  const select = $("#article-select");
+  if (select) select.value = "";
+  showOverview();
+}
+
+function overviewRowsFor(articles) {
+  const filtered = state.filterFn ? articles.filter(safeFilterCall(state.filterFn)) : articles;
+  return filtered;
+}
+
+function renderOverview() {
+  const body = $("#overview-rows");
+  const totals = $("#overview-totals");
+  if (!body) return;
+  const rows = overviewRowsFor(state.articles);
+
+  if (!rows.length) {
+    body.innerHTML = '<tr class="ov-none"><td colspan="6">No documents match.</td></tr>';
+    if (totals) totals.textContent = "";
+    return;
+  }
+
+  let sumFields = 0, sumReviewed = 0, complete = 0, unextracted = 0;
+  let html = "";
+  for (const a of rows) {
+    const nFields = a.n_fields ?? 0;
+    const nReviewed = a.n_reviewed ?? 0;
+    const nOverridden = a.n_overridden ?? 0;
+    const problem = !!a.review_error;
+    // An article with no active run is listed, never hidden — it is exactly
+    // the work someone still has to do.
+    const noRun = !a.active_run_id;
+    if (!problem) { sumFields += nFields; sumReviewed += nReviewed; }
+    if (a.is_complete) complete++;
+    if (noRun) unextracted++;
+
+    const pct = nFields > 0 ? Math.round((nReviewed / nFields) * 100) : 0;
+    let stateCell;
+    if (problem) stateCell = '<span class="ov-state problem">review unreadable</span>';
+    else if (noRun) stateCell = '<span class="ov-state">not extracted</span>';
+    else if (a.is_complete) stateCell = '<span class="ov-state done">complete</span>';
+    else stateCell = `<div class="ov-bar"><span style="width:${pct}%"></span></div>`;
+
+    const title = a.title || a.article_id;
+    html += `<tr data-article="${escapeHtml(a.article_id)}">`;
+    html += `<td class="ov-doc"><div class="ov-title">${escapeHtml(title)}</div>`;
+    html += `<div class="ov-sub">${escapeHtml(a.article_id)}</div></td>`;
+    html += `<td class="ov-num">${problem || noRun ? "&mdash;" : nFields}</td>`;
+    html += `<td class="ov-num">${problem || noRun ? "&mdash;" : nReviewed}</td>`;
+    html += `<td class="ov-num">${problem || noRun ? "&mdash;" : nOverridden}</td>`;
+    html += `<td class="ov-prog">${stateCell}</td>`;
+    html += `<td class="ov-run">${a.active_run_id ? `<code>${escapeHtml(a.active_run_id)}</code>` : "&mdash;"}</td>`;
+    html += `</tr>`;
+  }
+  body.innerHTML = html;
+
+  if (totals) {
+    const pct = sumFields > 0 ? Math.round((sumReviewed / sumFields) * 100) : 0;
+    const bits = [`${rows.length} documents`, `${complete} complete`, `${sumReviewed}/${sumFields} fields reviewed (${pct}%)`];
+    if (unextracted) bits.push(`${unextracted} not extracted`);
+    totals.textContent = bits.join(" \u00b7 ");
+  }
+
+  body.querySelectorAll("tr[data-article]").forEach(tr => {
+    tr.addEventListener("click", () => routeToDoc(tr.dataset.article));
+  });
+}
+
 async function init() {
   const [data, schemaData] = await Promise.all([
     fetchJson("/api/articles"),
@@ -2757,6 +2913,11 @@ async function init() {
   });
   wireFilterControls();
   wireSelectedFieldActions();
+
+  // Deep links survive reload, and the back button moves between the overview
+  // and a document rather than leaving the app.
+  window.addEventListener("hashchange", () => { applyRoute(); });
+  await applyRoute();
 }
 
 // ── Article queue filter ──
@@ -3077,22 +3238,18 @@ function populateDropdown() {
     currentVal && state.filteredArticles.some((a) => a.article_id === currentVal);
   if (currentStillVisible) {
     select.value = currentVal;
-  } else if (state.filteredArticles.length > 0) {
-    // Currently loaded article was filtered out (or none was loaded yet
-    // when a URL filter applied). Auto-select the first match so the
-    // detail panel always reflects the filtered queue.
+  } else if (state.filteredArticles.length > 0 && state.currentId) {
+    // The open article was filtered out. Move to the first match rather than
+    // leaving a document on screen that the queue no longer contains.
     const firstId = state.filteredArticles[0].article_id;
     select.value = firstId;
-    if (currentVal !== firstId) {
-      select.dispatchEvent(new Event("change"));
-    }
+    if (currentVal !== firstId) routeToDoc(firstId);
   } else if (state.currentId || currentVal) {
     // Filter has zero matches and an article was previously loaded —
     // return to the welcome screen rather than leaving stale content up.
     select.value = "";
     state.currentId = null;
-    $("#panels").style.display = "none";
-    $("#welcome").style.display = "flex";
+    showOverview();
   }
 
   updateNavState();
@@ -3103,9 +3260,7 @@ function navigateArticle(direction) {
   const currentIdx = state.filteredArticles.findIndex(a => a.article_id === state.currentId);
   const nextIdx = currentIdx + direction;
   if (nextIdx < 0 || nextIdx >= state.filteredArticles.length) return;
-  const nextId = state.filteredArticles[nextIdx].article_id;
-  $("#article-select").value = nextId;
-  $("#article-select").dispatchEvent(new Event("change"));
+  routeToDoc(state.filteredArticles[nextIdx].article_id);
 }
 
 function updateNavState() {
@@ -3117,16 +3272,20 @@ function updateNavState() {
 }
 
 // ── Article selection ──
-$("#article-select").addEventListener("change", async (e) => {
-  const id = e.target.value;
-  if (!id) return;
+// The dropdown drives the route; applyRoute drives loadArticle. A dropdown
+// pick, a deep link, and the back button therefore all take one path.
+$("#article-select").addEventListener("change", (e) => {
+  if (e.target.value) routeToDoc(e.target.value);
+});
+
+async function loadArticle(id) {
   state.currentId = id;
   state.selectedPath = null;
   state.editingPath = null;
   updateSelectedFieldBar(null);
 
-  // Show panels, hide welcome
-  $("#welcome").style.display = "none";
+  // Show the document route
+  $("#overview-route").style.display = "none";
   $("#panels").style.display = "flex";
 
   // Clear search state
@@ -3148,8 +3307,8 @@ $("#article-select").addEventListener("change", async (e) => {
     hasExtraction ? fetchJson(`/api/article/${id}`) : Promise.resolve(null),
     hasExtraction ? fetchJson(`/api/reasoning/${id}`).catch(() => null) : Promise.resolve(null),
     hasExtraction
-      ? fetchJson(`/api/annotations/${id}`).catch(() => ({ annotations: [] }))
-      : Promise.resolve({ annotations: [] }),
+      ? fetchAnnotations(id).catch(() => ({ annotations: [], review_error: null }))
+      : Promise.resolve({ annotations: [], review_error: null }),
     fetchJson(`/api/bibliography/${id}`).catch(() => null),
   ]);
   // Staleness guard: the user may have navigated on while these fetches ran.
@@ -3171,15 +3330,7 @@ $("#article-select").addEventListener("change", async (e) => {
     }
   }
 
-  state.annotations = {};
-  for (const ann of (annData.annotations || [])) {
-    let p = ann.path;
-    if (p.startsWith(".")) p = p.slice(1);
-    p = p.replace(/\.(\d+)(?=\.|$)/g, "[$1]");
-    state.annotations[p] = ann;
-  }
-  state.baseStale = !!annData.base_stale;
-  renderBaseStaleBanner();
+  applyAnnotationPayload(annData);
 
   const meta = bibData || state.articles.find(a => a.article_id === id);
   if (meta) renderBibHeader(meta);
@@ -3192,7 +3343,7 @@ $("#article-select").addEventListener("change", async (e) => {
   renderExtractionPanel();
   updateStats();
   updateConfidenceChip();
-});
+}
 
 // ── Bibliographic header ──
 // Only registry-verified provenance earns a pill; human-entered metadata
@@ -3752,16 +3903,16 @@ function collectSourceLines(obj, basePath) {
 
 function getRowAnnotationState(basePath) {
   // Check all annotations under this basePath
-  let total = 0, verified = 0, flagged = 0;
+  let total = 0, verified = 0, overridden = 0;
   for (const [path, ann] of Object.entries(state.annotations)) {
     if (path === basePath || path.startsWith(basePath + ".") || path.startsWith(basePath + "[")) {
       total++;
-      if (ann.status === "verified") verified++;
-      else if (ann.status === "flagged") flagged++;
+      if (isVerified(ann)) verified++;
+      else if (isOverridden(ann)) overridden++;
     }
   }
   // Count total leaf fields under basePath to know if "all" are annotated
-  return { total, verified, flagged };
+  return { total, verified, overridden };
 }
 
 function buildHorizontalTable(arr, basePath, key) {
@@ -3849,9 +4000,9 @@ function buildHorizontalTable(arr, basePath, key) {
           // Status column with rowspan
           const rowAnn = getRowAnnotationState(itemPath);
           let annStatus = "";
-          if (rowAnn.verified > 0 && rowAnn.flagged === 0) {
+          if (rowAnn.verified > 0 && rowAnn.overridden === 0) {
             annStatus = "verified";
-          } else if (rowAnn.flagged > 0) {
+          } else if (rowAnn.overridden > 0) {
             annStatus = "flagged";
           }
           html += `<td class="status-cell"${rowspanAttr}>${buildStatusActions(itemPath, annStatus)}</td>`;
@@ -3882,9 +4033,9 @@ function buildHorizontalTable(arr, basePath, key) {
       // Status column
       const rowAnn = getRowAnnotationState(itemPath);
       let annStatus = "";
-      if (rowAnn.verified > 0 && rowAnn.flagged === 0) {
+      if (rowAnn.verified > 0 && rowAnn.overridden === 0) {
         annStatus = "verified";
-      } else if (rowAnn.flagged > 0) {
+      } else if (rowAnn.overridden > 0) {
         annStatus = "flagged";
       }
       html += `<td class="status-cell">${buildStatusActions(itemPath, annStatus)}</td>`;
@@ -4071,9 +4222,8 @@ function buildValueCells(value, path) {
 
 function buildInlineEditForm(path, value = getValueAtPath(state.extraction, path)) {
   const ann = state.annotations[path];
-  const current = ann?.status === "flagged" && ann.correct_value !== undefined
-    ? ann.correct_value
-    : value;
+  const supplied = overrideValue(ann);
+  const current = supplied !== undefined ? supplied : value;
   const schemaField = schemaFieldForPath(path);
   const controlHtml = buildTypedEditControl(path, current, schemaField);
   return `<span class="inline-edit-form" data-path="${path}">` +
@@ -4128,11 +4278,12 @@ function buildEnumEditSelect(path, current, schemaField) {
 
 function displayFieldValueForPath(path, value = getValueAtPath(state.extraction, path)) {
   const ann = state.annotations[path];
-  if (ann && ann.status === "flagged" && ann.correct_value === REMOVE_VALUE) {
+  if (isRemoved(ann)) {
     return { html: '<span style="color:var(--text-dim)">(removed)</span>', style: "" };
   }
-  if (ann && ann.status === "flagged" && ann.correct_value) {
-    return { html: escapeHtml(ann.correct_value), style: "" };
+  const supplied = overrideValue(ann);
+  if (supplied !== undefined) {
+    return { html: escapeHtml(String(supplied)), style: "" };
   }
   if (typeof value === "number") {
     return { html: String(value), style: ' style="color:var(--val-number)"' };
@@ -4149,10 +4300,9 @@ function displayFieldValueForPath(path, value = getValueAtPath(state.extraction,
 function selectedFieldValueHtml(path) {
   const ann = state.annotations[path];
   const display = displayFieldValueForPath(path);
-  const editedClass = ann?.status === "flagged" ? " edited" : "";
-  const rawValue = ann?.status === "flagged" && ann.correct_value !== undefined
-    ? ann.correct_value
-    : getValueAtPath(state.extraction, path);
+  const editedClass = isOverridden(ann) ? " edited" : "";
+  const supplied = overrideValue(ann);
+  const rawValue = supplied !== undefined ? supplied : getValueAtPath(state.extraction, path);
   return {
     html: `<span class="source-evidence-value-text${editedClass}"${display.style}>${display.html}</span>`,
     title: displayFieldValue(rawValue),
@@ -4406,9 +4556,9 @@ function effectiveExtraction() {
   if (!state.extraction) return null;
   const data = JSON.parse(JSON.stringify(state.extraction));
   for (const [path, ann] of Object.entries(state.annotations)) {
-    if (ann.status !== "flagged" || ann.correct_value === undefined) continue;
-    if (ann.correct_value === REMOVE_VALUE) removeValueAtPath(data, path);
-    else applyCorrectedValue(data, path, ann.correct_value);
+    if (!isOverridden(ann)) continue;
+    if (isRemoved(ann)) removeValueAtPath(data, path);
+    else applyCorrectedValue(data, path, overrideValue(ann));
   }
   return data;
 }
@@ -4715,9 +4865,7 @@ async function saveInlineEdit(path) {
     return;
   }
   state.editingPath = null;
-  const ok = await saveAnnotation(path, "flagged", {
-    correct_value: correctValue,
-  });
+  const ok = await saveAnnotation(path, { override: { op: "replace", value: correctValue } });
   if (!ok) {
     state.editingPath = path;
     renderExtractionPanel();
@@ -4729,7 +4877,7 @@ async function removeInlineEdit(path) {
   const reviewer = $("#reviewer-id").value.trim();
   if (!reviewer) { alert("Please connect ORCID before editing."); return; }
   state.editingPath = null;
-  const ok = await saveAnnotation(path, "flagged", { correct_value: REMOVE_VALUE });
+  const ok = await saveAnnotation(path, { override: { op: "remove" } });
   if (!ok) {
     state.editingPath = path;
     renderExtractionPanel();
@@ -5266,7 +5414,8 @@ function buildLeafHtml(key, value, path) {
   // Edit details
   let editDetails = "";
   if (annStatus === "flagged" && ann) {
-    if (ann.correct_value) editDetails += `<div class="flag-correction" style="margin-left:24px">${escapeHtml(ann.correct_value)}</div>`;
+    const shown = overrideValue(ann);
+    if (shown !== undefined) editDetails += `<div class="flag-correction" style="margin-left:24px">${escapeHtml(String(shown))}</div>`;
     if (ann.note) editDetails += `<div class="flag-note-display" style="margin-left:24px">${escapeHtml(ann.note)}</div>`;
   }
 
@@ -5616,12 +5765,12 @@ function updateStats() {
   const reasoned = Object.keys(state.reasoningByPath).length;
   const uncited = document.querySelectorAll(".indicator.uncited").length;
   const total = reasoned + uncited;
-  const nVerified = Object.values(state.annotations).filter(a => a.status === "verified").length;
-  const nFlagged = Object.values(state.annotations).filter(a => a.status === "flagged").length;
+  const nVerified = Object.values(state.annotations).filter(isVerified).length;
+  const nOverridden = Object.values(state.annotations).filter(isOverridden).length;
   let msg = `${reasoned}/${total} cited`;
-  if (nVerified > 0 || nFlagged > 0) {
+  if (nVerified > 0 || nOverridden > 0) {
     msg += ` \u00b7 ${nVerified} verified`;
-    if (nFlagged > 0) msg += `, ${nFlagged} edited`;
+    if (nOverridden > 0) msg += `, ${nOverridden} edited`;
   }
   $("#stat-citations").textContent = msg;
   syncCurrentArticleProgress();
@@ -5651,17 +5800,17 @@ function updateConfidenceChip() {
 
 function reviewStateCounts() {
   if (!state.extraction) {
-    return { total: 0, reviewed: 0, verified: 0, flagged: 0, remaining: 0 };
+    return { total: 0, reviewed: 0, verified: 0, overridden: 0, remaining: 0 };
   }
   const leafPaths = collectLeafPaths(state.extraction);
   const reviewedAnnotations = leafPaths.map(path => state.annotations[path]).filter(Boolean);
-  const verified = reviewedAnnotations.filter(a => a.status === "verified").length;
-  const flagged = reviewedAnnotations.filter(a => a.status === "flagged").length;
+  const verified = reviewedAnnotations.filter(isVerified).length;
+  const overridden = reviewedAnnotations.filter(isOverridden).length;
   return {
     total: leafPaths.length,
-    reviewed: verified + flagged,
+    reviewed: verified + overridden,
     verified,
-    flagged,
+    overridden,
     remaining: leafPaths.filter(path => !state.annotations[path]).length,
   };
 }
@@ -5687,7 +5836,8 @@ function syncCurrentArticleProgress() {
   const counts = reviewStateCounts();
   article.n_fields = counts.total;
   article.n_verified = counts.verified;
-  article.n_flagged = counts.flagged;
+  article.n_overridden = counts.overridden;
+  if ($("#overview-route")?.style.display === "block") renderOverview();
   article.n_reviewed = counts.reviewed;
   article.n_annotated = article.n_reviewed;
   article.is_complete = article.n_fields > 0 && article.n_reviewed >= article.n_fields;
@@ -5722,24 +5872,35 @@ function setBulkStatus(message, batchId = null) {
   el.textContent = message;
 }
 
-function annotationEntry(path, status, extra = {}) {
-  const reviewer = $("#reviewer-id").value.trim();
-  const entry = { path: "." + path, status, reviewer };
+function annotationEntry(path, extra = {}) {
+  // The wire shape is the stored shape: {} means verified, `override` carries
+  // replace/remove/add, `note` is optional. Paths are canonical (no leading dot).
+  const entry = { path };
   for (const [key, value] of Object.entries(extra)) {
-    if (value !== undefined && value !== null && value !== "") {
-      entry[key] = value;
-    }
+    if (value !== undefined && value !== null && value !== "") entry[key] = value;
   }
   return entry;
 }
 
-async function saveAnnotation(path, status, extra = {}, options = {}) {
+// Reviews bind to one immutable run, so every read and write names it.
+function activeRunId(articleId = state.currentId) {
+  const meta = state.articles.find(a => a.article_id === articleId);
+  return meta ? meta.active_run_id : null;
+}
+
+function annotationsUrl(articleId, suffix = "") {
+  const runId = activeRunId(articleId);
+  if (!runId) return null;
+  return `/api/annotations/${encodeURIComponent(articleId)}/${encodeURIComponent(runId)}${suffix}`;
+}
+
+async function saveAnnotation(path, extra = {}, options = {}) {
   const id = state.currentId;  // captured now; the user may navigate mid-flight
   const previous = Object.prototype.hasOwnProperty.call(options, "previous")
     ? options.previous
     : state.annotations[path];
   const render = options.render !== false;
-  const entry = annotationEntry(path, status, extra);
+  const entry = annotationEntry(path, extra);
   setSaveStatus("Saving...", "saving");
   if (render) {
     state.annotations[path] = entry;
@@ -5747,23 +5908,29 @@ async function saveAnnotation(path, status, extra = {}, options = {}) {
   }
 
   try {
-    const response = await fetch(`/api/annotations/${id}`, {
+    const url = annotationsUrl(id);
+    if (!url) throw new Error("this article has no active run to review");
+    const response = await fetch(url, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(entry),
     });
-    if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+    if (!response.ok) {
+      // The server states the contract violation; show it rather than a code.
+      const detail = await response.json().catch(() => null);
+      throw new Error(detail?.detail || `${response.status} ${response.statusText}`);
+    }
     const saved = await response.json();
     if (id !== state.currentId) return true;  // saved, but this view moved on
-    state.annotations[path] = { ...entry, ...saved };
+    if (saved.annotation) state.annotations[path] = saved.annotation;
+    else delete state.annotations[path];
     setSaveStatus("Saved", "saved");
-    refreshBaseStale(id);
     return true;
   } catch (err) {
     if (id !== state.currentId) return false;
     if (previous) state.annotations[path] = previous;
     else delete state.annotations[path];
-    setSaveStatus("Failed to save annotation", "error");
+    setSaveStatus(err.message || "Failed to save annotation", "error");
     return false;
   } finally {
     if (render && id === state.currentId) {
@@ -5780,20 +5947,24 @@ async function clearAnnotation(path, options = {}) {
   setSaveStatus("Clearing...", "saving");
 
   try {
-    const response = await fetch(`/api/annotations/${id}/${path}`, {
-      method: "DELETE",
-    });
-    if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+    const url = annotationsUrl(id, `/${path}`);
+    if (!url) throw new Error("this article has no active run to review");
+    const response = await fetch(url, { method: "DELETE" });
+    if (!response.ok) {
+      const detail = await response.json().catch(() => null);
+      throw new Error(detail?.detail || `${response.status} ${response.statusText}`);
+    }
     if (id !== state.currentId) return true;  // cleared, but this view moved on
-    delete state.annotations[path];
+    // Unreview clears the whole subtree and may re-verify siblings, so the
+    // server's resulting frontier is authoritative — reload rather than guess.
     state.suppressClearHoverPaths.delete(path);
+    await loadAnnotations(id);
     setSaveStatus("Cleared", "saved");
-    refreshBaseStale(id);
     return true;
   } catch (err) {
     if (id !== state.currentId) return false;
     state.annotations[path] = previous;
-    setSaveStatus("Failed to save annotation", "error");
+    setSaveStatus(err.message || "Failed to clear annotation", "error");
     return false;
   } finally {
     if (render && id === state.currentId) {
@@ -5804,20 +5975,40 @@ async function clearAnnotation(path, options = {}) {
   }
 }
 
-function renderBaseStaleBanner() {
-  const el = $("#base-stale-warning");
+function renderReviewErrorBanner() {
+  const el = $("#review-error-warning");
   if (!el) return;
-  el.style.display = state.baseStale ? "block" : "none";
+  if (!state.reviewError) {
+    el.style.display = "none";
+    return;
+  }
+  el.textContent =
+    "\u26a0 This run's review file could not be read, so no review state is " +
+    "shown or editable. Fix or remove it by hand: " + state.reviewError;
+  el.style.display = "block";
 }
 
-function refreshBaseStale(id) {
-  // Staleness can clear when the last stale entry is re-saved or removed;
-  // re-ask the server rather than guessing. Responses apply by captured id.
-  fetchJson(`/api/annotations/${id}`).then(d => {
-    if (id !== state.currentId) return;
-    state.baseStale = !!(d && d.base_stale);
-    renderBaseStaleBanner();
-  }).catch(() => {});
+function fetchAnnotations(id) {
+  const url = annotationsUrl(id);
+  if (!url) return Promise.resolve({ annotations: [], review_error: null });
+  return fetchJson(url);
+}
+
+function applyAnnotationPayload(payload) {
+  // A corrupt review file is reported explicitly, never as "no reviews" —
+  // the two mean very different things to someone auditing a document.
+  state.reviewError = payload?.review_error || null;
+  state.annotations = {};
+  for (const ann of (payload?.annotations || [])) {
+    state.annotations[ann.path] = ann;
+  }
+  renderReviewErrorBanner();
+}
+
+async function loadAnnotations(id) {
+  const payload = await fetchAnnotations(id).catch(() => null);
+  if (id !== state.currentId || !payload) return;
+  applyAnnotationPayload(payload);
 }
 
 async function toggleFieldVerification(path) {
@@ -5827,17 +6018,17 @@ async function toggleFieldVerification(path) {
     state.selectedPath = path;
     state.selectedSourceIndex = 0;
     state.suppressClearHoverPaths.add(path);
-    await saveAnnotation(path, "verified", selectedVerifyExtra(path));
+    await saveAnnotation(path, selectedVerifyExtra(path));
     return;
   }
-  if (ann.status === "verified") {
+  if (isVerified(ann)) {
     if (state.suppressClearHoverPaths.has(path)) return;
     state.selectedPath = path;
     state.selectedSourceIndex = 0;
     await clearAnnotation(path);
     return;
   }
-  if (ann.status === "flagged") {
+  if (isOverridden(ann)) {
     openInlineEdit(path);
     return;
   }
@@ -5907,7 +6098,7 @@ function verifiedPathsInScope(basePath = null) {
   return collectLeafPaths(state.extraction).filter(path =>
     pathInScope(path, basePath) &&
     state.annotations[path] &&
-    state.annotations[path].status === "verified"
+    isVerified(state.annotations[path])
   );
 }
 
@@ -5915,7 +6106,7 @@ function sectionReviewState(basePath = null) {
   const leafPaths = collectLeafPaths(state.extraction).filter(path => pathInScope(path, basePath));
   const reviewedPaths = leafPaths.filter(path => {
     const ann = state.annotations[path];
-    return ann && (ann.status === "verified" || ann.status === "flagged");
+    return !!ann;
   });
   return {
     total: leafPaths.length,
@@ -6001,7 +6192,7 @@ function orderedReviewPaths() {
 function selectNextReviewPath(kind) {
   const paths = orderedReviewPaths().filter(path => {
     const ann = state.annotations[path];
-    if (kind === "flagged") return ann && ann.status === "flagged";
+    if (kind === "flagged") return isOverridden(ann);
     return !ann;
   });
   if (paths.length === 0) return;

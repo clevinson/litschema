@@ -44,3 +44,29 @@ articles do not enter current-schema coverage.
 **Rejected:** counting stored review entries; counting replacement-only leaves;
 frontend inference of refinement scope or completion; reporting corrupt review
 as unreviewed.
+
+
+## 2026-07-26 — Two routes, and one path through the app
+
+**Context:** the verifier was a single page whose only navigation was a
+dropdown that dispatched a change event. There was no way to link to a
+document, no way back to a corpus-level view, and no answer to "what is left
+to review" without opening articles one at a time.
+
+**Decision:** `#/` is the dataset overview and `#/doc/<article-id>` is one
+document. Both are deep-linkable and survive reload. Every way of moving
+between documents — dropdown, prev/next, a filter that excludes the open
+article, a pasted link, the back button — sets the hash and lets `applyRoute`
+load the document. One path, so navigation cannot diverge from what the URL
+says.
+
+The overview lists articles with no active run rather than hiding them: that
+is exactly the work someone still has to do, and hiding it would make the
+queue look shorter than it is. A corrupt review file shows as "review
+unreadable" with its counts blanked, never as zero — zero reads as "nothing
+reviewed yet", a materially more reassuring claim than "we cannot tell".
+
+**Rejected:** keeping the welcome splash, which occupied the position where
+corpus state belongs; and auto-selecting the first article on load, which
+skipped the overview entirely and made the corpus view unreachable without a
+filter that matched nothing.

@@ -73,7 +73,7 @@ def test_verifier_overview_and_json_use_effective_post_edit_values() -> None:
 
     assert "effectiveExtraction" in html
     assert "applyCorrectedValue" in html
-    assert 'ann.status !== "flagged" || ann.correct_value === undefined' in html
+    assert "if (!isOverridden(ann)) continue;" in html
     assert "removeValueAtPath" in html
     assert "renderOverviewView(effectiveExtraction())" in html
     assert "renderJsonView(effectiveExtraction())" in html
@@ -410,14 +410,25 @@ def test_bib_header_title_first_layout_with_corporate_author() -> None:
     assert "flex-basis: 100%" in html
 
 
-def test_verifier_surfaces_base_stale_warning() -> None:
+def test_verifier_surfaces_a_corrupt_review_file() -> None:
+    """Corrupt review state must be visible, never rendered as "no reviews"."""
     html = STATIC_HTML.read_text()
 
-    # The staleness API field must have a visible consequence.
-    assert 'id="base-stale-warning"' in html
-    assert "state.baseStale = !!annData.base_stale" in html
-    assert "renderBaseStaleBanner" in html
-    assert "refreshBaseStale" in html
+    assert 'id="review-error-warning"' in html
+    assert "state.reviewError = payload?.review_error || null" in html
+    assert "renderReviewErrorBanner" in html
+    # Staleness is superseded by run binding and must be gone entirely.
+    assert "baseStale" not in html
+    assert "base_stale" not in html
+
+
+def test_verifier_reads_and_writes_reviews_against_an_explicit_run() -> None:
+    html = STATIC_HTML.read_text()
+
+    assert "function activeRunId(" in html
+    assert "function annotationsUrl(" in html
+    # Every annotation URL is built through the run-aware helper.
+    assert "/api/annotations/${id}`" not in html
 
 
 def test_annotation_mutations_capture_the_article_id() -> None:
@@ -512,7 +523,43 @@ def test_inline_edit_has_typed_inputs_and_remove_affordance() -> None:
     assert "inline-edit-number" in html
     assert "inline-edit-boolean" in html
     assert "inline-edit-remove" in html
-    assert '"__remove__"' in html
+    assert 'op: "remove"' in html
     assert "schemaField.kind" in html or "schemaField?.kind" in html
     assert "(removed)" in html
     assert "removeInlineEdit" in html
+
+
+# ── routes (ka84) ────────────────────────────────────────────────────────────
+
+
+def test_verifier_exposes_overview_and_document_routes() -> None:
+    html = STATIC_HTML.read_text()
+
+    assert 'id="overview-route"' in html
+    assert "function parseRoute(" in html
+    assert "function applyRoute(" in html
+    assert '"#/doc/"' in html or "#/doc/${encodeURIComponent(articleId)}" in html
+    # Deep links must survive reload and the back button.
+    assert 'window.addEventListener("hashchange"' in html
+    assert "await applyRoute();" in html
+
+
+def test_navigation_goes_through_the_route_not_around_it() -> None:
+    """One path through the app: dropdown, deep link, and back all route."""
+    html = STATIC_HTML.read_text()
+
+    assert "if (e.target.value) routeToDoc(e.target.value);" in html
+    assert "routeToDoc(state.filteredArticles[nextIdx].article_id);" in html
+    # The old direct-dispatch path must be gone.
+    assert 'dispatchEvent(new Event("change"))' not in html
+
+
+def test_overview_lists_unextracted_articles_and_flags_unreadable_reviews() -> None:
+    """The overview is the work queue, so it must show what still has no run."""
+    html = STATIC_HTML.read_text()
+
+    assert "not extracted" in html
+    assert "review unreadable" in html
+    assert "const noRun = !a.active_run_id;" in html
+    # An unknown deep link is recoverable, never a dead end.
+    assert "No document" in html
