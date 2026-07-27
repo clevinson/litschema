@@ -1,0 +1,86 @@
+name: test
+
+on:
+  push:
+    branches: [main, "release/**", "feat/**"]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Lint
+        run: uv run ruff check .
+
+      - name: Tests
+        run: uv run pytest -q
+
+  wheel:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Build sdist and wheel
+        run: uv build
+
+      # A `--help` smoke never imports past the CLI module, so it cannot catch
+      # a missing runtime dependency in a submodule. Import the public surface
+      # from the built wheel, in a clean environment with no dev group.
+      - name: Import the public surface from the wheel
+        run: |
+          WHEEL=$(ls dist/*.whl)
+          uv run --isolated --no-project --with "$WHEEL" python - <<'EOF'
+          import litschema
+          import litschema.cli
+          import litschema.runs
+          import litschema.reviews
+          import litschema.review_paths
+          import litschema.articles
+          import litschema.config
+          import litschema.schema_resolution
+          import litschema.source_metadata
+          import litschema.export
+          import litschema.analysis          # must not need pandas to import
+          import litschema.explore.loader
+          import litschema.webapp.app
+          from litschema.cli import app      # entry point resolves
+          print("public surface imports cleanly")
+          EOF
+
+      # The bundled skills are force-included into the wheel; a project that
+      # installs litschema and runs `skills install` must find them there.
+      - name: Bundled skills ship in the wheel
+        run: |
+          WHEEL=$(ls dist/*.whl)
+          uv run --isolated --no-project --with "$WHEEL" python - <<'EOF'
+          from importlib import resources
+          skills = resources.files("litschema") / "skills"
+          names = sorted(p.name for p in skills.iterdir() if (p / "SKILL.md").is_file())
+          assert "extract-article" in names, names
+          assert "litschema-onboard" in names, names
+          print("bundled skills:", ", ".join(names))
+          EOF
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/

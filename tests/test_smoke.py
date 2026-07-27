@@ -517,3 +517,31 @@ def test_validate_defaults_to_article_store(
 
     assert result.exit_code == 0, result.output
     assert calls == [([], tmp_path / "litschema.yaml")]
+
+
+def test_analysis_imports_without_pandas_at_module_scope() -> None:
+    """The wheel must import with runtime deps only.
+
+    `litschema.analysis` is a notebook helper and pandas is a development
+    dependency, so importing pandas at module scope makes `import
+    litschema.analysis` fail in a plain install. A `--help` smoke never reaches
+    this module, which is why CI imports the public surface from the wheel.
+    """
+    source = (REPO_ROOT / "src" / "litschema" / "analysis" / "__init__.py").read_text()
+
+    assert "\nimport pandas as pd" not in source
+    assert "def _pandas():" in source
+    assert "if TYPE_CHECKING:" in source
+
+
+def test_ci_imports_the_public_surface_from_the_built_wheel() -> None:
+    workflow = (REPO_ROOT / ".github" / "workflows" / "test.yml").read_text()
+
+    assert "uv run pytest" in workflow
+    assert "uv run ruff check ." in workflow
+    assert "uv build" in workflow
+    # --isolated --no-project is what makes the check meaningful: it proves the
+    # wheel stands up without the dev group.
+    assert "--isolated --no-project" in workflow
+    assert "import litschema.analysis" in workflow
+    assert "litschema-onboard" in workflow  # bundled skills ship
