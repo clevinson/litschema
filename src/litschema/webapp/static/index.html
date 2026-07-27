@@ -6147,7 +6147,15 @@ async function bulkVerifyPaths(paths, source, skipped = 0) {
   const verifiedPaths = [];
   for (const path of paths) {
     const ok = await saveAnnotation(path, {}, { render: false });
-    if (ok) verifiedPaths.push(path);
+    if (ok) {
+      verifiedPaths.push(path);
+      // Disarm click-to-clear on what we just verified, exactly as a single
+      // verification does. Without this every field a bulk action touched is
+      // immediately armed to clear: the one under the cursor renders its ✕
+      // clear icon instead of the ✓, reading as "this one didn't take", and a
+      // follow-up click undoes the verification rather than confirming it.
+      state.suppressClearHoverPaths.add(path);
+    }
   }
 
   renderExtractionPanel();

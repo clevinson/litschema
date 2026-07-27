@@ -182,6 +182,23 @@ with sync_playwright() as p:
         check("added entries are plain verifications",
               added and all(v == {} for v in added.values()), json.dumps(added)[:90])
 
+        # A field the bulk action just verified must not be armed to clear:
+        # under the cursor it would render its clear icon, reading as "this one
+        # didn't take", and the next click would undo the verification.
+        first_leaf = sorted(k for k in under if k != num_target)[0]
+        page.locator(f'button.field-status[data-path="{first_leaf}"]').first.hover()
+        page.wait_for_timeout(400)
+        shown = page.evaluate(
+            """(p) => { const b = document.querySelector(`button.field-status[data-path="${p}"]`);
+                 const m=b.querySelector('.status-icon-main'), h=b.querySelector('.status-icon-hover');
+                 const vis=e=>e&&getComputedStyle(e).display!=='none';
+                 return (vis(m)?m.textContent:'')+(vis(h)?h.textContent:''); }""",
+            first_leaf,
+        )
+        check("bulk-verified control is not armed to clear", shown == "\u2713", repr(shown))
+        page.mouse.move(5, 5)
+        page.wait_for_timeout(300)
+
     print("\n[attribution is optional]")
     anon = [v for v in stored().values() if "reviewer" not in v]
     check("anonymous reviews saved without a reviewer", len(anon) > 0, f"{len(anon)} entries")

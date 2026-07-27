@@ -118,6 +118,21 @@ Writes identify the displayed run explicitly. If another process changes
 requires reload or explicit acknowledgement. Articles without an active run
 retain metadata/PDF access and show a clear extraction placeholder.
 
+#### Verification affordances
+
+A verified control is armed to clear on the next click, and shows that by
+swapping its check for a clear icon under the cursor. Arming is therefore
+suppressed for whatever was just verified — including every field a bulk
+action touched — until the pointer leaves it. Without that suppression the
+control under the cursor renders as a clear icon immediately after being
+verified, which reads as the verification not having taken, and the next click
+undoes it rather than confirming it.
+
+Bulk verification covers the unreviewed leaves in scope that have evidence
+behind them, resolving evidence through ancestors under
+`specs/extraction/spec.md`. It never overwrites an existing override: a value a
+human already corrected is not re-verified by a section-wide action.
+
 #### Supplying omitted values
 
 The default view shows only what the extraction contains. Omitted fields are
@@ -173,6 +188,9 @@ Implementation coverage must replace brittle source-substring assertions with:
 - browser behavior on `#/` and `#/doc/{id}`, including direct load, fragment
   query state, filtered next/previous, exclusion of the open article,
   navigation, back/forward, and reload;
+- bulk verification of a section whose evidence is cited only on an ancestor,
+  preservation of existing overrides within it, and suppression of
+  click-to-clear arming on everything it verified;
 - exact active-run schema selection, unavailable-schema errors, and review
   metric formulas for no-run, zero-leaf, verified, overridden, parent-covered,
   terminal-container, invalid-path, and corrupt-review cases;
