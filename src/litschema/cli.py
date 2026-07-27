@@ -1230,7 +1230,6 @@ def init(
     config_path.write_text(
         'project_root: "."\n'
         'schema_dir: "schema"\n'
-        'schema_root: "extraction.yaml"\n'
         'extraction_schema_file: "extraction.yaml"\n'
         'data_dir: "data"\n'
         'article_store_dir: "data/papers"\n'

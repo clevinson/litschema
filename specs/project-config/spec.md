@@ -33,9 +33,9 @@ Core keys and defaults:
 | `paper_inbox_dir` | `papers-inbox` | PDF intake |
 
 Unknown keys are preserved for domain repositories. `references_dir`,
-`tracking_xlsx`, `static_site_dir`, and `schema_root` still parse but have no
-consumer and must not be used. No config key may select a schema version or
-maintain schema history.
+`tracking_xlsx`, and `static_site_dir` still parse but have no consumer and
+must not be used; `init` no longer writes any of them. No config key may
+select a schema version or maintain schema history.
 
 ## One current schema
 
