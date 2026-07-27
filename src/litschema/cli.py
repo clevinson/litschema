@@ -1066,16 +1066,27 @@ def doctor(ctx: typer.Context):
         typer.echo(f"{CROSS} schema dir missing: {cfg.schema_dir}")
         issues.append(f"create {cfg.schema_dir}")
 
+    # The schema is the one thing every other verb depends on, so a failure to
+    # resolve it is the headline diagnosis, not something to skip past. Staying
+    # quiet here let `doctor` report a clean bill of health for an unparseable
+    # schema and pushed the confusing failure downstream into `extract`.
+    from .schema_resolution import identifier_reference_slots, resolve_extraction_schema
+
+    try:
+        resolved = resolve_extraction_schema(cfg)
+        typer.echo(f"{CHECK} extraction schema: {resolved.path} (root class {resolved.root_class})")
+    except Exception as exc:
+        resolved = None
+        typer.echo(f"{CROSS} cannot resolve the extraction schema: {exc}")
+        issues.append(
+            f"fix the extraction schema at {cfg.schema_dir} — every other command "
+            "reads it, and it must parse and declare exactly one `tree_root: true` class"
+        )
+
     # A multivalued class-range slot whose range has an identifier serializes
     # as bare ID strings, so every other attribute on that class silently has
     # nowhere to land. The extraction still validates, so nothing else catches
     # it — the loss only shows up as missing data once documents are extracted.
-    try:
-        from .schema_resolution import identifier_reference_slots, resolve_extraction_schema
-
-        resolved = resolve_extraction_schema(cfg)
-    except Exception:
-        resolved = None
     if resolved is not None:
         for finding in identifier_reference_slots(resolved.view, resolved.root_class):
             lost = ", ".join(finding["lost"])

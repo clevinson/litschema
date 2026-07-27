@@ -154,3 +154,70 @@ def test_identifier_reference_detection_skips_classes_without_identifiers(tmp_pa
 """,
     )
     assert identifier_reference_slots(view, "Study") == []
+
+
+# ── doctor's behaviour when the schema cannot be resolved ────────────────────
+
+
+def _doctor(project_root):
+    """Run `doctor` against a project, returning (exit_code, output)."""
+    from typer.testing import CliRunner
+
+    from litschema import cli
+
+    result = CliRunner().invoke(
+        cli.app, ["--config", str(project_root / "litschema.yaml"), "doctor"]
+    )
+    return result.exit_code, result.output
+
+
+def _minimal_project(tmp_path, schema_body: str):
+    schema_dir = tmp_path / "schema"
+    schema_dir.mkdir(parents=True, exist_ok=True)
+    (schema_dir / "extraction.yaml").write_text(schema_body)
+    (tmp_path / "litschema.yaml").write_text('project_root: "."\nschema_dir: "schema"\n')
+    return tmp_path
+
+
+def test_doctor_reports_an_unparseable_schema_and_exits_nonzero(tmp_path) -> None:
+    """The command whose job is diagnosis must not stay quiet about the schema.
+
+    Every other verb reads the extraction schema, so swallowing a resolution
+    failure here just moves the confusing error downstream into `extract`.
+    """
+    project = _minimal_project(tmp_path, "this: is: not: valid: linkml: [[[\n")
+
+    code, output = _doctor(project)
+
+    assert code == 1, output
+    assert "cannot resolve the extraction schema" in output
+    assert "Everything looks good" not in output
+    assert "fix the extraction schema" in output
+
+
+def test_doctor_reports_a_schema_with_no_tree_root(tmp_path) -> None:
+    project = _minimal_project(
+        tmp_path,
+        "id: https://example.org/t\nname: t\nclasses:\n"
+        "  NotARoot:\n    attributes:\n      article_id:\n        range: string\n",
+    )
+
+    code, output = _doctor(project)
+
+    assert code == 1, output
+    assert "cannot resolve the extraction schema" in output
+
+
+def test_doctor_names_the_resolved_schema_when_it_is_healthy(tmp_path) -> None:
+    project = _minimal_project(
+        tmp_path,
+        "id: https://example.org/t\nname: t\nclasses:\n"
+        "  ActualRoot:\n    tree_root: true\n    attributes:\n"
+        "      article_id:\n        range: string\n",
+    )
+
+    code, output = _doctor(project)
+
+    assert "extraction schema:" in output
+    assert "ActualRoot" in output
+    assert "cannot resolve the extraction schema" not in output
