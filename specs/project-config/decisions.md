@@ -41,3 +41,26 @@ into that file.
 
 **Rejected:** hashing a root file while allowing mutable imports; adding a
 second schema-closure manifest.
+
+
+## 2026-07-26 — doctor warns on slots that silently discard authored detail
+
+**Context:** the first demo schema defined a rich `Treatment` class and a
+multivalued `treatments` slot. Because `Treatment` declares an identifier,
+LinkML defaulted the slot to reference-by-identifier and generated an array of
+plain strings, so `practice_category`, `is_control`, `description`, and both
+amendment-rate fields had nowhere to land. Extractions validated cleanly the
+whole time. Five extraction agents independently rediscovered this and each
+worked around it, which is the signal that documentation is not the fix.
+
+**Decision:** `doctor` walks the schema from its tree root and reports any
+multivalued class-range slot that resolves to identifier references while its
+range class defines attributes beyond the identifier — naming the slot, the
+attributes at risk, and the `inlined_as_list: true` remedy. The heuristic is
+deliberately narrow: an identifier-only range class loses nothing, and an
+explicitly inlined slot has already opted out, so neither warns.
+
+**Rejected:** changing what LinkML generates, which would diverge from the
+language the schema is written in; failing schema resolution outright, since
+identifier references are legitimate when nothing is lost; and documenting the
+trap only, which the five independent rediscoveries showed to be insufficient.

@@ -82,6 +82,15 @@ an uncommitted schema may become unreconstructable once edited. `doctor` and
 | `verify` | `specs/verifier` |
 | `export`, `mcp` | `specs/explore` |
 
+`doctor` also inspects the schema for slots that silently discard authored
+detail: a multivalued class-range slot whose range class declares an
+`identifier` serializes as bare ID strings, so every other attribute on that
+class has nowhere to land while extractions still validate. Where the range
+class defines attributes beyond its identifier, the author expected inlining,
+and `doctor` names the slot, the attributes at risk, and the
+`inlined_as_list: true` remedy. A range class that defines only an identifier
+loses nothing and is not reported.
+
 `status` reports schema presence plus inbox, article, prepared-text,
 published-run, active-run, and current-schema-active counts, flags broken
 active pointers, and exits 0. `doctor` checks Python and `uv`, schema resolution,
@@ -114,4 +123,7 @@ Implementation coverage must pin:
 - common exit codes and project-scoped config flags;
 - status counts across missing, active, and current-schema-active runs, and
   broken-pointer flagging;
-- doctor failures for schema and skill resolution.
+- doctor failures for schema and skill resolution;
+- doctor's identifier-reference warning: reported when the range class has
+  attributes beyond its identifier, silent for an identifier-only range class
+  and for an explicitly inlined slot.

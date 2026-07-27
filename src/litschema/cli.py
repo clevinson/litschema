@@ -1035,6 +1035,29 @@ def doctor(ctx: typer.Context):
         typer.echo(f"{CROSS} schema dir missing: {cfg.schema_dir}")
         issues.append(f"create {cfg.schema_dir}")
 
+    # A multivalued class-range slot whose range has an identifier serializes
+    # as bare ID strings, so every other attribute on that class silently has
+    # nowhere to land. The extraction still validates, so nothing else catches
+    # it — the loss only shows up as missing data once documents are extracted.
+    try:
+        from .schema_resolution import identifier_reference_slots, resolve_extraction_schema
+
+        resolved = resolve_extraction_schema(cfg)
+    except Exception:
+        resolved = None
+    if resolved is not None:
+        for finding in identifier_reference_slots(resolved.view, resolved.root_class):
+            lost = ", ".join(finding["lost"])
+            typer.echo(
+                f"{WARN} `{finding['owner']}.{finding['slot']}` stores only "
+                f"{finding['range']} identifiers — {lost} cannot be recorded"
+            )
+            issues.append(
+                f"add `inlined_as_list: true` to the `{finding['slot']}` slot so "
+                f"{finding['range']} objects are stored inline, not as "
+                f"`{finding['identifier']}` references"
+            )
+
     # Skills check — project-local .claude/skills/ is the init default;
     # global installs are the alternative. Only litschema's bundled skills
     # count: unrelated skills living in the same directories are not a green

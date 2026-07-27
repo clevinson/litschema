@@ -44,6 +44,58 @@ def _find_tree_root_class(sv: SchemaView) -> str:
     )
 
 
+def identifier_reference_slots(view: SchemaView, root_class: str) -> list[dict]:
+    """Slots that will silently serialize as bare ID strings, losing detail.
+
+    LinkML defaults a multivalued slot whose range class declares an
+    `identifier` to reference-by-identifier, so the generated JSON Schema
+    types it as an array of strings. When the range class defines nothing but
+    its identifier that is exactly right. When it defines other attributes,
+    the author almost certainly expected inlined objects, and every one of
+    those attributes has nowhere to land — silently, with the extraction still
+    validating. Reported so the author sees it before extracting every
+    document against the schema, not after.
+
+    Returns one entry per affected slot, walking the tree from the root.
+    """
+    findings: list[dict] = []
+    seen: set[str] = set()
+
+    def visit(class_name: str) -> None:
+        if class_name in seen:
+            return
+        seen.add(class_name)
+        for slot in view.class_induced_slots(class_name):
+            range_name = slot.range
+            if not range_name or range_name not in (view.all_classes() or {}):
+                continue
+            identifier = None
+            others: list[str] = []
+            for sub in view.class_induced_slots(range_name):
+                if sub.identifier:
+                    identifier = sub.name
+                else:
+                    others.append(sub.name)
+            references_by_id = (
+                identifier is not None and slot.multivalued and not slot.inlined_as_list
+                and not slot.inlined
+            )
+            if references_by_id and others:
+                findings.append(
+                    {
+                        "owner": class_name,
+                        "slot": slot.name,
+                        "range": range_name,
+                        "identifier": identifier,
+                        "lost": sorted(others),
+                    }
+                )
+            visit(range_name)
+
+    visit(root_class)
+    return findings
+
+
 def schema_hash(cfg: LitSchemaConfig) -> str:
     """Schema identity: the SHA-256 of the configured schema file's exact bytes.
 
