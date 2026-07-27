@@ -182,20 +182,17 @@ with sync_playwright() as p:
         check("added entries are plain verifications",
               added and all(v == {} for v in added.values()), json.dumps(added)[:90])
 
-        # A field the bulk action just verified must not be armed to clear:
-        # under the cursor it would render its clear icon, reading as "this one
-        # didn't take", and the next click would undo the verification.
+        # A field the bulk action verified must accept its next click. The
+        # pointer never touched these controls — it was on the section header —
+        # so nothing about them should need a warm-up hover first.
         first_leaf = sorted(k for k in under if k != num_target)[0]
-        page.locator(f'button.field-status[data-path="{first_leaf}"]').first.hover()
-        page.wait_for_timeout(400)
-        shown = page.evaluate(
-            """(p) => { const b = document.querySelector(`button.field-status[data-path="${p}"]`);
-                 const m=b.querySelector('.status-icon-main'), h=b.querySelector('.status-icon-hover');
-                 const vis=e=>e&&getComputedStyle(e).display!=='none';
-                 return (vis(m)?m.textContent:'')+(vis(h)?h.textContent:''); }""",
-            first_leaf,
+        page.locator(f'button.field-status[data-path="{first_leaf}"]').first.click()
+        page.wait_for_timeout(1600)
+        check(
+            "one click clears a bulk-verified field",
+            first_leaf not in stored(),
+            f"{first_leaf} still stored",
         )
-        check("bulk-verified control is not armed to clear", shown == "\u2713", repr(shown))
         page.mouse.move(5, 5)
         page.wait_for_timeout(300)
 

@@ -780,3 +780,21 @@ def test_bulk_actions_report_only_failures() -> None:
     # Failures share the one status slot rather than having their own.
     assert "fields failed to save" in html
     assert 'setSaveStatus(`${failed}' in html
+
+
+def test_clear_arming_is_suppressed_only_for_the_control_just_clicked() -> None:
+    """Suppression follows the pointer, not the write.
+
+    Verifying a field disarms click-to-clear on that one control, so the click
+    that verified it cannot immediately undo it. Applying the same suppression
+    to every field a bulk action wrote made each of them swallow its next
+    genuine click, because the pointer had been on the section header and never
+    touched them.
+    """
+    html = STATIC_HTML.read_text()
+
+    body = html[html.index("async function bulkVerifyPaths("):html.index("async function clearVerifiedScope(")]
+    assert "suppressClearHoverPaths" not in body
+    # The single-click path still suppresses, scoped to the clicked path.
+    toggle = html[html.index("async function toggleFieldVerification("):]
+    assert "state.suppressClearHoverPaths.add(path)" in toggle

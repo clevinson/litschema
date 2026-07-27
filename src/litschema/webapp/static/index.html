@@ -6255,6 +6255,11 @@ async function toggleFieldVerification(path) {
   if (!ann) {
     state.selectedPath = path;
     state.selectedSourceIndex = 0;
+    // Disarm click-to-clear on the control the pointer is on right now, so the
+    // click that verified it cannot immediately undo it. Scoped to this one
+    // path: a bulk action leaves the pointer on the section header, so
+    // suppressing the fields it verified would make each of them swallow its
+    // next genuine click.
     state.suppressClearHoverPaths.add(path);
     await saveAnnotation(path, selectedVerifyExtra(path));
     return;
@@ -6351,15 +6356,7 @@ async function bulkVerifyPaths(paths, source) {
   const verifiedPaths = [];
   for (const path of paths) {
     const ok = await saveAnnotation(path, {}, { render: false });
-    if (ok) {
-      verifiedPaths.push(path);
-      // Disarm click-to-clear on what we just verified, exactly as a single
-      // verification does. Without this every field a bulk action touched is
-      // immediately armed to clear: the one under the cursor renders its ✕
-      // clear icon instead of the ✓, reading as "this one didn't take", and a
-      // follow-up click undoes the verification rather than confirming it.
-      state.suppressClearHoverPaths.add(path);
-    }
+    if (ok) verifiedPaths.push(path);
   }
 
   renderExtractionPanel();

@@ -169,12 +169,16 @@ Only failures are stated, in the same place a single failure is stated.
 #### Verification affordances
 
 A verified control is armed to clear on the next click, and shows that by
-swapping its check for a clear icon under the cursor. Arming is therefore
-suppressed for whatever was just verified — including every field a bulk
-action touched — until the pointer leaves it. Without that suppression the
-control under the cursor renders as a clear icon immediately after being
-verified, which reads as the verification not having taken, and the next click
-undoes it rather than confirming it.
+swapping its check for a clear icon under the cursor. Arming is suppressed for
+the control the pointer is on at the moment it becomes verified, until the
+pointer leaves it, so the click that verified a field cannot immediately undo
+it.
+
+Suppression follows the pointer, not the write. A bulk action leaves the
+pointer on the section control, having never touched the fields it verified,
+so those fields stay armed and accept their next click. Suppressing them
+instead would make each one silently swallow a genuine click and appear
+unresponsive.
 
 Bulk verification covers the unreviewed leaves in scope that have evidence
 behind them, resolving evidence through ancestors under
@@ -288,6 +292,8 @@ Implementation coverage must replace brittle source-substring assertions with:
   a run that extracted nothing;
 - silence from a bulk action that succeeds, and a stated failure when one does
   not;
+- clear-arming suppressed for a single verification's own control and not for
+  fields written by a bulk action, which accept their next click directly;
 - bulk verification of a section whose evidence is cited only on an ancestor,
   preservation of existing overrides within it, and suppression of
   click-to-clear arming on everything it verified;
