@@ -13,7 +13,7 @@ from litschema.config import LitSchemaConfig, load_config
 
 
 def _project_cfg(project: Path) -> LitSchemaConfig:
-    return LitSchemaConfig(
+    cfg = LitSchemaConfig(
         config_path=project / "litschema.yaml",
         project_root=project,
         data_dir=project / "data",
@@ -25,6 +25,12 @@ def _project_cfg(project: Path) -> LitSchemaConfig:
         article_store_dir=project / "data" / "papers",
         raw={},
     )
+    # Every real project has a resolvable extraction schema — `doctor` reports
+    # its absence as an error, and the verifier refuses to interpret a run it
+    # cannot type. Write it up front, before any run is published, so fixture
+    # runs record the project's real schema hash like published runs do.
+    _write_default_schema(cfg)
+    return cfg
 
 
 def _write_default_schema(cfg: LitSchemaConfig) -> None:
@@ -764,3 +770,81 @@ def test_settings_reports_repo_context_for_the_backfill_warning(tmp_path) -> Non
     assert client.get("/api/settings").json()["in_git_repo"] is False
     (cfg.project_root / ".git").mkdir()
     assert client.get("/api/settings").json()["in_git_repo"] is True
+
+
+# ── schema identity between a run and the schema used to interpret it ────────
+
+
+def test_progress_is_null_with_a_schema_error_when_the_schema_moved(tmp_path) -> None:
+    """A review is only meaningful against the schema the run was extracted with.
+
+    Silently aggregating against today's schema reported confident numbers for
+    a run it no longer describes. `specs/verifier/spec.md` requires the counts
+    to be null and the reason to be named.
+    """
+    cfg = _project_cfg(tmp_path)
+    _write_manifest(cfg, "a", {"id": "a"})
+    from .helpers import publish_test_run
+
+    publish_test_run(
+        cfg.article_store_dir / "a",
+        {"article_id": "a", "title": "T", "ph": 6.1},
+        run_id="01OLDSCHEMA00000000000000",
+        schema_hash="sha256:extracted-against-something-else",
+    )
+    client = _client(cfg)
+
+    entry = {a["article_id"]: a for a in client.get("/api/articles").json()["articles"]}["a"]
+
+    assert entry["schema_error"]
+    assert "different schema" in entry["schema_error"]
+    assert entry["n_fields"] is None
+    assert entry["n_verified"] is None
+    assert entry["is_complete"] is None
+
+
+def test_a_typed_edit_is_refused_when_the_schema_moved_but_verification_is_not(
+    tmp_path,
+) -> None:
+    """Only writes that carry a value need the schema.
+
+    Verification asserts the agent was right about what is already there, so
+    blocking it too would strand a reviewer mid-audit over a schema edit that
+    never touched the field in front of them.
+    """
+    cfg = _project_cfg(tmp_path)
+    _write_manifest(cfg, "a", {"id": "a"})
+    from .helpers import publish_test_run
+
+    run_id = "01OLDSCHEMA00000000000001"
+    publish_test_run(
+        cfg.article_store_dir / "a",
+        {"article_id": "a", "title": "T", "ph": 6.1},
+        run_id=run_id,
+        schema_hash="sha256:extracted-against-something-else",
+    )
+    client = _client(cfg)
+
+    edit = client.put(
+        f"/api/annotations/a/{run_id}",
+        json={"path": "ph", "override": {"op": "replace", "value": "7.2"}},
+    )
+    assert edit.status_code == 409
+    assert "cannot type this edit" in edit.json()["detail"]
+
+    verify = client.put(f"/api/annotations/a/{run_id}", json={"path": "ph"})
+    assert verify.status_code == 200, verify.text
+    assert verify.json()["state"] == "verified"
+
+
+def test_progress_names_an_unresolvable_schema_rather_than_reporting_zero(tmp_path) -> None:
+    cfg = _project_cfg(tmp_path)
+    _write_manifest(cfg, "a", {"id": "a"})
+    _write_extraction(cfg, "a", {"article_id": "a", "title": "T", "ph": 6.1})
+    (cfg.schema_dir / "extraction.yaml").write_text("this: is: not: linkml: [[[\n")
+    client = _client(cfg)
+
+    entry = {a["article_id"]: a for a in client.get("/api/articles").json()["articles"]}["a"]
+
+    assert entry["schema_error"]
+    assert entry["n_fields"] is None

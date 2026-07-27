@@ -308,17 +308,43 @@ def _set_require_reviewer(cfg: LitSchemaConfig, value: bool) -> None:
 
 
 def _resolved_schema(cfg: LitSchemaConfig):
-    """The project schema, or None when it cannot be resolved.
-
-    Typed coercion is a guarantee the schema provides; without a schema the
-    review still saves, storing the value exactly as supplied.
-    """
+    """The project schema, or None when it cannot be resolved."""
     from ..schema_resolution import resolve_extraction_schema
 
     try:
         return resolve_extraction_schema(cfg)
     except Exception:
         return None
+
+
+def _schema_error(files: ArticleFiles, run) -> str | None:
+    """Why this run cannot be interpreted with the current schema, or None.
+
+    A review is only meaningful relative to the schema the run was extracted
+    against. Resolving the current schema and using it regardless meant a
+    changed schema silently retyped a reviewer's edits, and an unresolvable one
+    silently switched typing off — in both cases with a perfectly normal-looking
+    page. `specs/verifier/spec.md` requires this to be said instead.
+    """
+    from ..schema_resolution import schema_hash
+
+    resolved = _resolved_schema(files.cfg)
+    if resolved is None:
+        return "the project's extraction schema cannot be resolved"
+    try:
+        current = schema_hash(files.cfg)
+    except OSError:
+        return "the project's extraction schema cannot be read"
+    try:
+        recorded = run.read_run_json().get("schema_hash")
+    except (OSError, ValueError):
+        return f"run {run.run_id} has an unreadable run.json"
+    if recorded and current != recorded:
+        return (
+            f"run {run.run_id} was extracted against a different schema "
+            f"({recorded[:14]}…, now {current[:14]}…)"
+        )
+    return None
 
 
 def _identifier_paths(files: ArticleFiles, run) -> set[str]:
@@ -359,6 +385,7 @@ def _article_progress(files: ArticleFiles) -> dict:
         "review_progress": 0.0,
         "is_complete": False,
         "review_error": None,
+        "schema_error": None,
     }
     try:
         run = active_run(files)
@@ -366,14 +393,24 @@ def _article_progress(files: ArticleFiles) -> dict:
         return {**empty, "review_error": str(exc)}
     if run is None:
         return empty
+
+    def unknown(key: str, message: str) -> dict:
+        """Counts we cannot stand behind are null, never zero.
+
+        Zero reads as "nothing reviewed yet" — a confident claim about the
+        work. Null says we cannot tell, which is what is actually true.
+        """
+        return {**{k: None for k in empty if k not in ("review_error", "schema_error")},
+                "review_error": None, "schema_error": None, key: message}
+
+    schema_error = _schema_error(files, run)
+    if schema_error is not None:
+        return unknown("schema_error", schema_error)
     try:
         progress = review_progress(run, exclude=_identifier_paths(files, run))
     except ReviewCorruptError as exc:
-        return {
-            **{key: None for key in empty if key != "review_error"},
-            "review_error": str(exc),
-        }
-    return {**progress, "review_error": None}
+        return unknown("review_error", str(exc))
+    return {**progress, "review_error": None, "schema_error": None}
 
 
 #: LinkML scalar range -> editor "kind" reported by /api/schema/fields.
@@ -838,8 +875,23 @@ async def put_annotation(article_id: str, run_id: str, request: Request, cfg: Cf
             f"(set {REQUIRE_REVIEWER_KEY}: false in litschema.yaml to change that)",
         )
 
+    # A value can only be typed against the schema the run was extracted with.
+    # Verification needs no schema at all — it asserts the agent was right about
+    # what is already there — so only writes that carry a value are refused.
+    # Blocking plain verification too would strand a reviewer mid-audit over a
+    # schema edit that never touched the field in front of them.
+    schema = _resolved_schema(cfg)
+    if entry.get("override", {}).get("op") in ("replace", "add"):
+        schema_error = _schema_error(article_files(cfg, article_id), run)
+        if schema_error is not None:
+            raise HTTPException(
+                409,
+                f"cannot type this edit: {schema_error}. Verification still works; "
+                f"restore the schema or re-extract to edit values again.",
+            )
+
     try:
-        fields = upsert_review(run, field_path, entry, schema=_resolved_schema(cfg))
+        fields = upsert_review(run, field_path, entry, schema=schema)
         key = canonical_review_path(field_path)
     except InvalidReviewPathError as exc:
         raise HTTPException(400, str(exc)) from exc

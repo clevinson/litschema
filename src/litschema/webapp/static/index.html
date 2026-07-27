@@ -3004,7 +3004,9 @@ function renderOverview() {
     const nFields = a.n_fields ?? 0;
     const nReviewed = a.n_reviewed ?? 0;
     const nOverridden = a.n_overridden ?? 0;
-    const problem = !!a.review_error;
+    // Either kind of "we cannot tell" reads the same in this table: the counts
+    // are dashes, not zeros, because zero is a confident claim about the work.
+    const problem = !!a.review_error || !!a.schema_error;
     // An article with no active run is listed, never hidden — it is exactly
     // the work someone still has to do.
     const noRun = !a.active_run_id;
@@ -3014,7 +3016,9 @@ function renderOverview() {
 
     const pct = nFields > 0 ? Math.round((nReviewed / nFields) * 100) : 0;
     let stateCell;
-    if (problem) stateCell = '<span class="ov-state problem">review unreadable</span>';
+    if (a.schema_error) {
+      stateCell = `<span class="ov-state problem" title="${escapeHtml(a.schema_error)}">schema mismatch</span>`;
+    } else if (problem) stateCell = '<span class="ov-state problem">review unreadable</span>';
     else if (noRun) stateCell = '<span class="ov-state">not extracted</span>';
     // A run that produced no reviewable field is complete by arithmetic, but
     // calling it "complete" reads as audited work. Say what actually happened.

@@ -17,13 +17,43 @@ def _try_json(text: str):
         return None
 
 
+def _project_schema_hash(article_dir: Path) -> str:
+    """The real hash of the schema this article's project is configured with.
+
+    Recording a placeholder made every fixture look like a run extracted
+    against some other schema, which is exactly the state the verifier now
+    refuses to interpret. Fixtures should be states the product can produce.
+    """
+    import hashlib
+
+    from litschema.config import load_config
+    from litschema.schema_resolution import extraction_schema_path
+
+    # Prefer the project's own config; many tests build LitSchemaConfig in
+    # memory and never write litschema.yaml, so fall back to the conventional
+    # layout (<project>/schema/extraction.yaml) that those tests do create.
+    for candidate in [article_dir, *article_dir.parents]:
+        config = candidate / "litschema.yaml"
+        if config.is_file():
+            try:
+                schema = extraction_schema_path(load_config(config, reload=True))
+            except Exception:
+                schema = None
+            if schema is not None and schema.is_file():
+                return "sha256:" + hashlib.sha256(schema.read_bytes()).hexdigest()
+        default = candidate / "schema" / "extraction.yaml"
+        if default.is_file():
+            return "sha256:" + hashlib.sha256(default.read_bytes()).hexdigest()
+    return "sha256:test"
+
+
 def publish_test_run(
     article_dir: Path,
     extraction: dict | str,
     *,
     reasoning: dict | str | None = None,
     run_id: str = TEST_RUN_ID,
-    schema_hash: str = "sha256:test",
+    schema_hash: str | None = None,
     activate: bool = True,
 ) -> Path:
     """Materialize a published run (and active pointer) for a test article.
@@ -32,7 +62,13 @@ def publish_test_run(
     refuses to publish one without it — a fixture that omits it builds a run
     shape the product cannot actually produce, and then tests pass against a
     state no user can reach.
+
+    ``schema_hash`` defaults to the project's real schema hash for the same
+    reason; pass one explicitly to model a run extracted against a schema that
+    has since changed.
     """
+    if schema_hash is None:
+        schema_hash = _project_schema_hash(article_dir)
     run_dir = article_dir / "extraction-runs" / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
     payload = extraction if isinstance(extraction, str) else json.dumps(extraction)
