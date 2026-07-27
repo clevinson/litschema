@@ -252,7 +252,7 @@ Review endpoints are run-explicit:
   and accepts the required note-discard confirmation.
 
 Malformed paths, invalid replacements, invalid or misplaced adds,
-terminal-override descendants, and writes to trashed runs fail without changing
+terminal-override descendants fail without changing
 review state.
 
 ## Invariants

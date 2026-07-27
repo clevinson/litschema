@@ -73,9 +73,9 @@ responsible for noticing it is missing.
   Deciding which papers belong in a review — title/abstract screening,
   full-text eligibility, PRISMA counts — happens in whatever tool the user
   already uses. There is consequently no corpus-level exclusion state: an
-  assembled article is in the corpus. Refinement-scope exclusion in
-  `specs/refinement/spec.md` is a different thing, scoped to one refinement
-  pass.
+  assembled article is in the corpus. Refinement-scope exclusion is a
+  different thing, scoped to one refinement pass; it belongs to the deferred
+  multirun work and is not specified in this release.
 - **Dual independent review is out of scope for v1.** The stored review model
   holds at most one entry per path and delegates authorship to Git history, so
   two reviewers work in separate clones and reconcile by merge. Blind

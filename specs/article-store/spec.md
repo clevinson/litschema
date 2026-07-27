@@ -4,9 +4,11 @@ Status: partially current.
 
 The on-disk source of truth is one directory per document under
 `data/papers/<article-id>/`. This spec owns article identity, immutable
-extraction runs, active-run selection, and the run CLI lifecycle. Extraction
-contents are defined by `specs/extraction/spec.md`; review entries and
-reconciliation are defined by `specs/reviews/spec.md`.
+extraction runs, and active-run selection. Extraction contents are defined by
+`specs/extraction/spec.md`; review entries are defined by
+`specs/reviews/spec.md`. The run lifecycle beyond `list` and `activate` —
+trash, restore, purge — belongs to the deferred multirun work and is not
+specified here.
 
 ## Implementation status
 

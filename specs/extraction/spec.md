@@ -78,7 +78,7 @@ show which of the two they used.
 ## Validation
 
 - `litschema validate [target]` validates extraction files. With no target it
-  discovers every live run in the configured store; trash is excluded. A file
+  discovers every published run in the configured store. A file
   or directory narrows the scope. It exits 0 only when every selected artifact
   is valid and exits 1 with per-file errors otherwise.
 - `litschema agent validate-reasoning <file>` validates one reasoning artifact
@@ -158,7 +158,7 @@ Implementation coverage must pin:
 - in-process atomic runtime schema generation and unique-root selection;
 - closed-world extraction validation, omitted missing values, and error-marker
   handling;
-- no-argument live-run discovery, trash exclusion, and missing explicit-target
+- no-argument published-run discovery and missing explicit-target
   failure;
 - reasoning schema validation, confidence bounds, canonical paths, and
   resolution of a leaf to its own entry or the nearest ancestor's;

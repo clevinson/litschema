@@ -295,8 +295,7 @@ Implementation coverage must replace brittle source-substring assertions with:
 - clear-arming suppressed for a single verification's own control and not for
   fields written by a bulk action, which accept their next click directly;
 - bulk verification of a section whose evidence is cited only on an ancestor,
-  preservation of existing overrides within it, and suppression of
-  click-to-clear arming on everything it verified;
+  and preservation of existing overrides within it;
 - exact active-run schema selection, unavailable-schema errors, and review
   metric formulas for no-run, zero-leaf, verified, overridden, parent-covered,
   terminal-container, invalid-path, and corrupt-review cases;
