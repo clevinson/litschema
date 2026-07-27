@@ -198,17 +198,25 @@ def canonicalize(fields: dict[str, dict]) -> dict[str, dict]:
 
 
 def _typed_entry(entry: dict, key: str, schema) -> dict:
-    """Coerce a replace/add value to its slot's declared type."""
+    """Coerce a replace/add value to its slot's type, then validate it.
+
+    Coercion handles the browser, which submits every edit as a string.
+    Validation handles everyone else: a value that arrives already typed was
+    previously written through untouched, so a list or a boolean could land in
+    a float slot and export as reviewed truth.
+    """
     override = entry.get("override")
     if schema is None or not override or override.get("op") == "remove":
         return entry
     if "value" not in override:
         return entry
-    from .schema_resolution import coerce_to_slot, slot_for_path
+    from .schema_resolution import check_value_against_slot, coerce_to_slot, slot_for_path
 
-    slot = slot_for_path(schema.view, schema.root_class, parse_path(key))
+    parts = parse_path(key)
+    slot = slot_for_path(schema.view, schema.root_class, parts)
     try:
         coerced = coerce_to_slot(schema.view, slot, override["value"])
+        check_value_against_slot(schema.view, schema.root_class, parts, coerced)
     except ValueError as exc:
         raise ReviewContractError(f"{key}: {exc}") from None
     if coerced is override["value"]:
@@ -216,7 +224,14 @@ def _typed_entry(entry: dict, key: str, schema) -> dict:
     return {**entry, "override": {**override, "value": coerced}}
 
 
-def _validate_against_run(run: RunFiles, path: str, entry: dict, extraction: dict) -> None:
+def _validate_against_run(
+    run: RunFiles,
+    path: str,
+    entry: dict,
+    extraction: dict,
+    fields: dict[str, dict],
+    schema=None,
+) -> None:
     override = entry.get("override")
     op = override.get("op") if override else None
     resolves = path_resolves(extraction, path)
@@ -226,7 +241,7 @@ def _validate_against_run(run: RunFiles, path: str, entry: dict, extraction: dic
             raise ReviewContractError(
                 f"{path} already exists in this run — use replace, not add"
             )
-        _validate_add_target(extraction, path)
+        _validate_add_target(extraction, path, fields)
     elif not resolves:
         raise ReviewContractError(f"{path} does not resolve against this run's extraction")
 
@@ -234,10 +249,27 @@ def _validate_against_run(run: RunFiles, path: str, entry: dict, extraction: dic
         parts = parse_path(path)
         if not parts:
             raise ReviewContractError("the extraction root cannot be removed")
+        # An identifier is the thing every other path is stated relative to.
+        # Removing it does not correct the record, it detaches it.
+        if schema is not None:
+            from .schema_resolution import slot_for_path
+
+            slot = slot_for_path(schema.view, schema.root_class, parts)
+            if slot is not None and getattr(slot, "identifier", False):
+                raise ReviewContractError(
+                    f"{path} is an identifier and cannot be removed — it is what the "
+                    f"rest of this extraction is addressed by"
+                )
 
 
-def _validate_add_target(extraction: dict, path: str) -> None:
-    """An add appends one past an array's length, or fills an absent property."""
+def _validate_add_target(extraction: dict, path: str, fields: dict[str, dict]) -> None:
+    """An add appends one past an array's length, or fills an absent property.
+
+    "The end of the array" counts the adds already recorded in this review, not
+    just the run's raw length. Measuring against the raw extraction made the
+    second append in a row impossible: after adding `items[n]`, `items[n+1]`
+    was rejected for not being index `n`.
+    """
     parts = parse_path(path)
     if not parts:
         raise ReviewContractError("cannot add at the extraction root")
@@ -251,13 +283,23 @@ def _validate_add_target(extraction: dict, path: str) -> None:
     if isinstance(last, int):
         if not isinstance(parent, list):
             raise ReviewContractError(f"{path} indexes something that is not an array")
-        if last != len(parent):
+        frontier = len(parent)
+        while _added_index(fields, parent_path, frontier):
+            frontier += 1
+        if last != frontier:
             raise ReviewContractError(
-                f"{path} must append one past the end of the array (index {len(parent)})"
+                f"{path} must append one past the end of the array (index {frontier})"
             )
     else:
         if not isinstance(parent, dict):
             raise ReviewContractError(f"the parent of {path} is not an object")
+
+
+def _added_index(fields: dict[str, dict], parent_path: str | None, index: int) -> bool:
+    """True when this review already records an ``add`` at ``parent[index]``."""
+    candidate = format_path((*parse_path(parent_path), index) if parent_path else (index,))
+    entry = fields.get(candidate)
+    return bool(entry and (entry.get("override") or {}).get("op") == "add")
 
 
 def upsert_review(
@@ -286,7 +328,7 @@ def upsert_review(
         )
 
     extraction = json.loads(run.extraction.read_text())
-    _validate_against_run(run, key, entry, extraction)
+    _validate_against_run(run, key, entry, extraction, fields, schema)
 
     fields[key] = entry
     if entry.get("override"):
@@ -330,18 +372,28 @@ def unreview_subtree(run: RunFiles, path: str, *, discard_note: bool = False) ->
             raise ReviewContractError(
                 f"{covering} carries a note that would be discarded — confirm explicitly"
             )
+        # The frontier walk descends from the ancestor toward the target, so a
+        # target that does not resolve sends it into a node that is not there.
+        # That surfaced as an uncaught KeyError, i.e. a 500.
+        extraction = json.loads(run.extraction.read_text())
+        if not path_resolves(extraction, key):
+            raise ReviewContractError(
+                f"{key} does not resolve against this run's extraction"
+            )
 
     for existing in [p for p in fields if p == key or is_ancestor(key, p)]:
         del fields[existing]
 
     if covering is not None:
+        # Sibling coverage inherits the covering entry's reviewer. Writing bare
+        # `{}` here silently reassigned someone's attested work to nobody.
+        reviewer = fields[covering].get("reviewer")
         del fields[covering]
-        extraction = json.loads(run.extraction.read_text())
         for sibling in _sibling_frontier(extraction, covering, key):
             if sibling not in fields and not any(
                 is_ancestor(existing, sibling) or existing == sibling for existing in fields
             ):
-                fields[sibling] = {}
+                fields[sibling] = {"reviewer": reviewer} if reviewer else {}
 
     fields = canonicalize(fields)
     write_reviews(run, fields)

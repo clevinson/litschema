@@ -53,12 +53,28 @@ _SCALAR_COERCIONS: dict[str, tuple[type, ...]] = {
 }
 
 
-def slot_for_path(view: SchemaView, root_class: str, path_parts) -> object | None:
-    """The LinkML slot a canonical review path lands on, or None if untyped.
+@dataclass(frozen=True)
+class SlotResolution:
+    """Where a review path lands in the schema.
 
-    Walks class ranges segment by segment; integer segments are array indices
-    and do not advance the class, since a multivalued slot's items share its
-    range.
+    ``kind`` distinguishes the two ways :func:`slot_for_path` used to return
+    None. They call for opposite handling: an *untyped* path is one the schema
+    says nothing about, so a value there is stored as supplied; an *unknown*
+    path names a property the class does not define, and writing there invents
+    data the schema cannot express.
+    """
+
+    kind: str  # "slot" | "untyped" | "unknown"
+    slot: object | None = None
+    owner_class: str | None = None
+    segment: str | None = None
+
+
+def resolve_slot(view: SchemaView, root_class: str, path_parts) -> SlotResolution:
+    """Walk a canonical review path through the schema.
+
+    Integer segments are array indices and do not advance the class, since a
+    multivalued slot's items share its range.
     """
     current_class: str | None = root_class
     slot = None
@@ -66,14 +82,21 @@ def slot_for_path(view: SchemaView, root_class: str, path_parts) -> object | Non
         if isinstance(part, int):
             continue
         if current_class is None:
-            return None
+            return SlotResolution("untyped")
         slots = {s.name: s for s in view.class_induced_slots(current_class)}
-        slot = slots.get(part)
-        if slot is None:
-            return None
+        if part not in slots:
+            return SlotResolution("unknown", owner_class=current_class, segment=part)
+        slot = slots[part]
         range_name = slot.range
         current_class = range_name if range_name in (view.all_classes() or {}) else None
-    return slot
+    if slot is None:
+        return SlotResolution("untyped")
+    return SlotResolution("slot", slot=slot)
+
+
+def slot_for_path(view: SchemaView, root_class: str, path_parts) -> object | None:
+    """The LinkML slot a canonical review path lands on, or None if untyped."""
+    return resolve_slot(view, root_class, path_parts).slot
 
 
 def coerce_to_slot(view: SchemaView, slot, value):
@@ -101,6 +124,105 @@ def coerce_to_slot(view: SchemaView, slot, value):
         return int(text) if range_name == "integer" else float(text)
     except ValueError:
         raise ValueError(f"{value!r} is not a valid {range_name}") from None
+
+
+# What each LinkML scalar range accepts once coercion has run. Booleans are
+# excluded from the numeric ranges deliberately: `isinstance(True, int)` is
+# True in Python, so `True` would otherwise pass as a valid integer.
+_RANGE_PYTHON_TYPES: dict[str, tuple[type, ...]] = {
+    "integer": (int,),
+    "float": (float, int),
+    "double": (float, int),
+    "decimal": (float, int),
+    "boolean": (bool,),
+    "string": (str,),
+    "uri": (str,),
+    "uriorcurie": (str,),
+    "date": (str,),
+    "datetime": (str,),
+    "time": (str,),
+    "ncname": (str,),
+}
+
+
+def check_value_against_slot(view: SchemaView, root_class: str, path_parts, value) -> None:
+    """Raise ``ValueError`` if ``value`` cannot legally sit at this path.
+
+    Coercion alone only ever looked at strings, so anything else — a list for a
+    float slot, `True` for an integer, an object where a number belongs — was
+    written straight through and exported as the human-reviewed value. A
+    browser cannot produce those, but the annotation API is a documented
+    surface and any non-browser client can.
+    """
+    resolution = resolve_slot(view, root_class, path_parts)
+    if resolution.kind == "unknown":
+        raise ValueError(
+            f"{resolution.segment!r} is not a property of {resolution.owner_class}"
+        )
+    if resolution.kind == "untyped" or resolution.slot is None:
+        return  # the schema declares nothing here; store as supplied
+
+    slot = resolution.slot
+    indexed = bool(path_parts) and isinstance(path_parts[-1], int)
+    if getattr(slot, "multivalued", False) and not indexed:
+        if not isinstance(value, list):
+            raise ValueError(
+                f"{slot.name} is multivalued, so it needs a list, not "
+                f"{type(value).__name__}"
+            )
+        for item in value:
+            _check_single_value(view, slot, item)
+        return
+    _check_single_value(view, slot, value)
+
+
+def _check_single_value(view: SchemaView, slot, value) -> None:
+    range_name = getattr(slot, "range", None)
+    if value is None:
+        return  # absence is expressed by `remove`, not by a null replacement
+
+    if range_name in (view.all_classes() or {}):
+        _check_class_value(view, range_name, value, slot.name)
+        return
+
+    enums = view.all_enums() or {}
+    if range_name in enums:
+        permitted = set((enums[range_name].permissible_values or {}).keys())
+        if value not in permitted:
+            raise ValueError(
+                f"{value!r} is not one of the {range_name} values: {sorted(permitted)}"
+            )
+        return
+
+    expected = _RANGE_PYTHON_TYPES.get(range_name)
+    if expected is None:
+        return  # a range we do not model; leave it to schema validation
+    if isinstance(value, bool) and bool not in expected:
+        raise ValueError(f"{value!r} is a boolean, but {slot.name} is {range_name}")
+    if not isinstance(value, expected):
+        raise ValueError(f"{value!r} is not a valid {range_name} for {slot.name}")
+    if expected == (float, int) or range_name in ("float", "double", "decimal"):
+        import math
+
+        if not math.isfinite(value):
+            raise ValueError(f"{value!r} is not a finite {range_name}")
+
+
+def _check_class_value(view: SchemaView, class_name: str, value, label: str) -> None:
+    """A class-range value must be an object whose properties the class defines."""
+    if not isinstance(value, dict):
+        raise ValueError(f"{label} holds {class_name} objects, not {type(value).__name__}")
+    slots = {s.name: s for s in view.class_induced_slots(class_name)}
+    unknown = sorted(set(value) - set(slots))
+    if unknown:
+        raise ValueError(f"{class_name} does not define {', '.join(unknown)}")
+    for key, item in value.items():
+        slot = slots[key]
+        if getattr(slot, "multivalued", False) and isinstance(item, list):
+            for entry in item:
+                _check_single_value(view, slot, entry)
+        else:
+            _check_single_value(view, slot, item)
 
 
 def identifier_leaf_paths(view: SchemaView, root_class: str, data) -> set[str]:

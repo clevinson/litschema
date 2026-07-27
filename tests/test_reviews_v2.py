@@ -503,3 +503,175 @@ def test_a_different_reviewers_verification_is_never_absorbed(tmp_path: Path) ->
     assert "experiments[0].ph" not in fields
     assert fields["experiments[0].yield"]["reviewer"] == "0000-0001-5109-3700"
     assert fields["experiments[0]"]["reviewer"] == "0000-0002-1825-0097"
+
+
+# ── schema-backed override validation ────────────────────────────────────────
+
+
+VALIDATION_SCHEMA = """id: https://example.org/v
+name: v
+prefixes:
+  linkml: https://w3id.org/linkml/
+imports: [linkml:types]
+default_range: string
+enums:
+  Tillage:
+    permissible_values:
+      no_till:
+      conventional:
+classes:
+  Study:
+    tree_root: true
+    attributes:
+      article_id:
+        identifier: true
+      title: {}
+      replicates:
+        range: integer
+      experiments:
+        range: Experiment
+        multivalued: true
+        inlined_as_list: true
+  Experiment:
+    attributes:
+      ph:
+        range: float
+      tillage:
+        range: Tillage
+"""
+
+VALIDATION_DATA = {
+    "article_id": "a",
+    "title": "T",
+    "replicates": 3,
+    "experiments": [{"ph": 6.1, "tillage": "no_till"}],
+}
+
+
+def _schema_run(tmp_path: Path):
+    """A run plus the resolved schema that governs it."""
+    from litschema.schema_resolution import resolve_extraction_schema
+
+    cfg = _cfg(tmp_path)
+    (tmp_path / "schema").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "schema" / "extraction.yaml").write_text(VALIDATION_SCHEMA)
+    files = article_files(cfg, "a")
+    files.article_dir.mkdir(parents=True, exist_ok=True)
+    files.metadata.write_text(json.dumps({"id": "a"}))
+    publish_test_run(files.article_dir, VALIDATION_DATA)
+    return run_files(files, TEST_RUN_ID), resolve_extraction_schema(cfg)
+
+
+@pytest.mark.parametrize(
+    ("path", "value", "because"),
+    [
+        ("experiments[0].ph", [1, 2, 3], "a list is not a float"),
+        ("experiments[0].ph", {"a": 1}, "an object is not a float"),
+        # isinstance(True, int) is True in Python, so booleans need naming.
+        ("experiments[0].ph", True, "a boolean is not a float"),
+        ("replicates", True, "a boolean is not an integer"),
+        ("replicates", 2.5, "a float is not an integer"),
+        ("experiments[0].tillage", "ploughed", "not a permissible enum value"),
+        ("title", 7, "a number is not a string"),
+        ("experiments[0]", {"ph": 6.1, "invented": 1}, "the class has no such property"),
+        ("experiments[0]", "a string", "a class range needs an object"),
+    ],
+)
+def test_override_values_are_validated_against_the_slot(tmp_path, path, value, because) -> None:
+    """Coercion only ever looked at strings; anything else was written through."""
+    run, schema = _schema_run(tmp_path)
+
+    with pytest.raises(ReviewContractError):
+        upsert_review(run, path, {"override": {"op": "replace", "value": value}}, schema=schema)
+
+    assert read_reviews(run) == {}, because
+
+
+@pytest.mark.parametrize(
+    ("path", "value"),
+    [
+        ("experiments[0].ph", 6.5),
+        ("experiments[0].ph", "6.5"),  # the browser submits strings
+        ("replicates", 4),
+        ("replicates", "4"),
+        ("experiments[0].tillage", "conventional"),
+        ("title", "A better title"),
+    ],
+)
+def test_valid_override_values_are_accepted_and_typed(tmp_path, path, value) -> None:
+    run, schema = _schema_run(tmp_path)
+
+    fields = upsert_review(
+        run, path, {"override": {"op": "replace", "value": value}}, schema=schema
+    )
+
+    stored = fields[path]["override"]["value"]
+    assert not isinstance(stored, str) or isinstance(value, str)
+
+
+def test_add_to_a_property_the_schema_does_not_define_is_refused(tmp_path) -> None:
+    run, schema = _schema_run(tmp_path)
+
+    with pytest.raises(ReviewContractError, match="not a property of Study"):
+        upsert_review(
+            run, "invented_field", {"override": {"op": "add", "value": "x"}}, schema=schema
+        )
+
+
+def test_an_identifier_slot_cannot_be_removed(tmp_path) -> None:
+    """Removing the identifier does not correct the record, it detaches it."""
+    run, schema = _schema_run(tmp_path)
+
+    with pytest.raises(ReviewContractError, match="is an identifier"):
+        upsert_review(run, "article_id", {"override": {"op": "remove"}}, schema=schema)
+
+
+def test_successive_array_adds_each_append_one_past_the_end(tmp_path) -> None:
+    """The frontier counts adds already in this review, not just the raw array."""
+    run, schema = _schema_run(tmp_path)
+    new = {"ph": 7.2, "tillage": "no_till"}
+
+    upsert_review(run, "experiments[1]", {"override": {"op": "add", "value": new}}, schema=schema)
+    fields = upsert_review(
+        run, "experiments[2]", {"override": {"op": "add", "value": new}}, schema=schema
+    )
+
+    assert "experiments[1]" in fields
+    assert "experiments[2]" in fields
+    # Still exactly one past the end: index 3 is next, 4 is not.
+    with pytest.raises(ReviewContractError, match=r"index 3"):
+        upsert_review(
+            run, "experiments[4]", {"override": {"op": "add", "value": new}}, schema=schema
+        )
+
+
+# ── unreviewing a subtree ────────────────────────────────────────────────────
+
+
+def test_unreview_preserves_the_covering_reviewers_attribution(tmp_path: Path) -> None:
+    """Sibling coverage inherits the reviewer, rather than becoming anonymous."""
+    run = _run(tmp_path, NESTED)
+    upsert_review(run, "experiments[0]", {"reviewer": "0000-0002-1825-0097"})
+
+    fields = unreview_subtree(run, "experiments[0].ph")
+
+    assert fields
+    assert all(entry.get("reviewer") == "0000-0002-1825-0097" for entry in fields.values()), (
+        f"attribution lost: {fields}"
+    )
+
+
+def test_unreview_of_an_unresolvable_descendant_is_a_contract_error(tmp_path: Path) -> None:
+    """It walked into a node that is not there and raised KeyError, i.e. a 500."""
+    run = _run(tmp_path, NESTED)
+    upsert_review(run, "experiments", {})
+
+    with pytest.raises(ReviewContractError, match="does not resolve"):
+        unreview_subtree(run, "experiments[9].nonexistent")
+
+
+def test_leaf_paths_excludes_empty_containers() -> None:
+    assert leaf_paths({"scalar": 1, "empty_dict": {}, "empty_list": [], "n": {"a": None}}) == [
+        "scalar",
+        "n.a",
+    ]

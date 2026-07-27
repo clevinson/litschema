@@ -138,11 +138,17 @@ def leaf_paths(data, path: str | None = None) -> list[str]:
     """Every scalar leaf path under ``path``, in document order.
 
     A container with no children is not a leaf: it contributes nothing to
-    review coverage, so counting it would inflate progress denominators.
+    review coverage, so counting it would inflate progress denominators. This
+    is what "no children" has to mean — an empty dict or list also produces no
+    children, and treating those as leaves added fields that hold nothing and
+    cannot be reviewed to the denominator.
     """
     children = child_paths(data, path)
     if not children:
-        return [] if path is None else [path]
+        if path is None:
+            return []
+        node = resolve(data, path)
+        return [] if isinstance(node, dict | list) else [path]
     out: list[str] = []
     for child in children:
         out.extend(leaf_paths(data, child))
