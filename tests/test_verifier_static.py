@@ -346,12 +346,20 @@ def test_verifier_shows_explicit_no_citation_state() -> None:
     assert "source-missing" in html
 
 
-def test_verifier_uses_explicit_no_citation_acceptance() -> None:
+def test_accepting_an_uncited_value_is_plain_verification() -> None:
+    """Version 2 has no tag for it, and none is needed.
+
+    Version 1 stamped `source: accepted_no_citation` when a reviewer accepted a
+    value the agent had not cited. Version 2's entry holds only `override` and
+    `note`, so that tag is unrepresentable — and unnecessary: whether a field
+    carried evidence is already answerable from the reasoning artifact, which
+    is immutable, rather than from a flag copied into the review at click time.
+    """
     html = STATIC_HTML.read_text()
 
-    assert "selectedFieldHasCitation" in html
-    assert "accepted_no_citation" in html
     assert "selectedVerifyExtra" in html
+    assert "accepted_no_citation" not in html
+    assert "selectedFieldHasCitation" not in html
 
 
 def test_verifier_edits_values_in_review_table_without_docked_modal() -> None:
@@ -577,3 +585,16 @@ def test_reasoning_resolves_through_ancestors() -> None:
     # Three raw accesses, all inside the index build and the resolver itself:
     # every other read site goes through reasoningFor().
     assert html.count("state.reasoningByPath[") == 3
+
+
+def test_render_tokens_derive_from_v2_state_not_a_status_key() -> None:
+    """`status` was a version-1 entry key; reading it renders everything unreviewed."""
+    html = STATIC_HTML.read_text()
+
+    assert "const statusToken = (ann)" in html
+    assert "statusToken(ann)" in html
+    # The version-1 key must not be read back anywhere.
+    assert "ann.status" not in html
+    assert "ann?.status" not in html
+    # Verification is an empty entry: no version-1 `source` tag rides along.
+    assert "accepted_no_citation" not in html

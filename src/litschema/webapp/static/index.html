@@ -2625,6 +2625,10 @@ const isVerified = (ann) => !!ann && !ann.override;
 const isOverridden = (ann) => !!ann && !!ann.override;
 const overrideOp = (ann) => ann?.override?.op ?? null;
 const isRemoved = (ann) => overrideOp(ann) === "remove";
+// Render token for a review entry. The table's visual vocabulary predates
+// version 2, so map onto it here rather than threading v2 names through every
+// cell builder: "" unreviewed, "verified", "flagged" (an override).
+const statusToken = (ann) => (isOverridden(ann) ? "flagged" : isVerified(ann) ? "verified" : "");
 // The value a reviewer supplied, or undefined when they only verified.
 const overrideValue = (ann) =>
   ann?.override && ann.override.op !== "remove" ? ann.override.value : undefined;
@@ -4204,7 +4208,7 @@ function buildValueCells(value, path) {
 
   const sourceHtml = buildEvidenceBadge(path);
 
-  const annStatus = ann ? ann.status : "";
+  const annStatus = statusToken(ann);
   const isEditing = state.editingPath === path;
   const display = isEditing ? null : displayFieldValueForPath(path, value);
   const valueClass = [
@@ -4827,12 +4831,11 @@ function selectedSourceRanges(path) {
   return entry.source_lines.split(",").map(s => s.trim()).filter(Boolean);
 }
 
-function selectedFieldHasCitation(path) {
-  return selectedSourceRanges(path).length > 0;
-}
-
 function selectedVerifyExtra(path) {
-  return selectedFieldHasCitation(path) ? {} : { source: "accepted_no_citation" };
+  // Verification is an empty entry in version 2. Accepting an uncited value is
+  // still just verification — there is no separate key for it, and the note
+  // field is the reviewer's, not ours to fill.
+  return {};
 }
 
 function selectedReasoning(path) {
@@ -5411,7 +5414,7 @@ function buildLeafHtml(key, value, path) {
 
   const entry = reasoningFor(path);
   const ann = state.annotations[path];
-  const annStatus = ann ? ann.status : "";
+  const annStatus = statusToken(ann);
 
   // Source lines (clickable)
   let sourceHtml = "";
