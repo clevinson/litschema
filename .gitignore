@@ -26,5 +26,12 @@ papers/
 data/
 *.pdf
 
+# ...but test fixture projects are source, not user data. Without this the
+# `data/` rule silently drops fixture files, and tests that pass locally on
+# untracked files fail in CI with nothing to point at. Generated runtime
+# caches inside a fixture stay ignored — they are rebuilt, not authored.
+!tests/fixtures/**
+tests/fixtures/**/.litschema/
+
 # AI tooling
 .roborev.toml

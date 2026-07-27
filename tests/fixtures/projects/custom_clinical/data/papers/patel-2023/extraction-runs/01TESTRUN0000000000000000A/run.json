@@ -1,0 +1,1 @@
+{"version": 1, "run_id": "01TESTRUN0000000000000000A", "article_id": "patel-2023", "created_at": "2026-01-01T00:00:00+00:00", "schema_hash": "sha256:test", "inputs": {"prepared_text": "sha256:test", "domain_context": "sha256:test", "skill": "sha256:test"}, "agent": {}}

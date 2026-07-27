@@ -1,0 +1,45 @@
+{
+  "article_id": "smith-2024",
+  "study_type": "field_trial",
+  "crops": ["corn", "soybean"],
+  "experiments": [
+    {
+      "site": {"country": "USA", "admin_boundary": "Iowa", "latitude": 42.0, "longitude": -93.5},
+      "soil": {
+        "texture_class": "silty_clay_loam",
+        "sand_pct": 12.0,
+        "silt_pct": 55.0,
+        "clay_pct": 33.0,
+        "taxonomy_system": "USDA",
+        "taxonomy_class": "Mollisol"
+      },
+      "treatments": [
+        {
+          "name": "cover crop only",
+          "type": "cover_crop",
+          "outcomes": [
+            {"variable": "yield", "unit": "kg/ha", "effect_direction": "neutral"},
+            {"variable": "soil_organic_carbon", "unit": "%", "effect_direction": "positive"}
+          ]
+        },
+        {
+          "name": "no-till only",
+          "type": "tillage",
+          "outcomes": [
+            {"variable": "yield", "unit": "kg/ha", "effect_direction": "positive"},
+            {"variable": "soil_organic_carbon", "unit": "%", "effect_direction": "neutral"}
+          ]
+        },
+        {
+          "name": "cover crop + no-till",
+          "type": "other",
+          "outcomes": [
+            {"variable": "yield", "unit": "kg/ha", "effect_direction": "positive"},
+            {"variable": "soil_organic_carbon", "unit": "%", "effect_direction": "positive"}
+          ]
+        }
+      ]
+    }
+  ],
+  "sample_size": 36
+}
