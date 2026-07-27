@@ -852,7 +852,7 @@
   .overview-table .ov-num, .overview-table td.ov-num { text-align: right; font-variant-numeric: tabular-nums; }
   .ov-title { font-weight: 500; }
   .ov-sub { color: var(--text-dim); font-size: 12px; margin-top: 2px; }
-  .ov-run code { font-size: 11px; color: var(--text-dim); }
+  .ov-run-model { font-size: 12px; white-space: nowrap; }
   .ov-bar { position: relative; width: 120px; height: 6px; border-radius: 3px; background: var(--border); }
   .ov-bar span { position: absolute; inset: 0 auto 0 0; border-radius: 3px; background: var(--green, #3fb950); }
   .ov-state { font-size: 12px; color: var(--text-dim); }
@@ -2524,7 +2524,7 @@ e.g. year >= 2024 && study_types.includes("review")'
           <th class="ov-num">Reviewed</th>
           <th class="ov-num">Edited</th>
           <th class="ov-prog">Progress</th>
-          <th class="ov-run">Active run</th>
+          <th class="ov-run">Extracted by</th>
         </tr>
       </thead>
       <tbody id="overview-rows"></tbody>
@@ -2865,6 +2865,20 @@ function overviewRowsFor(articles) {
   return filtered;
 }
 
+function runCellHtml(article) {
+  // Side by side across every document, this is where an inconsistent extraction
+  // shows up: one document run by a different model, or at a different effort,
+  // or months apart from the rest.
+  const run = article.active_run;
+  if (!run) return "&mdash;";
+  const when = shortDate(run.created_at);
+  const model = run.model || "unknown model";
+  const detail = [run.effort, when].filter(Boolean).join(" \u00b7 ");
+  const title = `Run ${run.run_id}`;
+  return `<div class="ov-run-model" title="${escapeHtml(title)}">${escapeHtml(model)}</div>` +
+    (detail ? `<div class="ov-sub">${escapeHtml(detail)}</div>` : "");
+}
+
 function renderOverview() {
   const body = $("#overview-rows");
   const totals = $("#overview-totals");
@@ -2906,7 +2920,7 @@ function renderOverview() {
     html += `<td class="ov-num">${problem || noRun ? "&mdash;" : nReviewed}</td>`;
     html += `<td class="ov-num">${problem || noRun ? "&mdash;" : nOverridden}</td>`;
     html += `<td class="ov-prog">${stateCell}</td>`;
-    html += `<td class="ov-run">${a.active_run_id ? `<code>${escapeHtml(a.active_run_id)}</code>` : "&mdash;"}</td>`;
+    html += `<td class="ov-run">${runCellHtml(a)}</td>`;
     html += `</tr>`;
   }
   body.innerHTML = html;
@@ -6068,9 +6082,7 @@ function renderRunChip() {
   // What produced this extraction, not which opaque id it was filed under: a
   // reviewer judging a value wants the model and when it ran. The id is kept
   // in the tooltip because run-level CLI commands take it.
-  const when = shortDate(run.created_at);
-  const parts = [run.model || "unknown model", run.effort, when].filter(Boolean);
-  chip.textContent = parts.join(" \u00b7 ");
+  chip.textContent = run.model || "unknown model";
   chip.title = [
     run.model ? `Model: ${run.model}` : "Model not recorded",
     run.provider ? `Provider: ${run.provider}` : null,

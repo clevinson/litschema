@@ -62,13 +62,14 @@ document — the article selector, previous/next, and the view-mode toggle — a
 hidden on the overview rather than shown inert, since a visible control implies
 a context the user is not in.
 
-The document view states what produced the extraction it is reviewing: the
-model, the effort it ran at, and when. Reviews bind to one immutable run, so
-that provenance is system state, not an implementation detail — particularly
-once more than one run can exist per article. The run identifier is opaque by
-contract and so identifies without informing; it is available on demand for the
-run-level commands that take it, but it is not what a reviewer weighing a value
-needs to see.
+Provenance is reported where it can be acted on. The document view names the
+model that produced the extraction being reviewed — enough context while
+weighing one value. Effort and extraction time are comparative: they answer
+whether a document is unlike its neighbours, which is a question about the
+whole set, so they appear on the overview where documents sit side by side. The
+run identifier is opaque by contract and so identifies without informing; it
+stays available for the run-level commands that take it, and is not
+foregrounded anywhere.
 
 No word names two things. The per-document render toggle switches how one
 document's *data* is displayed and is labelled accordingly; "overview" names
@@ -86,8 +87,12 @@ Unknown routes render a recoverable not-found view.
 ### Dataset summary
 
 The summary lists every assembled article, including articles with no active
-run. It reports source metadata, active run ID, active schema hash, extraction
-and reasoning availability, effective review progress, and override count.
+run. It reports source metadata, what produced the active run (model, effort,
+extraction time), active schema hash, extraction and reasoning availability,
+effective review progress, and override count. Reporting provenance per row is
+what makes an inconsistent extraction visible: one document run by a different
+model, at a different effort, or long apart from the rest shows up by
+comparison, which no single document view can reveal.
 Metrics are schema-derived; no ERW field names are hard-coded.
 
 ### Progress metrics

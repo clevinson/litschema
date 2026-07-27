@@ -668,6 +668,8 @@ def test_document_states_what_produced_the_extraction() -> None:
     assert 'id="run-chip"' in html
     assert "function renderRunChip(" in html
     assert "run.model" in html
-    assert "run.effort" in html
-    assert "run.created_at" in html
     assert "`Run: ${run.run_id}`" in html  # tooltip only
+    # Effort and timing are comparative, so they belong on the overview where
+    # documents sit side by side — not in a single document's header.
+    assert "function runCellHtml(" in html
+    assert "Extracted by" in html
