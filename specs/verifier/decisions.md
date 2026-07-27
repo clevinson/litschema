@@ -99,3 +99,33 @@ designed affordance and does not survive a deep link opened in a new tab;
 disabling rather than hiding document controls on the overview, which still
 implies a document is open; and restoring "Saving…/Saved" messages, which
 narrate what the control already shows.
+
+
+## 2026-07-26 — Settings, and a policy the server actually enforces
+
+**Context:** ORCID connection sat in the per-document review header, though who
+you are does not change per document. Separately, a project may want every
+review attributed, and there was no way to express that.
+
+**Decision:** identity and project policy live in a settings dialog reachable
+from either route. `require_reviewer` is stored in `litschema.yaml` and
+enforced at the write endpoint. Enforcing server-side is the whole point: a
+checkbox only the browser honours is bypassed by `curl` and by every agent, and
+would be the same theatre as a gate that records nothing. Storing it in config
+rather than browser storage follows from what it is — a statement about the
+project, shared through the repository, not a preference of one machine.
+
+This is the first time the verifier writes project configuration, which widens
+a surface previously described as read-only for project state. The write is
+narrow and preserves unknown keys, and clearing the policy deletes the key
+rather than writing `false`.
+
+Backfill attributes only entries that name nobody. Inside a Git repository it
+warns first, with a count, because anonymous entries may be a collaborator's
+and the file cannot tell afterwards who wrote them — the same reasoning that
+stops canonicalization absorbing a differently attributed entry.
+
+**Rejected:** a browser-only preference, which cannot bind a script; a required
+ORCID gate before any review, rejected earlier for taxing the solo case; and
+unconditional backfill, which in a shared project silently claims someone
+else's work.

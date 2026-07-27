@@ -836,6 +836,53 @@
   }
   .doc-breadcrumb a { color: var(--text-dim); text-decoration: none; }
   .doc-breadcrumb a:hover { text-decoration: underline; }
+  .reasoning-note { position: relative; display: inline-flex; cursor: help; }
+  .reasoning-note-icon {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 15px; height: 15px; border-radius: 50%;
+    border: 1px solid var(--border); color: var(--text-dim);
+    font-size: 10px; font-style: italic; font-family: Georgia, serif; line-height: 1;
+  }
+  .reasoning-note:hover .reasoning-note-icon,
+  .reasoning-note:focus .reasoning-note-icon { color: var(--text); border-color: var(--text-dim); }
+  .reasoning-note-body {
+    display: none; position: absolute; top: 22px; left: 0; z-index: 40;
+    width: 460px; max-width: 60vw; max-height: 320px; overflow-y: auto;
+    padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px;
+    background: var(--bg); box-shadow: 0 6px 20px rgba(0,0,0,0.18);
+    font-size: 12px; line-height: 1.5; color: var(--text); white-space: pre-wrap;
+    text-align: left; font-weight: 400; cursor: text;
+  }
+  .reasoning-note:hover .reasoning-note-body,
+  .reasoning-note:focus .reasoning-note-body,
+  .reasoning-note:focus-within .reasoning-note-body { display: block; }
+  .settings-modal { width: 480px; max-width: 92vw; }
+  /* `.orcid-modal` styles every label as an uppercase grid and defines no
+     header layout, so a dialog reusing the class inherits both. Reset what
+     this dialog needs rather than editing rules other dialogs depend on. */
+  .settings-modal header {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    margin-bottom: 4px;
+  }
+  .settings-modal header .close-btn {
+    background: none; border: 1px solid var(--border); border-radius: var(--radius);
+    color: var(--text-dim); cursor: pointer; padding: 2px 8px; line-height: 1;
+  }
+  .settings-modal header .close-btn:hover { color: var(--text); border-color: var(--text-dim); }
+  .settings-modal label.settings-toggle {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 13px; font-weight: 400; text-transform: none; color: var(--text);
+  }
+  .settings-modal label.settings-toggle input { width: auto; margin: 0; }
+  .settings-body { padding: 4px 2px 2px; }
+  .settings-section { padding: 12px 0; border-bottom: 1px solid var(--border); }
+  .settings-section:last-of-type { border-bottom: none; }
+  .settings-section h4 { margin: 0 0 6px; font-size: 13px; font-weight: 600; }
+  .settings-hint { margin: 6px 0 0; font-size: 12px; color: var(--text-dim); line-height: 1.5; }
+  .settings-toggle { display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; }
+  .settings-action { margin-top: 10px; }
+  .settings-status { padding-top: 10px; font-size: 12px; color: var(--text-dim); min-height: 16px; }
+  .settings-status[data-status="error"] { color: var(--red, #f85149); }
   .overview-route { padding: 28px 32px 48px; overflow-y: auto; height: 100%; }
   .overview-head { display: flex; align-items: baseline; gap: 16px; margin-bottom: 20px; }
   .overview-head h1 { font-size: 20px; font-weight: 600; margin: 0; }
@@ -2442,6 +2489,45 @@
     <button class="view-mode-btn" id="view-mode-data" data-view-mode="data" type="button">Data</button>
   </div>
   <button class="theme-btn" id="btn-theme" title="Toggle theme">&#9790;</button>
+  <button class="theme-btn" id="btn-settings" title="Settings" aria-label="Settings">&#9881;</button>
+</div>
+
+<div class="orcid-modal-backdrop" id="settings-modal" role="dialog" aria-modal="true"
+     aria-labelledby="settings-modal-title">
+  <div class="orcid-modal settings-modal">
+    <header><h3 id="settings-modal-title">Settings</h3>
+      <button class="close-btn" id="btn-settings-close" type="button" aria-label="Close">&times;</button>
+    </header>
+    <div class="settings-body">
+      <section class="settings-section">
+        <h4>Reviewer identity</h4>
+        <p class="settings-hint">Optional. Connect an ORCID to record who reviewed each
+          field. Reviews save without one.</p>
+        <div class="review-identity" id="review-identity-controls">
+          <input type="hidden" class="reviewer-input" id="reviewer-id">
+          <button class="orcid-connect-btn" id="btn-orcid-connect" title="Connect ORCID">Connect ORCID</button>
+          <button class="orcid-profile-btn" id="btn-orcid-profile" style="display:none" title="Disconnect ORCID">
+            <span class="orcid-name-label" id="orcid-profile-name"></span>
+            <span class="orcid-disconnect-label">Disconnect</span>
+          </button>
+        </div>
+        <div class="settings-action" id="backfill-row" style="display:none">
+          <button class="review-action-btn" id="btn-backfill">Attribute past reviews to me</button>
+          <span class="settings-hint" id="backfill-hint"></span>
+        </div>
+      </section>
+      <section class="settings-section">
+        <h4>Project policy</h4>
+        <label class="settings-toggle">
+          <input type="checkbox" id="toggle-require-reviewer">
+          <span>Require a reviewer on every review</span>
+        </label>
+        <p class="settings-hint">Saved to <code>litschema.yaml</code> and enforced by the
+          server, so it applies to everyone working in this project &mdash; not just this browser.</p>
+      </section>
+      <div class="settings-status" id="settings-status" aria-live="polite"></div>
+    </div>
+  </div>
 </div>
 
 <div class="filter-row" id="filter-row" style="display:none">
@@ -2608,6 +2694,11 @@ e.g. year >= 2024 && study_types.includes("review")'
           <div class="review-progress-row">
             <span class="review-progress" id="review-progress" aria-live="polite"></span>
             <span class="confidence-chip" id="confidence-chip" style="display:none"></span>
+            <span class="reasoning-note" id="reasoning-note" style="display:none" tabindex="0"
+                  role="button" aria-label="Why the extractor rated it this way">
+              <span class="reasoning-note-icon" aria-hidden="true">i</span>
+              <span class="reasoning-note-body" id="reasoning-note-body"></span>
+            </span>
             <span class="run-chip" id="run-chip" style="display:none" title="Active run"></span>
             <span class="save-status" id="save-status" aria-live="polite"></span>
             <span class="save-status" id="bulk-status" aria-live="polite"></span>
@@ -2617,14 +2708,6 @@ e.g. year >= 2024 && study_types.includes("review")'
           <div class="view-mode-toggle data-mode-toggle" aria-label="Overview display mode">
             <button class="view-mode-btn active" id="data-mode-table" data-data-mode="table" type="button">Table</button>
             <button class="view-mode-btn" id="data-mode-json" data-data-mode="json" type="button">JSON</button>
-          </div>
-          <div class="review-identity" id="review-identity-controls">
-            <input type="hidden" class="reviewer-input" id="reviewer-id">
-            <button class="orcid-connect-btn" id="btn-orcid-connect" title="Connect ORCID">ORCID</button>
-            <button class="orcid-profile-btn" id="btn-orcid-profile" style="display:none" title="Disconnect ORCID">
-              <span class="orcid-name-label" id="orcid-profile-name"></span>
-              <span class="orcid-disconnect-label">Disconnect</span>
-            </button>
           </div>
         </div>
       </div>
@@ -2984,6 +3067,8 @@ async function init() {
   // Deep links survive reload, and the back button moves between the overview
   // and a document rather than leaving the app.
   $("#btn-all-documents").addEventListener("click", () => { window.location.hash = "#/"; });
+  wireSettings();
+  loadSettings();
   window.addEventListener("hashchange", () => { applyRoute(); });
   await applyRoute();
 }
@@ -5861,6 +5946,24 @@ function updateStats() {
   syncCurrentArticleProgress();
 }
 
+function renderReasoningNote() {
+  // The extractor's own account of the run — why it rated its confidence as it
+  // did, and, when it extracted nothing, why there was nothing to extract.
+  // Shown behind an explicit affordance because a tooltip nobody knows about
+  // is the same as no explanation at all.
+  const wrap = $("#reasoning-note");
+  const body = $("#reasoning-note-body");
+  if (!wrap || !body) return;
+  const note = state.reasoning && state.reasoning.confidence_reasoning;
+  if (!note) {
+    wrap.style.display = "none";
+    body.textContent = "";
+    return;
+  }
+  body.textContent = note;
+  wrap.style.display = "inline-flex";
+}
+
 function updateConfidenceChip() {
   const chip = $("#confidence-chip");
   if (!chip) return;
@@ -5871,10 +5974,12 @@ function updateConfidenceChip() {
     chip.textContent = "";
     chip.className = "confidence-chip";
     chip.removeAttribute("title");
+    renderReasoningNote();  // an explanation can exist without a score
     return;
   }
   chip.textContent = `model confidence ${conf.toFixed(2)}`;
   chip.className = `confidence-chip ${confidenceBand(conf)}`;
+  renderReasoningNote();
   if (reasoning.confidence_reasoning) {
     chip.title = reasoning.confidence_reasoning;
   } else {
@@ -6526,6 +6631,114 @@ function renderExtractionPanel() {
     renderReviewTable();
     updateReviewWorkspace();
   }
+}
+
+// ── Settings ──
+
+let settingsState = { require_reviewer: false, in_git_repo: false, unattributed_reviews: 0 };
+
+function setSettingsStatus(message, status = "") {
+  const el = $("#settings-status");
+  if (!el) return;
+  el.textContent = message;
+  el.dataset.status = status;
+}
+
+async function loadSettings() {
+  try {
+    settingsState = await fetchJson("/api/settings");
+  } catch {
+    return;
+  }
+  $("#toggle-require-reviewer").checked = !!settingsState.require_reviewer;
+  renderBackfillRow();
+}
+
+function renderBackfillRow() {
+  const row = $("#backfill-row");
+  const hint = $("#backfill-hint");
+  if (!row || !hint) return;
+  const n = settingsState.unattributed_reviews || 0;
+  const connected = !!$("#reviewer-id").value.trim();
+  if (!connected || n === 0) {
+    row.style.display = "none";
+    return;
+  }
+  row.style.display = "block";
+  // Outside a repository the project is presumed local, so the anonymous
+  // reviews are the person's own. Inside one they may be a collaborator's,
+  // and claiming their work is not recoverable from the file afterwards.
+  hint.textContent = settingsState.in_git_repo
+    ? `${n} reviews have no reviewer. This project is in Git, so some may be a ` +
+      `collaborator's — attributing them to you cannot be undone from the file.`
+    : `${n} reviews have no reviewer.`;
+}
+
+async function applyRequireReviewer(value) {
+  setSettingsStatus("Saving…");
+  try {
+    const res = await fetch("/api/settings", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ require_reviewer: value }),
+    });
+    if (!res.ok) {
+      const detail = await res.json().catch(() => null);
+      throw new Error(detail?.detail || `${res.status} ${res.statusText}`);
+    }
+    settingsState = await res.json();
+    $("#toggle-require-reviewer").checked = !!settingsState.require_reviewer;
+    setSettingsStatus(value ? "Saved to litschema.yaml." : "Requirement removed.");
+  } catch (err) {
+    $("#toggle-require-reviewer").checked = !value;  // the file is the truth
+    setSettingsStatus(err.message || "Could not save", "error");
+  }
+}
+
+async function runBackfill() {
+  const reviewer = $("#reviewer-id").value.trim();
+  if (!reviewer) return;
+  const n = settingsState.unattributed_reviews || 0;
+  const warning = settingsState.in_git_repo
+    ? `\n\nThis project is in Git, so some of these may be a collaborator's work.`
+    : "";
+  if (!confirm(`Attribute ${n} previously anonymous reviews to ${reviewer}?${warning}`)) return;
+  setSettingsStatus("Attributing…");
+  try {
+    const res = await fetch("/api/reviews/backfill-reviewer", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reviewer }),
+    });
+    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+    const out = await res.json();
+    setSettingsStatus(
+      `${out.updated} reviews attributed to ${out.reviewer}` +
+      (out.skipped_corrupt ? ` · ${out.skipped_corrupt} unreadable file(s) skipped` : "")
+    );
+    await loadSettings();
+    if (state.currentId) await loadAnnotations(state.currentId);
+  } catch (err) {
+    setSettingsStatus(err.message || "Could not attribute reviews", "error");
+  }
+}
+
+function wireSettings() {
+  $("#btn-settings").addEventListener("click", async () => {
+    setSettingsStatus("");
+    await loadSettings();
+    $("#settings-modal").classList.add("active");
+  });
+  $("#btn-settings-close").addEventListener("click", () => {
+    $("#settings-modal").classList.remove("active");
+  });
+  $("#settings-modal").addEventListener("click", (e) => {
+    if (e.target.id === "settings-modal") $("#settings-modal").classList.remove("active");
+  });
+  $("#toggle-require-reviewer").addEventListener("change", (e) => {
+    applyRequireReviewer(e.target.checked);
+  });
+  $("#btn-backfill").addEventListener("click", runBackfill);
 }
 
 // ── Boot ──

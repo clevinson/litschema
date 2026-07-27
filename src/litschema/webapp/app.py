@@ -239,6 +239,61 @@ def _active_run_summary(files: ArticleFiles) -> dict | None:
     }
 
 
+def _count_unattributed(cfg: LitSchemaConfig) -> int:
+    """Review entries carrying no reviewer, across every published run."""
+    from ..articles import iter_metadata_paths
+    from ..reviews import ReviewCorruptError, read_reviews
+    from ..runs import iter_run_ids, run_files
+
+    total = 0
+    for metadata_path in iter_metadata_paths(cfg):
+        files = article_files(cfg, metadata_path.parent.name)
+        for run_id in iter_run_ids(files):
+            try:
+                fields = read_reviews(run_files(files, run_id))
+            except ReviewCorruptError:
+                continue
+            total += sum(1 for entry in fields.values() if not entry.get("reviewer"))
+    return total
+
+
+REQUIRE_REVIEWER_KEY = "require_reviewer"
+
+
+def _require_reviewer(cfg: LitSchemaConfig) -> bool:
+    """Whether this project demands attribution on every review.
+
+    Read from config on each request rather than cached: the file is the
+    authority, and it may be edited by hand or arrive through a pull while the
+    server is running.
+    """
+    import yaml
+
+    try:
+        raw = yaml.safe_load(cfg.config_path.read_text()) or {}
+    except (OSError, yaml.YAMLError):
+        return False
+    return bool(raw.get(REQUIRE_REVIEWER_KEY, False))
+
+
+def _set_require_reviewer(cfg: LitSchemaConfig, value: bool) -> None:
+    """Write the policy into the project config, preserving everything else.
+
+    Rewritten key-by-key rather than dumped wholesale so unknown keys, which
+    the config contract preserves for domain repositories, survive untouched.
+    """
+    import yaml
+
+    raw = yaml.safe_load(cfg.config_path.read_text()) or {}
+    if value:
+        raw[REQUIRE_REVIEWER_KEY] = True
+    else:
+        raw.pop(REQUIRE_REVIEWER_KEY, None)
+    tmp = cfg.config_path.with_suffix(".yaml.tmp")
+    tmp.write_text(yaml.safe_dump(raw, sort_keys=False, default_flow_style=False))
+    tmp.replace(cfg.config_path)
+
+
 def _resolved_schema(cfg: LitSchemaConfig):
     """The project schema, or None when it cannot be resolved.
 
@@ -628,6 +683,78 @@ async def get_reasoning(article_id: str, cfg: CfgDep):
     return json.loads(path.read_text())
 
 
+@app.get("/api/settings")
+async def get_settings(cfg: CfgDep):
+    """Project-level review settings and the context needed to explain them."""
+    from ..cli import _in_git_repo
+
+    shared = _in_git_repo(cfg.project_root)
+    return {
+        "require_reviewer": _require_reviewer(cfg),
+        # A repository is the available signal that the work may be shared,
+        # which is what makes attribution matter and backfill risky.
+        "in_git_repo": shared,
+        "unattributed_reviews": _count_unattributed(cfg),
+    }
+
+
+@app.put("/api/settings")
+async def put_settings(request: Request, cfg: CfgDep):
+    """Update project review policy. Writes litschema.yaml."""
+    body = await request.json()
+    if not isinstance(body, dict):
+        raise HTTPException(400, "body must be a JSON object")
+    if REQUIRE_REVIEWER_KEY in body:
+        value = body[REQUIRE_REVIEWER_KEY]
+        if not isinstance(value, bool):
+            raise HTTPException(400, f"{REQUIRE_REVIEWER_KEY} must be true or false")
+        try:
+            _set_require_reviewer(cfg, value)
+        except OSError as exc:
+            raise HTTPException(500, f"could not write {cfg.config_path}: {exc}") from exc
+    return await get_settings(cfg)
+
+
+@app.post("/api/reviews/backfill-reviewer")
+async def backfill_reviewer(request: Request, cfg: CfgDep):
+    """Attribute previously anonymous reviews to a reviewer.
+
+    Only entries with no reviewer are touched; an entry already attributed to
+    someone is never reassigned. Corrupt review files are skipped rather than
+    rewritten.
+    """
+    from ..articles import iter_metadata_paths
+    from ..reviews import ReviewCorruptError, read_reviews, write_reviews
+    from ..runs import iter_run_ids, run_files
+
+    body = await request.json()
+    reviewer = str((body or {}).get("reviewer") or "").strip()
+    if not reviewer:
+        raise HTTPException(400, "reviewer is required")
+    reviewer = _normalize_orcid_id(reviewer)
+
+    updated = 0
+    skipped_corrupt = 0
+    for metadata_path in iter_metadata_paths(cfg):
+        files = article_files(cfg, metadata_path.parent.name)
+        for run_id in iter_run_ids(files):
+            run = run_files(files, run_id)
+            try:
+                fields = read_reviews(run)
+            except ReviewCorruptError:
+                skipped_corrupt += 1
+                continue
+            changed = False
+            for entry in fields.values():
+                if not entry.get("reviewer"):
+                    entry["reviewer"] = reviewer
+                    changed = True
+                    updated += 1
+            if changed:
+                write_reviews(run, fields)
+    return {"updated": updated, "skipped_corrupt": skipped_corrupt, "reviewer": reviewer}
+
+
 @app.get("/api/annotations/{article_id}/{run_id}")
 async def get_annotations(article_id: str, run_id: str, cfg: CfgDep):
     """Stored review entries and effective state for one explicit run.
@@ -681,6 +808,14 @@ async def put_annotation(article_id: str, run_id: str, request: Request, cfg: Cf
     reviewer = body.get("reviewer")
     if reviewer and str(reviewer).strip():
         entry["reviewer"] = _normalize_orcid_id(str(reviewer).strip())
+    # A policy only the browser respects is not a policy: enforce it here so it
+    # binds every caller, including scripts and agents.
+    if _require_reviewer(cfg) and "reviewer" not in entry:
+        raise HTTPException(
+            400,
+            "this project requires a reviewer on every review "
+            f"(set {REQUIRE_REVIEWER_KEY}: false in litschema.yaml to change that)",
+        )
 
     try:
         fields = upsert_review(run, field_path, entry, schema=_resolved_schema(cfg))

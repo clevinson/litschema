@@ -677,3 +677,90 @@ def test_articles_listing_reports_no_run_metadata_when_unextracted(tmp_path) -> 
 
     assert entry["active_run"] is None
     assert entry["active_run_id"] is None
+
+
+# ── project review policy and backfill ───────────────────────────────────────
+
+
+def _config_project(tmp_path):
+    cfg = _project_cfg(tmp_path)
+    _write_default_schema(cfg)
+    cfg.config_path.write_text(
+        'project_root: "."\nschema_dir: "schema"\nextraction_schema_file: "extraction.yaml"\n'
+        'article_store_dir: "data/papers"\n'
+    )
+    return cfg
+
+
+def test_require_reviewer_binds_every_client_not_just_the_browser(tmp_path) -> None:
+    """A policy the server does not enforce is advisory, and curl ignores it."""
+    cfg = _config_project(tmp_path)
+    _write_manifest(cfg, "a", {"id": "a"})
+    run_id = _write_extraction(cfg, "a", {"article_id": "a", "title": "T", "ph": 6.1})
+    client = _client(cfg)
+
+    # Off by default: anonymous review is normal.
+    assert client.put(f"/api/annotations/a/{run_id}", json={"path": "title"}).status_code == 200
+
+    assert client.put("/api/settings", json={"require_reviewer": True}).json()["require_reviewer"]
+
+    refused = client.put(f"/api/annotations/a/{run_id}", json={"path": "ph"})
+    assert refused.status_code == 400
+    assert "requires a reviewer" in refused.text
+
+    ok = client.put(
+        f"/api/annotations/a/{run_id}",
+        json={"path": "ph", "reviewer": "0000-0002-1825-0097"},
+    )
+    assert ok.status_code == 200
+    assert "require_reviewer: true" in cfg.config_path.read_text()
+
+
+def test_settings_write_preserves_other_config_keys(tmp_path) -> None:
+    """Unknown keys are preserved for domain repositories (project-config spec)."""
+    cfg = _config_project(tmp_path)
+    cfg.config_path.write_text(cfg.config_path.read_text() + 'custom_domain_key: keep-me\n')
+    client = _client(cfg)
+
+    client.put("/api/settings", json={"require_reviewer": True})
+    client.put("/api/settings", json={"require_reviewer": False})
+
+    text = cfg.config_path.read_text()
+    assert "custom_domain_key: keep-me" in text
+    assert "require_reviewer" not in text  # removed rather than left false
+
+
+def test_backfill_attributes_only_anonymous_entries(tmp_path) -> None:
+    """Never reassign someone else's review."""
+    cfg = _config_project(tmp_path)
+    _write_manifest(cfg, "a", {"id": "a"})
+    run_id = _write_extraction(cfg, "a", {"article_id": "a", "title": "T", "ph": 6.1})
+    run_dir = cfg.article_store_dir / "a" / "extraction-runs" / run_id
+    (run_dir / "review.json").write_text(
+        _json.dumps({
+            "version": 2,
+            "fields": {
+                "title": {},
+                "ph": {"reviewer": "0000-0001-5109-3700"},
+            },
+        })
+    )
+    client = _client(cfg)
+
+    out = client.post(
+        "/api/reviews/backfill-reviewer", json={"reviewer": "0000-0002-1825-0097"}
+    ).json()
+
+    assert out["updated"] == 1
+    fields = _json.loads((run_dir / "review.json").read_text())["fields"]
+    assert fields["title"]["reviewer"] == "0000-0002-1825-0097"
+    assert fields["ph"]["reviewer"] == "0000-0001-5109-3700"  # untouched
+
+
+def test_settings_reports_repo_context_for_the_backfill_warning(tmp_path) -> None:
+    cfg = _config_project(tmp_path)
+    client = _client(cfg)
+
+    assert client.get("/api/settings").json()["in_git_repo"] is False
+    (cfg.project_root / ".git").mkdir()
+    assert client.get("/api/settings").json()["in_git_repo"] is True

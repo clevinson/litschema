@@ -201,13 +201,42 @@ filter loaded from a URL is displayed but never evaluated during navigation;
 the user must explicitly confirm its first execution. Core navigation and
 review do not depend on the filter.
 
+## Settings and project policy
+
+Reviewer identity is a property of the person, not of the document on screen,
+so it lives in a settings dialog reachable from either route rather than in a
+per-document header.
+
+`require_reviewer` is project policy: when set, every review must name a
+reviewer. It is stored in `litschema.yaml` and enforced at the write endpoint,
+so it binds every caller — scripts and agents included — rather than being a
+rule the browser politely follows. Writing it is the one place the verifier
+mutates project configuration; the write preserves unknown keys, and clearing
+the policy removes the key rather than recording a false value.
+
+Backfilling attribution onto previously anonymous reviews never reassigns an
+entry that already names someone. Whether the offer carries a warning follows
+the same signal used elsewhere: outside a Git repository the project is
+presumed local and its anonymous reviews the reviewer's own; inside one they
+may be a collaborator's, and the dialog says so with a count before proceeding,
+because the file cannot distinguish afterwards.
+
+## Extractor explanations
+
+The reasoning artifact's overall confidence and its accompanying explanation
+are shown together, the explanation behind a visible affordance rather than a
+bare tooltip — an explanation nobody knows is there is not an explanation. This
+is the only place a run states why it extracted little or nothing, which is
+exactly when a reviewer most needs it.
+
 ## API ownership
 
 The target read surface retains `GET /api/articles`, `/api/markdown/{id}`,
 `/api/pdf/{id}`, `/api/schema/fields`, and optional ORCID lookup. Extraction and
 reasoning reads accept an explicit run ID. Review endpoints follow
-`specs/reviews/spec.md` and always carry a run ID. After a review write, the document and summary use server-recomputed
-effective state. Route entry and explicit refresh reread disk state so CLI run
+`specs/reviews/spec.md` and always carry a run ID. Project settings are read and written at `/api/settings`; attribution
+backfill posts to its own endpoint. After a review write, the document and
+summary use server-recomputed effective state. Route entry and explicit refresh reread disk state so CLI run
 changes appear without restarting the server. Run mutation endpoints are out of
 scope. Server handlers call Python APIs in process and never shell out to CLI
 commands.
@@ -239,6 +268,12 @@ Implementation coverage must replace brittle source-substring assertions with:
   unextracted article;
 - the absence of any label naming both a route and a view mode;
 - silence on successful saves and a visible, persistent message on failure;
+- server-side refusal of an unattributed review under `require_reviewer`,
+  preservation of unknown config keys across a policy write, and removal rather
+  than falsification when the policy is cleared;
+- backfill touching only unattributed entries, and warning inside a repository;
+- the extractor explanation surfacing behind its own affordance, including for
+  a run that extracted nothing;
 - bulk verification of a section whose evidence is cited only on an ancestor,
   preservation of existing overrides within it, and suppression of
   click-to-clear arming on everything it verified;

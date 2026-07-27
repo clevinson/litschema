@@ -79,14 +79,20 @@ def test_verifier_overview_and_json_use_effective_post_edit_values() -> None:
     assert "renderJsonView(effectiveExtraction())" in html
 
 
-def test_verifier_moves_identity_and_queue_controls_into_review_header() -> None:
+def test_review_header_holds_queue_controls_but_not_identity() -> None:
+    """Identity belongs to the person, not to the document on screen.
+
+    The review header is per-document; who you are is not, so it moved to
+    settings. The queue controls stay, because they act on the open document.
+    """
     html = STATIC_HTML.read_text()
 
     toolbar = html[html.index('<div class="toolbar">'):html.index('<div class="orcid-modal-backdrop"')]
     assert 'id="review-identity-controls"' not in toolbar
     assert 'id="view-mode-json"' not in toolbar
-    assert 'id="review-identity-controls"' in html
-    assert html.index('id="extraction-panel-title"') < html.index('id="review-identity-controls"')
+    # Identity now lives in the settings dialog, after the review header.
+    assert 'id="settings-modal"' in html
+    assert html.index('id="review-identity-controls"') > html.index('id="settings-modal-title"')
     assert 'id="review-progress"' in html
     assert 'id="btn-prev-unreviewed"' in html
     assert 'id="btn-next-unreviewed"' in html
@@ -225,7 +231,7 @@ def test_verifier_uses_orcid_connect_flow() -> None:
     assert 'id="reviewer-id"' in html
     assert 'type="hidden"' in html
     assert 'id="btn-orcid-connect"' in html
-    assert ">ORCID</button>" in html
+    assert ">Connect ORCID</button>" in html
     assert 'id="orcid-modal"' in html
     assert 'id="orcid-input"' in html
     assert 'id="btn-orcid-lookup"' not in html
@@ -697,3 +703,35 @@ def test_overview_distinguishes_nothing_extracted_from_complete() -> None:
     assert "nothing extracted" in html
     assert "nFields === 0" in html
     assert "a.is_complete && nFields > 0" in html  # excluded from the tally too
+
+
+def test_settings_dialog_holds_identity_and_project_policy() -> None:
+    html = STATIC_HTML.read_text()
+
+    assert 'id="btn-settings"' in html
+    assert 'id="settings-modal"' in html
+    assert 'id="toggle-require-reviewer"' in html
+    assert 'id="btn-backfill"' in html
+    # It reuses .orcid-modal, which styles every label uppercase and defines no
+    # header layout, so the dialog must reset both for itself.
+    assert ".settings-modal header {" in html
+    assert "label.settings-toggle" in html
+
+
+def test_backfill_warns_when_the_project_may_be_shared() -> None:
+    """Anonymous entries in a repo may be a collaborator's, not yours."""
+    html = STATIC_HTML.read_text()
+
+    assert "settingsState.in_git_repo" in html
+    assert "collaborator's" in html
+    assert "cannot be undone" in html
+
+
+def test_extractor_note_is_behind_a_visible_affordance() -> None:
+    """A tooltip nobody knows about is the same as no explanation."""
+    html = STATIC_HTML.read_text()
+
+    assert 'id="reasoning-note"' in html
+    assert "function renderReasoningNote(" in html
+    assert "confidence_reasoning" in html
+    assert ".reasoning-note:hover .reasoning-note-body" in html
