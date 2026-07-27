@@ -571,3 +571,22 @@ def test_publish_workflow_gates_on_tests_and_a_matching_tag() -> None:
     assert "does not match project version" in workflow  # tag/version agreement
     assert "id-token: write" in workflow           # trusted publishing, no stored token
     assert "pypa/gh-action-pypi-publish" in workflow
+
+
+def test_pdf_converter_is_pinned_to_one_minor() -> None:
+    """Conversion output is hashed into run provenance, so it must not drift.
+
+    pymupdf4llm 1.27 -> 1.28 changed the markdown it produces (proper <sup>
+    markup, a real H1 title, more table rows). That is an improvement, but it
+    means the same PDF converts to different bytes — and `inputs.prepared_text`
+    in run.json hashes exactly those bytes. An unbounded requirement would let
+    a resolver change every future run's provenance silently.
+    """
+    import tomllib
+
+    with (REPO_ROOT / "pyproject.toml").open("rb") as fh:
+        deps = tomllib.load(fh)["project"]["dependencies"]
+
+    pin = next(d for d in deps if d.startswith("pymupdf4llm"))
+    assert ">=1.28" in pin
+    assert "<1.29" in pin

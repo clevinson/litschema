@@ -29,7 +29,12 @@ dependencies = [
     "requests>=2.31.0",
     "pyyaml>=6.0",
     "typer>=0.12.0",
-    "pymupdf4llm>=0.0.17",       # `prepare-text` — PDF → markdown
+    # `prepare-text` — PDF → markdown. Pinned to one minor: 1.27 -> 1.28
+    # changed conversion output materially (better markup, more table rows),
+    # and that output is hashed into run.json as `inputs.prepared_text`, so a
+    # silent bump would change every run's provenance. Widen deliberately,
+    # after comparing output, not by resolution.
+    "pymupdf4llm>=1.28.0,<1.29",
     "fastapi[standard]>=0.115",  # `verify` — verification webapp
     "duckdb>=1.0.0",             # `mcp` — explore store
     "mcp>=1.27.0",               # `mcp` — Model Context Protocol server
