@@ -2743,6 +2743,30 @@ const isRemoved = (ann) => overrideOp(ann) === "remove";
 // version 2, so map onto it here rather than threading v2 names through every
 // cell builder: "" unreviewed, "verified", "flagged" (an override).
 const statusToken = (ann) => (isOverridden(ann) ? "flagged" : isVerified(ann) ? "verified" : "");
+// Mirrors `controlling_entry` in reviews.py: the exact entry, else the nearest
+// stored ancestor. The backend model is ancestor-aware — verifying a container
+// covers everything beneath it, and unreviewing part of a covered subtree
+// collapses the rest onto container paths — so a display that looked up only
+// the exact path would render covered leaves as unreviewed while the
+// server-computed counter counted them as done.
+function controllingAnnotation(path) {
+  const exact = state.annotations[path];
+  if (exact) return exact;
+  const parts = pathToParts(path);
+  for (let depth = parts.length - 1; depth > 0; depth--) {
+    const ancestor = partsToPath(parts.slice(0, depth));
+    const entry = state.annotations[ancestor];
+    if (entry) return entry;
+  }
+  return undefined;
+}
+
+function partsToPath(parts) {
+  return parts.reduce(
+    (acc, part) => (/^\d+$/.test(part) ? `${acc}[${part}]` : acc ? `${acc}.${part}` : part),
+    ""
+  );
+}
 // The value a reviewer supplied, or undefined when they only verified.
 const overrideValue = (ann) =>
   ann?.override && ann.override.op !== "remove" ? ann.override.value : undefined;
@@ -4390,7 +4414,7 @@ function buildTableRowNoField(value, path) {
 
 function buildValueCells(value, path) {
   const entry = reasoningFor(path);
-  const ann = state.annotations[path];
+  const ann = controllingAnnotation(path);
 
   const sourceHtml = buildEvidenceBadge(path);
 
@@ -5610,7 +5634,7 @@ function buildLeafHtml(key, value, path) {
   const showIndicator = value !== null && typeof value !== "boolean";
 
   const entry = reasoningFor(path);
-  const ann = state.annotations[path];
+  const ann = controllingAnnotation(path);
   const annStatus = statusToken(ann);
 
   // Source lines (clickable)

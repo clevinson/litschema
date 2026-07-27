@@ -14,6 +14,7 @@ the publisher's: publishing a complete non-error run atomically activates it
 from __future__ import annotations
 
 import json
+import logging
 import os
 import shutil
 import time
@@ -23,6 +24,8 @@ from pathlib import Path
 from .articles import ArticleFiles
 from .config import LitSchemaConfig
 from .schema_resolution import schema_hash
+
+logger = logging.getLogger(__name__)
 
 RUN_JSON_VERSION = 1
 ACTIVE_RUN_FILENAME = "active-run.json"
@@ -369,7 +372,22 @@ def publish_run(
 
     activated = not error_marker
     if activated:
-        _write_active_pointer(files, run.run_id)
-    staged_extraction.unlink()
-    staged_reasoning.unlink(missing_ok=True)
+        # Roll the run directory back if activation fails. Leaving a complete
+        # but inactive run behind reports failure while the store says an
+        # extraction happened, and a retry would publish a second copy of it.
+        try:
+            _write_active_pointer(files, run.run_id)
+        except OSError:
+            shutil.rmtree(run.run_dir, ignore_errors=True)
+            raise
+
+    # Past this point the run is published and active: the command has already
+    # succeeded. Clearing the staging files is tidying, so a failure here must
+    # not turn a successful publication into a reported failure — which would
+    # invite a retry that publishes the same extraction twice.
+    for staged in (staged_extraction, staged_reasoning):
+        try:
+            staged.unlink(missing_ok=True)
+        except OSError as exc:
+            logger.warning("published run %s but could not remove %s: %s", run.run_id, staged, exc)
     return run, activated

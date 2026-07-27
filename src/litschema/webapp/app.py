@@ -212,22 +212,17 @@ def _leaf_paths(obj, base_path: str = "") -> list[str]:
     return paths
 
 
-def _active_run_id_or_none(files: ArticleFiles) -> str | None:
-    """The active run id, or None when absent or the pointer is broken."""
-    from ..runs import BrokenActiveRunError, active_run_id
-
-    try:
-        return active_run_id(files)
-    except BrokenActiveRunError:
-        return None
-
-
 def _active_run_summary(files: ArticleFiles) -> dict | None:
     """What produced the active extraction, for display.
 
     The run id is opaque by contract, so it identifies but does not inform. A
     reviewer judging an extraction wants to know what produced it and when —
     the id is carried along only because run-level CLI commands take it.
+
+    Resolves the pointer once. Reporting `active_run_id` from a separate
+    resolution meant a listing entry could pair one run's id with another run's
+    metadata if the pointer moved between the two reads, and cost a second file
+    read per article for no benefit.
     """
     from ..runs import BrokenActiveRunError, active_run
 
@@ -562,6 +557,7 @@ async def list_articles(cfg: CfgDep):
         else:
             setups = data.get("experimental_setups") or []
             progress = _article_progress(files)
+            run_summary = _active_run_summary(files)
             entry.update(
                 {
                     "has_extraction": True,
@@ -570,8 +566,8 @@ async def list_articles(cfg: CfgDep):
                     "focus_areas": data.get("focus_areas", []),
                     "document_type": data.get("document_type"),
                     "n_setups": len(setups),
-                    "active_run_id": _active_run_id_or_none(files),
-                    "active_run": _active_run_summary(files),
+                    "active_run_id": (run_summary or {}).get("run_id"),
+                    "active_run": run_summary,
                     **progress,
                 }
             )
