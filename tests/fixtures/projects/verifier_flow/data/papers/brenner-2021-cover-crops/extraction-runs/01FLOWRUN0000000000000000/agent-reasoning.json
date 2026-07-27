@@ -1,0 +1,44 @@
+{
+  "confidence": 0.86,
+  "fields": [
+    {
+      "path": ".site_name",
+      "source_lines": "L7",
+      "value": "Wendelsheim Long-Term Site"
+    },
+    {
+      "path": ".site_country",
+      "source_lines": "L7",
+      "value": "Germany"
+    },
+    {
+      "path": ".mean_annual_temperature_c",
+      "source_lines": "L8",
+      "value": "9.4",
+      "note": "stated directly as mean annual temperature"
+    },
+    {
+      "path": ".replicates",
+      "source_lines": "L11",
+      "value": "four"
+    },
+    {
+      "path": ".tillage",
+      "source_lines": "L12",
+      "value": "reduced tillage"
+    },
+    {
+      "path": ".crops",
+      "source_lines": "L9"
+    },
+    {
+      "path": ".measurements[0]",
+      "source_lines": "L20",
+      "note": "first data row of the measurements table"
+    },
+    {
+      "path": ".measurements[1]",
+      "source_lines": "L21"
+    }
+  ]
+}

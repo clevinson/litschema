@@ -1,0 +1,6 @@
+project_root: "."
+schema_dir: "schema"
+extraction_schema_file: "extraction.yaml"
+data_dir: "data"
+article_store_dir: "data/papers"
+paper_inbox_dir: "papers-inbox"

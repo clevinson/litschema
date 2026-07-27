@@ -1,0 +1,33 @@
+{
+  "confidence": 0.72,
+  "fields": [
+    {
+      "path": ".site_name",
+      "source_lines": "L5"
+    },
+    {
+      "path": ".site_country",
+      "source_lines": "L5"
+    },
+    {
+      "path": ".mean_annual_temperature_c",
+      "source_lines": "L6"
+    },
+    {
+      "path": ".replicates",
+      "source_lines": "L8"
+    },
+    {
+      "path": ".tillage",
+      "source_lines": "L8"
+    },
+    {
+      "path": ".crops",
+      "source_lines": "L7"
+    },
+    {
+      "path": ".measurements[0]",
+      "source_lines": "L14"
+    }
+  ]
+}

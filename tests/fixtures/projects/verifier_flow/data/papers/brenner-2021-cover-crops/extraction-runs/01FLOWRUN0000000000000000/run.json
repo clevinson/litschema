@@ -1,0 +1,19 @@
+{
+  "agent": {
+    "effort": "high",
+    "harness": "claude-code",
+    "harness_version": "2.1.219",
+    "model": "claude-sonnet-5",
+    "provider": "anthropic"
+  },
+  "article_id": "brenner-2021-cover-crops",
+  "created_at": "2026-03-04T10:15:00+00:00",
+  "inputs": {
+    "domain_context": "sha256:fixture",
+    "prepared_text": "sha256:fixture",
+    "skill": "sha256:fixture"
+  },
+  "run_id": "01FLOWRUN0000000000000000",
+  "schema_hash": "sha256:fixture",
+  "version": 1
+}
