@@ -853,6 +853,7 @@
   .ov-title { font-weight: 500; }
   .ov-sub { color: var(--text-dim); font-size: 12px; margin-top: 2px; }
   .ov-run-model { font-size: 12px; white-space: nowrap; }
+  .overview-table .ov-date { white-space: nowrap; color: var(--text-dim); font-size: 12px; }
   .ov-bar { position: relative; width: 120px; height: 6px; border-radius: 3px; background: var(--border); }
   .ov-bar span { position: absolute; inset: 0 auto 0 0; border-radius: 3px; background: var(--green, #3fb950); }
   .ov-state { font-size: 12px; color: var(--text-dim); }
@@ -1006,17 +1007,17 @@
     margin-top: 18px;
   }
 
-  .overview-table colgroup .overview-col-field { width: 35%; }
-  .overview-table colgroup .overview-col-value { width: auto; }
+  .data-table colgroup .data-col-field { width: 35%; }
+  .data-table colgroup .data-col-value { width: auto; }
 
-  .overview-table td.overview-value-cell,
-  .overview-table .cell-value {
+  .data-table td.data-value-cell,
+  .data-table .cell-value {
     color: var(--text);
     font-family: var(--font-mono);
   }
 
-  .overview-table td:nth-child(3),
-  .overview-table td.status-cell {
+  .data-table td:nth-child(3),
+  .data-table td.status-cell {
     text-align: left;
     white-space: normal;
   }
@@ -2525,6 +2526,7 @@ e.g. year >= 2024 && study_types.includes("review")'
           <th class="ov-num">Edited</th>
           <th class="ov-prog">Progress</th>
           <th class="ov-run">Extracted by</th>
+          <th class="ov-date">Extraction date</th>
         </tr>
       </thead>
       <tbody id="overview-rows"></tbody>
@@ -2871,12 +2873,17 @@ function runCellHtml(article) {
   // or months apart from the rest.
   const run = article.active_run;
   if (!run) return "&mdash;";
-  const when = shortDate(run.created_at);
   const model = run.model || "unknown model";
-  const detail = [run.effort, when].filter(Boolean).join(" \u00b7 ");
   const title = `Run ${run.run_id}`;
   return `<div class="ov-run-model" title="${escapeHtml(title)}">${escapeHtml(model)}</div>` +
-    (detail ? `<div class="ov-sub">${escapeHtml(detail)}</div>` : "");
+    (run.effort ? `<div class="ov-sub">${escapeHtml(run.effort)}</div>` : "");
+}
+
+function runDateHtml(article) {
+  const run = article.active_run;
+  const when = run && shortDate(run.created_at);
+  if (!when) return "&mdash;";
+  return `<span title="${escapeHtml(run.created_at)}">${escapeHtml(when)}</span>`;
 }
 
 function renderOverview() {
@@ -2886,7 +2893,7 @@ function renderOverview() {
   const rows = overviewRowsFor(state.articles);
 
   if (!rows.length) {
-    body.innerHTML = '<tr class="ov-none"><td colspan="6">No documents match.</td></tr>';
+    body.innerHTML = '<tr class="ov-none"><td colspan="7">No documents match.</td></tr>';
     if (totals) totals.textContent = "";
     return;
   }
@@ -2902,13 +2909,16 @@ function renderOverview() {
     // the work someone still has to do.
     const noRun = !a.active_run_id;
     if (!problem) { sumFields += nFields; sumReviewed += nReviewed; }
-    if (a.is_complete) complete++;
+    if (a.is_complete && nFields > 0) complete++;
     if (noRun) unextracted++;
 
     const pct = nFields > 0 ? Math.round((nReviewed / nFields) * 100) : 0;
     let stateCell;
     if (problem) stateCell = '<span class="ov-state problem">review unreadable</span>';
     else if (noRun) stateCell = '<span class="ov-state">not extracted</span>';
+    // A run that produced no reviewable field is complete by arithmetic, but
+    // calling it "complete" reads as audited work. Say what actually happened.
+    else if (nFields === 0) stateCell = '<span class="ov-state">nothing extracted</span>';
     else if (a.is_complete) stateCell = '<span class="ov-state done">complete</span>';
     else stateCell = `<div class="ov-bar"><span style="width:${pct}%"></span></div>`;
 
@@ -2921,6 +2931,7 @@ function renderOverview() {
     html += `<td class="ov-num">${problem || noRun ? "&mdash;" : nOverridden}</td>`;
     html += `<td class="ov-prog">${stateCell}</td>`;
     html += `<td class="ov-run">${runCellHtml(a)}</td>`;
+    html += `<td class="ov-date">${runDateHtml(a)}</td>`;
     html += `</tr>`;
   }
   body.innerHTML = html;
@@ -4507,8 +4518,8 @@ function buildOverviewSection(label, obj, basePath, depth) {
 }
 
 function buildOverviewMergedTable(scalarRows, primitiveArrayEntries) {
-  let html = '<table class="ext-table overview-table">';
-  html += '<colgroup><col class="overview-col-field"><col class="overview-col-value"></colgroup>';
+  let html = '<table class="ext-table data-table">';
+  html += '<colgroup><col class="data-col-field"><col class="data-col-value"></colgroup>';
   html += '<thead><tr><th>Field</th><th>Value</th></tr></thead><tbody>';
   for (const row of scalarRows) {
     html += buildOverviewTableRow(row.key, row.val, row.path);
@@ -4539,7 +4550,7 @@ function buildOverviewTableRow(key, value, path) {
 }
 
 function buildDataValueCell(value, path) {
-  return `<td class="cell-value overview-value-cell" data-path="${path}">${overviewDisplayValue(value)}</td>`;
+  return `<td class="cell-value data-value-cell" data-path="${path}">${overviewDisplayValue(value)}</td>`;
 }
 
 function overviewDisplayValue(value) {
@@ -4556,7 +4567,7 @@ function buildDataHorizontalTable(arr, basePath, key) {
   const label = humanize(key);
   const hasExpandedCols = columns.some(c => c.isExpanded);
   let html = `<div class="tv-heading" data-depth="0"><span class="tv-heading-label">${escapeHtml(label)}</span></div>`;
-  html += '<div class="tv-body"><table class="ext-table horizontal-table overview-table"><colgroup>';
+  html += '<div class="tv-body"><table class="ext-table horizontal-table data-table"><colgroup>';
   for (let c = 0; c < columns.length; c++) html += '<col style="width:auto">';
   html += '</colgroup><thead><tr>';
   for (const col of columns) html += `<th>${escapeHtml(col.header)}</th>`;
@@ -4576,11 +4587,11 @@ function buildDataHorizontalTable(arr, basePath, key) {
         for (const col of columns) {
           if (col.isExpanded) {
             const { value, path } = col.getter(item, itemPath, subIndex);
-            html += `<td${value != null && value !== "" ? ` class="cell-value overview-value-cell" data-path="${path}"` : ""}>${overviewDisplayValue(value)}</td>`;
+            html += `<td${value != null && value !== "" ? ` class="cell-value data-value-cell" data-path="${path}"` : ""}>${overviewDisplayValue(value)}</td>`;
           } else if (subIndex === 0) {
             const { value, path } = col.getter(item, itemPath);
             const rowspanAttr = expandCount > 1 ? ` rowspan="${expandCount}"` : "";
-            html += `<td class="cell-value overview-value-cell" data-path="${path}"${rowspanAttr}>${overviewDisplayValue(value)}</td>`;
+            html += `<td class="cell-value data-value-cell" data-path="${path}"${rowspanAttr}>${overviewDisplayValue(value)}</td>`;
           }
         }
         html += '</tr>';
@@ -4589,7 +4600,7 @@ function buildDataHorizontalTable(arr, basePath, key) {
       html += `<tr class="clickable horizontal-row" data-path="${itemPath}">`;
       for (const col of columns) {
         const { value, path } = col.getter(item, itemPath);
-        html += `<td${value != null && value !== "" ? ` class="cell-value overview-value-cell" data-path="${path}"` : ""}>${overviewDisplayValue(value)}</td>`;
+        html += `<td${value != null && value !== "" ? ` class="cell-value data-value-cell" data-path="${path}"` : ""}>${overviewDisplayValue(value)}</td>`;
       }
       html += '</tr>';
     }

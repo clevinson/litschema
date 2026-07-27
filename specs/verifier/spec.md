@@ -92,7 +92,14 @@ extraction time), active schema hash, extraction and reasoning availability,
 effective review progress, and override count. Reporting provenance per row is
 what makes an inconsistent extraction visible: one document run by a different
 model, at a different effort, or long apart from the rest shows up by
-comparison, which no single document view can reveal.
+comparison, which no single document view can reveal. Extraction time is its
+own column so dates align and can be scanned; counts are right-aligned so
+magnitudes compare at a glance.
+
+An article whose active run produced no reviewable field is reported as having
+nothing extracted, not as complete, and does not count toward the completed
+tally. Completion by arithmetic over an empty set is true but reads as audited
+work, which is the opposite of what it means.
 Metrics are schema-derived; no ERW field names are hard-coded.
 
 ### Progress metrics

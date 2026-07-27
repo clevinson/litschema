@@ -673,3 +673,27 @@ def test_document_states_what_produced_the_extraction() -> None:
     # documents sit side by side — not in a single document's header.
     assert "function runCellHtml(" in html
     assert "Extracted by" in html
+
+
+def test_overview_and_data_tables_do_not_share_a_class() -> None:
+    """The naming collision reached CSS and misaligned a column.
+
+    The per-document data view's table was also called `overview-table`, so the
+    dataset overview inherited `td:nth-child(3) { text-align: left }` — written
+    for a different table — and its Reviewed column left-aligned while its
+    neighbours went right. One class, one table.
+    """
+    html = STATIC_HTML.read_text()
+
+    assert ".data-table td:nth-child(3)" in html
+    assert ".overview-table td:nth-child(3)" not in html
+    assert 'class="ext-table data-table"' in html
+
+
+def test_overview_distinguishes_nothing_extracted_from_complete() -> None:
+    """Zero reviewable fields is complete by arithmetic, not by review."""
+    html = STATIC_HTML.read_text()
+
+    assert "nothing extracted" in html
+    assert "nFields === 0" in html
+    assert "a.is_complete && nFields > 0" in html  # excluded from the tally too
