@@ -17,7 +17,7 @@ classifiers = [
     "Topic :: Text Processing :: Markup",
 ]
 # All runtime deps live here. We deliberately do NOT split into extras —
-# the pipeline's steps (assemble / prepare-text / extract-skill / verify /
+# the pipeline's steps (assemble / prepare-text / extract / verify /
 # export / mcp) form a coherent tool surface, and anyone reaching for litschema is
 # almost certainly going to use the full pipeline. Forcing `--extra X`
 # incantations for first-time users was a net DX loss against a ~130 MB

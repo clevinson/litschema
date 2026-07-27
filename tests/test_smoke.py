@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -559,8 +560,24 @@ def test_package_metadata_is_complete_for_a_public_release() -> None:
     assert project["authors"]
     assert project["classifiers"]
     assert project["urls"]["Repository"].startswith("https://")
-    # The dependency rationale comment must not cite verbs that no longer exist.
-    assert "harvest /" not in (REPO_ROOT / "pyproject.toml").read_text()
+
+    # The dependency rationale comment names the pipeline's steps as its
+    # argument against extras, so every verb it cites must still be a real one.
+    # Asserting the absence of specific dead names only catches the ones we
+    # already thought of — `extract-skill` outlived a `harvest`-only check.
+    from typer.main import get_command
+
+    from litschema.cli import app
+
+    verbs = set(get_command(app).commands)
+    rationale = re.search(
+        r"the pipeline's steps \(([^)]*)\)",
+        (REPO_ROOT / "pyproject.toml").read_text(),
+        re.DOTALL,
+    )
+    assert rationale, "the dependency rationale no longer names the pipeline's steps"
+    cited = {step.strip() for step in rationale.group(1).replace("\n#", " ").split("/")}
+    assert cited <= verbs, f"rationale cites verbs the CLI does not have: {sorted(cited - verbs)}"
 
 
 def test_publish_workflow_gates_on_tests_and_a_matching_tag() -> None:
