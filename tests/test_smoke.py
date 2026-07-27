@@ -545,3 +545,29 @@ def test_ci_imports_the_public_surface_from_the_built_wheel() -> None:
     assert "--isolated --no-project" in workflow
     assert "import litschema.analysis" in workflow
     assert "litschema-onboard" in workflow  # bundled skills ship
+
+
+def test_package_metadata_is_complete_for_a_public_release() -> None:
+    """PyPI shows what this declares, and a version cannot be re-uploaded."""
+    import tomllib
+
+    with (REPO_ROOT / "pyproject.toml").open("rb") as fh:
+        project = tomllib.load(fh)["project"]
+
+    assert project["license"] == "Apache-2.0"
+    assert project["readme"] == "README.md"
+    assert project["authors"]
+    assert project["classifiers"]
+    assert project["urls"]["Repository"].startswith("https://")
+    # The dependency rationale comment must not cite verbs that no longer exist.
+    assert "harvest /" not in (REPO_ROOT / "pyproject.toml").read_text()
+
+
+def test_publish_workflow_gates_on_tests_and_a_matching_tag() -> None:
+    workflow = (REPO_ROOT / ".github" / "workflows" / "publish.yml").read_text()
+
+    assert 'tags: ["v*"]' in workflow
+    assert "uv run pytest -q" in workflow          # never publish an untested build
+    assert "does not match project version" in workflow  # tag/version agreement
+    assert "id-token: write" in workflow           # trusted publishing, no stored token
+    assert "pypa/gh-action-pypi-publish" in workflow
