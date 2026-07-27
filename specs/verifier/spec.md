@@ -159,15 +159,12 @@ A failure is the opposite — it has no other signal, so it is stated in words
 and stays until the next action. Writing failures nowhere is how a rejected
 edit can look identical to a saved one.
 
-A bulk action reports what it did, because per-field feedback does not scale to
-an action touching many fields at once. It names each outcome separately rather
-than totalling them: how many it verified, how many it deliberately left because
-no citation backs them, and how many failed to save. A single "skipped" count
-conflates finished work, intentional omissions, and errors — and an error
-counted as a skip is an error nobody sees.
-
-Fields already reviewed are never reported as skipped. They are completed work,
-not something the action declined to do.
+The same rule governs bulk actions. Everything a bulk verification succeeds at
+is already on screen: the controls it changed turn verified, and clearing
+reverts them. A field it deliberately left alone shows that its evidence is
+missing in its own row, permanently and beside the value the decision concerns
+— which is both more durable and better placed than a count that disappears.
+Only failures are stated, in the same place a single failure is stated.
 
 #### Verification affordances
 
@@ -289,8 +286,8 @@ Implementation coverage must replace brittle source-substring assertions with:
 - backfill touching only unattributed entries, and warning inside a repository;
 - the extractor explanation surfacing behind its own affordance, including for
   a run that extracted nothing;
-- bulk reporting that separates verified, uncited-and-left, and failed, and
-  that never counts already-reviewed fields as skipped;
+- silence from a bulk action that succeeds, and a stated failure when one does
+  not;
 - bulk verification of a section whose evidence is cited only on an ancestor,
   preservation of existing overrides within it, and suppression of
   click-to-clear arming on everything it verified;

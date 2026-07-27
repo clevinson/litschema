@@ -2708,7 +2708,6 @@ e.g. year >= 2024 && study_types.includes("review")'
             </span>
             <span class="run-chip" id="run-chip" style="display:none" title="Active run"></span>
             <span class="save-status" id="save-status" aria-live="polite"></span>
-            <span class="save-status" id="bulk-status" aria-live="polite"></span>
           </div>
         </div>
         <div class="review-actions" id="review-actions">
@@ -6075,13 +6074,6 @@ function setSaveStatus(message, status = "") {
   }
 }
 
-function setBulkStatus(message, batchId = null, status = "") {
-  const el = $("#bulk-status");
-  if (!el) return;
-  el.dataset.status = status;
-  el.textContent = message;
-}
-
 function annotationEntry(path, extra = {}) {
   // The wire shape is the stored shape: {} means verified, `override` carries
   // replace/remove/add, `note` and `reviewer` are optional. Paths are canonical.
@@ -6347,35 +6339,15 @@ function sectionReviewState(basePath = null) {
   };
 }
 
-function uncitedInScope(basePath) {
-  // Unreviewed fields the bulk action deliberately leaves alone: nothing in the
-  // reasoning artifact backs them, and verifying uncited values wholesale is
-  // rubber-stamping rather than auditing. This is the only "skip" worth
-  // reporting — fields already reviewed are finished work, not omissions.
-  return collectLeafPaths(state.extraction).filter(path =>
-    pathInScope(path, basePath) &&
-    !state.annotations[path] &&
-    getValueAtPath(state.extraction, path) !== undefined &&
-    !reasoningFor(path)?.source_lines
-  );
-}
-
 async function bulkVerifyScope(basePath, source) {
   const paths = collectReviewablePaths(basePath);
   if (basePath && paths.length > 0) state.suppressClearHoverSections.add(basePath);
-  await bulkVerifyPaths(paths, source, uncitedInScope(basePath).length);
+  await bulkVerifyPaths(paths, source);
 }
 
-async function bulkVerifyPaths(paths, source, uncited = 0) {
-  const uncitedText = uncited
-    ? `${uncited} left for you: no citation to check them against`
-    : "";
-  if (paths.length === 0) {
-    setBulkStatus(uncitedText || "Nothing left to verify here.");
-    return;
-  }
+async function bulkVerifyPaths(paths, source) {
+  if (paths.length === 0) return;
 
-  const batchId = `bulk_${Date.now()}_${Math.random().toString(16).slice(2)}`;
   const verifiedPaths = [];
   for (const path of paths) {
     const ok = await saveAnnotation(path, {}, { render: false });
@@ -6392,14 +6364,10 @@ async function bulkVerifyPaths(paths, source, uncited = 0) {
 
   renderExtractionPanel();
   updateStats();
-  // A save that failed is an error, not a skip. Folding the two together let a
-  // failure pass for a deliberate omission and disappear.
+  // Only failure gets words. What succeeded is visible in every control that
+  // changed, and a field left alone shows "No citation" in its own row.
   const failed = paths.length - verifiedPaths.length;
-  const parts = [`${verifiedPaths.length} verified`];
-  if (uncitedText) parts.push(uncitedText);
-  if (failed) parts.push(`${failed} failed to save`);
-  setBulkStatus(parts.join(" \u00b7 "), verifiedPaths.length > 0 ? batchId : null,
-                failed ? "error" : "");
+  if (failed) setSaveStatus(`${failed} of ${paths.length} fields failed to save`, "error");
 }
 
 async function clearVerifiedScope(basePath = null) {
@@ -6411,7 +6379,6 @@ async function clearVerifiedScope(basePath = null) {
   }
   renderExtractionPanel();
   updateStats();
-  setBulkStatus(`${cleared} verified fields cleared`);
 }
 
 function rowCellPaths(rowPath) {

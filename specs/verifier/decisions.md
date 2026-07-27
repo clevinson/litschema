@@ -129,3 +129,24 @@ stops canonicalization absorbing a differently attributed entry.
 ORCID gate before any review, rejected earlier for taxing the solo case; and
 unconditional backfill, which in a shared project silently claims someone
 else's work.
+
+
+## 2026-07-26 — Bulk actions report failures only, like every other action
+
+**Context:** bulk verification printed a summary — verified, skipped, later
+split into verified, left-uncited, and failed. Reviewing it against what the
+screen already shows, almost all of it was restatement. Verified fields turn
+their controls verified. Cleared fields revert. A field left alone for lack of
+evidence shows "No citation" in its own row, permanently, next to the value in
+question.
+
+**Decision:** bulk actions say nothing when they succeed, and state failures in
+the same slot a single failed save uses. This makes one rule cover every
+action: the control is the feedback, words are for failure. The second status
+element, its function, and the batch identifier that only ever grouped a
+message are all removed.
+
+**Rejected:** keeping a success tally on the argument that bulk actions are too
+large to verify by eye — the counts restate per-control state that is already
+visible, and the one genuinely invisible thing, why a field was passed over,
+belongs in that field's row rather than in a message that vanishes.

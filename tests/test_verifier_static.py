@@ -272,9 +272,8 @@ def test_verifier_bulk_review_is_reversible_and_field_level() -> None:
     assert "bulkVerifyPaths" in html
     assert "clearVerifiedScope" in html
     assert "undoBulkBatch" not in html
-    # Batches group the status message only. `batch_id` was a version-1 entry
-    # key; version 2 stores override/note/reviewer and nothing else.
-    assert "batchId" in html
+    # `batch_id` was a version-1 entry key; version 2 stores override, note and
+    # reviewer only. With the bulk status gone, batch grouping has no consumer.
     assert "batch_id" not in html
 
 
@@ -762,21 +761,22 @@ def test_module_state_is_declared_before_parse_time_initialisation() -> None:
     assert html.index("let settingsState") < html.index("function renderBackfillRow(")
 
 
-def test_bulk_status_separates_deliberate_skips_from_failures() -> None:
-    """"N skipped" conflated four unrelated things, one of them an error.
+def test_bulk_actions_report_only_failures() -> None:
+    """Everything a bulk action succeeded at is already on screen.
 
-    The old count was `all leaves in scope − verifiable`, plus failures. It
-    lumped together fields already reviewed (finished work, not omissions),
-    fields with no value, fields deliberately left alone for lack of a
-    citation, and saves that errored — so a failure was indistinguishable from
-    an intentional skip and vanished into a number nobody could interpret.
+    Verified fields turn their controls green; cleared ones revert; a field
+    left alone shows "No citation" in its own row, permanently and where the
+    decision applies. A transient tally restates all of that and, when it also
+    counted errors, hid them among intentional omissions. One rule for both
+    single and bulk actions: the control is the feedback, words are for
+    failure.
     """
     html = STATIC_HTML.read_text()
 
-    assert "function uncitedInScope(" in html
-    assert "no citation to check them against" in html
-    assert "failed to save" in html
+    assert "setBulkStatus" not in html
+    assert 'id="bulk-status"' not in html
     assert "skippedBulkCount" not in html
-    # The bare "N skipped" phrasing is gone from bulk verification. Backfill
-    # still reports skipped corrupt files, which names exactly what and why.
-    assert "fields verified · ${skippedText} skipped" not in html
+    assert "fields cleared" not in html
+    # Failures share the one status slot rather than having their own.
+    assert "fields failed to save" in html
+    assert 'setSaveStatus(`${failed}' in html
