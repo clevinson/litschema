@@ -152,12 +152,25 @@ def _require_run(cfg: LitSchemaConfig, article_id: str, run_id: str):
     return run
 
 
-def _active_artifact(files: ArticleFiles, name: str):
-    """Path of an artifact inside the active run, or None (broken pointer -> None
-    here; list/read endpoints surface the article as unextracted rather than
-    500ing the whole listing)."""
-    from ..runs import BrokenActiveRunError, active_run
+def _active_artifact(files: ArticleFiles, name: str, run_id: str | None = None):
+    """Path of an artifact inside a run, or None.
 
+    ``run_id`` names the run explicitly; without it the active run is resolved.
+    A document must be read through the same run its reviews are written to —
+    resolving the pointer independently on each read let the page render one
+    run's extraction while writing reviews against another.
+
+    A broken pointer yields None rather than raising, so list and read
+    endpoints surface the article as unextracted instead of 500ing the listing.
+    """
+    from ..runs import BrokenActiveRunError, active_run, run_files
+
+    if run_id is not None:
+        try:
+            run = run_files(files, run_id)
+        except BrokenActiveRunError:
+            return None
+        return getattr(run, name) if run.run_json.is_file() else None
     try:
         run = active_run(files)
     except BrokenActiveRunError:
@@ -567,13 +580,17 @@ async def get_orcid_profile(orcid_id: str):
 
 
 @app.get("/api/article/{article_id}")
-async def get_article(article_id: str, cfg: CfgDep):
-    """Return the active run's raw extraction JSON for an article.
+async def get_article(article_id: str, cfg: CfgDep, run_id: str | None = None):
+    """Return a run's raw extraction JSON for an article.
 
     Raw, not effective: the document view renders the review overlay itself so
     it can show what the agent said alongside what a human changed it to.
+
+    ``run_id`` pins the read to one run, so the payload on screen is the one
+    the reviewer's annotations will be written against; omitted, the active
+    run is used.
     """
-    path = _active_artifact(article_files(cfg, article_id), "extraction")
+    path = _active_artifact(article_files(cfg, article_id), "extraction", run_id)
     if path is None or not path.exists():
         raise HTTPException(404, f"No extraction for {article_id}")
     return json.loads(path.read_text())
@@ -675,9 +692,13 @@ async def get_pdf(article_id: str, cfg: CfgDep):
 
 
 @app.get("/api/reasoning/{article_id}")
-async def get_reasoning(article_id: str, cfg: CfgDep):
-    """Return per-field extraction reasoning if it exists."""
-    path = _active_artifact(article_files(cfg, article_id), "reasoning")
+async def get_reasoning(article_id: str, cfg: CfgDep, run_id: str | None = None):
+    """Return per-field extraction reasoning if it exists.
+
+    ``run_id`` pins the read to one run, matching `/api/article`: evidence must
+    describe the same extraction the reviewer is looking at.
+    """
+    path = _active_artifact(article_files(cfg, article_id), "reasoning", run_id)
     if path is None or not path.exists():
         raise HTTPException(404, f"No reasoning for {article_id}")
     return json.loads(path.read_text())

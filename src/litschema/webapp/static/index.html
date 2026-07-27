@@ -2711,7 +2711,7 @@ e.g. year >= 2024 && study_types.includes("review")'
           </div>
         </div>
         <div class="review-actions" id="review-actions">
-          <div class="view-mode-toggle data-mode-toggle" aria-label="Overview display mode">
+          <div class="view-mode-toggle data-mode-toggle" aria-label="Data display mode">
             <button class="view-mode-btn active" id="data-mode-table" data-data-mode="table" type="button">Table</button>
             <button class="view-mode-btn" id="data-mode-json" data-data-mode="json" type="button">JSON</button>
           </div>
@@ -2755,6 +2755,9 @@ const state = {
   viewMode: "review",
   dataMode: "table",
   currentId: null,
+  // The run the open document was loaded from; every read and write for it
+  // names this id rather than re-resolving whatever is active at the time.
+  currentRunId: null,
   markdown: null,
   extraction: null,
   reasoning: null,
@@ -2777,8 +2780,11 @@ const state = {
 };
 
 function initialViewMode() {
+  // Only `data` (and the legacy `json`) select the data view. Listing "review"
+  // among them sent `?view=review` — a link explicitly asking for review — to
+  // the data view instead.
   const mode = new URLSearchParams(window.location.search).get("view");
-  return ["review", "data"].includes(mode) || mode === "json" ? "data" : "review";
+  return mode === "data" || mode === "json" ? "data" : "review";
 }
 
 function initialDataMode() {
@@ -2950,6 +2956,7 @@ async function applyRoute() {
     return;
   }
   state.currentId = null;
+  state.currentRunId = null;
   const select = $("#article-select");
   if (select) select.value = "";
   showOverview();
@@ -3412,6 +3419,10 @@ function populateDropdown() {
     // return to the welcome screen rather than leaving stale content up.
     select.value = "";
     state.currentId = null;
+    state.currentRunId = null;
+    // Route to the overview rather than only swapping panels, so the URL and
+    // what is on screen agree — a reload here reopened the old document.
+    window.location.hash = "#/";
     showOverview();
   }
 
@@ -3443,6 +3454,7 @@ $("#article-select").addEventListener("change", (e) => {
 
 async function loadArticle(id) {
   state.currentId = id;
+  state.currentRunId = null;
   state.selectedPath = null;
   state.editingPath = null;
   updateSelectedFieldBar(null);
@@ -3466,10 +3478,19 @@ async function loadArticle(id) {
   const summary = state.articles.find(a => a.article_id === id);
   const hasExtraction = !summary || summary.has_extraction !== false;
 
+  // Pin the run for this document, once, and read AND write through it. The
+  // reads used to resolve the active run server-side on each request while the
+  // writes used this cached id, so re-extracting in another terminal while the
+  // page was open showed the new run and filed the reviews against the old one.
+  state.currentRunId = summary ? summary.active_run_id || null : null;
+  const runQuery = state.currentRunId ? `?run_id=${encodeURIComponent(state.currentRunId)}` : "";
+
   const [mdData, extraction, reasoningData, annData, bibData] = await Promise.all([
     fetchJson(`/api/markdown/${id}`).catch(() => null),
-    hasExtraction ? fetchJson(`/api/article/${id}`) : Promise.resolve(null),
-    hasExtraction ? fetchJson(`/api/reasoning/${id}`).catch(() => null) : Promise.resolve(null),
+    hasExtraction ? fetchJson(`/api/article/${id}${runQuery}`) : Promise.resolve(null),
+    hasExtraction
+      ? fetchJson(`/api/reasoning/${id}${runQuery}`).catch(() => null)
+      : Promise.resolve(null),
     hasExtraction
       ? fetchAnnotations(id).catch(() => ({ annotations: [], review_error: null }))
       : Promise.resolve({ annotations: [], review_error: null }),
@@ -4737,11 +4758,18 @@ function reasoningFor(path) {
   }
 }
 
+// Mirrors `effective_extraction` in reviews.py. The two must agree exactly:
+// this is what the reviewer approves, and that is what gets exported.
 function effectiveExtraction() {
   if (!state.extraction) return null;
   const data = JSON.parse(JSON.stringify(state.extraction));
-  for (const [path, ann] of Object.entries(state.annotations)) {
-    if (!isOverridden(ann)) continue;
+  // Shallowest path first, as the backend does. Applying a container override
+  // after a leaf override inside it would otherwise discard the leaf, and
+  // Object.entries order depends on the order writes happened to arrive.
+  const overrides = Object.entries(state.annotations)
+    .filter(([, ann]) => isOverridden(ann))
+    .sort((a, b) => pathToParts(a[0]).length - pathToParts(b[0]).length);
+  for (const [path, ann] of overrides) {
     if (isRemoved(ann)) removeValueAtPath(data, path);
     else applyCorrectedValue(data, path, overrideValue(ann));
   }
@@ -4768,7 +4796,11 @@ function removeValueAtPath(obj, path) {
     if (current === null || current === undefined) return;
   }
   const last = parts[parts.length - 1];
-  if (Array.isArray(current)) current.splice(Number(last), 1);
+  // A removed array element becomes a null tombstone, never a splice. Splicing
+  // renumbers every later element, so the reviewer's next click lands on a
+  // different element than the one they are looking at — and the export, which
+  // tombstones, disagrees with what they approved.
+  if (Array.isArray(current)) current[Number(last)] = null;
   else delete current[last];
 }
 
@@ -6089,8 +6121,11 @@ function annotationEntry(path, extra = {}) {
   return entry;
 }
 
-// Reviews bind to one immutable run, so every read and write names it.
+// Reviews bind to one immutable run, so every read and write names it. For the
+// open document that is the run pinned when it was loaded — not whatever is
+// active now — so annotations always land on the payload actually on screen.
 function activeRunId(articleId = state.currentId) {
+  if (articleId === state.currentId && state.currentRunId) return state.currentRunId;
   const meta = state.articles.find(a => a.article_id === articleId);
   return meta ? meta.active_run_id : null;
 }
@@ -6376,6 +6411,11 @@ async function clearVerifiedScope(basePath = null) {
   }
   renderExtractionPanel();
   updateStats();
+  // Same contract as bulkVerifyPaths: success is visible in the controls that
+  // changed, failure has to be said. A later successful clear resets
+  // save-status, so a partial failure otherwise finishes looking clean.
+  const failed = paths.length - cleared;
+  if (failed) setSaveStatus(`${failed} of ${paths.length} fields failed to clear`, "error");
 }
 
 function rowCellPaths(rowPath) {

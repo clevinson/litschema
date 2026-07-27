@@ -73,7 +73,6 @@ def test_verifier_overview_and_json_use_effective_post_edit_values() -> None:
 
     assert "effectiveExtraction" in html
     assert "applyCorrectedValue" in html
-    assert "if (!isOverridden(ann)) continue;" in html
     assert "removeValueAtPath" in html
     assert "renderDataView(effectiveExtraction())" in html
     assert "renderJsonView(effectiveExtraction())" in html
