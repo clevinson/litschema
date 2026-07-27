@@ -21,6 +21,15 @@ Needs playwright, which is not a project dependency, so it runs on demand:
 
 Targets are derived from whatever the project contains rather than hard-coded,
 so pointing it at another project exercises that project's documents.
+
+This file is where the verifier's *behavioural* claims are pinned.
+`tests/test_verifier_static.py` asserts that certain strings appear in
+index.html, which cannot detect any of the defects it nominally guards — it
+passed through a v1 status key that made every field render unreviewed, a
+temporal dead zone that killed the settings button, and a routing bug that sent
+`?view=review` to the data view. Claims about what the app *does* belong here;
+claims about what it *contains* (a removed surface staying removed) can stay
+there.
 """
 
 from __future__ import annotations
@@ -188,6 +197,23 @@ def run_flow(harness: Harness) -> None:
         check("lists every document", rows.count() == len(articles),
               f"{rows.count()} rows, {len(articles)} articles")
 
+        unextracted = [a for a in articles if a.get("has_extraction") is False]
+        if unextracted:
+            row = page.locator(
+                f'#overview-rows tr[data-article="{unextracted[0]["article_id"]}"]'
+            )
+            check("an unextracted document is listed, not hidden", row.count() == 1)
+            check("and reads as not extracted", "not extracted" in row.inner_text().lower(),
+                  row.inner_text().replace("\n", " ")[:70])
+
+        print("\n[document-scoped controls belong to the document]")
+        hidden_on_overview = [
+            sel for sel in ("#article-select", "#stat-citations")
+            if page.locator(sel).count() and page.locator(sel).first.is_visible()
+        ]
+        check("document controls are hidden on the overview", not hidden_on_overview,
+              ", ".join(hidden_on_overview))
+
         print("\n[open a document]")
         page.locator(f'#overview-rows tr[data-article="{article}"]').click()
         page.wait_for_selector("#panels", state="visible", timeout=20000)
@@ -197,6 +223,40 @@ def run_flow(harness: Harness) -> None:
         check("document is pinned to one run",
               bool(page.evaluate("() => state.currentRunId")),
               str(page.evaluate("() => state.currentRunId")))
+        check("document controls appear with the document",
+              page.locator("#article-select").first.is_visible())
+
+        print("\n[the document says what produced it]")
+        run_meta = next(a for a in articles if a["article_id"] == article).get("active_run") or {}
+        chip = page.locator("#run-chip").first
+        if chip.count():
+            # The chip reads as the model; the opaque run id and the rest of the
+            # provenance are on demand, in its tooltip.
+            text = chip.inner_text()
+            tooltip = chip.get_attribute("title") or ""
+            if run_meta.get("model"):
+                check("chip names the model", run_meta["model"] in text, f"{text!r}")
+            check("run id is available but not shouted",
+                  run_meta.get("run_id", "") in tooltip and run_meta.get("run_id", "") not in text,
+                  tooltip.replace("\n", " | ")[:90])
+            for label in ("effort", "provider", "created_at"):
+                if run_meta.get(label):
+                    check(f"tooltip carries {label}", str(run_meta[label]) in tooltip,
+                          tooltip.replace("\n", " | ")[:90])
+        else:
+            check("provenance chip present", False, "no run chip rendered")
+
+        print("\n[there is a way back]")
+        exit_control = page.locator("#back-to-overview, .back-to-overview, [data-route='overview']")
+        check("document offers a marked exit", exit_control.count() > 0)
+        if exit_control.count():
+            exit_control.first.click()
+            page.wait_for_timeout(900)
+            check("exit returns to the overview", page.url.rstrip("/").endswith("#/")
+                  or page.locator("#overview-route").is_visible(), page.url)
+            page.goto(f"{base}/#/doc/{article}", wait_until="networkidle")
+            page.wait_for_selector("#panels", state="visible", timeout=20000)
+            page.wait_for_timeout(900)
 
         print("\n[deep links honour the view they name]")
         for view, expected in (("review", "review"), ("data", "data")):
@@ -342,6 +402,47 @@ def run_flow(harness: Harness) -> None:
                 page.mouse.move(5, 5)
                 page.wait_for_timeout(300)
 
+        print("\n[a bulk action that succeeds says nothing]")
+        # Success is visible in every control that changed; only failure is
+        # stated. A count on success is chatter that has to be dismissed.
+        status_text = page.locator("#save-status").inner_text().strip()
+        check("no success chatter after bulk verify", status_text == "", status_text[:60])
+
+        print("\n[a bulk action that fails says so]")
+        # Break the write path, then bulk-verify a section. Silence here is the
+        # failure mode that matters: the section looks done and is not.
+        page.route("**/api/annotations/**", lambda route: route.abort()
+                   if route.request.method == "PUT" else route.continue_())
+        broken = next((i for i in range(toggles.count()) if not toggles.nth(i).is_disabled()), None)
+        if broken is not None:
+            toggles.nth(broken).click()
+            page.wait_for_timeout(2500)
+            failed_text = page.locator("#save-status").inner_text()
+            check("failure is reported", "fail" in failed_text.lower(), failed_text[:70])
+            check("and marked as an error, not neutral chatter",
+                  page.locator("#save-status").get_attribute("data-status") == "error",
+                  str(page.locator("#save-status").get_attribute("data-status")))
+        page.unroute("**/api/annotations/**")
+
+        print("\n[clear-arming follows the pointer, not the write]")
+        # The control the pointer is on when it becomes verified must not clear
+        # on the very next click; one it never touched must.
+        fresh = next((p for p in strings if p not in stored()), None)
+        if fresh:
+            btn = page.locator(f'button.field-status[data-path="{fresh}"]').first
+            btn.click()
+            page.wait_for_timeout(1200)
+            btn.click()  # pointer never left: this click must not undo it
+            page.wait_for_timeout(1200)
+            check("the click that verified a field cannot immediately undo it",
+                  fresh in stored(), json.dumps(sorted(stored()))[:80])
+            page.mouse.move(5, 5)
+            page.wait_for_timeout(400)
+            btn.click()  # pointer left and came back: now it clears
+            page.wait_for_timeout(1200)
+            check("it clears once the pointer has left and returned",
+                  fresh not in stored(), json.dumps(sorted(stored()))[:80])
+
         print("\n[attribution is optional]")
         anon = [v for v in stored().values() if "reviewer" not in v]
         check("anonymous reviews saved without a reviewer", len(anon) > 0, f"{len(anon)} entries")
@@ -364,7 +465,10 @@ def run_flow(harness: Harness) -> None:
               status_class(page, target))
 
         print("\n[console]")
-        real = [e for e in page_errors if "favicon" not in e.lower()]
+        # ERR_FAILED comes from the aborted requests this flow injected on
+        # purpose to prove failures are reported; it is not a page defect.
+        ignore = ("favicon", "err_failed", "failed to load resource")
+        real = [e for e in page_errors if not any(token in e.lower() for token in ignore)]
         check("no page errors", not real, "; ".join(real[:3])[:200])
 
         browser.close()

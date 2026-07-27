@@ -19,8 +19,16 @@ Supplying omitted values. The `add` op works end to end through the API; only
 its affordance in the document view is unbuilt.
 
 Browser coverage lives in `tests/browser_verify_flow.py`, which drives the real
-click path and asserts the resulting `review.json`. It is not in the pytest
+click path and asserts both what lands in `review.json` and what the page
+renders. It runs against a copy of a fixture project in a temp directory,
+serving it itself, so it never touches a real one. It is not in the pytest
 suite because playwright is not a project dependency.
+
+Every behavioural requirement below is pinned there. `tests/test_verifier_static.py`
+asserts only that removed surfaces stay removed: a substring in index.html
+cannot detect a control that renders but does nothing, which is how a v1 status
+key, a parse-time dead zone, and a `?view=review` routing bug all shipped past
+a green suite.
 
 `litschema verify` is the loopback-only human review application. It consumes
 active runs and run-bound reviews but does not own their storage or lifecycle.

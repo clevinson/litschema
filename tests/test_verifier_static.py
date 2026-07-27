@@ -673,10 +673,10 @@ def test_document_states_what_produced_the_extraction() -> None:
     """
     html = STATIC_HTML.read_text()
 
+    # What the chip actually renders — model in the text, run id and effort in
+    # the tooltip — is asserted against a live page in browser_verify_flow.py.
     assert 'id="run-chip"' in html
     assert "function renderRunChip(" in html
-    assert "run.model" in html
-    assert "`Run: ${run.run_id}`" in html  # tooltip only
     # Effort and timing are comparative, so they belong on the overview where
     # documents sit side by side — not in a single document's header.
     assert "function runCellHtml(" in html
@@ -760,15 +760,14 @@ def test_module_state_is_declared_before_parse_time_initialisation() -> None:
     assert html.index("let settingsState") < html.index("function renderBackfillRow(")
 
 
-def test_bulk_actions_report_only_failures() -> None:
-    """Everything a bulk action succeeded at is already on screen.
+def test_no_separate_bulk_status_surface_remains() -> None:
+    """One status slot, not two.
 
-    Verified fields turn their controls green; cleared ones revert; a field
-    left alone shows "No citation" in its own row, permanently and where the
-    decision applies. A transient tally restates all of that and, when it also
-    counted errors, hid them among intentional omissions. One rule for both
-    single and bulk actions: the control is the feedback, words are for
-    failure.
+    Whether a bulk action reports the right thing is behaviour, and
+    `tests/browser_verify_flow.py` drives it: silence on success, a stated
+    failure with `data-status="error"` when a write fails. What is checked here
+    is only that the old parallel surface is gone, so a future change cannot
+    quietly reintroduce a second place for status to live.
     """
     html = STATIC_HTML.read_text()
 
@@ -776,24 +775,5 @@ def test_bulk_actions_report_only_failures() -> None:
     assert 'id="bulk-status"' not in html
     assert "skippedBulkCount" not in html
     assert "fields cleared" not in html
-    # Failures share the one status slot rather than having their own.
-    assert "fields failed to save" in html
-    assert 'setSaveStatus(`${failed}' in html
 
 
-def test_clear_arming_is_suppressed_only_for_the_control_just_clicked() -> None:
-    """Suppression follows the pointer, not the write.
-
-    Verifying a field disarms click-to-clear on that one control, so the click
-    that verified it cannot immediately undo it. Applying the same suppression
-    to every field a bulk action wrote made each of them swallow its next
-    genuine click, because the pointer had been on the section header and never
-    touched them.
-    """
-    html = STATIC_HTML.read_text()
-
-    body = html[html.index("async function bulkVerifyPaths("):html.index("async function clearVerifiedScope(")]
-    assert "suppressClearHoverPaths" not in body
-    # The single-click path still suppresses, scoped to the clicked path.
-    toggle = html[html.index("async function toggleFieldVerification("):]
-    assert "state.suppressClearHoverPaths.add(path)" in toggle
