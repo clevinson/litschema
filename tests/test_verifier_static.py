@@ -656,10 +656,18 @@ def test_document_scoped_toolbar_controls_are_hidden_on_the_overview() -> None:
     assert "setToolbarScope(true)" in html
 
 
-def test_document_states_which_run_is_being_reviewed() -> None:
-    """Reviews bind to one immutable run, so which run is on screen is state."""
+def test_document_states_what_produced_the_extraction() -> None:
+    """Reviews bind to one immutable run, so its provenance is system state.
+
+    The run id is opaque by contract and so identifies without informing. A
+    reviewer judging a value wants the model, the effort it ran at, and when —
+    the id stays in the tooltip because run-level CLI commands take it.
+    """
     html = STATIC_HTML.read_text()
 
     assert 'id="run-chip"' in html
     assert "function renderRunChip(" in html
-    assert "Reviewing run" in html
+    assert "run.model" in html
+    assert "run.effort" in html
+    assert "run.created_at" in html
+    assert "`Run: ${run.run_id}`" in html  # tooltip only

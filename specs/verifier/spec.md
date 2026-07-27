@@ -62,9 +62,13 @@ document — the article selector, previous/next, and the view-mode toggle — a
 hidden on the overview rather than shown inert, since a visible control implies
 a context the user is not in.
 
-The document view names the run it is reviewing. Reviews bind to one immutable
-run, so which run is on screen is system state, not an implementation detail —
-particularly once more than one run can exist per article.
+The document view states what produced the extraction it is reviewing: the
+model, the effort it ran at, and when. Reviews bind to one immutable run, so
+that provenance is system state, not an implementation detail — particularly
+once more than one run can exist per article. The run identifier is opaque by
+contract and so identifies without informing; it is available on demand for the
+run-level commands that take it, but it is not what a reviewer weighing a value
+needs to see.
 
 No word names two things. The per-document render toggle switches how one
 document's *data* is displayed and is labelled accordingly; "overview" names
@@ -218,8 +222,10 @@ Implementation coverage must replace brittle source-substring assertions with:
   navigation, back/forward, and reload;
 - a marked exit from every document route, breadcrumb linking, and hiding of
   document-scoped controls on the overview;
-- the displayed run identity, and the absence of any label naming both a route
-  and a view mode;
+- displayed run provenance (model, effort, extraction time) with the opaque
+  identifier available but not foregrounded, and its absence for an
+  unextracted article;
+- the absence of any label naming both a route and a view mode;
 - silence on successful saves and a visible, persistent message on failure;
 - bulk verification of a section whose evidence is cited only on an ancestor,
   preservation of existing overrides within it, and suppression of

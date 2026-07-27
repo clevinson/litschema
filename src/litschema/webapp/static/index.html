@@ -6049,16 +6049,36 @@ async function clearAnnotation(path, options = {}) {
   }
 }
 
+function shortDate(iso) {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (isNaN(d)) return null;
+  return d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+}
+
 function renderRunChip() {
   const chip = $("#run-chip");
   if (!chip) return;
-  const runId = activeRunId();
-  if (!runId) {
+  const meta = state.articles.find(a => a.article_id === state.currentId);
+  const run = meta && meta.active_run;
+  if (!run) {
     chip.style.display = "none";
     return;
   }
-  chip.textContent = `run ${runId.slice(-6)}`;
-  chip.title = `Reviewing run ${runId}`;
+  // What produced this extraction, not which opaque id it was filed under: a
+  // reviewer judging a value wants the model and when it ran. The id is kept
+  // in the tooltip because run-level CLI commands take it.
+  const when = shortDate(run.created_at);
+  const parts = [run.model || "unknown model", run.effort, when].filter(Boolean);
+  chip.textContent = parts.join(" \u00b7 ");
+  chip.title = [
+    run.model ? `Model: ${run.model}` : "Model not recorded",
+    run.provider ? `Provider: ${run.provider}` : null,
+    run.effort ? `Effort: ${run.effort}` : null,
+    run.harness ? `Harness: ${run.harness}` : null,
+    run.created_at ? `Extracted: ${run.created_at}` : null,
+    `Run: ${run.run_id}`,
+  ].filter(Boolean).join("\n");
   chip.style.display = "inline";
 }
 

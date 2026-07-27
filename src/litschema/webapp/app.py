@@ -209,6 +209,36 @@ def _active_run_id_or_none(files: ArticleFiles) -> str | None:
         return None
 
 
+def _active_run_summary(files: ArticleFiles) -> dict | None:
+    """What produced the active extraction, for display.
+
+    The run id is opaque by contract, so it identifies but does not inform. A
+    reviewer judging an extraction wants to know what produced it and when —
+    the id is carried along only because run-level CLI commands take it.
+    """
+    from ..runs import BrokenActiveRunError, active_run
+
+    try:
+        run = active_run(files)
+    except BrokenActiveRunError:
+        return None
+    if run is None:
+        return None
+    try:
+        record = run.read_run_json()
+    except (OSError, ValueError):
+        return {"run_id": run.run_id}
+    agent = record.get("agent") or {}
+    return {
+        "run_id": run.run_id,
+        "created_at": record.get("created_at"),
+        "provider": agent.get("provider"),
+        "model": agent.get("model"),
+        "effort": agent.get("effort"),
+        "harness": agent.get("harness"),
+    }
+
+
 def _resolved_schema(cfg: LitSchemaConfig):
     """The project schema, or None when it cannot be resolved.
 
@@ -420,6 +450,7 @@ async def list_articles(cfg: CfgDep):
                     "confidence": None,
                     "n_setups": 0,
                     "active_run_id": None,
+                    "active_run": None,
                     **_article_progress(files),
                 }
             )
@@ -435,6 +466,7 @@ async def list_articles(cfg: CfgDep):
                     "document_type": data.get("document_type"),
                     "n_setups": len(setups),
                     "active_run_id": _active_run_id_or_none(files),
+                    "active_run": _active_run_summary(files),
                     **progress,
                 }
             )

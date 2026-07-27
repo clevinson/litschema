@@ -642,3 +642,38 @@ def test_read_endpoints_404_for_an_article_without_an_active_run(tmp_path) -> No
     # The article still lists — it is work to do, not an error.
     ids = {a["article_id"] for a in client.get("/api/articles").json()["articles"]}
     assert "bare" in ids
+
+
+def test_articles_listing_describes_what_produced_the_active_run(tmp_path) -> None:
+    """Provenance the reviewer can act on, not just an opaque identifier."""
+    cfg = _project_cfg(tmp_path)
+    _write_manifest(cfg, "a", {"id": "a"})
+    run_id = _write_extraction(cfg, "a", {"article_id": "a", "title": "T"})
+    run_json = cfg.article_store_dir / "a" / "extraction-runs" / run_id / "run.json"
+    record = _json.loads(run_json.read_text())
+    record["agent"] = {
+        "harness": "claude-code",
+        "provider": "anthropic",
+        "model": "claude-sonnet-5",
+        "effort": "high",
+    }
+    run_json.write_text(_json.dumps(record))
+
+    entry = {a["article_id"]: a for a in _client(cfg).get("/api/articles").json()["articles"]}["a"]
+
+    assert entry["active_run"]["model"] == "claude-sonnet-5"
+    assert entry["active_run"]["effort"] == "high"
+    assert entry["active_run"]["created_at"] == "2026-01-01T00:00:00+00:00"
+    assert entry["active_run"]["run_id"] == run_id
+
+
+def test_articles_listing_reports_no_run_metadata_when_unextracted(tmp_path) -> None:
+    cfg = _project_cfg(tmp_path)
+    _write_manifest(cfg, "bare", {"id": "bare"})
+
+    entry = {
+        a["article_id"]: a for a in _client(cfg).get("/api/articles").json()["articles"]
+    }["bare"]
+
+    assert entry["active_run"] is None
+    assert entry["active_run_id"] is None
