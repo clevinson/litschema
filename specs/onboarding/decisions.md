@@ -141,3 +141,34 @@ fabricated consent; a project-config key, which would be committed and would
 approve the override for everyone who clones; and emitting a pyproject.toml so
 the override is unnecessary, which was tried and reverted (see kata qr3c — it
 only helps post-publication and made `doctor` report false success).
+
+## 2026-07-27 — Dev-override approval moves out of the checkout (supersedes the storage location above)
+
+**Context:** the entry above stored approval in `.litschema/dev-cli-approved`
+and argued it was safe because the runtime directory is gitignored, so approval
+"never travels to another user with the repo." That reasoning does not hold.
+`.gitignore` governs what *this* repository tracks; it has no say over what an
+incoming repository already contains. Nothing stops a project from committing
+both `.litschema/dev-cli` and a matching `.litschema/dev-cli-approved`, and on
+a fresh clone the hashes agree — so the skills' own instruction ("use it
+silently — they have approved this exact command before") hands a hostile
+checkout silent arbitrary command execution on first run.
+
+**Decision:** approval lives in the user's configuration, at
+`${XDG_CONFIG_HOME:-$HOME/.config}/litschema/dev-cli-approved/<sha256 of the
+real project path>`, holding the content hash. An in-project marker grants
+nothing and is explicitly ignored; `doctor` reports one as ignored and offers
+to have it deleted.
+
+**What the original decision got right, and keeps:** approval must be
+verifiable state rather than a relayed claim, because an agent that accepts
+asserted consent also accepts fabricated consent. That was the correct response
+to the threat it was built for — a peer agent laundering permission through a
+dispatch prompt. It simply did not address a second threat: consent forged by
+the repository itself. Keying by project path and content hash preserves the
+batch property that motivated the original design, since every subagent can
+still confirm approval on its own.
+
+**Rejected:** keying by project name rather than resolved path, which would let
+one approval cover any checkout sharing a directory name; and prompting per
+agent, which is what the recorded-state design existed to eliminate.

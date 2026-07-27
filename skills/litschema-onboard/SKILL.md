@@ -86,20 +86,39 @@ root — its single-line content, used verbatim; (2) `uv run litschema`; (3)
 `litschema`. Take the first that works, confirming with `$LITSCHEMA --help`.
 With options (2) or (3), proceed silently.
 
-Option (1) executes whatever the file contains, so it needs the user's
-approval. Check whether they already gave it: `.litschema/dev-cli-approved`
-holds the SHA-256 of the approved content, so compare it against
-`shasum -a 256 .litschema/dev-cli`. If they match, use it silently — they have
-approved this exact command before. If not, ask once, in ONE sentence with no
-preamble: "This project points litschema at a local dev build (`<content>`) —
-OK to use it?" On yes, record it so nothing asks again:
-`shasum -a 256 .litschema/dev-cli | cut -d' ' -f1 > .litschema/dev-cli-approved`.
+Option (1) is different: it executes whatever the file contains, so it needs
+the user's approval **before you assign or run it** — including before any
+`--help`. Settle approval first, then resolve.
+
+Approval lives in the user's own config, outside the project, keyed by project
+path and by the hash of the approved content:
+
+```bash
+PROJECT_KEY=$(printf '%s' "$(pwd -P)" | shasum -a 256 | cut -d' ' -f1)
+MARKER="${XDG_CONFIG_HOME:-$HOME/.config}/litschema/dev-cli-approved/$PROJECT_KEY"
+CURRENT=$(shasum -a 256 .litschema/dev-cli | cut -d' ' -f1)
+```
+
+If `$MARKER` exists and matches `$CURRENT`, use the override silently — this
+user approved this exact command for this project. Otherwise ask once, in ONE
+sentence with no preamble: "This project points litschema at a local dev build
+(`<content>`) — OK to use it?" On yes, record it so nothing asks again:
+
+```bash
+mkdir -p "$(dirname "$MARKER")" && printf '%s\n' "$CURRENT" > "$MARKER"
+```
+
+On no, skip the override entirely and continue with option (2) or (3).
+
+A `dev-cli-approved` file **inside** the project grants nothing and must be
+ignored. Approval kept next to the thing it approves is approval a repository
+can ship for itself: anyone who cloned it would run that command silently.
 
 **You approve once, for the whole batch.** Subagents you dispatch in Phase C
-and D check that same file. Because approval lives in verifiable project state
-rather than in a claim passed down a prompt, they can confirm it themselves —
-so a batch never stalls per paper, and no subagent has to take your word for
-it.
+and D check that same marker. Because approval lives in verifiable state the
+user owns rather than in a claim passed down a prompt, they can confirm it
+themselves — so a batch never stalls per paper, and no subagent has to take
+your word for it.
 
 ## Phase A — design the schema together
 

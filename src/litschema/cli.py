@@ -94,6 +94,31 @@ def _unattributed_review_count(cfg: LitSchemaConfig) -> int:
     return total
 
 
+def dev_cli_approval_path(project_root: Path) -> Path:
+    """Where this machine's user records approval of a project's dev override.
+
+    Outside the checkout, deliberately. The marker used to live beside the
+    override it approves, so a repository could commit both `.litschema/dev-cli`
+    and a matching `.litschema/dev-cli-approved` — and every agent that cloned
+    it would run that command silently, believing the user had approved it. A
+    content hash proves the file has not changed since approval; it cannot
+    prove *this user* ever approved it. Only user-owned state can.
+
+    Keyed by the real project path so approving one checkout says nothing about
+    another, and by content hash so editing the override revokes it.
+    """
+    base = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config")
+    key = hashlib.sha256(str(project_root.resolve()).encode()).hexdigest()
+    return base / "litschema" / "dev-cli-approved" / key
+
+
+def dev_cli_is_approved(project_root: Path, dev_cli: Path) -> bool:
+    marker = dev_cli_approval_path(project_root)
+    if not marker.is_file():
+        return False
+    return marker.read_text().strip() == hashlib.sha256(dev_cli.read_bytes()).hexdigest()
+
+
 def _in_git_repo(start: Path) -> bool:
     """True when ``start`` sits inside a Git working tree.
 
@@ -1042,21 +1067,27 @@ def doctor(ctx: typer.Context):
     if dev_cli.is_file():
         override = dev_cli.read_text().strip()
         typer.echo(f"{CHECK} CLI dev override (.litschema/dev-cli): {override}")
-        # Agents run this file, so it needs the user's approval, recorded as a
-        # hash they can verify rather than a claim passed to them in a prompt.
-        approved_file = cfg.project_root / ".litschema" / "dev-cli-approved"
+        # Agents run this file, so it needs the user's approval — recorded in
+        # this user's own config, not in the project, so a repository cannot
+        # ship its own approval.
+        marker = dev_cli_approval_path(cfg.project_root)
         current = hashlib.sha256(dev_cli.read_bytes()).hexdigest()
-        approved = approved_file.read_text().strip() if approved_file.is_file() else None
-        if approved == current:
+        if dev_cli_is_approved(cfg.project_root, dev_cli):
             typer.echo(f"{CHECK} dev override approved for agent use")
         else:
-            detail = "changed since approval" if approved else "not yet approved"
+            detail = "changed since approval" if marker.is_file() else "not yet approved"
             typer.echo(f"{WARN} dev override {detail} — agents will stop and ask before using it")
             issues.append(
-                "approve the dev override so agents can use it without asking per run: "
-                "`shasum -a 256 .litschema/dev-cli | cut -d' ' -f1 "
-                "> .litschema/dev-cli-approved`"
+                "if you trust this command, approve it for agent use: "
+                f"`mkdir -p {marker.parent} && echo {current} > {marker}`"
             )
+        stale = cfg.project_root / ".litschema" / "dev-cli-approved"
+        if stale.exists():
+            typer.echo(
+                f"{WARN} {stale} is ignored — approval now lives in your own config, "
+                f"because a checkout could otherwise approve itself"
+            )
+            issues.append(f"delete {stale}; it no longer grants anything")
     elif legacy_dev_cli.is_file():
         typer.echo(f"{WARN} legacy .litschema/cli found — agent skills now read .litschema/dev-cli")
         issues.append("rename .litschema/cli to .litschema/dev-cli")
