@@ -675,3 +675,22 @@ def test_leaf_paths_excludes_empty_containers() -> None:
         "scalar",
         "n.a",
     ]
+
+
+def test_the_browser_flow_fixture_records_its_own_schema_hash() -> None:
+    """Keep the fixture a state the product can actually produce.
+
+    The verifier refuses to type edits for a run whose recorded schema hash no
+    longer matches the project's. If this fixture drifts, the browser flow
+    fails with 409s that look like a product bug rather than a stale fixture.
+    """
+    import hashlib
+
+    root = Path(__file__).resolve().parent / "fixtures" / "projects" / "verifier_flow"
+    expected = "sha256:" + hashlib.sha256((root / "schema" / "extraction.yaml").read_bytes()).hexdigest()
+
+    recorded = {p: json.loads(p.read_text())["schema_hash"] for p in root.rglob("run.json")}
+
+    assert recorded, "the fixture has no published runs"
+    stale = {str(p.relative_to(root)): h for p, h in recorded.items() if h != expected}
+    assert not stale, f"re-record schema_hash as {expected} in: {sorted(stale)}"
