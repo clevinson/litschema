@@ -133,6 +133,24 @@ If `schema/extraction.yaml` already defines real fields beyond the scaffold
    `description` on every slot) and `domain_context.md` (the review question,
    what's in and out of scope, extraction guidance, tricky cases you noticed
    while skimming).
+
+   **Nested repeating structures need `inlined_as_list: true`.** When a
+   multivalued slot's range is another class you define here — experiments,
+   treatments, measurements, sites — add it to that slot:
+
+   ```yaml
+   treatments:
+     range: Treatment
+     multivalued: true
+     inlined_as_list: true    # store whole objects, not just their ids
+   ```
+
+   Without it, LinkML stores only each object's identifier if the class has
+   one, and every other attribute you defined on it silently has nowhere to
+   go. Extractions still validate, so nothing complains — the data is just
+   missing. If you would rather not think about it, leave `identifier: true`
+   off nested classes entirely; it is only needed when something must refer to
+   an item by id.
 5. **Validate (silently).** Resolve `$LITSCHEMA` now if you haven't (see
    "Resolving the litschema command" above — this is where the dev-cli
    confirmation, if any, belongs). Run

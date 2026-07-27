@@ -200,3 +200,29 @@ overloading `replace` to reach absent paths, which would make human-supplied
 values indistinguishable from agent corrections without diffing the run;
 hand-authoring nested structure through inline tree editing rather than a
 form over the item class; and positional matching of added elements across runs.
+
+
+## 2026-07-26 — Version 2 lands; the wire shape is the stored shape
+
+**Context:** version 1 keyed entries by author with `signal: verified|flagged`
+and carried an extraction-hash staleness stamp. The API spoke a third
+vocabulary again (`status`/`reviewer`/`correct_value`) with a translation layer
+bridging it to storage for a single consumer, our own frontend.
+
+**Decision:** version 2 ships as specified. Verification is an empty object;
+`override` carries replace/remove/add; a note never changes state. Run binding
+replaces staleness entirely, because a review now binds to a payload that
+cannot change. The HTTP surface uses the spec's own names, so the translation
+layer is deleted rather than ported — a reader of this spec sees the same
+words on the wire. Reads and writes name their run explicitly, so switching the
+active run can never silently retarget an edit in progress.
+
+Corrupt review state is explicit everywhere: the API returns
+`annotations: null` with a `review_error` rather than an empty list, because an
+empty list reads as "nothing reviewed yet" — a materially different and more
+reassuring claim than "we cannot tell what was reviewed".
+
+**Rejected:** migrating version-1 files, which the alpha policy forbids and
+which would require guessing whether a `flagged` entry meant an override or a
+note; keeping the API's historical field names behind a mapping layer; and
+reporting corrupt reviews as zero counts.

@@ -39,18 +39,13 @@ def test_loader_reads_per_article_folder_and_review_json(
             "sample_size": 12,
         },
     )
-    (paper_dir / "review.json").write_text(
+    from .helpers import TEST_RUN_ID
+
+    (paper_dir / "extraction-runs" / TEST_RUN_ID / "review.json").write_text(
         json.dumps(
             {
-                "version": 1,
-                "fields": {
-                    "sample_size": {
-                        "author": "0000-0002-1825-0097",
-                        "signal": "flagged",
-                        "timestamp": "2026-05-05T00:00:00+00:00",
-                        "override_value": 18,
-                    }
-                },
+                "version": 2,
+                "fields": {"sample_size": {"override": {"op": "replace", "value": 18}}},
             }
         )
         + "\n"

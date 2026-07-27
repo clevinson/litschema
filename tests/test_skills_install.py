@@ -186,3 +186,14 @@ def test_skill_setup_gates_resolve_cli_with_dev_override() -> None:
     assert "not approval" in extract
     # The conductor approves once for a whole batch rather than per paper.
     assert "approve once" in onboard.lower()
+
+
+def test_onboard_teaches_inlining_for_nested_repeating_structures() -> None:
+    """The trap is prevented where schemas are authored, not only detected later."""
+    onboard = (REPO_ROOT / "skills" / "litschema-onboard" / "SKILL.md").read_text()
+
+    assert "inlined_as_list: true" in onboard
+    # Stated in the schema-drafting phase, before validation runs.
+    assert onboard.index("inlined_as_list") < onboard.index("**Validate (silently)")
+    # Names the consequence, not just the incantation.
+    assert "silently has nowhere" in onboard

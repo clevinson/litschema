@@ -21,11 +21,9 @@ from linkml_runtime.utils.schemaview import SchemaView
 
 from ..articles import (
     article_files,
-    article_id_from_extraction_path,
-    iter_active_extraction_paths,
 )
 from ..config import LitSchemaConfig
-from ..reviews import read_reviews
+from ..reviews import effective_extraction, read_reviews
 from ..schema_resolution import resolve_extraction_schema
 
 
@@ -58,63 +56,6 @@ def _parse_path(path: str) -> list[str | int]:
 #: Reviewer sentinel meaning "this field should not exist" (see
 #: specs/reviews/spec.md) — applied as a field removal, never as a value.
 REMOVE_SENTINEL = "__remove__"
-
-
-def _apply_override(record: dict, path: str, value: Any) -> bool:
-    """Set record at path to value (or remove the field for the sentinel).
-
-    Returns False on path-resolve failure.
-    """
-    segs = _parse_path(path)
-    if not segs:
-        return False
-    cur: Any = record
-    for seg in segs[:-1]:
-        try:
-            cur = cur[seg]
-        except (KeyError, IndexError, TypeError):
-            return False
-    last = segs[-1]
-    try:
-        if value == REMOVE_SENTINEL:
-            if isinstance(cur, dict):
-                cur.pop(last, None)
-            elif isinstance(cur, list) and isinstance(last, int) and last < len(cur):
-                cur[last] = None
-            return True
-        cur[last] = value
-        return True
-    except (KeyError, IndexError, TypeError):
-        return False
-
-
-def _build_override_map(cfg: LitSchemaConfig) -> dict[str, list[dict]]:
-    """{article_id: [{path, value}, ...]} — one override max per field path."""
-    by_article: dict[str, list[dict]] = {}
-    for extraction_path in iter_active_extraction_paths(cfg):
-        article_id = article_id_from_extraction_path(extraction_path)
-        fields = read_reviews(article_files(cfg, article_id))
-        overrides = [
-            {"path": path, "value": entry["override_value"]}
-            for path, entry in fields.items()
-            if "override_value" in entry
-        ]
-        if overrides:
-            by_article[article_id] = overrides
-    return by_article
-
-
-def _apply_overrides_to_extraction(
-    extraction: dict,
-    overrides: list[dict],
-) -> tuple[dict, int]:
-    """Apply review overrides (order is immaterial: one entry per field path)."""
-    record = json.loads(json.dumps(extraction))  # deep copy
-    count = 0
-    for override in overrides:
-        if _apply_override(record, override["path"], override["value"]):
-            count += 1
-    return record, count
 
 
 # ── Schema-driven column-shape derivation ──────────────────────────────────
@@ -312,24 +253,34 @@ def load_reviewed_records(
     single definition of "reviewed records" shared by the explore store and
     ``litschema export``.
     """
-    override_map = _build_override_map(cfg)
+    from ..articles import iter_metadata_paths
+    from ..runs import BrokenActiveRunError, active_run
+
     records: list[dict] = []
     reviews_applied = 0
     overrides_applied = 0
-    for ext_path in iter_active_extraction_paths(cfg):
-        article_id = article_id_from_extraction_path(ext_path)
-        data = json.loads(ext_path.read_text())
-        if data.get("error"):
+    for metadata_path in iter_metadata_paths(cfg):
+        article_id = metadata_path.parent.name
+        try:
+            run = active_run(article_files(cfg, article_id))
+        except BrokenActiveRunError:
+            raise
+        if run is None:
             continue
-        # Honor either an in-record id or fall back to filename stem when
+        raw = json.loads(run.extraction.read_text())
+        if raw.get("error"):
+            continue
+        # The overlay is defined by specs/reviews/spec.md and applied there;
+        # a corrupt review must not silently degrade to raw values.
+        fields = read_reviews(run)
+        data = effective_extraction(run, fields) if fields else raw
+        if fields:
+            reviews_applied += 1
+            overrides_applied += sum(1 for e in fields.values() if e.get("override"))
+        # Honor either an in-record id or fall back to the directory name when
         # the schema's id_slot isn't `article_id`.
         if id_slot and id_slot not in data:
             data[id_slot] = article_id
-        overrides = override_map.get(article_id) or []
-        if overrides:
-            data, applied = _apply_overrides_to_extraction(data, overrides)
-            reviews_applied += 1
-            overrides_applied += applied
         records.append(data)
     return records, reviews_applied, overrides_applied
 

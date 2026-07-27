@@ -1,6 +1,6 @@
 # Capability: reviews
 
-Status: approved target.
+Status: partially current.
 
 A review is a compact, run-bound overlay on immutable extracted data. This spec
 owns exact-path entries, effective review state, hierarchy, canonical storage,
@@ -9,18 +9,14 @@ conflicting edits.
 
 ## Implementation status
 
-None of this spec ships yet. A version-1 review model is live at the article
-root (`review.json` beside the extraction) with a different entry shape —
-`{author, signal: verified|flagged, timestamp, base_extraction_sha256?}` plus
-optional `override_value`/`note`/`source`/`batch_id`, and an
-extraction-hash staleness guard. Version 2 below replaces that model rather
-than extending it: the legacy keys become invalid, verification becomes an
-empty object, overrides move under an `override` key, and staleness is
-superseded by run binding.
+Live today: the stored model, effective state, canonical hierarchy, the `add`
+op, subtree unreview, corrupt handling, and the run-explicit annotation API.
+Version 1 is gone rather than migrated — its keys are rejected as corrupt.
 
-The 0.1.0 scope, tracked by `2gd1` (blocked on `tdv3`), is the stored model
-and its user surface: entries, effective state, hierarchy, add, subtree
-unreview, corrupt handling, and the annotation API.
+Pending: the verifier frontend still speaks the version-1 vocabulary
+(verified/flagged) and has not been rebuilt against these endpoints, so
+in-browser review editing does not work until `ka84` lands. Every other
+consumer — export, the explore store, progress aggregation — reads v2.
 
 ## Stored model
 

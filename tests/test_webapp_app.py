@@ -32,6 +32,30 @@ def _write_manifest(cfg: LitSchemaConfig, article_id: str, manifest: dict) -> No
     article_dir.mkdir(parents=True, exist_ok=True)
     (article_dir / "article-metadata.json").write_text(_json.dumps(manifest))
 
+_RUN_SEQ = itertools.count()
+
+
+def _client(cfg) -> TestClient:
+    webapp.app.dependency_overrides[webapp.get_config] = lambda: cfg
+    return TestClient(webapp.app)
+
+
+def teardown_function() -> None:
+    webapp.app.dependency_overrides.clear()
+
+
+def _write_extraction(cfg, article_id: str, extraction: dict, reasoning: dict | None = None) -> str:
+    """Publish a fresh run for the article; repeat calls model re-extraction."""
+    from .helpers import publish_test_run
+
+    article_dir = cfg.article_store_dir / article_id
+    article_dir.mkdir(parents=True, exist_ok=True)
+    run_id = f"01TESTRUN{next(_RUN_SEQ):015d}XX"
+    publish_test_run(article_dir, extraction, reasoning=reasoning, run_id=run_id)
+    return run_id
+
+
+
 
 def test_article_meta_returns_provenance_and_editability(tmp_path) -> None:
     cfg = _project_cfg(tmp_path)
@@ -156,196 +180,6 @@ def test_main_honors_port_argument(monkeypatch, tmp_path) -> None:
     assert runs == [((webapp.app,), {"host": "127.0.0.1", "port": 8017})]
 
 
-def test_annotation_from_entry_maps_spec_names_to_api_names() -> None:
-    entry = {
-        "author": "0000-0002-1825-0097",
-        "signal": "flagged",
-        "timestamp": "t1",
-        "override_value": "6.5",
-        "note": "n",
-    }
-
-    ann = webapp._annotation_from_entry("experiments[0].ph", entry)
-
-    assert ann == {
-        "path": "experiments[0].ph",
-        "status": "flagged",
-        "reviewer": "0000-0002-1825-0097",
-        "timestamp": "t1",
-        "correct_value": "6.5",
-        "note": "n",
-    }
-
-
-def _client(cfg: LitSchemaConfig) -> TestClient:
-    webapp.app.dependency_overrides[webapp.get_config] = lambda: cfg
-    return TestClient(webapp.app)
-
-
-def teardown_function() -> None:
-    webapp.app.dependency_overrides.clear()
-
-
-_RUN_SEQ = itertools.count()
-
-
-def _write_extraction(cfg, article_id: str, extraction: dict, reasoning: dict | None = None) -> None:
-    """Publish a fresh run for the article; repeat calls model re-extraction."""
-    from .helpers import publish_test_run
-
-    article_dir = cfg.article_store_dir / article_id
-    article_dir.mkdir(parents=True, exist_ok=True)
-    run_id = f"01TESTRUN{next(_RUN_SEQ):015d}XX"
-    publish_test_run(article_dir, extraction, reasoning=reasoning, run_id=run_id)
-
-
-def test_put_annotation_round_trip_via_review_json(tmp_path) -> None:
-    cfg = _project_cfg(tmp_path)
-    _write_extraction(cfg, "a", {"article_id": "a", "title": "T"})
-    client = _client(cfg)
-
-    resp = client.put(
-        "/api/annotations/a",
-        json={"path": ".title", "status": "flagged",
-              "reviewer": "0000-0002-1825-0097", "correct_value": "Better"},
-    )
-    assert resp.status_code == 200
-
-    # storage uses the spec shape: one entry object per field path...
-    on_disk = _json.loads((cfg.article_store_dir / "a" / "review.json").read_text())
-    entry = on_disk["fields"]["title"]
-    assert isinstance(entry, dict)
-    assert entry["signal"] == "flagged"
-    assert entry["author"] == "0000-0002-1825-0097"
-    assert entry["override_value"] == "Better"
-    assert "status" not in entry and "correct_value" not in entry
-
-    # ...while the API keeps its historical shape
-    anns = client.get("/api/annotations/a").json()["annotations"]
-    (ann,) = anns
-    assert ann["path"] == "title"
-    assert ann["status"] == "flagged"
-    assert ann["reviewer"] == "0000-0002-1825-0097"
-    assert ann["correct_value"] == "Better"
-
-
-def test_delete_annotation_clears_review_json(tmp_path) -> None:
-    cfg = _project_cfg(tmp_path)
-    _write_extraction(cfg, "a", {"article_id": "a", "title": "T"})
-    client = _client(cfg)
-    client.put("/api/annotations/a", json={"path": ".title", "status": "verified", "reviewer": ""})
-
-    assert client.delete("/api/annotations/a/title").status_code == 200
-    assert client.get("/api/annotations/a").json()["annotations"] == []
-    assert not (cfg.article_store_dir / "a" / "review.json").exists()
-
-
-def test_put_annotation_replaces_across_reviewers(tmp_path) -> None:
-    cfg = _project_cfg(tmp_path)
-    _write_extraction(cfg, "a", {"article_id": "a", "title": "T"})
-    client = _client(cfg)
-    reviewer_a = "0000-0002-1825-0097"
-    reviewer_b = "0000-0001-5109-3700"
-    client.put(
-        "/api/annotations/a", json={"path": "title", "status": "flagged", "reviewer": reviewer_a}
-    )
-    client.put(
-        "/api/annotations/a", json={"path": "title", "status": "verified", "reviewer": reviewer_b}
-    )
-
-    # one review per field: B's save replaced A's, author records the attribution
-    anns = client.get("/api/annotations/a").json()["annotations"]
-    (ann,) = anns
-    assert ann["reviewer"] == reviewer_b
-    assert ann["status"] == "verified"
-
-    # clearing removes THE entry, whoever wrote it
-    assert client.delete("/api/annotations/a/title").status_code == 200
-    assert client.get("/api/annotations/a").json()["annotations"] == []
-
-
-def test_put_annotation_validation_refuses_bad_input(tmp_path) -> None:
-    cfg = _project_cfg(tmp_path)
-    _write_extraction(cfg, "a", {"article_id": "a", "title": "T"})
-    client = _client(cfg)
-
-    ok = {"path": "title", "status": "verified", "reviewer": ""}
-    assert client.put("/api/annotations/a", json=[ok]).status_code == 400  # array body
-    assert client.put("/api/annotations/a", json={**ok, "path": 5}).status_code == 400
-    assert client.put("/api/annotations/a", json={"status": "verified"}).status_code == 400
-    assert client.put("/api/annotations/a", json={"path": "title"}).status_code == 400
-    assert (
-        client.put("/api/annotations/a", json={**ok, "status": "cleared"}).status_code == 400
-    )
-    # Flags need a reviewer, and any reviewer given must be a real ORCID.
-    assert (
-        client.put(
-            "/api/annotations/a", json={"path": "title", "status": "flagged", "reviewer": ""}
-        ).status_code
-        == 400
-    )
-    assert client.put("/api/annotations/a", json={**ok, "reviewer": "bob"}).status_code == 400
-    # ORCID URL forms normalize to the bare id.
-    resp = client.put(
-        "/api/annotations/a",
-        json={**ok, "reviewer": "https://orcid.org/0000-0002-1825-0097"},
-    )
-    assert resp.status_code == 200
-    assert resp.json()["reviewer"] == "0000-0002-1825-0097"
-
-
-def test_annotation_writes_refuse_corrupt_review_json_with_409(tmp_path) -> None:
-    cfg = _project_cfg(tmp_path)
-    _write_extraction(cfg, "a", {"article_id": "a", "title": "T"})
-    review_path = cfg.article_store_dir / "a" / "review.json"
-    review_path.write_text("{not json")
-    client = _client(cfg)
-
-    put = client.put(
-        "/api/annotations/a", json={"path": "title", "status": "verified", "reviewer": ""}
-    )
-    delete = client.delete("/api/annotations/a/title")
-
-    assert put.status_code == 409
-    assert delete.status_code == 409
-    assert review_path.read_text() == "{not json"  # evidence intact, file not deleted
-    assert client.get("/api/annotations/a").json()["annotations"] == []  # reads stay lenient
-
-
-def test_delete_annotation_requires_a_field_path(tmp_path) -> None:
-    cfg = _project_cfg(tmp_path)
-    _write_extraction(cfg, "a", {"article_id": "a", "title": "T"})
-    client = _client(cfg)
-
-    assert client.delete("/api/annotations/a/").status_code == 400
-    assert client.delete("/api/annotations/a/%2E").status_code == 400  # dots-only path
-
-
-def test_get_annotations_base_stale_false_on_fresh_write(tmp_path) -> None:
-    cfg = _project_cfg(tmp_path)
-    _write_extraction(cfg, "a", {"article_id": "a", "title": "T"})
-    client = _client(cfg)
-
-    # no reviews yet -> no stamp -> not stale
-    assert client.get("/api/annotations/a").json()["base_stale"] is False
-
-    client.put("/api/annotations/a", json={"path": "title", "status": "verified", "reviewer": ""})
-    assert client.get("/api/annotations/a").json()["base_stale"] is False
-
-
-def test_get_annotations_base_stale_true_after_extraction_changes(tmp_path) -> None:
-    cfg = _project_cfg(tmp_path)
-    _write_extraction(cfg, "a", {"article_id": "a", "title": "T"})
-    client = _client(cfg)
-    client.put("/api/annotations/a", json={"path": "title", "status": "verified", "reviewer": ""})
-
-    _write_extraction(cfg, "a", {"article_id": "a", "title": "T (re-extracted)"})
-
-    body = client.get("/api/annotations/a").json()
-    assert body["base_stale"] is True
-    assert body["annotations"]  # annotations still served alongside the warning
-
-
 def test_list_articles_includes_assembled_but_unextracted(tmp_path) -> None:
     cfg = _project_cfg(tmp_path)
     _write_manifest(
@@ -373,9 +207,8 @@ def test_list_articles_includes_assembled_but_unextracted(tmp_path) -> None:
     assert noext["n_fields"] == 0
     assert noext["n_reviewed"] == 0
     assert noext["n_verified"] == 0
-    assert noext["n_flagged"] == 0
+    assert noext["n_overridden"] == 0
     assert noext["is_complete"] is False
-    assert noext["has_flags"] is False
     assert by_id["ext"]["has_extraction"] is True
     assert by_id["ext"]["title"] == "Extracted Title"
 
@@ -619,3 +452,127 @@ def test_sync_bibliography_error_paths(tmp_path, monkeypatch) -> None:
     assert client.post("/api/bibliography/ghost/sync").status_code == 404
     assert client.post("/api/bibliography/no-doi/sync").status_code == 400
     assert client.post("/api/bibliography/gone/sync").status_code == 502
+
+
+# ── run-explicit annotation API (v2) ─────────────────────────────────────────
+
+
+def _article_with_run(cfg, article_id="a", extraction=None):
+    _write_manifest(cfg, article_id, {"id": article_id})
+    payload = extraction or {"article_id": article_id, "title": "T", "ph": 6.1}
+    return _write_extraction(cfg, article_id, payload)
+
+
+def test_annotation_round_trip_is_run_explicit(tmp_path) -> None:
+    cfg = _project_cfg(tmp_path)
+    run_id = _article_with_run(cfg)
+    client = _client(cfg)
+
+    put = client.put(
+        f"/api/annotations/a/{run_id}",
+        json={"path": "ph", "override": {"op": "replace", "value": 6.5}, "note": "table 2"},
+    )
+    assert put.status_code == 200, put.text
+    assert put.json()["state"] == "overridden"
+
+    got = client.get(f"/api/annotations/a/{run_id}").json()
+    assert got["run_id"] == run_id
+    assert got["review_error"] is None
+    assert got["annotations"] == [
+        {"path": "ph", "state": "overridden", "override": {"op": "replace", "value": 6.5},
+         "note": "table 2"}
+    ]
+
+
+def test_verify_is_an_empty_entry_not_a_status(tmp_path) -> None:
+    cfg = _project_cfg(tmp_path)
+    run_id = _article_with_run(cfg)
+    client = _client(cfg)
+
+    client.put(f"/api/annotations/a/{run_id}", json={"path": "title"})
+
+    annotation = client.get(f"/api/annotations/a/{run_id}").json()["annotations"][0]
+    assert annotation == {"path": "title", "state": "verified"}
+
+
+def test_annotation_writes_to_an_unknown_run_404(tmp_path) -> None:
+    cfg = _project_cfg(tmp_path)
+    _article_with_run(cfg)
+    client = _client(cfg)
+
+    assert client.get("/api/annotations/a/01NOSUCHRUN0000000000000X").status_code == 404
+    assert client.put(
+        "/api/annotations/a/01NOSUCHRUN0000000000000X", json={"path": "ph"}
+    ).status_code == 404
+    # Traversal-shaped run ids never reach the store: the guarded resolver
+    # rejects a literal one, and an encoded one matches no route at all.
+    assert client.get("/api/annotations/a/..").status_code >= 400
+    assert client.get("/api/annotations/a/..%2F..%2Fetc").status_code >= 400
+
+
+def test_annotation_rejects_contract_violations_with_400(tmp_path) -> None:
+    cfg = _project_cfg(tmp_path)
+    run_id = _article_with_run(cfg)
+    client = _client(cfg)
+
+    missing = client.put(f"/api/annotations/a/{run_id}", json={"path": "nope"})
+    assert missing.status_code == 400
+    assert "does not resolve" in missing.text
+
+    bad_op = client.put(
+        f"/api/annotations/a/{run_id}", json={"path": "ph", "override": {"op": "bogus"}}
+    )
+    assert bad_op.status_code == 400
+
+    malformed = client.put(f"/api/annotations/a/{run_id}", json={"path": "a..b"})
+    assert malformed.status_code == 400
+
+
+def test_corrupt_review_is_explicit_never_an_empty_list(tmp_path) -> None:
+    cfg = _project_cfg(tmp_path)
+    run_id = _article_with_run(cfg)
+    run_dir = cfg.article_store_dir / "a" / "extraction-runs" / run_id
+    (run_dir / "review.json").write_text("{not json")
+    client = _client(cfg)
+
+    got = client.get(f"/api/annotations/a/{run_id}").json()
+    assert got["annotations"] is None  # not [] — the caller must see the difference
+    assert "unreadable" in got["review_error"]
+
+    write = client.put(f"/api/annotations/a/{run_id}", json={"path": "ph"})
+    assert write.status_code == 409
+    assert (run_dir / "review.json").read_text() == "{not json"  # never destroyed
+
+
+def test_delete_unreviews_the_subtree_and_gates_note_discard(tmp_path) -> None:
+    cfg = _project_cfg(tmp_path)
+    run_id = _article_with_run(
+        cfg, extraction={"article_id": "a", "exp": {"x": 1, "y": 2}}
+    )
+    client = _client(cfg)
+    client.put(f"/api/annotations/a/{run_id}", json={"path": "exp", "note": "checked"})
+
+    blocked = client.delete(f"/api/annotations/a/{run_id}/exp.x")
+    assert blocked.status_code == 409
+    assert "confirm" in blocked.text
+
+    ok = client.delete(f"/api/annotations/a/{run_id}/exp.x?discard_note=true")
+    assert ok.status_code == 200
+
+    # exp.y keeps the coverage it had; exp.x is unreviewed.
+    paths = {a["path"] for a in client.get(f"/api/annotations/a/{run_id}").json()["annotations"]}
+    assert paths == {"exp.y"}
+
+
+def test_articles_listing_reports_active_run_and_v2_counts(tmp_path) -> None:
+    cfg = _project_cfg(tmp_path)
+    run_id = _article_with_run(cfg)
+    client = _client(cfg)
+    client.put(f"/api/annotations/a/{run_id}", json={"path": "ph"})
+
+    entry = {a["article_id"]: a for a in client.get("/api/articles").json()["articles"]}["a"]
+
+    assert entry["active_run_id"] == run_id
+    assert entry["n_verified"] == 1
+    assert entry["n_overridden"] == 0
+    assert entry["review_error"] is None

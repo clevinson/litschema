@@ -11,7 +11,6 @@ import re
 import urllib.error
 import urllib.request
 import webbrowser
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated
 
@@ -30,12 +29,14 @@ from ..articles import (
 )
 from ..config import LitSchemaConfig
 from ..ingest.openalex_harvest import RegistryUnavailableError, sync_article
+from ..review_paths import InvalidReviewPathError, canonical_review_path
 from ..reviews import (
-    ReviewFileUnreadableError,
-    base_extraction_stale,
-    canonical_review_path,
-    delete_reviews_at,
+    ReviewContractError,
+    ReviewCorruptError,
+    effective_state,
     read_reviews,
+    review_progress,
+    unreview_subtree,
     upsert_review,
 )
 from ..schema_resolution import resolve_extraction_schema
@@ -121,32 +122,32 @@ def _article_pdf_path(cfg: LitSchemaConfig, article_id: str) -> Path | None:
     return article_pdf
 
 
-def _annotation_from_entry(path: str, entry: dict) -> dict:
-    """Map a review.json entry to the webapp's historical annotation shape."""
-    ann = {
-        "path": path,
-        "status": entry.get("signal"),
-        "reviewer": entry.get("author", ""),
-        "timestamp": entry.get("timestamp"),
-    }
-    if entry.get("override_value") is not None:
-        ann["correct_value"] = entry["override_value"]
-    for key in ("note", "source", "batch_id"):
-        if entry.get(key) is not None:
-            ann[key] = entry[key]
-    return ann
+def _annotation(path: str, entry: dict) -> dict:
+    """One stored review entry, in the vocabulary the spec defines.
 
-
-def _current_annotations(cfg: LitSchemaConfig, article_id: str) -> list[dict]:
-    """Return the current annotation state: one annotation per field path.
-
-    review.json holds at most one entry per field; ``author`` on the entry is
-    git-diff attribution, and multi-reviewer coordination happens in PR diffs
-    of review.json (specs/reviews/decisions.md, 2026-06-11).
+    The wire shape IS the stored shape — there is no translation layer, so a
+    reader of `specs/reviews/spec.md` sees the same names here.
     """
+    annotation: dict = {"path": path, "state": "overridden" if entry.get("override") else "verified"}
+    if entry.get("override") is not None:
+        annotation["override"] = entry["override"]
+    if entry.get("note") is not None:
+        annotation["note"] = entry["note"]
+    return annotation
+
+
+def _require_run(cfg: LitSchemaConfig, article_id: str, run_id: str):
+    """Resolve an explicit run, 404ing rather than escaping the store."""
+    from ..runs import BrokenActiveRunError, run_files
+
     files = article_files(cfg, article_id)
-    fields = read_reviews(files)
-    return [_annotation_from_entry(path, entry) for path, entry in fields.items()]
+    try:
+        run = run_files(files, run_id)
+    except BrokenActiveRunError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    if not run.run_json.is_file() or not run.extraction.is_file():
+        raise HTTPException(404, f"no published run {run_id} for {article_id}")
+    return run
 
 
 def _active_artifact(files: ArticleFiles, name: str):
@@ -196,30 +197,50 @@ def _leaf_paths(obj, base_path: str = "") -> list[str]:
     return paths
 
 
-def _review_progress(extraction: dict, annotations: list[dict]) -> dict:
-    """Summarize field-level review progress for article queue filters."""
-    leaf_paths = set(_leaf_paths(extraction))
-    current: dict[str, dict] = {}
-    for annotation in annotations:
-        path = annotation.get("path")
-        if not path:
-            continue
-        path = path.lstrip(".")
-        if path in leaf_paths:
-            current[path] = annotation
+def _active_run_id_or_none(files: ArticleFiles) -> str | None:
+    """The active run id, or None when absent or the pointer is broken."""
+    from ..runs import BrokenActiveRunError, active_run_id
 
-    n_verified = sum(1 for ann in current.values() if ann.get("status") == "verified")
-    n_flagged = sum(1 for ann in current.values() if ann.get("status") == "flagged")
-    n_fields = len(leaf_paths)
-    n_reviewed = n_verified + n_flagged
-    return {
-        "n_fields": n_fields,
-        "n_reviewed": n_reviewed,
-        "n_verified": n_verified,
-        "n_flagged": n_flagged,
-        "is_complete": n_fields > 0 and n_reviewed >= n_fields,
-        "has_flags": n_flagged > 0,
+    try:
+        return active_run_id(files)
+    except BrokenActiveRunError:
+        return None
+
+
+def _article_progress(files: ArticleFiles) -> dict:
+    """Review progress for an article's active run.
+
+    `specs/reviews/spec.md` owns effective state; this only aggregates. A
+    corrupt review file nulls the counts rather than reporting them as zero —
+    zero would read as "nothing reviewed yet", which is a different and much
+    more comfortable claim than "we cannot tell".
+    """
+    from ..runs import BrokenActiveRunError, active_run
+
+    empty = {
+        "n_fields": 0,
+        "n_reviewed": 0,
+        "n_verified": 0,
+        "n_overridden": 0,
+        "n_unreviewed": 0,
+        "review_progress": 0.0,
+        "is_complete": False,
+        "review_error": None,
     }
+    try:
+        run = active_run(files)
+    except BrokenActiveRunError as exc:
+        return {**empty, "review_error": str(exc)}
+    if run is None:
+        return empty
+    try:
+        progress = review_progress(run)
+    except ReviewCorruptError as exc:
+        return {
+            **{key: None for key in empty if key != "review_error"},
+            "review_error": str(exc),
+        }
+    return {**progress, "review_error": None}
 
 
 #: LinkML scalar range -> editor "kind" reported by /api/schema/fields.
@@ -363,20 +384,13 @@ async def list_articles(cfg: CfgDep):
                     "has_extraction": False,
                     "confidence": None,
                     "n_setups": 0,
-                    "n_annotated": 0,
-                    "n_fields": 0,
-                    "n_reviewed": 0,
-                    "n_verified": 0,
-                    "n_flagged": 0,
-                    "is_complete": False,
-                    "has_flags": False,
+                    "active_run_id": None,
+                    **_article_progress(files),
                 }
             )
         else:
             setups = data.get("experimental_setups") or []
-            # Annotation progress
-            annotations = _current_annotations(cfg, article_id)
-            progress = _review_progress(data, annotations)
+            progress = _article_progress(files)
             entry.update(
                 {
                     "has_extraction": True,
@@ -385,7 +399,7 @@ async def list_articles(cfg: CfgDep):
                     "focus_areas": data.get("focus_areas", []),
                     "document_type": data.get("document_type"),
                     "n_setups": len(setups),
-                    "n_annotated": progress["n_reviewed"],
+                    "active_run_id": _active_run_id_or_none(files),
                     **progress,
                 }
             )
@@ -543,83 +557,96 @@ async def get_reasoning(article_id: str, cfg: CfgDep):
     return json.loads(path.read_text())
 
 
-@app.get("/api/annotations/{article_id}")
-async def get_annotations(article_id: str, cfg: CfgDep):
-    """Return annotations for an article: one per reviewed field path.
+@app.get("/api/annotations/{article_id}/{run_id}")
+async def get_annotations(article_id: str, run_id: str, cfg: CfgDep):
+    """Stored review entries and effective state for one explicit run.
 
-    ``base_stale`` is true when any stored review was written against a
-    different agent-extraction.json than the current one
-    (specs/reviews/spec.md § Staleness).
+    Every review read and write names its run, so switching the active run can
+    never silently retarget an edit begun against a different extraction.
     """
+    run = _require_run(cfg, article_id, run_id)
+    try:
+        fields = read_reviews(run)
+    except ReviewCorruptError as exc:
+        # Explicit, never a silent empty: the caller must be able to tell
+        # "no reviews" apart from "reviews unreadable".
+        return {
+            "article_id": article_id,
+            "run_id": run_id,
+            "annotations": None,
+            "review_error": str(exc),
+        }
     return {
         "article_id": article_id,
-        "annotations": _current_annotations(cfg, article_id),
-        "base_stale": base_extraction_stale(article_files(cfg, article_id)),
+        "run_id": run_id,
+        "annotations": [_annotation(path, entry) for path, entry in sorted(fields.items())],
+        "review_error": None,
     }
 
 
-@app.put("/api/annotations/{article_id}")
-async def put_annotation(article_id: str, request: Request, cfg: CfgDep):
-    """Add or update a field annotation."""
+@app.put("/api/annotations/{article_id}/{run_id}")
+async def put_annotation(article_id: str, run_id: str, request: Request, cfg: CfgDep):
+    """Upsert one path. No override means verify; an override replaces/removes/adds."""
+    run = _require_run(cfg, article_id, run_id)
     body = await request.json()
     if not isinstance(body, dict):
         raise HTTPException(400, "body must be a JSON object")
+
     field_path = body.get("path")
-    status = body.get("status")  # verified | flagged
-    reviewer = body.get("reviewer", "")
+    if not isinstance(field_path, str) or not field_path.strip():
+        raise HTTPException(400, "path is required")
+
+    entry: dict = {}
+    override = body.get("override")
+    if override is not None:
+        if not isinstance(override, dict) or override.get("op") not in ("replace", "remove", "add"):
+            raise HTTPException(400, "override.op must be replace, remove, or add")
+        entry["override"] = override
     note = body.get("note")
-    correct_value = body.get("correct_value")  # proposed correction or "__remove__" to delete field
-    source = body.get("source")
-    batch_id = body.get("batch_id")
-
-    if not field_path or not status:
-        raise HTTPException(400, "path and status are required")
-    if not isinstance(field_path, str):
-        raise HTTPException(400, "path must be a string")
-    if status not in ("verified", "flagged"):
-        raise HTTPException(400, "status must be verified or flagged")
-    if status == "flagged" and not reviewer:
-        raise HTTPException(400, "reviewer ORCID is required for flags")
-    if reviewer:
-        # Author is an ORCID or empty (specs/reviews/spec.md); normalize URLs.
-        reviewer = _normalize_orcid_id(str(reviewer))
-
-    entry = {
-        "author": reviewer,
-        "signal": status,
-        "timestamp": datetime.now(UTC).isoformat(),
-    }
     if note:
-        entry["note"] = note
-    if correct_value is not None:
-        entry["override_value"] = correct_value
-    if source:
-        entry["source"] = source
-    if batch_id:
-        entry["batch_id"] = batch_id
+        entry["note"] = str(note)
 
-    files = article_files(cfg, article_id)
     try:
-        entry = upsert_review(files, field_path, entry)
-    except ReviewFileUnreadableError as exc:
+        fields = upsert_review(run, field_path, entry)
+        key = canonical_review_path(field_path)
+    except InvalidReviewPathError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except ReviewContractError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except ReviewCorruptError as exc:
         raise HTTPException(409, str(exc)) from exc
-    return _annotation_from_entry(canonical_review_path(field_path), entry)
+    return {
+        "annotation": _annotation(key, fields[key]) if key in fields else None,
+        "state": effective_state(key, fields),
+    }
 
 
-@app.delete("/api/annotations/{article_id}/{field_path:path}")
-async def delete_annotation(article_id: str, field_path: str, cfg: CfgDep):
-    """Remove THE annotation for a specific field, whoever wrote it.
+@app.delete("/api/annotations/{article_id}/{run_id}/{field_path:path}")
+async def delete_annotation(
+    article_id: str,
+    run_id: str,
+    field_path: str,
+    cfg: CfgDep,
+    discard_note: bool = False,
+):
+    """Unreview the whole subtree at ``field_path``.
 
-    Drops the entry from review.json rather than recording a 'cleared'
-    marker — clearing is not an attributable action.
+    Pass ``?discard_note=true`` to confirm discarding a note carried by a
+    covering ancestor — the one case where unreviewing destroys prose a human
+    wrote, so it is never implicit.
     """
+    run = _require_run(cfg, article_id, run_id)
     if not field_path.strip("."):
         raise HTTPException(400, "field path is required")
     try:
-        delete_reviews_at(article_files(cfg, article_id), field_path)
-    except ReviewFileUnreadableError as exc:
+        unreview_subtree(run, field_path, discard_note=discard_note)
+    except InvalidReviewPathError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except ReviewContractError as exc:
         raise HTTPException(409, str(exc)) from exc
-    return {"deleted": field_path}
+    except ReviewCorruptError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    return {"unreviewed": canonical_review_path(field_path)}
 
 
 def run_app(cfg: LitSchemaConfig, *, port: int = 8000) -> None:
