@@ -4,7 +4,6 @@
   data/papers/<id>/article.md
   data/papers/<id>/active-run.json
   data/papers/<id>/extraction-runs/<run-id>/...
-  data/papers/<id>/review.json          (v1 review model, article-bound)
 
 Article-root agent-extraction.json / agent-reasoning.json are STAGING files:
 an extraction attempt writes them, and publication consumes them into an
@@ -59,10 +58,6 @@ class ArticleFiles:
     @property
     def staged_reasoning(self) -> Path:
         return self.article_dir / "agent-reasoning.json"
-
-    @property
-    def reviews(self) -> Path:
-        return self.article_dir / "review.json"
 
     def read_metadata(self) -> dict:
         if not self.metadata.exists():
@@ -127,10 +122,6 @@ def iter_markdown_paths(cfg: LitSchemaConfig) -> Iterator[Path]:
     yield from _iter_article_artifact_paths(cfg, "article.md")
 
 
-
-
-def iter_review_paths(cfg: LitSchemaConfig) -> Iterator[Path]:
-    yield from _iter_article_artifact_paths(cfg, "review.json")
 
 
 def iter_metadata_paths(cfg: LitSchemaConfig) -> Iterator[Path]:

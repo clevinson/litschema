@@ -21,7 +21,6 @@ from .articles import (
     article_files,
     iter_markdown_paths,
     iter_metadata_paths,
-    iter_review_paths,
 )
 from .config import ConfigNotFoundError, LitSchemaConfig
 from .ingest import article_assembly, validate_extraction
@@ -941,17 +940,19 @@ def status(ctx: typer.Context):
     project = _require_project(ctx)
     cfg = project.config
 
+    from .reviews import ReviewCorruptError, read_reviews
     from .runs import BrokenActiveRunError, active_run, iter_run_ids
     from .schema_resolution import schema_hash as _schema_hash
 
     metadata = len(list(iter_metadata_paths(cfg)))
     converted = len(list(iter_markdown_paths(cfg)))
-    annotations = len(list(iter_review_paths(cfg)))
 
     live_runs = 0
     active_runs = 0
     current_schema_active = 0
     broken_pointers = 0
+    reviewed_articles = 0
+    review_entries = 0
     try:
         current_hash = _schema_hash(cfg)
     except OSError:
@@ -970,8 +971,18 @@ def status(ctx: typer.Context):
         try:
             if current_hash and run.read_run_json().get("schema_hash") == current_hash:
                 current_schema_active += 1
-        except (OSError, json.JSONDecodeError):
+        except (OSError, ValueError):
             pass
+        # Reviews bind to a run, so they must be counted through one. Globbing
+        # the old article-root path reported 0 unconditionally, which reads as
+        # "no review work yet" rather than "this counter is broken".
+        try:
+            fields = read_reviews(run)
+        except ReviewCorruptError:
+            continue
+        if fields:
+            reviewed_articles += 1
+            review_entries += len(fields)
 
     schema_yaml = extraction_schema_path(cfg)
     papers = _count_files(cfg.paper_inbox_dir, "*.pdf")
@@ -997,7 +1008,10 @@ def status(ctx: typer.Context):
     typer.echo(f"current:     {current_schema_active} active runs on the current schema")
     if broken_pointers:
         typer.echo(f"{CROSS} broken:      {broken_pointers} broken active-run pointers")
-    typer.echo(f"annotations: {annotations}")
+    typer.echo(
+        f"reviewed:    {reviewed_articles} articles with reviews "
+        f"({review_entries} entries on active runs)"
+    )
 
 
 @app.command(help="Diagnose configuration and dependency issues.")

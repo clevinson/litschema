@@ -653,3 +653,29 @@ def test_runs_list_marks_active_and_reports_model(tmp_path: Path, monkeypatch) -
     assert result.output.count("01SECONDRUN00000000000000") == 1
     active_lines = [line for line in result.output.splitlines() if "active" in line]
     assert len(active_lines) == 1  # exactly one run is active
+
+
+def test_status_counts_reviews_bound_to_the_active_run(tmp_path: Path, monkeypatch) -> None:
+    """The counter must read where reviews actually live.
+
+    It globbed the v1 article-root `review.json`, a path nothing writes any
+    more, so it reported 0 unconditionally — which reads as "no review work
+    yet" rather than "this number is broken".
+    """
+    from litschema.articles import article_files as _article_files
+    from litschema.reviews import upsert_review
+    from litschema.runs import active_run
+
+    cfg, article_dir = _publishable_project(tmp_path)
+    monkeypatch.setattr(cli, "_require_project", lambda ctx=None: SimpleNamespace(config=cfg))
+    runner = CliRunner()
+    assert runner.invoke(cli.app, ["agent", "record-extraction", "smith-2024"]).exit_code == 0
+
+    assert "0 articles with reviews" in runner.invoke(cli.app, ["status"]).output
+
+    run = active_run(_article_files(cfg, "smith-2024"))
+    upsert_review(run, "title", {})
+
+    output = runner.invoke(cli.app, ["status"]).output
+    assert "1 articles with reviews" in output
+    assert "(1 entries on active runs)" in output

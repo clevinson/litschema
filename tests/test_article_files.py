@@ -8,7 +8,6 @@ from litschema.articles import (
     iter_active_extraction_paths,
     iter_live_run_extraction_paths,
     iter_markdown_paths,
-    iter_review_paths,
 )
 from litschema.config import LitSchemaConfig
 
@@ -41,8 +40,9 @@ def test_article_files_exposes_run_and_staging_paths(tmp_path: Path) -> None:
     assert files.staged_reasoning == paper_dir / "agent-reasoning.json"
     assert files.runs_dir == paper_dir / "extraction-runs"
     assert files.active_run_file == paper_dir / "active-run.json"
-    assert files.reviews == paper_dir / "review.json"
-    assert not hasattr(files, "reviews_legacy")  # no legacy awareness
+    # Reviews are run-bound (RunFiles.review); the article root carries no
+    # review path at all, so nothing can accidentally read or write the v1 one.
+    assert not hasattr(files, "reviews")
     assert files.pdf == paper_dir / "smith-2024.pdf"
 
 
@@ -96,10 +96,8 @@ def test_iter_artifact_paths_read_per_article_store(tmp_path: Path) -> None:
     paper_dir = tmp_path / "data" / "papers" / "smith-2024"
     paper_dir.mkdir(parents=True)
     (paper_dir / "article.md").write_text("new markdown")
-    (paper_dir / "review.json").write_text('{"version": 1, "fields": {}}\n')
 
     assert list(iter_markdown_paths(cfg)) == [paper_dir / "article.md"]
-    assert list(iter_review_paths(cfg)) == [paper_dir / "review.json"]
 
 
 def test_write_article_metadata_is_atomic_and_leaves_no_tmp(tmp_path: Path) -> None:
