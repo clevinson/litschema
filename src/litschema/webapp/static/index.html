@@ -856,6 +856,19 @@
   .reasoning-note:hover .reasoning-note-body,
   .reasoning-note:focus .reasoning-note-body,
   .reasoning-note:focus-within .reasoning-note-body { display: block; }
+  /* `.review-identity` was sized for a toolbar chip: inline-flex and
+     flex-shrink:0. In a dialog it must take the full width, or its flexible
+     input collapses to zero and the whole control disappears while still
+     computing as "visible". */
+  .settings-modal .review-identity { display: block; width: 100%; }
+  .identity-entry, .identity-connected { display: flex; align-items: center; gap: 8px; }
+  .identity-input {
+    flex: 1; min-width: 0; padding: 6px 9px;
+    border: 1px solid var(--border); border-radius: var(--radius);
+    background: var(--bg-input); color: var(--text);
+    font-family: var(--font-mono); font-size: 12px;
+  }
+  .identity-name { flex: 1; min-width: 0; font-size: 13px; }
   .settings-modal { width: 480px; max-width: 92vw; }
   /* `.orcid-modal` styles every label as an uppercase grid and defines no
      header layout, so a dialog reusing the class inherits both. Reset what
@@ -2505,11 +2518,17 @@
           field. Reviews save without one.</p>
         <div class="review-identity" id="review-identity-controls">
           <input type="hidden" class="reviewer-input" id="reviewer-id">
-          <button class="orcid-connect-btn" id="btn-orcid-connect" title="Connect ORCID">Connect ORCID</button>
-          <button class="orcid-profile-btn" id="btn-orcid-profile" style="display:none" title="Disconnect ORCID">
-            <span class="orcid-name-label" id="orcid-profile-name"></span>
-            <span class="orcid-disconnect-label">Disconnect</span>
-          </button>
+          <div class="identity-entry" id="identity-entry">
+            <input type="text" id="orcid-input" class="identity-input"
+                   placeholder="0000-0002-1825-0097" aria-label="ORCID iD">
+            <button class="review-action-btn primary" id="btn-orcid-save">Connect</button>
+          </div>
+          <div class="identity-connected" id="identity-connected" style="display:none">
+            <span class="identity-name" id="orcid-profile-name"></span>
+            <button class="review-action-btn" id="btn-orcid-edit">Change</button>
+            <button class="review-action-btn" id="btn-orcid-profile">Disconnect</button>
+          </div>
+          <div class="settings-hint" id="orcid-result"></div>
         </div>
         <div class="settings-action" id="backfill-row" style="display:none">
           <button class="review-action-btn" id="btn-backfill">Attribute past reviews to me</button>
@@ -2520,10 +2539,11 @@
         <h4>Project policy</h4>
         <label class="settings-toggle">
           <input type="checkbox" id="toggle-require-reviewer">
-          <span>Require a reviewer on every review</span>
+          <span>Reviews and audits require an ORCID iD</span>
         </label>
-        <p class="settings-hint">Saved to <code>litschema.yaml</code> and enforced by the
-          server, so it applies to everyone working in this project &mdash; not just this browser.</p>
+        <p class="settings-hint">Saved to <code>litschema.yaml</code> and enforced when reviews
+          are saved, so it applies to everyone auditing extractions in this project &mdash; not
+          only people working on this computer.</p>
       </section>
       <div class="settings-status" id="settings-status" aria-live="polite"></div>
     </div>
@@ -2583,19 +2603,6 @@ e.g. year >= 2024 && study_types.includes("review")'
   </div>
 </div>
 
-<div class="orcid-modal-backdrop" id="orcid-modal" role="dialog" aria-modal="true" aria-labelledby="orcid-modal-title">
-  <div class="orcid-modal">
-    <h3 id="orcid-modal-title">Connect ORCID</h3>
-    <label>ORCID iD
-      <input type="text" id="orcid-input" placeholder="0000-0002-1825-0097">
-    </label>
-    <div class="orcid-result" id="orcid-result">Enter an ORCID iD to connect your reviewer identity.</div>
-    <div class="selected-edit-actions">
-      <button class="review-action-btn" id="btn-orcid-cancel">Cancel</button>
-      <button class="review-action-btn primary" id="btn-orcid-save">Save</button>
-    </div>
-  </div>
-</div>
 
 <div class="overview-route" id="overview-route">
   <header class="overview-head">
@@ -2740,6 +2747,10 @@ const statusToken = (ann) => (isOverridden(ann) ? "flagged" : isVerified(ann) ? 
 // The value a reviewer supplied, or undefined when they only verified.
 const overrideValue = (ann) =>
   ann?.override && ann.override.op !== "remove" ? ann.override.value : undefined;
+// Declared with module state, not beside its handlers: identity initialisation
+// runs at parse time and reads it, which a `let` further down cannot satisfy.
+let settingsState = { require_reviewer: false, in_git_repo: false, unattributed_reviews: 0 };
+
 const state = {
   articles: [],
   viewMode: "review",
@@ -6525,35 +6536,41 @@ function normalizeOrcidInput(value) {
 
 function setReviewerIdentity(profile) {
   const reviewerId = $("#reviewer-id");
-  const connect = $("#btn-orcid-connect");
-  const profileBtn = $("#btn-orcid-profile");
+  const entry = $("#identity-entry");
+  const connected = $("#identity-connected");
   const name = $("#orcid-profile-name");
+  const result = $("#orcid-result");
   if (!profile) {
     reviewerId.value = "";
-    connect.style.display = "inline-flex";
-    profileBtn.style.display = "none";
-    localStorage.removeItem("erw-reviewer-profile");
-    localStorage.removeItem("erw-reviewer-id");
+    entry.style.display = "flex";
+    connected.style.display = "none";
+    if (result) result.textContent = "";
+    localStorage.removeItem("litschema-reviewer-profile");
+    localStorage.removeItem("litschema-reviewer-id");
+    if (typeof renderBackfillRow === "function") renderBackfillRow();
     return;
   }
   reviewerId.value = profile.orcid;
-  connect.style.display = "none";
-  profileBtn.style.display = "inline-flex";
-  name.textContent = profile.name;
-  localStorage.setItem("erw-reviewer-profile", JSON.stringify(profile));
-  localStorage.setItem("erw-reviewer-id", profile.orcid);
+  entry.style.display = "none";
+  connected.style.display = "flex";
+  // The identifier is what gets stored; the name is what makes it checkable at
+  // a glance, so show both rather than an opaque number.
+  name.textContent = profile.name && profile.name !== profile.orcid
+    ? `${profile.name} \u00b7 ${profile.orcid}`
+    : profile.orcid;
+  if (result) result.textContent = "";
+  localStorage.setItem("litschema-reviewer-profile", JSON.stringify(profile));
+  localStorage.setItem("litschema-reviewer-id", profile.orcid);
+  if (typeof renderBackfillRow === "function") renderBackfillRow();
 }
 
-function openOrcidModal() {
+function editReviewerIdentity() {
+  // Back to the input, pre-filled, without discarding the identity until a new
+  // one is confirmed — changing your mind mid-edit should cost nothing.
   $("#orcid-input").value = $("#reviewer-id").value || "";
-  $("#orcid-result").textContent = "Enter an ORCID iD to connect your reviewer identity.";
-  $("#btn-orcid-save").disabled = false;
-  $("#orcid-modal").classList.add("active");
+  $("#identity-entry").style.display = "flex";
+  $("#identity-connected").style.display = "none";
   $("#orcid-input").focus();
-}
-
-function closeOrcidModal() {
-  $("#orcid-modal").classList.remove("active");
 }
 
 async function saveOrcidProfile() {
@@ -6561,48 +6578,45 @@ async function saveOrcidProfile() {
   const result = $("#orcid-result");
   const save = $("#btn-orcid-save");
   if (!/^\d{4}-\d{4}-\d{4}-\d{3}[0-9X]$/.test(value)) {
-    result.textContent = "Enter a valid ORCID iD.";
+    result.textContent = "Enter a valid ORCID iD, e.g. 0000-0002-1825-0097.";
     return;
   }
-  result.textContent = "Checking ORCID profile...";
+  result.textContent = "Checking ORCID\u2026";
   save.disabled = true;
   try {
     const response = await fetch(`/api/orcid/${encodeURIComponent(value)}`);
     if (!response.ok) throw new Error("not found");
-    const profile = await response.json();
-    setReviewerIdentity(profile);
-    closeOrcidModal();
-  } catch (err) {
-    result.textContent = "User not found.";
+    setReviewerIdentity(await response.json());
+  } catch {
+    // The lookup is a convenience, not a gate: an unreachable registry must not
+    // stop someone recording who they are.
+    result.textContent = "Could not reach ORCID; using the iD as entered.";
+    setReviewerIdentity({ orcid: value, name: value });
+  } finally {
     save.disabled = false;
   }
 }
 
 function initReviewerIdentity() {
-  const savedProfile = localStorage.getItem("erw-reviewer-profile");
-  if (savedProfile) {
+  const saved = localStorage.getItem("litschema-reviewer-profile");
+  if (saved) {
     try {
-      setReviewerIdentity(JSON.parse(savedProfile));
+      setReviewerIdentity(JSON.parse(saved));
       return;
-    } catch (err) {
-      localStorage.removeItem("erw-reviewer-profile");
+    } catch {
+      localStorage.removeItem("litschema-reviewer-profile");
     }
   }
-  const savedReviewer = localStorage.getItem("erw-reviewer-id");
-  if (savedReviewer) {
-    setReviewerIdentity({ orcid: savedReviewer, name: savedReviewer });
-  } else {
-    setReviewerIdentity(null);
-  }
+  const savedId = localStorage.getItem("litschema-reviewer-id");
+  setReviewerIdentity(savedId ? { orcid: savedId, name: savedId } : null);
 }
 
-$("#btn-orcid-connect").addEventListener("click", openOrcidModal);
 $("#btn-orcid-profile").addEventListener("click", () => setReviewerIdentity(null));
+$("#btn-orcid-edit").addEventListener("click", editReviewerIdentity);
 $("#orcid-input").addEventListener("keydown", (e) => {
   if (e.key === "Enter") saveOrcidProfile();
 });
 $("#btn-orcid-save").addEventListener("click", saveOrcidProfile);
-$("#btn-orcid-cancel").addEventListener("click", closeOrcidModal);
 initReviewerIdentity();
 
 // ── Extraction rendering ──
@@ -6634,8 +6648,6 @@ function renderExtractionPanel() {
 }
 
 // ── Settings ──
-
-let settingsState = { require_reviewer: false, in_git_repo: false, unattributed_reviews: 0 };
 
 function setSettingsStatus(message, status = "") {
   const el = $("#settings-status");

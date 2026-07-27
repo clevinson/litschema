@@ -205,10 +205,18 @@ review do not depend on the filter.
 
 Reviewer identity is a property of the person, not of the document on screen,
 so it lives in a settings dialog reachable from either route rather than in a
-per-document header.
+per-document header. It is entered inline there: collecting one value should
+not open a dialog on top of a dialog. A connected identity displays as a name
+beside its identifier, with an explicit control to change it that returns to
+the input without discarding the current identity until a new one is confirmed.
+Registry lookup is a convenience, not a gate — an unreachable registry records
+the identifier as entered rather than blocking the reviewer.
 
 `require_reviewer` is project policy: when set, every review must name a
-reviewer. It is stored in `litschema.yaml` and enforced at the write endpoint,
+reviewer. Its wording states what is required and whom it binds — everyone
+auditing extractions in the project, not only people on the machine that set
+it — because a policy read as a local preference will be set with the wrong
+expectations. It is stored in `litschema.yaml` and enforced at the write endpoint,
 so it binds every caller — scripts and agents included — rather than being a
 rule the browser politely follows. Writing it is the one place the verifier
 mutates project configuration; the write preserves unknown keys, and clearing

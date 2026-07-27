@@ -56,6 +56,11 @@ An empty object means verified. Neither a note nor a reviewer creates another
 state. Keys sort, writes replace atomically, and a file with no entries is
 absent.
 
+`reviewer` holds an identifier for the person who reviewed the path. This
+release writes ORCID iDs and validates them as such; the field is specified as
+an identifier rather than as an ORCID so that supporting another kind later is
+additive rather than a change of meaning.
+
 `reviewer` is deliberately optional. Someone auditing their own documents
 gains nothing from asserting who they are, and requiring it would put a login
 in front of the first thing a new user does. A shared project is different, so

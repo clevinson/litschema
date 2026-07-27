@@ -225,22 +225,26 @@ def test_review_header_shows_failures_but_not_success_chatter() -> None:
     assert 'id="save-status"' in html
 
 
-def test_verifier_uses_orcid_connect_flow() -> None:
+def test_identity_is_entered_inline_not_in_a_nested_dialog() -> None:
+    """Settings collects the iD directly; a dialog over a dialog is a stack."""
     html = STATIC_HTML.read_text()
 
     assert 'id="reviewer-id"' in html
     assert 'type="hidden"' in html
-    assert 'id="btn-orcid-connect"' in html
-    assert ">Connect ORCID</button>" in html
-    assert 'id="orcid-modal"' in html
+    assert 'id="identity-entry"' in html
+    assert 'id="btn-orcid-edit"' in html
+    assert 'id="orcid-modal"' not in html  # the nested dialog is gone
+    assert "function editReviewerIdentity(" in html
+    # A registry that cannot be reached must not block recording who you are.
+    assert "using the iD as entered" in html
     assert 'id="orcid-input"' in html
-    assert 'id="btn-orcid-lookup"' not in html
     assert 'id="btn-orcid-save"' in html
     assert "saveOrcidProfile" in html
     assert "lookupOrcidProfile" not in html
     assert "/api/orcid/" in html
     assert "Disconnect" in html
-    assert html.index('id="btn-orcid-cancel"') < html.index('id="btn-orcid-save"')
+    # Cancel belonged to the dialog; inline entry needs no dismissal.
+    assert 'id="btn-orcid-cancel"' not in html
 
 
 def test_verifier_exposes_bulk_review_actions() -> None:
@@ -735,3 +739,24 @@ def test_extractor_note_is_behind_a_visible_affordance() -> None:
     assert "function renderReasoningNote(" in html
     assert "confidence_reasoning" in html
     assert ".reasoning-note:hover .reasoning-note-body" in html
+
+
+def test_policy_label_names_what_is_required_and_who_it_binds() -> None:
+    html = STATIC_HTML.read_text()
+
+    assert "Reviews and audits require an ORCID iD" in html
+    assert "everyone auditing extractions in this project" in html
+    assert "not just this browser" not in html
+
+
+def test_module_state_is_declared_before_parse_time_initialisation() -> None:
+    """Identity init runs at parse time and reads settings state.
+
+    Declared beside its handlers, the `let` binding sat in the temporal dead
+    zone when identity initialisation reached it, throwing before any listener
+    was wired — the settings button silently did nothing.
+    """
+    html = STATIC_HTML.read_text()
+
+    assert html.index("let settingsState") < html.index("initReviewerIdentity();")
+    assert html.index("let settingsState") < html.index("function renderBackfillRow(")
