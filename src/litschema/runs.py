@@ -41,6 +41,27 @@ class BrokenActiveRunError(Exception):
     """active-run.json names a run that does not exist or is unreadable."""
 
 
+def is_error_marker(data: object) -> bool:
+    """True when an extraction payload is an error marker rather than data.
+
+    Recognised by structure — ``error: true`` plus a nonempty ``reason`` — not
+    by the truthiness of an ``error`` key. This is a scientific extraction
+    tool, and `error` is an ordinary slot name in that domain (measurement
+    error, standard error): a truthiness test would let a real extraction skip
+    schema validation and publish inactive whenever that value was non-zero.
+
+    Every consumer must share this predicate. Three independent copies of the
+    test are how validation and publication came to disagree about what a
+    marker is.
+    """
+    return (
+        isinstance(data, dict)
+        and data.get("error") is True
+        and isinstance(data.get("reason"), str)
+        and bool(data["reason"].strip())
+    )
+
+
 def new_run_id() -> str:
     """A 26-char ULID: 48-bit ms timestamp + 80 bits of randomness."""
     value = (int(time.time() * 1000) << 80) | int.from_bytes(os.urandom(10), "big")
@@ -140,9 +161,11 @@ def is_error_run(run: RunFiles) -> bool:
     """True when the run's extraction is an error marker rather than data."""
     try:
         data = json.loads(run.extraction.read_text())
-    except (OSError, json.JSONDecodeError):
+    except (OSError, ValueError):
+        # ValueError covers both a JSON syntax error and undecodable bytes;
+        # either way the payload is not usable data.
         return True
-    return bool(isinstance(data, dict) and data.get("error"))
+    return is_error_marker(data)
 
 
 def activate_run(files: ArticleFiles, run_id: str) -> None:
@@ -159,16 +182,53 @@ def activate_run(files: ArticleFiles, run_id: str) -> None:
         raise RunActivationError(f"{run_id} is not a published run of {files.article_id}")
     if is_error_run(run):
         raise RunActivationError(f"{run_id} is an error-marker run and cannot be activated")
+
+    # Activation is what every consumer reads through, so check the run holds
+    # what they need rather than trusting that publication left it complete —
+    # a run directory can be edited by hand between the two.
+    try:
+        record = run.read_run_json()
+    except (OSError, ValueError) as exc:
+        raise RunActivationError(f"{run_id} has an unreadable run.json: {exc}") from None
+    if not isinstance(record, dict):
+        raise RunActivationError(f"{run_id} has a run.json that is not an object")
+    if record.get("article_id") not in (None, files.article_id):
+        raise RunActivationError(
+            f"{run_id} records article {record['article_id']!r}, not {files.article_id!r}"
+        )
+    try:
+        extraction = json.loads(run.extraction.read_text())
+    except (OSError, ValueError) as exc:
+        raise RunActivationError(f"{run_id} has an unreadable extraction: {exc}") from None
+    if not isinstance(extraction, dict):
+        raise RunActivationError(f"{run_id} has an extraction that is not an object")
+    if not run.reasoning.is_file():
+        raise RunActivationError(
+            f"{run_id} has no agent-reasoning.json; the verifier needs it to show evidence"
+        )
+
     _write_active_pointer(files, run.run_id)
 
 
 def run_summary(run: RunFiles, *, active_run_id: str | None) -> dict:
-    """Display fields for `runs list`, tolerant of an unreadable run.json."""
+    """Display fields for `runs list`, tolerant of an unreadable run.json.
+
+    Tolerant means every damaged shape, not just the two that were obvious:
+    `runs list` is the command you reach for to find out *which* run is broken,
+    so one bad record must not take down the listing. `ValueError` covers both
+    a JSON syntax error and undecodable bytes, and both the record and its
+    `agent` are normalized to dicts — valid JSON that is not an object parses
+    fine and then fails on `.get()`.
+    """
     try:
         record = run.read_run_json()
-    except (OSError, json.JSONDecodeError):
+    except (OSError, ValueError):
         record = {}
-    agent = record.get("agent") or {}
+    if not isinstance(record, dict):
+        record = {}
+    agent = record.get("agent")
+    if not isinstance(agent, dict):
+        agent = {}
     return {
         "run_id": run.run_id,
         "active": run.run_id == active_run_id,
@@ -259,12 +319,22 @@ def publish_run(
         raise RunPublishError(f"no staged extraction at {staged_extraction}")
     try:
         extraction_data = json.loads(staged_extraction.read_text())
-    except json.JSONDecodeError as exc:
+    except ValueError as exc:
         raise RunPublishError(f"staged extraction is not valid JSON: {exc}") from exc
-    is_error_marker = bool(isinstance(extraction_data, dict) and extraction_data.get("error"))
+    if not isinstance(extraction_data, dict):
+        raise RunPublishError(
+            f"staged extraction must be a JSON object, not "
+            f"{type(extraction_data).__name__}: {staged_extraction}"
+        )
+    error_marker = is_error_marker(extraction_data)
+    if error_marker and extraction_data.get("article_id") not in (None, files.article_id):
+        raise RunPublishError(
+            f"the staged error marker names article "
+            f"{extraction_data['article_id']!r}, not {files.article_id!r}"
+        )
 
     staged_reasoning = files.staged_reasoning
-    if not is_error_marker and not staged_reasoning.is_file():
+    if not error_marker and not staged_reasoning.is_file():
         raise RunPublishError(f"no staged reasoning at {staged_reasoning}")
 
     # Reproduction: the publisher hashes every input itself; failure to hash
@@ -297,7 +367,7 @@ def publish_run(
         shutil.rmtree(staging, ignore_errors=True)
         raise
 
-    activated = not is_error_marker
+    activated = not error_marker
     if activated:
         _write_active_pointer(files, run.run_id)
     staged_extraction.unlink()

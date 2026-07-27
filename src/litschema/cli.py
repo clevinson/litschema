@@ -503,7 +503,7 @@ def runs_list(
     project = _require_project(ctx)
     cfg = project.config
     from .articles import iter_metadata_paths
-    from .runs import BrokenActiveRunError, active_run_id, iter_run_ids, run_files, run_summary
+    from .runs import BrokenActiveRunError, active_run, iter_run_ids, run_files, run_summary
 
     if article_id is not None:
         article_ids = [_require_article(cfg, article_id).article_id]
@@ -518,11 +518,16 @@ def runs_list(
             if article_id is not None:
                 typer.echo(f"{current_id}: no published runs")
             continue
+        # Resolve through active_run(), not active_run_id(): the latter only
+        # parses the pointer, so one naming a deleted run listed no active
+        # marker and exited 0 — indistinguishable from an article nobody has
+        # activated yet, which is the opposite of what this command is for.
         try:
-            selected = active_run_id(files)
-        except BrokenActiveRunError:
+            selected = active_run(files)
+            selected = selected.run_id if selected is not None else None
+        except BrokenActiveRunError as exc:
             selected = None
-            typer.secho(f"{CROSS} {current_id}: broken active-run pointer", fg=typer.colors.RED)
+            typer.secho(f"{CROSS} {current_id}: {exc}", fg=typer.colors.RED)
         typer.echo(current_id)
         for run_id in run_ids:
             total += 1

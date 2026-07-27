@@ -27,10 +27,23 @@ def validate_file(
     validator: LinkMLDataValidator | None = None,
 ) -> tuple[bool, list[str]]:
     """Validate a single extraction JSON file. Returns (valid, errors)."""
-    data = json.loads(filepath.read_text())
+    try:
+        data = json.loads(filepath.read_text())
+    except ValueError as exc:
+        return False, [f"{filepath} is not valid JSON: {exc}"]
+    if not isinstance(data, dict):
+        return False, [
+            f"{filepath} must be a JSON object, not {type(data).__name__}",
+        ]
 
-    # Skip error markers
-    if data.get("error"):
+    # An error marker records that extraction could not produce data, so there
+    # is nothing to validate against the schema. Match on its structure via the
+    # shared predicate: testing `data.get("error")` for truthiness waved through
+    # any extraction whose schema happens to define an `error` slot — a
+    # measurement error of 0.42 disabled validation for the whole document.
+    from ..runs import is_error_marker
+
+    if is_error_marker(data):
         return True, []
 
     validator = validator or create_linkml_validator(schema_path, root_class)

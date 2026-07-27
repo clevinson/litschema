@@ -387,6 +387,136 @@ def test_agent_record_extraction_error_marker_publishes_inactive(
     assert len(list((article_dir / "extraction-runs").iterdir())) == 1
 
 
+@pytest.mark.parametrize(
+    "payload,expected",
+    [
+        ({"article_id": "a", "error": True, "reason": "no extractable text"}, True),
+        # `error` is an ordinary slot name in a science schema. Truthiness let a
+        # measurement error of 0.42 skip validation and publish inactive.
+        ({"article_id": "a", "error": 0.42}, False),
+        ({"article_id": "a", "error": 1}, False),
+        ({"article_id": "a", "error": "extraction_failed"}, False),
+        # A marker must say why; `error: true` alone is not a diagnosis.
+        ({"article_id": "a", "error": True}, False),
+        ({"article_id": "a", "error": True, "reason": "   "}, False),
+        ({"article_id": "a", "error": False, "reason": "x"}, False),
+        ([1, 2, 3], False),
+        ("a string", False),
+        (None, False),
+    ],
+)
+def test_error_markers_are_recognised_by_structure_not_truthiness(payload, expected) -> None:
+    from litschema.runs import is_error_marker
+
+    assert is_error_marker(payload) is expected
+
+
+def test_a_truthy_error_field_does_not_bypass_schema_validation(tmp_path: Path) -> None:
+    """A real extraction carrying an `error` value must still be validated."""
+    from litschema.ingest.validate_extraction import validate_file
+
+    cfg, article_dir = _publishable_project(tmp_path)
+    schema = tmp_path / "schema" / "extraction.yaml"
+    staged = tmp_path / "staged.json"
+    staged.write_text(json.dumps({"article_id": "a", "error": 0.42, "bogus": "not in schema"}))
+
+    valid, errors = validate_file(staged, schema, "Article")
+
+    assert valid is False
+    assert errors
+
+
+def test_validate_file_reports_non_object_json_instead_of_crashing(tmp_path: Path) -> None:
+    from litschema.ingest.validate_extraction import validate_file
+
+    cfg, article_dir = _publishable_project(tmp_path)
+    schema = tmp_path / "schema" / "extraction.yaml"
+    staged = tmp_path / "staged.json"
+    staged.write_text("[1, 2, 3]")
+
+    valid, errors = validate_file(staged, schema, "Article")
+
+    assert valid is False
+    assert "must be a JSON object" in errors[0]
+
+
+def test_record_extraction_rejects_a_marker_naming_another_article(
+    tmp_path: Path, monkeypatch
+) -> None:
+    cfg, article_dir = _publishable_project(tmp_path)
+    (article_dir / "agent-extraction.json").write_text(
+        json.dumps({"article_id": "someone-else", "error": True, "reason": "bad scan"})
+    )
+    (article_dir / "agent-reasoning.json").unlink()
+    monkeypatch.setattr(cli, "_require_project", lambda ctx=None: SimpleNamespace(config=cfg))
+
+    result = CliRunner().invoke(cli.app, ["agent", "record-extraction", "smith-2024"])
+
+    assert result.exit_code == 1, result.output
+    assert "names article" in result.output
+    assert not (article_dir / "extraction-runs").exists()
+
+
+def test_runs_list_survives_every_damaged_run_json(tmp_path: Path, monkeypatch) -> None:
+    """One unreadable record must not take down the listing that would find it."""
+    cfg, article_dir = _publishable_project(tmp_path)
+    monkeypatch.setattr(cli, "_require_project", lambda ctx=None: SimpleNamespace(config=cfg))
+    runner = CliRunner()
+    assert runner.invoke(cli.app, ["agent", "record-extraction", "smith-2024"]).exit_code == 0
+
+    runs = article_dir / "extraction-runs"
+    for run_id, blob in [
+        ("01DAMAGED000000000000000A", b'["a list, not an object"]'),
+        ("01DAMAGED000000000000000B", b"\xff\xfe not utf-8 at all"),
+        ("01DAMAGED000000000000000C", b'{"agent": "a string, not an object"}'),
+        ("01DAMAGED000000000000000D", b"{not json"),
+    ]:
+        run_dir = runs / run_id
+        run_dir.mkdir(parents=True)
+        (run_dir / "run.json").write_bytes(blob)
+        (run_dir / "agent-extraction.json").write_text('{"article_id": "smith-2024"}')
+
+    result = runner.invoke(cli.app, ["runs", "list", "smith-2024"])
+
+    assert result.exit_code == 0, result.output
+    for run_id in ("A", "B", "C", "D"):
+        assert f"01DAMAGED000000000000000{run_id}" in result.output
+
+
+def test_runs_list_reports_a_pointer_naming_a_run_that_is_gone(
+    tmp_path: Path, monkeypatch
+) -> None:
+    cfg, article_dir = _publishable_project(tmp_path)
+    monkeypatch.setattr(cli, "_require_project", lambda ctx=None: SimpleNamespace(config=cfg))
+    runner = CliRunner()
+    assert runner.invoke(cli.app, ["agent", "record-extraction", "smith-2024"]).exit_code == 0
+    (article_dir / "active-run.json").write_text(json.dumps({"run_id": "01GONE00000000000000000000"}))
+
+    result = runner.invoke(cli.app, ["runs", "list", "smith-2024"])
+
+    assert "not a published run" in result.output
+
+
+def test_runs_activate_refuses_a_run_missing_reasoning(tmp_path: Path, monkeypatch) -> None:
+    """Activation is what consumers read through, so the run must be complete."""
+    cfg, article_dir = _publishable_project(tmp_path)
+    monkeypatch.setattr(cli, "_require_project", lambda ctx=None: SimpleNamespace(config=cfg))
+    runner = CliRunner()
+    assert runner.invoke(cli.app, ["agent", "record-extraction", "smith-2024"]).exit_code == 0
+    first = json.loads((article_dir / "active-run.json").read_text())["run_id"]
+    _publish_second_run(article_dir, "01SECONDRUN00000000000000")
+    (article_dir / "extraction-runs" / "01SECONDRUN00000000000000" / "agent-reasoning.json").unlink()
+
+    result = runner.invoke(
+        cli.app, ["runs", "activate", "smith-2024", "01SECONDRUN00000000000000"]
+    )
+
+    assert result.exit_code == 1, result.output
+    assert "agent-reasoning.json" in result.output
+    # The pointer is unchanged: a refused activation must not disturb it.
+    assert json.loads((article_dir / "active-run.json").read_text()) == {"run_id": first}
+
+
 def test_agent_record_extraction_re_extraction_keeps_prior_run(
     tmp_path: Path, monkeypatch
 ) -> None:

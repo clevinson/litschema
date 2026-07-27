@@ -5,7 +5,16 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from litschema.runs import is_error_marker
+
 TEST_RUN_ID = "01TESTRUN0000000000000000A"
+
+
+def _try_json(text: str):
+    try:
+        return json.loads(text)
+    except ValueError:
+        return None
 
 
 def publish_test_run(
@@ -17,11 +26,22 @@ def publish_test_run(
     schema_hash: str = "sha256:test",
     activate: bool = True,
 ) -> Path:
-    """Materialize a published run (and active pointer) for a test article."""
+    """Materialize a published run (and active pointer) for a test article.
+
+    A non-error run gets a reasoning file by default, because `publish_run`
+    refuses to publish one without it — a fixture that omits it builds a run
+    shape the product cannot actually produce, and then tests pass against a
+    state no user can reach.
+    """
     run_dir = article_dir / "extraction-runs" / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
     payload = extraction if isinstance(extraction, str) else json.dumps(extraction)
     (run_dir / "agent-extraction.json").write_text(payload)
+
+    if reasoning is None:
+        parsed = extraction if isinstance(extraction, dict) else _try_json(extraction)
+        if not is_error_marker(parsed):
+            reasoning = {"fields": []}
     if reasoning is not None:
         payload = reasoning if isinstance(reasoning, str) else json.dumps(reasoning)
         (run_dir / "agent-reasoning.json").write_text(payload)
