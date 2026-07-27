@@ -2,9 +2,14 @@
 
 A review is a compact overlay on one immutable run (`specs/reviews/spec.md`).
 At most one entry per exact path; an entry carries an optional ``override``
-(``replace``/``remove``/``add``) and an optional ``note``. An empty object
-means verified. Git supplies author and time history, so the stored model
-carries neither.
+(``replace``/``remove``/``add``), an optional ``note``, and an optional
+``reviewer``. An empty object means verified.
+
+``reviewer`` is optional by design: a lone researcher auditing their own
+documents gains nothing from asserting who they are, while a shared project
+does. Where the project is a Git repository, history carries stronger
+attribution than a self-typed identifier — author, time, and a diff — so the
+stored field complements it rather than replacing it.
 
 The file is the state: there is no staleness mode, because a review binds to a
 run whose payload can never change.
@@ -96,9 +101,12 @@ def read_reviews(run: RunFiles) -> dict[str, dict]:
 
 
 def _validate_entry_shape(key: str, entry: dict, *, source: str) -> None:
-    unknown = set(entry) - {"override", "note"}
+    unknown = set(entry) - {"override", "note", "reviewer"}
     if unknown:
         raise ReviewCorruptError(f"{source}: entry at {key!r} has unknown keys {sorted(unknown)}")
+    reviewer = entry.get("reviewer")
+    if reviewer is not None and (not isinstance(reviewer, str) or not reviewer.strip()):
+        raise ReviewCorruptError(f"{source}: entry at {key!r} has an empty reviewer")
     override = entry.get("override")
     if override is None:
         return
@@ -160,14 +168,21 @@ def terminal_override_ancestor(path: str, fields: dict[str, dict]) -> str | None
 
 
 def _is_redundant(path: str, fields: dict[str, dict]) -> bool:
-    """Exactly the spec's rule: bare verification under bare verification."""
+    """Bare verification under bare verification, by the same reviewer.
+
+    A descendant attributed to someone else is never redundant: dropping it
+    would silently reassign their work to whoever verified the parent.
+    """
     entry = fields[path]
     if entry.get("override") or entry.get("note"):
         return False
     ancestor = nearest_stored_ancestor(path, fields)
     if ancestor is None:
         return False
-    return not fields[ancestor].get("override")
+    covering = fields[ancestor]
+    if covering.get("override"):
+        return False
+    return entry.get("reviewer") == covering.get("reviewer")
 
 
 def canonicalize(fields: dict[str, dict]) -> dict[str, dict]:
@@ -281,8 +296,12 @@ def upsert_review(
     else:
         # Saving parent verification absorbs only redundant descendants.
         for existing in [p for p in fields if is_ancestor(key, p)]:
-            if not (fields[existing].get("override") or fields[existing].get("note")):
-                del fields[existing]
+            covered = fields[existing]
+            if covered.get("override") or covered.get("note"):
+                continue
+            if covered.get("reviewer") != entry.get("reviewer"):
+                continue  # someone else's verification is not ours to absorb
+            del fields[existing]
 
     fields = canonicalize(fields)
     write_reviews(run, fields)

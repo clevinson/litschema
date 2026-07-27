@@ -469,3 +469,37 @@ def test_uncoercible_override_is_refused_not_forced(tmp_path: Path) -> None:
         upsert_review(run, "count", {"override": {"op": "replace", "value": "many"}}, schema=schema)
     # Nothing was stored.
     assert read_reviews(run) == {}
+
+
+# ── optional attribution ─────────────────────────────────────────────────────
+
+
+def test_reviewer_is_optional_and_stored_when_given(tmp_path: Path) -> None:
+    run = _run(tmp_path, NESTED)
+
+    anon = upsert_review(run, "title", {})
+    assert anon["title"] == {}  # auditing never requires identifying yourself
+
+    named = upsert_review(run, "experiments[0].ph", {"reviewer": "0000-0002-1825-0097"})
+    assert named["experiments[0].ph"]["reviewer"] == "0000-0002-1825-0097"
+
+
+def test_an_empty_reviewer_is_corrupt_not_stored(tmp_path: Path) -> None:
+    run = _run(tmp_path, NESTED)
+
+    with pytest.raises(ReviewCorruptError, match="empty reviewer"):
+        upsert_review(run, "title", {"reviewer": "   "})
+
+
+def test_a_different_reviewers_verification_is_never_absorbed(tmp_path: Path) -> None:
+    """Canonicalization must not reassign one person's work to another."""
+    run = _run(tmp_path, NESTED)
+    upsert_review(run, "experiments[0].ph", {"reviewer": "0000-0002-1825-0097"})
+    upsert_review(run, "experiments[0].yield", {"reviewer": "0000-0001-5109-3700"})
+
+    fields = upsert_review(run, "experiments[0]", {"reviewer": "0000-0002-1825-0097"})
+
+    # Same reviewer: absorbed by the parent. Different reviewer: kept.
+    assert "experiments[0].ph" not in fields
+    assert fields["experiments[0].yield"]["reviewer"] == "0000-0001-5109-3700"
+    assert fields["experiments[0]"]["reviewer"] == "0000-0002-1825-0097"

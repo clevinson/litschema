@@ -255,9 +255,10 @@ def test_verifier_bulk_review_is_reversible_and_field_level() -> None:
     assert "bulkVerifyPaths" in html
     assert "clearVerifiedScope" in html
     assert "undoBulkBatch" not in html
-    assert "bulk_section" in html
-    assert "bulk_article" not in html
-    assert "batch_id" in html
+    # Batches group the status message only. `batch_id` was a version-1 entry
+    # key; version 2 stores override/note/reviewer and nothing else.
+    assert "batchId" in html
+    assert "batch_id" not in html
 
 
 def test_verifier_action_column_uses_compact_status() -> None:
@@ -290,12 +291,20 @@ def test_verifier_action_column_uses_compact_status() -> None:
     assert "toggleFieldVerification" in html
 
 
-def test_verifier_bulk_review_normalizes_primitive_array_reasoning() -> None:
+def test_bulk_review_covers_leaves_whose_evidence_is_cited_on_an_ancestor() -> None:
+    """Section verification must work for row-cited nested data.
+
+    Bulk selection used to require an exact per-leaf reasoning entry, so a
+    section whose evidence was cited once at row level — the normal shape for a
+    results table — offered nothing to verify and rendered its control
+    disabled. Selection now walks leaves and resolves evidence through
+    ancestors, which also subsumes the old primitive-array normalization.
+    """
     html = STATIC_HTML.read_text()
 
-    assert "reviewableAnnotationPaths" in html
-    assert "value.map((_, idx) => `${path}[${idx}]`)" in html
-    assert ".flatMap(([path]) => reviewableAnnotationPaths(path))" in html
+    assert "collectReviewablePaths" in html
+    assert "reasoningFor(path)?.source_lines" in html
+    assert "reviewableAnnotationPaths" not in html
 
 
 def test_verifier_section_headers_keep_status_and_bulk_action_together() -> None:

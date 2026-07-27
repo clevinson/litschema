@@ -133,6 +133,8 @@ def _annotation(path: str, entry: dict) -> dict:
         annotation["override"] = entry["override"]
     if entry.get("note") is not None:
         annotation["note"] = entry["note"]
+    if entry.get("reviewer") is not None:
+        annotation["reviewer"] = entry["reviewer"]
     return annotation
 
 
@@ -642,6 +644,11 @@ async def put_annotation(article_id: str, run_id: str, request: Request, cfg: Cf
     note = body.get("note")
     if note:
         entry["note"] = str(note)
+    # Attribution is optional: a lone reviewer gains nothing from asserting who
+    # they are. When supplied it is normalized so the stored form is canonical.
+    reviewer = body.get("reviewer")
+    if reviewer and str(reviewer).strip():
+        entry["reviewer"] = _normalize_orcid_id(str(reviewer).strip())
 
     try:
         fields = upsert_review(run, field_path, entry, schema=_resolved_schema(cfg))

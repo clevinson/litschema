@@ -4,8 +4,8 @@ Status: partially current.
 
 A review is a compact, run-bound overlay on immutable extracted data. This spec
 owns exact-path entries, effective review state, hierarchy, canonical storage,
-and corrupt-review behavior. Git diffs and pull requests own attribution and
-conflicting edits.
+optional attribution, and corrupt-review behavior. Conflicting edits are
+resolved by merging, not by the format.
 
 ## Implementation status
 
@@ -51,11 +51,23 @@ described below.
 
 An entry has optional `override`
 (`{"op":"replace","value":...}`, `{"op":"remove"}`, or
-`{"op":"add","value":...}`) and optional `note`.
-An empty object means verified. A note may accompany verification or an
-override and does not create another state. Git supplies author and time
-history. Keys sort, writes replace atomically, and a file with no entries is
+`{"op":"add","value":...}`), optional `note`, and optional `reviewer`.
+An empty object means verified. Neither a note nor a reviewer creates another
+state. Keys sort, writes replace atomically, and a file with no entries is
 absent.
+
+`reviewer` is deliberately optional. Someone auditing their own documents
+gains nothing from asserting who they are, and requiring it would put a login
+in front of the first thing a new user does. A shared project is different, so
+the field exists and is recorded whenever a reviewer identifies themselves.
+
+Where the project is a Git repository, history remains the stronger record —
+author, timestamp, and a diff, none of it self-asserted. The stored field
+complements that rather than replacing it, and covers the case the framework
+must also serve: a project with no repository at all, where nothing else can
+carry attribution. Because a repository is the available signal that work may
+be shared, `doctor` reports unattributed entries only inside one; outside, a
+project is presumed local and anonymous review is simply how it works.
 
 Absence carries no review state. A field the extraction omitted is simply
 absent: the model does not record that a human confirmed an omission, and
@@ -64,7 +76,8 @@ An omitted field becomes reviewable only when a human supplies it with `add`.
 
 One entry per path also means one reviewer per path. Version 1 keyed entries by
 author and so could hold competing reviews of the same field; version 2
-deliberately does not. Two reviewers work in separate clones and reconcile by
+deliberately does not — `reviewer` records who last reviewed a path, not a set
+of opinions about it. Two reviewers work in separate clones and reconcile by
 merging `review.json`. Blind double-extraction with adjudication is a stated
 non-goal for v1 (`specs/README.md` § Scope boundaries) and would require a
 format change, not an additive one.
@@ -140,8 +153,10 @@ merely confirmed. `specs/explore/spec.md` carries that distinction into export.
 A verifying parent covers descendants unless a more specific entry changes
 state or carries a note. Canonical redundancy is exact:
 
-- an entry is redundant only when it has no note or override and its nearest
-  stored ancestor is also verification without an override;
+- an entry is redundant only when it has no note or override, its nearest
+  stored ancestor is also verification without an override, and both name the
+  same reviewer — absorbing a differently attributed entry would reassign one
+  person's work to another;
 - entries with a note or override are never redundant;
 - an empty verification below a container override is invalid, not redundant;
 - canonicalization removes redundant entries but never synthesizes a parent
@@ -260,6 +275,8 @@ Implementation coverage must pin:
   overrides; and array tombstone index stability;
 - coercion of a string override to integer, float, and boolean slots, refusal
   of an uncoercible value with nothing stored, and strings left untouched;
+- optional attribution: absent by default, stored when supplied, rejected when
+  empty, and never absorbed into a differently attributed ancestor;
 - add at an appended array index and at an absent object property; sequential
   appends; refusal at a resolving path, under a terminal override, at the
   extraction root, and for a value failing item-class or required-slot

@@ -40,10 +40,26 @@ def stored() -> dict:
     return json.loads(open(hits[0]).read())["fields"] if hits else {}
 
 
+def reset_reviews() -> None:
+    """Clear this article's reviews so the run starts from a known state.
+
+    The flow asserts exact stored contents, so leftovers from a previous run
+    change what the controls even offer — an already-overridden field shows a
+    revert control rather than an edit one. Scoped to the one article this
+    script drives; nothing else in the project is touched.
+    """
+    import os
+
+    for hit in glob.glob(f"{PROJECT}/data/papers/{ARTICLE}/extraction-runs/*/review.json"):
+        os.remove(hit)
+
+
 def status_class(page, path: str) -> str:
     btn = page.locator(f'button.field-status[data-path="{path}"]').first
     return btn.get_attribute("class") or ""
 
+
+reset_reviews()
 
 with sync_playwright() as p:
     browser = p.chromium.launch(headless=True)
@@ -138,6 +154,43 @@ with sync_playwright() as p:
         " return e ? (e.source_lines + '|' + (e.inheritedFrom || 'exact')) : null; }"
     )
     check("nested cell has evidence", bool(got), str(got))
+
+    print("\n[section-wide verify]")
+    # Regression: bulk selection required an exact per-leaf reasoning entry, so
+    # a section cited once at row level rendered its control disabled.
+    toggles = page.locator("button.section-review-toggle")
+    check("section controls present", toggles.count() > 0, f"{toggles.count()}")
+    idx = next((i for i in range(toggles.count()) if not toggles.nth(i).is_disabled()), None)
+    check("a section control is enabled", idx is not None)
+    if idx is not None:
+        section_path = toggles.nth(idx).get_attribute("data-path")
+        before = len(stored())
+        toggles.nth(idx).click()
+        page.wait_for_timeout(2500)
+        after = stored()
+        check("section verify wrote several entries", len(after) > before + 1,
+              f"{before} -> {len(after)}")
+        check("section reads complete",
+              "section-complete" in (toggles.nth(idx).get_attribute("class") or ""),
+              toggles.nth(idx).get_attribute("class") or "")
+        # Bulk verify adds plain verifications and must not overwrite an
+        # override a human already recorded in that section.
+        under = {k: v for k, v in after.items() if k.startswith(f"{section_path}.")}
+        preserved = under.get(num_target, {}).get("override", {}).get("op")
+        check("existing override preserved", preserved == "replace", json.dumps(under.get(num_target)))
+        added = {k: v for k, v in under.items() if k != num_target}
+        check("added entries are plain verifications",
+              added and all(v == {} for v in added.values()), json.dumps(added)[:90])
+
+    print("\n[attribution is optional]")
+    anon = [v for v in stored().values() if "reviewer" not in v]
+    check("anonymous reviews saved without a reviewer", len(anon) > 0, f"{len(anon)} entries")
+    page.evaluate("() => { document.querySelector('#reviewer-id').value = '0000-0002-1825-0097'; }")
+    page.locator('button.field-status[data-path="replicates"]').first.click()
+    page.wait_for_timeout(1500)
+    check("a connected reviewer is recorded",
+          stored().get("replicates", {}).get("reviewer") == "0000-0002-1825-0097",
+          json.dumps(stored().get("replicates")))
 
     print("\n[clear a review]")
     page.locator(f'button.field-status[data-path="{target}"]').first.click()

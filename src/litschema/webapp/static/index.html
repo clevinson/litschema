@@ -5893,8 +5893,13 @@ function setBulkStatus(message, batchId = null) {
 
 function annotationEntry(path, extra = {}) {
   // The wire shape is the stored shape: {} means verified, `override` carries
-  // replace/remove/add, `note` is optional. Paths are canonical (no leading dot).
+  // replace/remove/add, `note` and `reviewer` are optional. Paths are canonical.
   const entry = { path };
+  // Attribution rides along when the reviewer has connected an ORCID, and is
+  // simply absent when they have not — auditing never requires identifying
+  // yourself, which would be pure friction for someone reviewing their own work.
+  const reviewer = $("#reviewer-id")?.value.trim();
+  if (reviewer) entry.reviewer = reviewer;
   for (const [key, value] of Object.entries(extra)) {
     if (value !== undefined && value !== null && value !== "") entry[key] = value;
   }
@@ -6085,32 +6090,17 @@ function collectLeafPaths(obj, basePath = "") {
   return paths;
 }
 
-function reviewableAnnotationPaths(path) {
-  const value = getValueAtPath(state.extraction, path);
-  if (isPrimitiveArray(value)) {
-    return value.map((_, idx) => `${path}[${idx}]`);
-  }
-  return [path];
-}
-
 function collectReviewablePaths(basePath = null) {
-  const leafPaths = new Set(collectLeafPaths(state.extraction));
-  return Object.entries(state.reasoningByPath)
-    .filter(([path, entry]) => {
-      if (!pathInScope(path, basePath)) return false;
-      if (!entry || !entry.source_lines) return false;
-      return reviewableAnnotationPaths(path).some(annPath =>
-        leafPaths.has(annPath) &&
-        !state.annotations[annPath] &&
-        getValueAtPath(state.extraction, annPath) !== undefined
-      );
-    })
-    .flatMap(([path]) => reviewableAnnotationPaths(path))
-    .filter(path =>
-      leafPaths.has(path) &&
-      !state.annotations[path] &&
-      getValueAtPath(state.extraction, path) !== undefined
-    );
+  // Every unreviewed leaf in scope that has evidence behind it. Evidence is
+  // resolved through ancestors: an agent that cites a table row once has cited
+  // its cells, and requiring an exact per-leaf entry made bulk verification
+  // silently unavailable for exactly the nested sections it is most useful for.
+  return collectLeafPaths(state.extraction).filter(path =>
+    pathInScope(path, basePath) &&
+    !state.annotations[path] &&
+    getValueAtPath(state.extraction, path) !== undefined &&
+    !!reasoningFor(path)?.source_lines
+  );
 }
 
 function verifiedPathsInScope(basePath = null) {
@@ -6156,10 +6146,7 @@ async function bulkVerifyPaths(paths, source, skipped = 0) {
   const batchId = `bulk_${Date.now()}_${Math.random().toString(16).slice(2)}`;
   const verifiedPaths = [];
   for (const path of paths) {
-    const ok = await saveAnnotation(path, "verified", {
-      source,
-      batch_id: batchId,
-    }, { render: false });
+    const ok = await saveAnnotation(path, {}, { render: false });
     if (ok) verifiedPaths.push(path);
   }
 
@@ -6244,7 +6231,7 @@ function selectAdjacentReviewPath(direction) {
 async function verifyRowAnnotations(rowPath) {
   const paths = rowCellPaths(rowPath);
   for (const path of paths) {
-    await saveAnnotation(path, "verified", {}, { render: false });
+    await saveAnnotation(path, {}, { render: false });
   }
   renderExtractionPanel();
   updateStats();
@@ -6270,7 +6257,7 @@ function wireAnnotationActions(panel) {
 
       if (action === "verify") {
         if (isRow) await verifyRowAnnotations(path);
-        else await saveAnnotation(path, "verified");
+        else await saveAnnotation(path, {});
       } else if (action === "flag") {
         openInlineEdit(path);
       } else if (action === "clear") {

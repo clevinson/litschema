@@ -73,6 +73,37 @@ def main(
     ctx.obj = config
 
 
+def _unattributed_review_count(cfg: LitSchemaConfig) -> int:
+    """Review entries carrying no reviewer, across every published run.
+
+    Corrupt review files are skipped rather than counted: they are reported by
+    their own consumers, and guessing at their contents here would be worse
+    than saying nothing.
+    """
+    from .reviews import ReviewCorruptError, read_reviews
+    from .runs import iter_run_ids, run_files
+
+    total = 0
+    for metadata_path in iter_metadata_paths(cfg):
+        files = article_files(cfg, metadata_path.parent.name)
+        for run_id in iter_run_ids(files):
+            try:
+                fields = read_reviews(run_files(files, run_id))
+            except ReviewCorruptError:
+                continue
+            total += sum(1 for entry in fields.values() if not entry.get("reviewer"))
+    return total
+
+
+def _in_git_repo(start: Path) -> bool:
+    """True when ``start`` sits inside a Git working tree.
+
+    Checked by walking for `.git` rather than shelling out, so a project
+    without Git never pays for a subprocess — and needs no `git` on PATH.
+    """
+    return any((candidate / ".git").exists() for candidate in [start, *start.parents])
+
+
 def _count_files(path: Path, pattern: str = "*") -> int:
     return len(list(path.glob(pattern))) if path.is_dir() else 0
 
@@ -1102,6 +1133,22 @@ def doctor(ctx: typer.Context):
         issues.append(
             "install an agentic CLI that reads installed skills (e.g. Claude Code or Codex)"
         )
+
+    # Attribution only matters where the work might be shared, and a Git
+    # repository is the available signal for that. Outside one, a project is
+    # presumed local and anonymous reviews are simply how it works — nagging
+    # a lone reviewer to identify themselves to themselves helps nobody.
+    if _in_git_repo(cfg.project_root):
+        unattributed = _unattributed_review_count(cfg)
+        if unattributed:
+            typer.echo(
+                f"{WARN} {unattributed} review entries have no reviewer — this project is "
+                "in Git, so it may be shared"
+            )
+            typer.echo(
+                f"{DIM}     connect an ORCID in `litschema verify` to attribute new "
+                f"reviews; existing ones are unchanged{RESET}"
+            )
 
     if issues:
         typer.echo("\nNext steps:")

@@ -385,3 +385,42 @@ def test_doctor_reports_dev_cli_approval_state(tmp_path: Path, monkeypatch) -> N
     dev_cli.write_text("uv run --project ../elsewhere litschema\n")
     changed = runner.invoke(cli.app, args)
     assert "changed since approval" in changed.output
+
+
+def test_doctor_reports_unattributed_reviews_only_inside_a_repo(tmp_path: Path) -> None:
+    """A repo implies the work may be shared; outside one, anonymous is normal."""
+    import json as _json
+
+    from typer.testing import CliRunner
+
+    from litschema import cli
+    from tests.helpers import TEST_RUN_ID, publish_test_run
+
+    project = tmp_path / "proj"
+    (project / "schema").mkdir(parents=True)
+    (project / "schema" / "extraction.yaml").write_text(
+        "id: x\nname: x\nclasses:\n  A:\n    tree_root: true\n    attributes:\n"
+        "      article_id:\n        identifier: true\n"
+    )
+    (project / "litschema.yaml").write_text(
+        'project_root: "."\nschema_dir: "schema"\nextraction_schema_file: "extraction.yaml"\n'
+        'article_store_dir: "data/papers"\n'
+    )
+    article = project / "data" / "papers" / "a"
+    article.mkdir(parents=True)
+    (article / "article-metadata.json").write_text(_json.dumps({"id": "a"}))
+    publish_test_run(article, {"article_id": "a", "title": "T"})
+    run_dir = article / "extraction-runs" / TEST_RUN_ID
+    (run_dir / "review.json").write_text(
+        _json.dumps({"version": 2, "fields": {"title": {}}})
+    )
+    args = ["--config", str(project / "litschema.yaml"), "doctor"]
+    runner = CliRunner()
+
+    outside = runner.invoke(cli.app, args)
+    assert "no reviewer" not in outside.output
+
+    (project / ".git").mkdir()
+    inside = runner.invoke(cli.app, args)
+    assert "1 review entries have no reviewer" in inside.output
+    assert "may be shared" in inside.output

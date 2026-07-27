@@ -226,3 +226,30 @@ reassuring claim than "we cannot tell what was reviewed".
 which would require guessing whether a `flagged` entry meant an override or a
 note; keeping the API's historical field names behind a mapping layer; and
 reporting corrupt reviews as zero counts.
+
+
+## 2026-07-26 — Attribution is optional, and Git is not assumed
+
+**Context:** the earlier entry gave attribution entirely to Git diffs. That
+answer stops working once Git is optional, which it now is — the framework
+shells out to `git` nowhere, and a whole eight-document corpus was built,
+extracted, exported, and audited outside any repository. Attribution then had
+no home at all for that user. The alternative first considered was requiring an
+ORCID before any review could be saved, prompting for it automatically.
+
+**Decision:** `reviewer` is an optional entry key. A review saves without it;
+when a reviewer has identified themselves, it is recorded. No gate: someone
+auditing their own documents gains nothing from asserting who they are, and a
+login in front of the first action contradicts an onboarding flow built to be
+frictionless. Canonicalization will not absorb a descendant whose reviewer
+differs from its covering ancestor, since that would silently reassign one
+person's work to another. `doctor` reports unattributed entries only inside a
+Git repository, taking the repository as the available signal that work may be
+shared; outside one, a project is presumed local and anonymous review is
+unremarkable.
+
+**Rejected:** requiring an ORCID before auditing, which taxes the common
+solo case to serve the uncommon shared one; removing ORCID support entirely,
+which would have to be rebuilt for dual review and abandons the non-Git user;
+and treating a self-typed identifier as equivalent to Git history, which it is
+not — it carries no timestamp and nothing verifies it.
