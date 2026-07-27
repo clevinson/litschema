@@ -375,3 +375,35 @@ def test_progress_is_complete_only_when_every_leaf_is_covered(tmp_path: Path) ->
 
     upsert_review(run, "title", {})
     assert review_progress(run)["is_complete"] is True
+
+
+def test_identifier_slots_are_excluded_from_the_denominator(tmp_path: Path) -> None:
+    """Identifiers are structural identity, not review work (verifier spec)."""
+    from linkml_runtime.utils.schemaview import SchemaView
+
+    from litschema.schema_resolution import identifier_leaf_paths
+
+    schema = tmp_path / "s.yaml"
+    schema.write_text(
+        "id: https://example.org/t\nname: t\n"
+        "prefixes:\n  linkml: https://w3id.org/linkml/\n"
+        "imports: [linkml:types]\ndefault_range: string\n"
+        "classes:\n  Article:\n    tree_root: true\n    attributes:\n"
+        "      article_id:\n        identifier: true\n"
+        "      title: {}\n"
+        "      experiments:\n        range: Experiment\n        multivalued: true\n"
+        "        inlined_as_list: true\n"
+        "  Experiment:\n    attributes:\n"
+        "      id:\n        identifier: true\n      ph:\n        range: float\n"
+    )
+    view = SchemaView(str(schema))
+    data = {"article_id": "a", "title": "T", "experiments": [{"id": "E1", "ph": 6.1}]}
+
+    identifiers = identifier_leaf_paths(view, "Article", data)
+    assert identifiers == {"article_id", "experiments[0].id"}
+
+    run = _run(tmp_path / "proj", data)
+    full = review_progress(run)["n_fields"]
+    trimmed = review_progress(run, exclude=identifiers)["n_fields"]
+    assert full == 4  # article_id, title, experiments[0].id, experiments[0].ph
+    assert trimmed == 2  # only title and ph are review work

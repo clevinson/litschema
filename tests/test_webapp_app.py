@@ -27,6 +27,20 @@ def _project_cfg(project: Path) -> LitSchemaConfig:
     )
 
 
+def _write_default_schema(cfg: LitSchemaConfig) -> None:
+    """A real schema, so typed-editor metadata resolves like it does live."""
+    cfg.schema_dir.mkdir(parents=True, exist_ok=True)
+    (cfg.schema_dir / "extraction.yaml").write_text(
+        "id: https://example.org/t\nname: t\n"
+        "prefixes:\n  linkml: https://w3id.org/linkml/\n"
+        "imports: [linkml:types]\ndefault_range: string\n"
+        "classes:\n  Article:\n    tree_root: true\n    attributes:\n"
+        "      article_id:\n        identifier: true\n"
+        "      title: {}\n      ph:\n        range: float\n"
+    )
+    cfg.raw["extraction_schema_file"] = "extraction.yaml"
+
+
 def _write_manifest(cfg: LitSchemaConfig, article_id: str, manifest: dict) -> None:
     article_dir = cfg.article_store_dir / article_id
     article_dir.mkdir(parents=True, exist_ok=True)
@@ -576,3 +590,55 @@ def test_articles_listing_reports_active_run_and_v2_counts(tmp_path) -> None:
     assert entry["n_verified"] == 1
     assert entry["n_overridden"] == 0
     assert entry["review_error"] is None
+
+
+# ── every read endpoint, exercised ───────────────────────────────────────────
+
+
+def test_every_read_endpoint_answers_for_a_fully_populated_article(tmp_path) -> None:
+    """Smoke-covers the whole read surface.
+
+    The document view calls these together on load, so a single stale attribute
+    on any of them breaks the page. Enumerating them here means a rename cannot
+    pass tests while leaving an endpoint 500ing.
+    """
+    cfg = _project_cfg(tmp_path)
+    _write_default_schema(cfg)
+    _write_manifest(cfg, "a", {"id": "a", "filename": "a.pdf"})
+    run_id = _write_extraction(
+        cfg,
+        "a",
+        {"article_id": "a", "title": "T", "ph": 6.1},
+        reasoning={"confidence": 0.7, "fields": [{"path": ".ph", "source_lines": "L3"}]},
+    )
+    (cfg.article_store_dir / "a" / "article.md").write_text("# A\n\nbody\n")
+    client = _client(cfg)
+
+    for path in (
+        "/",
+        "/api/articles",
+        "/api/schema/fields",
+        "/api/article/a",
+        "/api/bibliography/a",
+        "/api/markdown/a",
+        "/api/reasoning/a",
+        f"/api/annotations/a/{run_id}",
+    ):
+        response = client.get(path)
+        assert response.status_code == 200, f"{path} -> {response.status_code} {response.text[:200]}"
+
+    # The extraction endpoint serves the ACTIVE RUN's payload, not a stale
+    # article-root file, and serves it raw so the client can show both values.
+    assert client.get("/api/article/a").json() == {"article_id": "a", "title": "T", "ph": 6.1}
+
+
+def test_read_endpoints_404_for_an_article_without_an_active_run(tmp_path) -> None:
+    cfg = _project_cfg(tmp_path)
+    _write_manifest(cfg, "bare", {"id": "bare"})
+    client = _client(cfg)
+
+    assert client.get("/api/article/bare").status_code == 404
+    assert client.get("/api/reasoning/bare").status_code == 404
+    # The article still lists — it is work to do, not an error.
+    ids = {a["article_id"] for a in client.get("/api/articles").json()["articles"]}
+    assert "bare" in ids

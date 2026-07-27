@@ -207,6 +207,25 @@ def _active_run_id_or_none(files: ArticleFiles) -> str | None:
         return None
 
 
+def _identifier_paths(files: ArticleFiles, run) -> set[str]:
+    """`identifier: true` leaves, which are identity rather than review work.
+
+    Falls back to excluding nothing when the schema cannot be resolved — an
+    inflated denominator is a better failure than a crash on every listing.
+    """
+    from ..schema_resolution import identifier_leaf_paths, resolve_extraction_schema
+
+    try:
+        resolved = resolve_extraction_schema(files.cfg)
+        data = json.loads(run.extraction.read_text())
+    except Exception:
+        return set()
+    try:
+        return identifier_leaf_paths(resolved.view, resolved.root_class, data)
+    except Exception:
+        return set()
+
+
 def _article_progress(files: ArticleFiles) -> dict:
     """Review progress for an article's active run.
 
@@ -234,7 +253,7 @@ def _article_progress(files: ArticleFiles) -> dict:
     if run is None:
         return empty
     try:
-        progress = review_progress(run)
+        progress = review_progress(run, exclude=_identifier_paths(files, run))
     except ReviewCorruptError as exc:
         return {
             **{key: None for key in empty if key != "review_error"},
@@ -446,9 +465,13 @@ async def get_orcid_profile(orcid_id: str):
 
 @app.get("/api/article/{article_id}")
 async def get_article(article_id: str, cfg: CfgDep):
-    """Return full extraction JSON for an article."""
-    path = article_files(cfg, article_id).extraction
-    if not path.exists():
+    """Return the active run's raw extraction JSON for an article.
+
+    Raw, not effective: the document view renders the review overlay itself so
+    it can show what the agent said alongside what a human changed it to.
+    """
+    path = _active_artifact(article_files(cfg, article_id), "extraction")
+    if path is None or not path.exists():
         raise HTTPException(404, f"No extraction for {article_id}")
     return json.loads(path.read_text())
 

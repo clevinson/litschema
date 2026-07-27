@@ -365,15 +365,26 @@ def _resolve_parts(data, parts: tuple[str | int, ...]):
         return None
 
 
-def review_progress(run: RunFiles, fields: dict[str, dict] | None = None) -> dict:
-    """Counts over the run's leaves plus any leaves an ``add`` contributed."""
+def review_progress(
+    run: RunFiles,
+    fields: dict[str, dict] | None = None,
+    *,
+    exclude: set[str] | None = None,
+) -> dict:
+    """Counts over the run's leaves plus any leaves an ``add`` contributed.
+
+    ``exclude`` drops paths from the denominator entirely — the verifier passes
+    `identifier: true` slots, which are structural identity rather than
+    extracted findings and so are not review work.
+    """
     fields = read_reviews(run) if fields is None else fields
     extraction = json.loads(run.extraction.read_text())
 
-    paths = list(leaf_paths(extraction))
+    skip = exclude or set()
+    paths = [p for p in leaf_paths(extraction) if p not in skip]
     for path, entry in fields.items():
         override = entry.get("override")
-        if override and override["op"] == "add" and path not in paths:
+        if override and override["op"] == "add" and path not in paths and path not in skip:
             paths.append(path)
 
     verified = overridden = 0

@@ -44,6 +44,44 @@ def _find_tree_root_class(sv: SchemaView) -> str:
     )
 
 
+def identifier_leaf_paths(view: SchemaView, root_class: str, data) -> set[str]:
+    """Leaf paths in ``data`` that are `identifier: true` slots.
+
+    Identifiers are structural identity, not extracted findings, so they are
+    excluded from review denominators (`specs/verifier/spec.md`). Resolved by
+    walking the data alongside the schema rather than by slot name, so a
+    non-identifier slot that happens to share a name elsewhere is unaffected.
+    """
+    found: set[str] = set()
+
+    def slots_of(class_name: str) -> dict:
+        return {s.name: s for s in view.class_induced_slots(class_name)}
+
+    def walk(node, class_name: str | None, prefix: str) -> None:
+        if class_name is None or not isinstance(node, dict):
+            return
+        slots = slots_of(class_name)
+        for key, value in node.items():
+            slot = slots.get(key)
+            if slot is None:
+                continue
+            path = f"{prefix}.{key}" if prefix else key
+            if slot.identifier:
+                found.add(path)
+                continue
+            range_name = slot.range
+            if not range_name or range_name not in (view.all_classes() or {}):
+                continue
+            if isinstance(value, list):
+                for index, item in enumerate(value):
+                    walk(item, range_name, f"{path}[{index}]")
+            else:
+                walk(value, range_name, path)
+
+    walk(data, root_class, "")
+    return found
+
+
 def identifier_reference_slots(view: SchemaView, root_class: str) -> list[dict]:
     """Slots that will silently serialize as bare ID strings, losing detail.
 

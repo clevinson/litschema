@@ -18,6 +18,10 @@ Pending: the show-all-fields toggle and the array add control described under
 Supplying omitted values. The `add` op works end to end through the API; only
 its affordance in the document view is unbuilt.
 
+Browser coverage lives in `tests/browser_verify_flow.py`, which drives the real
+click path and asserts the resulting `review.json`. It is not in the pytest
+suite because playwright is not a project dependency.
+
 `litschema verify` is the loopback-only human review application. It consumes
 active runs and run-bound reviews but does not own their storage or lifecycle.
 Source metadata is owned by `specs/source-metadata/spec.md`.

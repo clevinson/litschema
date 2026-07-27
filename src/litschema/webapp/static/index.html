@@ -2638,7 +2638,7 @@ const state = {
   reasoning: null,
   reasoningByPath: {},
   schemaFields: {},
-  annotations: {},  // path -> {status, reviewer, timestamp, note}
+  annotations: {},  // path -> {path, state, override?, note?}
   selectedPath: null,
   editingPath: null,
   selectedSourceIndex: 0,
@@ -4857,8 +4857,6 @@ function cancelInlineEdit() {
 async function saveInlineEdit(path) {
   if (!path) return;
   const control = document.querySelector(`.inline-edit-input[data-path=${CSS.escape(path)}], .inline-edit-select[data-path=${CSS.escape(path)}]`);
-  const reviewer = $("#reviewer-id").value.trim();
-  if (!reviewer) { alert("Please connect ORCID before editing."); return; }
   const correctValue = control ? control.value.trim() : "";
   if (correctValue === "" && control && control.classList.contains("inline-edit-number")) {
     cancelInlineEdit();
@@ -4874,8 +4872,6 @@ async function saveInlineEdit(path) {
 
 async function removeInlineEdit(path) {
   if (!path) return;
-  const reviewer = $("#reviewer-id").value.trim();
-  if (!reviewer) { alert("Please connect ORCID before editing."); return; }
   state.editingPath = null;
   const ok = await saveAnnotation(path, { override: { op: "remove" } });
   if (!ok) {
