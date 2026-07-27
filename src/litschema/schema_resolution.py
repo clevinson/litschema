@@ -44,6 +44,65 @@ def _find_tree_root_class(sv: SchemaView) -> str:
     )
 
 
+_SCALAR_COERCIONS: dict[str, tuple[type, ...]] = {
+    "integer": (int,),
+    "float": (float, int),
+    "double": (float, int),
+    "decimal": (float, int),
+    "boolean": (bool,),
+}
+
+
+def slot_for_path(view: SchemaView, root_class: str, path_parts) -> object | None:
+    """The LinkML slot a canonical review path lands on, or None if untyped.
+
+    Walks class ranges segment by segment; integer segments are array indices
+    and do not advance the class, since a multivalued slot's items share its
+    range.
+    """
+    current_class: str | None = root_class
+    slot = None
+    for part in path_parts:
+        if isinstance(part, int):
+            continue
+        if current_class is None:
+            return None
+        slots = {s.name: s for s in view.class_induced_slots(current_class)}
+        slot = slots.get(part)
+        if slot is None:
+            return None
+        range_name = slot.range
+        current_class = range_name if range_name in (view.all_classes() or {}) else None
+    return slot
+
+
+def coerce_to_slot(view: SchemaView, slot, value):
+    """Coerce a client-supplied value to the slot's declared scalar type.
+
+    HTML controls submit strings, so a numeric field edited in a browser
+    arrives as `"23"`. Storing that would put a string where the schema
+    promises a float and quietly produce an invalid export. Coercion is exact:
+    a value that does not convert cleanly raises rather than being forced.
+    """
+    if slot is None or value is None:
+        return value
+    range_name = getattr(slot, "range", None)
+    if range_name not in _SCALAR_COERCIONS or not isinstance(value, str):
+        return value
+    text = value.strip()
+    if range_name == "boolean":
+        lowered = text.lower()
+        if lowered in ("true", "yes", "1"):
+            return True
+        if lowered in ("false", "no", "0"):
+            return False
+        raise ValueError(f"{value!r} is not a boolean")
+    try:
+        return int(text) if range_name == "integer" else float(text)
+    except ValueError:
+        raise ValueError(f"{value!r} is not a valid {range_name}") from None
+
+
 def identifier_leaf_paths(view: SchemaView, root_class: str, data) -> set[str]:
     """Leaf paths in ``data`` that are `identifier: true` slots.
 

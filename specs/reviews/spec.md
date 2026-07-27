@@ -87,8 +87,12 @@ beneath that path are invalid. The override defines the complete effective
 container or removes it. An `add` is likewise terminal at its path: the added
 value is supplied whole, so descendant entries beneath it are invalid.
 
-Replace uses the supplied value after target-schema validation. A replace value
-cannot be JSON `null`; omission uses remove, and `null` is reserved for
+Replace uses the supplied value after target-schema validation: the value is
+coerced to the target slot's declared scalar type and refused when it cannot
+be. This is load-bearing rather than pedantic — a browser submits every edit as
+a string, so without it a numeric field reviewed by a human stores `"23"` where
+the schema promises a number, and the invalid value only surfaces downstream in
+an export. A replace value cannot be JSON `null`; omission uses remove, and `null` is reserved for
 array-element tombstones. Remove is invalid on any LinkML `identifier: true`
 slot. Other remove operations behave by target kind:
 
@@ -254,6 +258,8 @@ Implementation coverage must pin:
 - verified/overridden/unreviewed derivation; non-null replacement;
   identifier-remove refusal; replace/remove by target kind; terminal container
   overrides; and array tombstone index stability;
+- coercion of a string override to integer, float, and boolean slots, refusal
+  of an uncoercible value with nothing stored, and strings left untouched;
 - add at an appended array index and at an absent object property; sequential
   appends; refusal at a resolving path, under a terminal override, at the
   extraction root, and for a value failing item-class or required-slot

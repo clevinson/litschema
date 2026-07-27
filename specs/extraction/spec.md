@@ -66,6 +66,15 @@ indices and no leading dot, for example `experiments[0].ph`. Source lines use
 Confidence belongs only in reasoning. The project extraction schema does not
 gain framework confidence fields.
 
+Evidence inherits down the extraction tree. An entry at a container path is
+evidence for every leaf beneath it that has no entry of its own, so an agent
+citing a table row once has cited each of its cells. A leaf's own entry always
+wins. This is deliberate: requiring one entry per leaf would multiply a
+row-shaped citation across every column without adding information, and makes
+reasoning files grow with the data rather than with the evidence. Consumers
+resolve a leaf by taking its exact entry, else the nearest ancestor's, and
+show which of the two they used.
+
 ## Validation
 
 - `litschema validate [target]` validates extraction files. With no target it
@@ -152,7 +161,7 @@ Implementation coverage must pin:
 - no-argument live-run discovery, trash exclusion, and missing explicit-target
   failure;
 - reasoning schema validation, confidence bounds, canonical paths, and
-  extracted-leaf coverage;
+  resolution of a leaf to its own entry or the nearest ancestor's;
 - staged validation before publication and absence of partial runs;
 - immutable published artifacts;
 - publisher-computed schema and input hashes, refusal of caller-supplied

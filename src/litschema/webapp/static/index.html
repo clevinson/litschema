@@ -4199,7 +4199,7 @@ function buildTableRowNoField(value, path) {
 }
 
 function buildValueCells(value, path) {
-  const entry = state.reasoningByPath[path];
+  const entry = reasoningFor(path);
   const ann = state.annotations[path];
 
   const sourceHtml = buildEvidenceBadge(path);
@@ -4552,6 +4552,26 @@ function wireJsonEvents(panel) {
   });
 }
 
+// Evidence inherits down, the way review coverage does. An agent that cites a
+// whole table row once — the same two lines back every cell in it — has given
+// real evidence for each of those cells; requiring it to repeat the citation
+// per cell would bloat the file without adding information. Exact entries win;
+// otherwise the nearest ancestor's evidence applies, marked as inherited so a
+// reviewer can tell row-level evidence from cell-level.
+function reasoningFor(path) {
+  if (!path) return null;
+  const exact = state.reasoningByPath[path];
+  if (exact) return exact;
+  let cursor = path;
+  while (true) {
+    const cut = Math.max(cursor.lastIndexOf("."), cursor.lastIndexOf("["));
+    if (cut <= 0) return null;
+    cursor = cursor.slice(0, cut);
+    const entry = state.reasoningByPath[cursor];
+    if (entry) return { ...entry, inheritedFrom: cursor };
+  }
+}
+
 function effectiveExtraction() {
   if (!state.extraction) return null;
   const data = JSON.parse(JSON.stringify(state.extraction));
@@ -4802,7 +4822,7 @@ function selectedFieldValueLabel(path) {
 }
 
 function selectedSourceRanges(path) {
-  const entry = state.reasoningByPath[path];
+  const entry = reasoningFor(path);
   if (!entry || !entry.source_lines) return [];
   return entry.source_lines.split(",").map(s => s.trim()).filter(Boolean);
 }
@@ -4816,12 +4836,12 @@ function selectedVerifyExtra(path) {
 }
 
 function selectedReasoning(path) {
-  const entry = state.reasoningByPath[path];
+  const entry = reasoningFor(path);
   return entry && entry.reasoning ? entry.reasoning : "";
 }
 
 function selectedConfidence(path) {
-  const entry = state.reasoningByPath[path];
+  const entry = reasoningFor(path);
   return entry && typeof entry.confidence === "number" ? entry.confidence : null;
 }
 
@@ -5249,7 +5269,7 @@ function wireTableEvents(panel) {
         // No multi-source nav (single source link or no source) — look up reasoning directly
         resetAllSourceNavs();
         activeCell.classList.add("cell-selected");
-        const entry = state.reasoningByPath[cellPath];
+        const entry = reasoningFor(cellPath);
         if (entry && entry.source_lines) {
           renderMarkdown();
           const lineRanges = parseSourceLines(entry.source_lines);
@@ -5296,7 +5316,7 @@ function selectTableRow(path, rangeIndex) {
   state.sections = [];
   state.sectionIndex = 0;
 
-  const entry = state.reasoningByPath[path];
+  const entry = reasoningFor(path);
   if (!entry || !entry.source_lines) {
     $("#stat-citations").textContent = `${path}: no citation`;
     return;
@@ -5389,7 +5409,7 @@ function buildTreeHtml(obj, path) {
 function buildLeafHtml(key, value, path) {
   const showIndicator = value !== null && typeof value !== "boolean";
 
-  const entry = state.reasoningByPath[path];
+  const entry = reasoningFor(path);
   const ann = state.annotations[path];
   const annStatus = ann ? ann.status : "";
 
@@ -5471,7 +5491,7 @@ function selectLeaf(el) {
   state.sections = [];
   state.sectionIndex = 0;
 
-  const entry = state.reasoningByPath[path];
+  const entry = reasoningFor(path);
   if (!entry || !entry.source_lines) {
     $("#stat-citations").textContent = `${path}: no citation`;
     return;
@@ -5541,7 +5561,7 @@ function scrollToSection() {
   if (counter) counter.textContent = `${state.sectionIndex + 1}/${state.sections.length}`;
 
   const path = state.selectedPath;
-  const entry = state.reasoningByPath[path];
+  const entry = reasoningFor(path);
   let msg = `${path}: ${state.sectionIndex + 1}/${state.sections.length} (${section.label})`;
   if (entry && entry.reasoning) msg += ` \u2014 ${entry.reasoning}`;
   $("#stat-citations").textContent = msg;

@@ -563,3 +563,17 @@ def test_overview_lists_unextracted_articles_and_flags_unreadable_reviews() -> N
     assert "const noRun = !a.active_run_id;" in html
     # An unknown deep link is recoverable, never a dead end.
     assert "No document" in html
+
+
+def test_reasoning_resolves_through_ancestors() -> None:
+    """A row-level citation is evidence for the cells in that row."""
+    html = STATIC_HTML.read_text()
+
+    assert "function reasoningFor(" in html
+    assert "inheritedFrom" in html
+    # Every read goes through the resolver, not the raw index.
+    body = html[html.index("function reasoningFor("):]
+    assert "state.reasoningByPath[path]" in body  # the exact-match lookup inside it
+    # Three raw accesses, all inside the index build and the resolver itself:
+    # every other read site goes through reasoningFor().
+    assert html.count("state.reasoningByPath[") == 3

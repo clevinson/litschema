@@ -182,6 +182,25 @@ def canonicalize(fields: dict[str, dict]) -> dict[str, dict]:
 # ── writes ───────────────────────────────────────────────────────────────────
 
 
+def _typed_entry(entry: dict, key: str, schema) -> dict:
+    """Coerce a replace/add value to its slot's declared type."""
+    override = entry.get("override")
+    if schema is None or not override or override.get("op") == "remove":
+        return entry
+    if "value" not in override:
+        return entry
+    from .schema_resolution import coerce_to_slot, slot_for_path
+
+    slot = slot_for_path(schema.view, schema.root_class, parse_path(key))
+    try:
+        coerced = coerce_to_slot(schema.view, slot, override["value"])
+    except ValueError as exc:
+        raise ReviewContractError(f"{key}: {exc}") from None
+    if coerced is override["value"]:
+        return entry
+    return {**entry, "override": {**override, "value": coerced}}
+
+
 def _validate_against_run(run: RunFiles, path: str, entry: dict, extraction: dict) -> None:
     override = entry.get("override")
     op = override.get("op") if override else None
@@ -226,10 +245,23 @@ def _validate_add_target(extraction: dict, path: str) -> None:
             raise ReviewContractError(f"the parent of {path} is not an object")
 
 
-def upsert_review(run: RunFiles, path: str, entry: dict) -> dict[str, dict]:
-    """Set the entry at ``path``, then canonicalize. Returns the stored fields."""
+def upsert_review(
+    run: RunFiles,
+    path: str,
+    entry: dict,
+    *,
+    schema: object | None = None,
+) -> dict[str, dict]:
+    """Set the entry at ``path``, then canonicalize. Returns the stored fields.
+
+    ``schema`` is a resolved extraction schema; when given, a replace/add value
+    is coerced to the target slot's declared type and rejected if it cannot be.
+    Without it the value is stored as supplied — callers that can resolve the
+    schema should pass it, since a browser submits every edit as a string.
+    """
     key = canonical_review_path(path)
     fields = read_reviews(run)
+    entry = _typed_entry(entry, key, schema)
     _validate_entry_shape(key, entry, source=str(run.review))
 
     blocked = terminal_override_ancestor(key, fields)

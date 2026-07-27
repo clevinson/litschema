@@ -207,6 +207,20 @@ def _active_run_id_or_none(files: ArticleFiles) -> str | None:
         return None
 
 
+def _resolved_schema(cfg: LitSchemaConfig):
+    """The project schema, or None when it cannot be resolved.
+
+    Typed coercion is a guarantee the schema provides; without a schema the
+    review still saves, storing the value exactly as supplied.
+    """
+    from ..schema_resolution import resolve_extraction_schema
+
+    try:
+        return resolve_extraction_schema(cfg)
+    except Exception:
+        return None
+
+
 def _identifier_paths(files: ArticleFiles, run) -> set[str]:
     """`identifier: true` leaves, which are identity rather than review work.
 
@@ -630,7 +644,7 @@ async def put_annotation(article_id: str, run_id: str, request: Request, cfg: Cf
         entry["note"] = str(note)
 
     try:
-        fields = upsert_review(run, field_path, entry)
+        fields = upsert_review(run, field_path, entry, schema=_resolved_schema(cfg))
         key = canonical_review_path(field_path)
     except InvalidReviewPathError as exc:
         raise HTTPException(400, str(exc)) from exc

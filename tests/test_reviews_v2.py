@@ -407,3 +407,65 @@ def test_identifier_slots_are_excluded_from_the_denominator(tmp_path: Path) -> N
     trimmed = review_progress(run, exclude=identifiers)["n_fields"]
     assert full == 4  # article_id, title, experiments[0].id, experiments[0].ph
     assert trimmed == 2  # only title and ph are review work
+
+
+# ── typed override values ────────────────────────────────────────────────────
+
+
+def _typed_schema(tmp_path: Path):
+    from linkml_runtime.utils.schemaview import SchemaView
+
+    from litschema.schema_resolution import ResolvedExtractionSchema
+
+    path = tmp_path / "typed.yaml"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        "id: https://example.org/t\nname: t\n"
+        "prefixes:\n  linkml: https://w3id.org/linkml/\n"
+        "imports: [linkml:types]\ndefault_range: string\n"
+        "classes:\n  Article:\n    tree_root: true\n    attributes:\n"
+        "      article_id:\n        identifier: true\n"
+        "      title: {}\n      count:\n        range: integer\n"
+        "      flagged:\n        range: boolean\n"
+        "      readings:\n        range: Reading\n        multivalued: true\n"
+        "        inlined_as_list: true\n"
+        "  Reading:\n    attributes:\n      value:\n        range: float\n"
+    )
+    view = SchemaView(str(path))
+    return ResolvedExtractionSchema(path=path, view=view, root_class="Article")
+
+
+def test_override_values_are_coerced_to_the_slot_type(tmp_path: Path) -> None:
+    """A browser submits every edit as a string; the store must not keep it one."""
+    data = {"article_id": "a", "title": "T", "count": 3, "flagged": False,
+            "readings": [{"value": 1.5}]}
+    run = _run(tmp_path / "proj", data)
+    schema = _typed_schema(tmp_path / "schema")
+
+    fields = upsert_review(run, "count", {"override": {"op": "replace", "value": "23"}},
+                           schema=schema)
+    assert fields["count"]["override"]["value"] == 23
+
+    fields = upsert_review(run, "readings[0].value", {"override": {"op": "replace", "value": "6.85"}},
+                           schema=schema)
+    assert fields["readings[0].value"]["override"]["value"] == 6.85
+
+    fields = upsert_review(run, "flagged", {"override": {"op": "replace", "value": "true"}},
+                           schema=schema)
+    assert fields["flagged"]["override"]["value"] is True
+
+    # A string slot keeps its string.
+    fields = upsert_review(run, "title", {"override": {"op": "replace", "value": "New"}},
+                           schema=schema)
+    assert fields["title"]["override"]["value"] == "New"
+
+
+def test_uncoercible_override_is_refused_not_forced(tmp_path: Path) -> None:
+    data = {"article_id": "a", "title": "T", "count": 3, "flagged": False, "readings": []}
+    run = _run(tmp_path / "proj", data)
+    schema = _typed_schema(tmp_path / "schema")
+
+    with pytest.raises(ReviewContractError, match="not a valid integer"):
+        upsert_review(run, "count", {"override": {"op": "replace", "value": "many"}}, schema=schema)
+    # Nothing was stored.
+    assert read_reviews(run) == {}
