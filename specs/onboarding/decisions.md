@@ -117,3 +117,27 @@ import mechanism is not part of the MVP.
 
 **Rejected:** folding refinement into onboarding; overwriting extraction
 outputs on rerun; reviving imported framework base schemas.
+
+
+## 2026-07-26 — Dev-override approval is recorded state, not a relayed claim
+
+**Context:** running the first real batch, every dispatched subagent stopped to
+ask for approval of the `.litschema/dev-cli` override, and correctly refused
+the conductor's assertion that the user had already approved it — naming it as
+permission laundering. The batch could not proceed. Relaying the user's genuine
+approval afterward still cost a round trip per agent, because consent arriving
+as prose cannot be distinguished from consent invented as prose.
+
+**Decision:** approval is the SHA-256 of the approved `dev-cli` content, stored
+in `.litschema/dev-cli-approved`. Agents compare hashes themselves instead of
+trusting a claim, so a conductor approves once and its subagents proceed
+silently. Editing the override changes the hash and revokes approval
+automatically. The file lives under the gitignored runtime directory, so
+approval is machine-local and never travels to another user with the repo.
+
+**Rejected:** passing approval down in the dispatch prompt, which cannot be
+made correct because an agent that accepts asserted consent also accepts
+fabricated consent; a project-config key, which would be committed and would
+approve the override for everyone who clones; and emitting a pyproject.toml so
+the override is unnecessary, which was tried and reverted (see kata qr3c — it
+only helps post-publication and made `doctor` report false success).

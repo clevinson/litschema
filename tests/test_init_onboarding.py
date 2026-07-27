@@ -347,3 +347,41 @@ def test_doctor_recognizes_project_local_skills(tmp_path, monkeypatch) -> None:
 
     assert "agent skills installed (project-local)" in result.output
     assert "skills not installed" not in result.output
+
+
+def test_doctor_reports_dev_cli_approval_state(tmp_path: Path, monkeypatch) -> None:
+    """The override needs verifiable approval, not an agent's say-so."""
+    import hashlib
+
+    from typer.testing import CliRunner
+
+    from litschema import cli
+
+    project = tmp_path / "proj"
+    (project / "schema").mkdir(parents=True)
+    (project / "schema" / "extraction.yaml").write_text(
+        "id: x\nname: x\nclasses:\n  A:\n    tree_root: true\n    attributes:\n"
+        "      article_id:\n        identifier: true\n"
+    )
+    (project / "litschema.yaml").write_text(
+        'project_root: "."\nschema_dir: "schema"\nextraction_schema_file: "extraction.yaml"\n'
+    )
+    dev_cli = project / ".litschema" / "dev-cli"
+    dev_cli.parent.mkdir(parents=True)
+    dev_cli.write_text("uv run --project ../litschema litschema\n")
+    runner = CliRunner()
+    args = ["--config", str(project / "litschema.yaml"), "doctor"]
+
+    unapproved = runner.invoke(cli.app, args)
+    assert "not yet approved" in unapproved.output
+    assert "agents will stop and ask" in unapproved.output
+
+    approved_file = project / ".litschema" / "dev-cli-approved"
+    approved_file.write_text(hashlib.sha256(dev_cli.read_bytes()).hexdigest() + "\n")
+    approved = runner.invoke(cli.app, args)
+    assert "dev override approved for agent use" in approved.output
+
+    # Editing the override invalidates the old approval automatically.
+    dev_cli.write_text("uv run --project ../elsewhere litschema\n")
+    changed = runner.invoke(cli.app, args)
+    assert "changed since approval" in changed.output

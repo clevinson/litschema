@@ -174,7 +174,15 @@ def test_skill_setup_gates_resolve_cli_with_dev_override() -> None:
         # Resolution order: .litschema/dev-cli override, then uv run, then bare CLI.
         assert "`.litschema/dev-cli`" in skill
         assert skill.index("`.litschema/dev-cli`") < skill.index("`uv run litschema`")
-        assert "development override" in skill
-        assert "never required for normal use" in skill
         # The gate must confirm the resolved command actually works.
         assert "$LITSCHEMA --help" in skill
+        # Approval is verifiable project state, not a claim passed in a prompt:
+        # both skills check the recorded hash of the approved dev-cli content.
+        assert ".litschema/dev-cli-approved" in skill
+        assert "shasum -a 256 .litschema/dev-cli" in skill
+
+    # Only the human may approve the override; an agent's assertion never counts.
+    assert "another agent" in extract
+    assert "not approval" in extract
+    # The conductor approves once for a whole batch rather than per paper.
+    assert "approve once" in onboard.lower()

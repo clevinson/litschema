@@ -6,6 +6,7 @@ mcp / status / doctor / skills install / agent / init.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import shutil
@@ -991,6 +992,21 @@ def doctor(ctx: typer.Context):
     if dev_cli.is_file():
         override = dev_cli.read_text().strip()
         typer.echo(f"{CHECK} CLI dev override (.litschema/dev-cli): {override}")
+        # Agents run this file, so it needs the user's approval, recorded as a
+        # hash they can verify rather than a claim passed to them in a prompt.
+        approved_file = cfg.project_root / ".litschema" / "dev-cli-approved"
+        current = hashlib.sha256(dev_cli.read_bytes()).hexdigest()
+        approved = approved_file.read_text().strip() if approved_file.is_file() else None
+        if approved == current:
+            typer.echo(f"{CHECK} dev override approved for agent use")
+        else:
+            detail = "changed since approval" if approved else "not yet approved"
+            typer.echo(f"{WARN} dev override {detail} — agents will stop and ask before using it")
+            issues.append(
+                "approve the dev override so agents can use it without asking per run: "
+                "`shasum -a 256 .litschema/dev-cli | cut -d' ' -f1 "
+                "> .litschema/dev-cli-approved`"
+            )
     elif legacy_dev_cli.is_file():
         typer.echo(f"{WARN} legacy .litschema/cli found — agent skills now read .litschema/dev-cli")
         issues.append("rename .litschema/cli to .litschema/dev-cli")

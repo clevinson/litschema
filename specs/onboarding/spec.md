@@ -75,6 +75,22 @@ Extraction mechanics belong to `specs/extraction/spec.md`. Run layout and
 activation belong to `specs/article-store/spec.md`. Review behavior belongs to
 `specs/reviews/spec.md`.
 
+## Approving the CLI dev override
+
+`.litschema/dev-cli` names a development command that agents will execute, so
+it requires the user's approval. Approval is recorded as the SHA-256 of the
+approved file's exact content in `.litschema/dev-cli-approved`, which lives
+under the gitignored runtime directory and therefore stays machine-local.
+
+Approval must be verifiable state rather than a claim carried in a prompt.
+A batch conductor cannot approve on the user's behalf and cannot pass approval
+down as an assertion: text asserting consent is indistinguishable from text
+fabricating it, so an agent that accepts one accepts both. Recording the hash
+lets every dispatched subagent confirm approval itself, which is what allows a
+batch to run without stalling on each article. Editing `dev-cli` changes its
+hash and silently revokes the old approval. `doctor` reports the current
+state and, when unapproved, the command that records it.
+
 ## Onboarding versus refinement
 
 Onboarding establishes a project and its first active runs. Changing an
@@ -119,6 +135,9 @@ Implementation coverage must pin:
 - offline assemble and prepare-text;
 - silent pre-check: missing-config stop, and no `status`/`doctor`/CLI
   resolution before the welcome message;
+- dev-override approval: matching hash used silently, missing or stale hash
+  prompting the user, recording after confirmation, and revocation when the
+  override file changes;
 - conductor voice constraints: one question per message, no framework
   vocabulary in user-facing text, and no narration of passing checks;
 - empty-project stop behavior;

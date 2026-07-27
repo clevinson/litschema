@@ -84,11 +84,22 @@ step 5). Resolve it then, not before, so the cold open stays about papers.
 Resolve `$LITSCHEMA` in order: (1) a `.litschema/dev-cli` file in the project
 root — its single-line content, used verbatim; (2) `uv run litschema`; (3)
 `litschema`. Take the first that works, confirming with `$LITSCHEMA --help`.
-If it resolves to the `.litschema/dev-cli` override — a development override
-pointing at a work-in-progress checkout, never required for normal use, which
-executes whatever it contains — get a yes first, in ONE sentence with no
+With options (2) or (3), proceed silently.
+
+Option (1) executes whatever the file contains, so it needs the user's
+approval. Check whether they already gave it: `.litschema/dev-cli-approved`
+holds the SHA-256 of the approved content, so compare it against
+`shasum -a 256 .litschema/dev-cli`. If they match, use it silently — they have
+approved this exact command before. If not, ask once, in ONE sentence with no
 preamble: "This project points litschema at a local dev build (`<content>`) —
-OK to use it?" With options (2) or (3), just proceed silently.
+OK to use it?" On yes, record it so nothing asks again:
+`shasum -a 256 .litschema/dev-cli | cut -d' ' -f1 > .litschema/dev-cli-approved`.
+
+**You approve once, for the whole batch.** Subagents you dispatch in Phase C
+and D check that same file. Because approval lives in verifiable project state
+rather than in a claim passed down a prompt, they can confirm it themselves —
+so a batch never stalls per paper, and no subagent has to take your word for
+it.
 
 ## Phase A — design the schema together
 
