@@ -112,7 +112,14 @@ If either command exits nonzero, read the errors, fix the JSON, and re-run the f
 
 Do NOT finish until both validation commands exit 0 or you have exhausted retries.
 
-After both validation commands exit 0, publish the run:
+After both validation commands exit 0, the staged files are ready to publish.
+
+**If your instructions say a conductor will publish, stop here** and report
+that the article is staged and validated. Do not run `record-extraction`. The
+conductor publishes because it chose the model you are running on, and it is
+the only party that knows that with certainty.
+
+**Otherwise publish the run yourself:**
 
 ```bash
 $LITSCHEMA agent record-extraction {article_id}
@@ -124,15 +131,12 @@ input hashes in `run.json`, and activates the run (`active-run.json`). If it
 exits nonzero, read the error — publication refuses to proceed rather than
 recording an incomplete run.
 
-If you know the model this extraction actually ran on — for example, you are a
-subagent and the conductor told you your model — include it:
-
-```bash
-$LITSCHEMA agent record-extraction {article_id} --provider anthropic --model claude-sonnet-5
-```
-
-Do not invent provider or model names; omit what you do not know. The run
-publishes either way.
+**Never pass `--model` or `--provider` describing yourself.** You cannot
+observe which model you are; a model's belief about its own identity is not
+reliable, and a wrong value here silently misattributes the extraction. Pass
+those flags only to relay a value your instructions gave you verbatim, and
+omit them entirely otherwise. An absent model is correct and honest; a guessed
+one is a false record that nothing downstream can detect.
 
 ## Backfill Bibliographic Metadata
 

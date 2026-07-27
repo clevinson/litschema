@@ -142,7 +142,8 @@ Tell the user in one line when their papers are in and ready.
 1. Pick ONE of the papers you skimmed. Extract it with the extract-article
    skill (its SKILL.md lives under `.claude/skills/` for project-local
    installs or `~/.claude/skills/` for global ones; it handles the extraction,
-   reasoning, validation, and provenance mechanics).
+   reasoning, and validation mechanics). If you dispatch it as a subagent, you
+   publish the result yourself — see Phase D.2 for why and how.
 2. Offer to open the review app (one question): "Want me to launch the review
    app for you, or start it yourself?" — options roughly **"Launch it"** /
    **"I'll launch it on my own."**
@@ -156,17 +157,33 @@ Tell the user in one line when their papers are in and ready.
    fields fit? is anything missing or forced?
 3. If the schema needs work: revise `schema/extraction.yaml` +
    `domain_context.md`, re-validate (Phase A.5), re-extract this one paper,
-   and re-check. Loop until they're satisfied — changes are cheap now and
+   and re-check. Re-extracting publishes a new run and makes it active; the
+   previous run stays on disk, so nothing is lost if the new one is worse
+   (`$LITSCHEMA runs list` shows both, `runs activate` picks). Loop until they're satisfied — changes are cheap now and
    expensive after the batch.
 
 ## Phase D — the rest
 
-1. List remaining articles: in `data/papers/` with no `agent-extraction.json`,
-   OR whose `agent-extraction.json` is an error marker (`"error": true`) —
-   failed papers are retried, not counted as done.
+1. List remaining articles: those in `data/papers/` with no active run
+   (`$LITSCHEMA runs list` shows nothing for them), or whose active run is an
+   error marker — failed papers are retried, not counted as done.
 2. Extract each via the extract-article skill. Dispatch each paper as its own
    subagent (Task tool) when available so your context stays small; otherwise
    run sequentially. A few in flight at most.
+
+   **You publish, not the subagent.** Tell each subagent explicitly that a
+   conductor will publish, so it stages and validates but does not run
+   `record-extraction`. When it reports back, you run:
+
+   ```bash
+   $LITSCHEMA agent record-extraction {article_id} --provider {provider} --model {model}
+   ```
+
+   naming the model *you dispatched it with*. This is the whole point: you
+   chose that model, so you are the only party that knows it. A subagent asked
+   to name its own model will sometimes state a different one, and the
+   resulting run.json is then a false record with nothing to flag it. If you
+   dispatched without choosing a model, omit both flags rather than guessing.
 3. On a per-paper failure: retry once; if it still fails, record the id and
    move on. Never abort the batch for one paper.
 4. Run `$LITSCHEMA meta sync --all` — extraction already syncs each paper whose

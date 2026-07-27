@@ -110,11 +110,24 @@ check → extraction from that article's markdown only → write both staged
 artifacts → validate both, with bounded repair attempts → record provenance and
 publish → source-metadata enrichment through its own CLI.
 
-The skill declares the model it ran under when the harness makes that
-knowable — a conductor dispatching one subagent per article knows the model it
-requested for each. It never overwrites a run, changes `active-run.json`
-implicitly for a rerun, edits source metadata files directly, or imports facts
-from another article.
+### Who publishes, and who may name the model
+
+An extracting agent must never describe its own model. A model's belief about
+its own identity is not observable from the execution environment and is not
+reliably correct, so a self-reported value is a false record that nothing
+downstream can detect. The skill passes `--provider`/`--model` only to relay a
+value its instructions supplied verbatim, and omits them otherwise; an absent
+model is correct.
+
+Where a conductor dispatches per-article subagents, the conductor publishes.
+It chose the model for each dispatch, so it is the only party that knows it.
+The subagent stages and validates, then reports; the conductor calls
+`record-extraction` naming the model it dispatched. A standalone extraction
+with no conductor publishes itself and omits the model.
+
+The skill never overwrites a run, changes `active-run.json` implicitly for a
+rerun, edits source metadata files directly, or imports facts from another
+article.
 
 ## Invariants
 
@@ -145,6 +158,8 @@ Implementation coverage must pin:
 - publisher-computed schema and input hashes, refusal of caller-supplied
   hashes, and publication failure when one cannot be computed;
 - publication success with partial or absent agent attribution;
+- skill text forbidding self-described provider/model and assigning
+  publication to a dispatching conductor;
 - no manifest provenance write and no implicit rerun activation;
 - bounded skill repair, article-only evidence, deterministic CLI calls, and
   registry-first metadata backfill.
