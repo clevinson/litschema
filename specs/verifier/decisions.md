@@ -70,3 +70,32 @@ reviewed yet", a materially more reassuring claim than "we cannot tell".
 corpus state belongs; and auto-selecting the first article on load, which
 skipped the overview entirely and made the corpus view unreachable without a
 filter that matched nothing.
+
+
+## 2026-07-26 — Navigation, naming, and what feedback is worth saying
+
+**Context:** a usability pass against Nielsen's heuristics found the document
+route had no marked way back to the overview. Worse, the only control labelled
+"Overview" on that route was the per-document render toggle, so clicking it
+expecting to navigate silently re-rendered the extraction panel instead. The
+word named three things: the dataset route, the view mode, and its table/JSON
+sub-modes. Separately, `setSaveStatus` and `setBulkStatus` both guarded on
+elements that did not exist, so every save message — including every failure —
+was computed and discarded.
+
+**Decision:** the render toggle is "Data", renamed in the label and in the code
+behind it so the two cannot drift; "overview" names the route alone. Every
+document carries a breadcrumb and a persistent exit to the overview.
+Document-scoped controls hide on the overview instead of rendering inert. The
+document states which run it is reviewing.
+
+On feedback, the earlier decision to keep transient chatter out of the header
+was right and is kept: a successful save is already shown by the control
+changing state. Only failures are written, and they persist rather than fading,
+since a failure the user does not notice is indistinguishable from a success.
+
+**Rejected:** relying on the browser back button as the exit, which is not a
+designed affordance and does not survive a deep link opened in a new tab;
+disabling rather than hiding document controls on the overview, which still
+implies a document is open; and restoring "Saving…/Saved" messages, which
+narrate what the control already shows.

@@ -767,19 +767,19 @@
     margin-top: 6px;
   }
 
-  .overview-mode-toggle {
+  .data-mode-toggle {
     display: none;
   }
 
-  .panel-header.overview-active .overview-mode-toggle {
+  .panel-header.data-active .data-mode-toggle {
     display: inline-flex;
   }
 
-  .panel-header.overview-active .review-queue-actions {
+  .panel-header.data-active .review-queue-actions {
     display: none;
   }
 
-  .panel-header.overview-active .review-identity {
+  .panel-header.data-active .review-identity {
     display: none !important;
   }
 
@@ -822,6 +822,20 @@
     margin-right: 6px;
   }
 
+  .save-status { font-size: 12px; color: var(--text-dim); }
+  .save-status[data-status="saving"] { color: var(--text-dim); }
+  .save-status[data-status="saved"] { color: var(--green, #3fb950); }
+  .save-status[data-status="error"] { color: var(--red, #f85149); font-weight: 500; }
+  .run-chip {
+    font-size: 11px; font-family: ui-monospace, monospace; color: var(--text-dim);
+    border: 1px solid var(--border); border-radius: 10px; padding: 1px 7px;
+  }
+  .back-to-overview { white-space: nowrap; }
+  .doc-breadcrumb {
+    font-size: 12px; color: var(--text-dim); margin-bottom: 6px;
+  }
+  .doc-breadcrumb a { color: var(--text-dim); text-decoration: none; }
+  .doc-breadcrumb a:hover { text-decoration: underline; }
   .overview-route { padding: 28px 32px 48px; overflow-y: auto; height: 100%; }
   .overview-head { display: flex; align-items: baseline; gap: 16px; margin-bottom: 20px; }
   .overview-head h1 { font-size: 20px; font-weight: 600; margin: 0; }
@@ -2405,6 +2419,11 @@
 <body>
 
 <div class="toolbar">
+  <!-- The exit back to the document list. NN/g's "emergency exit": every
+       document route needs a clearly marked way out that is not the browser
+       back button. -->
+  <button class="toolbar-btn back-to-overview" id="btn-all-documents" type="button"
+          title="Back to all documents">&#8592;&nbsp;All documents</button>
   <select id="article-select">
     <option value="">Select an article...</option>
   </select>
@@ -2419,7 +2438,7 @@
   </button>
   <div class="view-mode-toggle" aria-label="Extraction view mode">
     <button class="view-mode-btn active" id="view-mode-review" data-view-mode="review" type="button">Audit</button>
-    <button class="view-mode-btn" id="view-mode-overview" data-view-mode="overview" type="button">Overview</button>
+    <button class="view-mode-btn" id="view-mode-data" data-view-mode="data" type="button">Data</button>
   </div>
   <button class="theme-btn" id="btn-theme" title="Toggle theme">&#9790;</button>
 </div>
@@ -2517,6 +2536,7 @@ e.g. year >= 2024 && study_types.includes("review")'
   <div class="panel panel-left">
     <div class="panel-header">
       <div class="article-bibheader" id="article-bibheader" style="display:none">
+        <div class="doc-breadcrumb"><a href="#/">All documents</a> &rsaquo; this document</div>
         <span class="bib-title" id="bib-title"></span>
         <span class="bib-meta">
           <span class="bib-authors" id="bib-authors"></span>
@@ -2586,12 +2606,15 @@ e.g. year >= 2024 && study_types.includes("review")'
           <div class="review-progress-row">
             <span class="review-progress" id="review-progress" aria-live="polite"></span>
             <span class="confidence-chip" id="confidence-chip" style="display:none"></span>
+            <span class="run-chip" id="run-chip" style="display:none" title="Active run"></span>
+            <span class="save-status" id="save-status" aria-live="polite"></span>
+            <span class="save-status" id="bulk-status" aria-live="polite"></span>
           </div>
         </div>
         <div class="review-actions" id="review-actions">
-          <div class="view-mode-toggle overview-mode-toggle" aria-label="Overview display mode">
-            <button class="view-mode-btn active" id="overview-mode-table" data-overview-mode="table" type="button">Table</button>
-            <button class="view-mode-btn" id="overview-mode-json" data-overview-mode="json" type="button">JSON</button>
+          <div class="view-mode-toggle data-mode-toggle" aria-label="Overview display mode">
+            <button class="view-mode-btn active" id="data-mode-table" data-data-mode="table" type="button">Table</button>
+            <button class="view-mode-btn" id="data-mode-json" data-data-mode="json" type="button">JSON</button>
           </div>
           <div class="review-identity" id="review-identity-controls">
             <input type="hidden" class="reviewer-input" id="reviewer-id">
@@ -2635,7 +2658,7 @@ const overrideValue = (ann) =>
 const state = {
   articles: [],
   viewMode: "review",
-  overviewMode: "table",
+  dataMode: "table",
   currentId: null,
   markdown: null,
   extraction: null,
@@ -2660,18 +2683,18 @@ const state = {
 
 function initialViewMode() {
   const mode = new URLSearchParams(window.location.search).get("view");
-  return ["review", "overview"].includes(mode) || mode === "json" ? "overview" : "review";
+  return ["review", "data"].includes(mode) || mode === "json" ? "data" : "review";
 }
 
-function initialOverviewMode() {
+function initialDataMode() {
   const params = new URLSearchParams(window.location.search);
-  const mode = params.get("overview");
+  const mode = params.get("data");
   if (["table", "json"].includes(mode)) return mode;
   return params.get("view") === "json" ? "json" : "table";
 }
 
 function setViewMode(mode, options = {}) {
-  if (!["review", "overview"].includes(mode)) return;
+  if (!["review", "data"].includes(mode)) return;
   state.viewMode = mode;
   state.editingPath = null;
   syncViewControls();
@@ -2679,27 +2702,27 @@ function setViewMode(mode, options = {}) {
     const url = new URL(window.location.href);
     if (mode === "review") {
       url.searchParams.delete("view");
-      url.searchParams.delete("overview");
+      url.searchParams.delete("data");
     } else {
-      url.searchParams.set("view", "overview");
-      if (state.overviewMode === "json") url.searchParams.set("overview", "json");
-      else url.searchParams.delete("overview");
+      url.searchParams.set("view", "data");
+      if (state.dataMode === "json") url.searchParams.set("data", "json");
+      else url.searchParams.delete("data");
     }
     history.replaceState(null, "", url);
   }
   renderExtractionPanel();
 }
 
-function setOverviewMode(mode, options = {}) {
+function setDataMode(mode, options = {}) {
   if (!["table", "json"].includes(mode)) return;
-  state.overviewMode = mode;
-  syncOverviewModeControls();
-  if (state.viewMode !== "overview") return;
+  state.dataMode = mode;
+  syncDataModeControls();
+  if (state.viewMode !== "data") return;
   if (options.updateUrl !== false) {
     const url = new URL(window.location.href);
-    url.searchParams.set("view", "overview");
-    if (mode === "json") url.searchParams.set("overview", "json");
-    else url.searchParams.delete("overview");
+    url.searchParams.set("view", "data");
+    if (mode === "json") url.searchParams.set("data", "json");
+    else url.searchParams.delete("data");
     history.replaceState(null, "", url);
   }
   renderExtractionPanel();
@@ -2713,20 +2736,20 @@ function syncViewControls() {
   });
   const title = $("#extraction-panel-title");
   if (title) {
-    title.textContent = state.viewMode === "overview"
-      ? "Extraction Overview"
+    title.textContent = state.viewMode === "data"
+      ? "Extraction Data"
       : "Extraction Review";
   }
   const header = $("#extraction-panel-header");
-  if (header) header.classList.toggle("overview-active", state.viewMode === "overview");
+  if (header) header.classList.toggle("data-active", state.viewMode === "data");
   const progress = $("#review-progress");
   if (progress) progress.style.display = state.viewMode === "review" ? "inline" : "none";
-  syncOverviewModeControls();
+  syncDataModeControls();
 }
 
-function syncOverviewModeControls() {
-  document.querySelectorAll(".view-mode-btn[data-overview-mode]").forEach(btn => {
-    const active = btn.dataset.overviewMode === state.overviewMode;
+function syncDataModeControls() {
+  document.querySelectorAll(".view-mode-btn[data-data-mode]").forEach(btn => {
+    const active = btn.dataset.dataMode === state.dataMode;
     btn.classList.toggle("active", active);
     btn.setAttribute("aria-pressed", active ? "true" : "false");
   });
@@ -2791,9 +2814,20 @@ function routeToDoc(articleId, { replace = false } = {}) {
   else window.location.hash = target;
 }
 
+function setToolbarScope(inDocument) {
+  // Document-scoped controls are hidden on the overview rather than disabled:
+  // there is no document for them to act on, so showing them implies a context
+  // the user is not in.
+  for (const sel of ["#article-select", ".article-nav", ".view-mode-toggle", "#btn-all-documents"]) {
+    const el = document.querySelector(sel);
+    if (el) el.style.display = inDocument ? "" : "none";
+  }
+}
+
 function showOverview() {
   $("#panels").style.display = "none";
   $("#overview-route").style.display = "block";
+  setToolbarScope(false);
   renderOverview();
 }
 
@@ -2813,7 +2847,11 @@ async function applyRoute() {
       select.value = route.articleId;
     }
     if (state.currentId !== route.articleId) await loadArticle(route.articleId);
-    else { $("#overview-route").style.display = "none"; $("#panels").style.display = "flex"; }
+    else {
+      $("#overview-route").style.display = "none";
+      $("#panels").style.display = "flex";
+      setToolbarScope(true);
+    }
     return;
   }
   state.currentId = null;
@@ -2893,7 +2931,7 @@ async function init() {
   state.articles = data.articles;
   state.schemaFields = schemaData.fields || {};
   state.viewMode = initialViewMode();
-  state.overviewMode = initialOverviewMode();
+  state.dataMode = initialDataMode();
   syncViewControls();
   // If a URL filter is present, load deep fields up front so the first
   // dropdown render reflects accurate matches (the filter expression may
@@ -2912,14 +2950,15 @@ async function init() {
   document.querySelectorAll(".view-mode-btn[data-view-mode]").forEach(btn => {
     btn.addEventListener("click", () => setViewMode(btn.dataset.viewMode));
   });
-  document.querySelectorAll(".view-mode-btn[data-overview-mode]").forEach(btn => {
-    btn.addEventListener("click", () => setOverviewMode(btn.dataset.overviewMode));
+  document.querySelectorAll(".view-mode-btn[data-data-mode]").forEach(btn => {
+    btn.addEventListener("click", () => setDataMode(btn.dataset.dataMode));
   });
   wireFilterControls();
   wireSelectedFieldActions();
 
   // Deep links survive reload, and the back button moves between the overview
   // and a document rather than leaving the app.
+  $("#btn-all-documents").addEventListener("click", () => { window.location.hash = "#/"; });
   window.addEventListener("hashchange", () => { applyRoute(); });
   await applyRoute();
 }
@@ -3291,6 +3330,7 @@ async function loadArticle(id) {
   // Show the document route
   $("#overview-route").style.display = "none";
   $("#panels").style.display = "flex";
+  setToolbarScope(true);
 
   // Clear search state
   clearSearchFull();
@@ -3347,6 +3387,7 @@ async function loadArticle(id) {
   renderExtractionPanel();
   updateStats();
   updateConfidenceChip();
+  renderRunChip();
 }
 
 // ── Bibliographic header ──
@@ -4361,7 +4402,7 @@ function buildTableRow(key, value, path) {
   </tr>`;
 }
 
-function renderOverviewView(data = effectiveExtraction()) {
+function renderDataView(data = effectiveExtraction()) {
   const panel = $("#panel-right");
   if (!data) {
     panel.innerHTML = '<div class="loading">No extraction data</div>';
@@ -4387,7 +4428,7 @@ function renderOverviewView(data = effectiveExtraction()) {
   }
 
   for (const key of complexKeys) {
-    html += renderOverviewValue(key, data[key], key, 0);
+    html += renderDataValue(key, data[key], key, 0);
   }
 
   html += '</div>';
@@ -4395,11 +4436,11 @@ function renderOverviewView(data = effectiveExtraction()) {
   wireOverviewEvents(panel);
 }
 
-function renderOverviewValue(key, val, basePath, depth) {
+function renderDataValue(key, val, basePath, depth) {
   if (isLeaf(val)) return "";
   if (isPrimitiveArray(val)) return buildOverviewMergedTable([], [{ key, val, path: basePath }]);
   if (Array.isArray(val) && val.length > 0 && isUniformArray(val)) {
-    return buildOverviewHorizontalTable(val, basePath, key);
+    return buildDataHorizontalTable(val, basePath, key);
   }
   if (Array.isArray(val)) {
     let html = "";
@@ -4443,7 +4484,7 @@ function buildOverviewSection(label, obj, basePath, depth) {
     html += buildOverviewMergedTable(leafRows, primitiveArrayEntries);
   }
   for (const entry of complexEntries) {
-    html += renderOverviewValue(entry.key, entry.val, entry.path, depth + 1);
+    html += renderDataValue(entry.key, entry.val, entry.path, depth + 1);
   }
 
   if (indent) html += '</div>';
@@ -4469,7 +4510,7 @@ function buildOverviewMergedTable(scalarRows, primitiveArrayEntries) {
           ? `<td class="field-cell" rowspan="${arr.length}" style="vertical-align:top">${humanize(entry.key)}</td>`
           : "";
         const selectedCls = state.selectedPath === itemPath ? " selected" : "";
-        html += `<tr class="clickable${selectedCls}" data-path="${itemPath}">${fieldCell}${buildOverviewValueCell(arr[i], itemPath)}</tr>`;
+        html += `<tr class="clickable${selectedCls}" data-path="${itemPath}">${fieldCell}${buildDataValueCell(arr[i], itemPath)}</tr>`;
       }
     }
   }
@@ -4480,10 +4521,10 @@ function buildOverviewMergedTable(scalarRows, primitiveArrayEntries) {
 function buildOverviewTableRow(key, value, path) {
   const selectedCls = state.selectedPath === path ? " selected" : "";
   return `<tr class="clickable${selectedCls}" data-path="${path}">` +
-    `<td class="field-cell">${humanize(key)}</td>${buildOverviewValueCell(value, path)}</tr>`;
+    `<td class="field-cell">${humanize(key)}</td>${buildDataValueCell(value, path)}</tr>`;
 }
 
-function buildOverviewValueCell(value, path) {
+function buildDataValueCell(value, path) {
   return `<td class="cell-value overview-value-cell" data-path="${path}">${overviewDisplayValue(value)}</td>`;
 }
 
@@ -4496,7 +4537,7 @@ function overviewDisplayValue(value) {
   return escapeHtml(String(value));
 }
 
-function buildOverviewHorizontalTable(arr, basePath, key) {
+function buildDataHorizontalTable(arr, basePath, key) {
   const columns = getUniformColumns(arr);
   const label = humanize(key);
   const hasExpandedCols = columns.some(c => c.isExpanded);
@@ -5873,6 +5914,15 @@ let saveStatusTimer = null;
 function setSaveStatus(message, status = "") {
   const el = $("#save-status");
   if (!el) return;
+  if (status !== "error") {
+    // Saving/Saved are deliberately silent: the field control itself moves
+    // between unreviewed, verified, and edited, and narrating that in the
+    // header is chatter. Only a failure needs words.
+    if (saveStatusTimer) clearTimeout(saveStatusTimer);
+    el.textContent = "";
+    el.dataset.status = "";
+    return;
+  }
   if (saveStatusTimer) clearTimeout(saveStatusTimer);
   el.textContent = message;
   el.dataset.status = status;
@@ -5997,6 +6047,19 @@ async function clearAnnotation(path, options = {}) {
       updateSelectedFieldBar(state.selectedPath);
     }
   }
+}
+
+function renderRunChip() {
+  const chip = $("#run-chip");
+  if (!chip) return;
+  const runId = activeRunId();
+  if (!runId) {
+    chip.style.display = "none";
+    return;
+  }
+  chip.textContent = `run ${runId.slice(-6)}`;
+  chip.title = `Reviewing run ${runId}`;
+  chip.style.display = "inline";
 }
 
 function renderReviewErrorBanner() {
@@ -6412,10 +6475,10 @@ function renderExtractionPanel() {
     return;
   }
   syncViewControls();
-  if (state.viewMode === "overview" && state.overviewMode === "json") {
+  if (state.viewMode === "data" && state.dataMode === "json") {
     renderJsonView(effectiveExtraction());
-  } else if (state.viewMode === "overview") {
-    renderOverviewView(effectiveExtraction());
+  } else if (state.viewMode === "data") {
+    renderDataView(effectiveExtraction());
   } else {
     renderReviewTable();
     updateReviewWorkspace();

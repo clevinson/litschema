@@ -25,7 +25,7 @@ def test_verifier_defaults_to_review_table_with_mode_switcher() -> None:
     html = STATIC_HTML.read_text()
 
     assert 'viewMode: "review"' in html
-    assert 'overviewMode: "table"' in html
+    assert 'dataMode: "table"' in html
     assert 'id="btn-review-table"' not in html
     assert 'id="btn-pivot-view"' not in html
     assert ">Pivot<" not in html
@@ -35,19 +35,19 @@ def test_verifier_defaults_to_review_table_with_mode_switcher() -> None:
     assert 'id="panel-right-meta"' not in html
     assert 'id="view-mode-review"' in html
     assert ">Audit</button>" in html
-    assert 'id="view-mode-overview"' in html
+    assert 'id="view-mode-data"' in html
     assert 'data-view-mode="review"' in html
-    assert 'data-view-mode="overview"' in html
+    assert 'data-view-mode="data"' in html
     assert 'data-view-mode="json"' not in html
     assert 'id="view-mode-json"' not in html
-    assert 'id="overview-mode-table"' in html
-    assert 'id="overview-mode-json"' in html
-    assert 'data-overview-mode="table"' in html
-    assert 'data-overview-mode="json"' in html
+    assert 'id="data-mode-table"' in html
+    assert 'id="data-mode-json"' in html
+    assert 'data-data-mode="table"' in html
+    assert 'data-data-mode="json"' in html
     assert "setViewMode" in html
-    assert "setOverviewMode" in html
+    assert "setDataMode" in html
     assert "initialViewMode" in html
-    assert "initialOverviewMode" in html
+    assert "initialDataMode" in html
     assert "syncViewControls" in html
 
 
@@ -55,13 +55,13 @@ def test_verifier_restores_read_only_overview_and_json_modes() -> None:
     html = STATIC_HTML.read_text()
 
     assert "renderReviewTable" in html
-    assert "renderOverviewView" in html
+    assert "renderDataView" in html
     assert "renderJsonView" in html
     assert "renderExtractionPanel" in html
-    assert "state.viewMode === \"overview\"" in html
-    assert "state.overviewMode === \"json\"" in html
-    assert "buildOverviewHorizontalTable" in html
-    assert "buildOverviewValueCell" in html
+    assert 'state.viewMode === "data"' in html
+    assert 'state.dataMode === "json"' in html
+    assert "buildDataHorizontalTable" in html
+    assert "buildDataValueCell" in html
     assert "json-tree" in html
     assert "json-toggle" in html
     assert "Overview" in html
@@ -75,7 +75,7 @@ def test_verifier_overview_and_json_use_effective_post_edit_values() -> None:
     assert "applyCorrectedValue" in html
     assert "if (!isOverridden(ann)) continue;" in html
     assert "removeValueAtPath" in html
-    assert "renderOverviewView(effectiveExtraction())" in html
+    assert "renderDataView(effectiveExtraction())" in html
     assert "renderJsonView(effectiveExtraction())" in html
 
 
@@ -102,8 +102,8 @@ def test_verifier_moves_identity_and_queue_controls_into_review_header() -> None
 def test_verifier_json_is_overview_submode_with_code_styling() -> None:
     html = STATIC_HTML.read_text()
 
-    assert "overview-mode-toggle" in html
-    assert "syncOverviewModeControls" in html
+    assert "data-mode-toggle" in html
+    assert "syncDataModeControls" in html
     assert "json-code-view" in html
     assert "json-token-key" in html
     assert "json-token-string" in html
@@ -200,16 +200,23 @@ def test_verifier_table_uses_compact_evidence_badges() -> None:
     assert "reasoning-tooltip-row" not in html
 
 
-def test_verifier_keeps_transient_feedback_out_of_review_header() -> None:
+def test_review_header_shows_failures_but_not_success_chatter() -> None:
+    """Success is shown by the control; only failure needs words.
+
+    Narrating "Saving…/Saved" in the header is noise when the field control
+    already moves between unreviewed, verified, and edited. A failure has no
+    other signal at all, so it must be visible — writing errors nowhere is how
+    a silently-swallowed edit stayed invisible.
+    """
     html = STATIC_HTML.read_text()
 
-    assert 'id="save-status"' not in html
-    assert 'id="bulk-status"' not in html
     assert "btn-undo-bulk" not in html
     assert "setSaveStatus" in html
     assert "saveAnnotation" in html
     assert "clearAnnotation" in html
-    assert "Failed to save annotation" in html
+    # Only the error branch renders.
+    assert 'if (status !== "error")' in html
+    assert 'id="save-status"' in html
 
 
 def test_verifier_uses_orcid_connect_flow() -> None:
@@ -607,3 +614,52 @@ def test_render_tokens_derive_from_v2_state_not_a_status_key() -> None:
     assert "ann?.status" not in html
     # Verification is an empty entry: no version-1 `source` tag rides along.
     assert "accepted_no_citation" not in html
+
+
+# ── navigation and orientation (UX audit) ────────────────────────────────────
+
+
+def test_document_route_has_a_marked_exit_to_the_overview() -> None:
+    """NN/g emergency exit: leaving a document must not require the back button."""
+    html = STATIC_HTML.read_text()
+
+    assert 'id="btn-all-documents"' in html
+    assert "All documents" in html
+    assert 'href="#/"' in html  # breadcrumb link
+    assert "doc-breadcrumb" in html
+
+
+def test_overview_is_not_also_the_name_of_a_document_view_mode() -> None:
+    """One word, one meaning.
+
+    "Overview" named the dataset route AND the per-document render mode AND its
+    sub-modes, so the only control labelled Overview on a document did not go
+    to the overview. The render mode is about one document's data and now says
+    so, in the label and in the code that backs it.
+    """
+    html = STATIC_HTML.read_text()
+
+    assert 'data-view-mode="data"' in html
+    assert ">Data</button>" in html
+    assert 'data-view-mode="overview"' not in html
+    assert "overviewMode" not in html
+    assert "renderOverviewView" not in html
+    # `overview` survives only as the route name.
+    assert 'return { name: "overview" };' in html
+
+
+def test_document_scoped_toolbar_controls_are_hidden_on_the_overview() -> None:
+    html = STATIC_HTML.read_text()
+
+    assert "function setToolbarScope(" in html
+    assert "setToolbarScope(false)" in html
+    assert "setToolbarScope(true)" in html
+
+
+def test_document_states_which_run_is_being_reviewed() -> None:
+    """Reviews bind to one immutable run, so which run is on screen is state."""
+    html = STATIC_HTML.read_text()
+
+    assert 'id="run-chip"' in html
+    assert "function renderRunChip(" in html
+    assert "Reviewing run" in html

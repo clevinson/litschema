@@ -55,6 +55,23 @@ route showing an article's runs and their states once articles can have more
 than one. That surface is developed on the `feat/multirun` branch and is not
 specified here.
 
+Each route states where the user is and offers a marked way out. A document
+shows a breadcrumb back to the overview and a persistent control returning to
+it, so leaving never depends on the browser's back button. Controls scoped to a
+document — the article selector, previous/next, and the view-mode toggle — are
+hidden on the overview rather than shown inert, since a visible control implies
+a context the user is not in.
+
+The document view names the run it is reviewing. Reviews bind to one immutable
+run, so which run is on screen is system state, not an implementation detail —
+particularly once more than one run can exist per article.
+
+No word names two things. The per-document render toggle switches how one
+document's *data* is displayed and is labelled accordingly; "overview" names
+the dataset route and nothing else. A control labelled for the route but wired
+to something else is worse than a missing control, because it silently does the
+wrong thing.
+
 Routes are deep-linkable and survive reload. Filter, sort, and view state use
 fragment query parameters and travel from the summary to a document route.
 Next/previous follows that encoded queue. A direct document link without queue
@@ -117,6 +134,17 @@ Writes identify the displayed run explicitly. If another process changes
 `active-run.json`, the page does not silently retarget a pending edit: it
 requires reload or explicit acknowledgement. Articles without an active run
 retain metadata/PDF access and show a clear extraction placeholder.
+
+#### Feedback
+
+A successful review needs no message: the field control moves between
+unreviewed, verified, and edited, and narrating that in the header is chatter.
+A failure is the opposite — it has no other signal, so it is stated in words
+and stays until the next action. Writing failures nowhere is how a rejected
+edit can look identical to a saved one.
+
+A bulk action reports what it did and what it skipped, because per-field
+feedback does not scale to an action that touches many fields at once.
 
 #### Verification affordances
 
@@ -188,6 +216,11 @@ Implementation coverage must replace brittle source-substring assertions with:
 - browser behavior on `#/` and `#/doc/{id}`, including direct load, fragment
   query state, filtered next/previous, exclusion of the open article,
   navigation, back/forward, and reload;
+- a marked exit from every document route, breadcrumb linking, and hiding of
+  document-scoped controls on the overview;
+- the displayed run identity, and the absence of any label naming both a route
+  and a view mode;
+- silence on successful saves and a visible, persistent message on failure;
 - bulk verification of a section whose evidence is cited only on an ancestor,
   preservation of existing overrides within it, and suppression of
   click-to-clear arming on everything it verified;
