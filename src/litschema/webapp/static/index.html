@@ -6721,13 +6721,24 @@ async function saveOrcidProfile() {
   save.disabled = true;
   try {
     const response = await fetch(`/api/orcid/${encodeURIComponent(value)}`);
-    if (!response.ok) throw new Error("not found");
-    setReviewerIdentity(await response.json());
+    if (response.ok) {
+      setReviewerIdentity(await response.json());
+      return;
+    }
+    // A 404 is the registry answering, not failing to: this iD does not exist.
+    // Accepting it anyway let a nonexistent identity satisfy a project policy
+    // that exists precisely to make reviews attributable.
+    if (response.status === 404) {
+      result.textContent = "No ORCID record for that iD — check the digits.";
+      return;
+    }
+    throw new Error(`registry error ${response.status}`);
   } catch {
-    // The lookup is a convenience, not a gate: an unreachable registry must not
-    // stop someone recording who they are.
-    result.textContent = "Could not reach ORCID; using the iD as entered.";
+    // Unreachable or erroring registry: the lookup is a convenience, not a
+    // gate, so record the iD — but say the name is unverified, and say it
+    // after setReviewerIdentity, which clears this line.
     setReviewerIdentity({ orcid: value, name: value });
+    result.textContent = "Could not reach ORCID; saved the iD unverified.";
   } finally {
     save.disabled = false;
   }

@@ -234,8 +234,11 @@ def test_identity_is_entered_inline_not_in_a_nested_dialog() -> None:
     assert 'id="btn-orcid-edit"' in html
     assert 'id="orcid-modal"' not in html  # the nested dialog is gone
     assert "function editReviewerIdentity(" in html
-    # A registry that cannot be reached must not block recording who you are.
-    assert "using the iD as entered" in html
+    # A registry that cannot be reached must not block recording who you are —
+    # but an iD it says does not exist is a different answer, and is refused.
+    assert "saved the iD unverified" in html
+    assert "No ORCID record for that iD" in html
+    assert "response.status === 404" in html
     assert 'id="orcid-input"' in html
     assert 'id="btn-orcid-save"' in html
     assert "saveOrcidProfile" in html
