@@ -3197,7 +3197,7 @@ function updateFilterBadge() {
 function evaluateFilterPreview(expr) {
   const input = $("#filter-input");
   const countEl = $("#filter-count");
-  if (state.filterUnconfirmed && expr === state.filterExpr) {
+  if (state.filterUnconfirmed) {
     // Still the expression that arrived in the URL. Evaluating it to show a
     // match count runs it just as surely as applying it, so reopening the
     // filter row must not become a way around the confirmation.
@@ -3562,6 +3562,11 @@ async function loadArticle(id) {
   if (listing && Array.isArray(listing.articles)) {
     mergeArticleSummaries(listing.articles);
     if (id !== state.currentId) return;
+    // Editor metadata is derived from the schema, so a schema that has moved
+    // since page load leaves cached controls typed against the old one.
+    const fields = await fetchJson("/api/schema/fields").catch(() => null);
+    if (id !== state.currentId) return;
+    if (fields && fields.fields) state.schemaFields = fields.fields;
   }
   const summary = state.articles.find(a => a.article_id === id);
   // Default to NOT requesting an extraction we cannot confirm exists. Assuming
@@ -4618,7 +4623,12 @@ function buildRowEditAction(path, status) {
 }
 
 function buildStatusActions(path, status) {
-  return `<span class="status-actions">${buildFieldStatus(path, status)}${buildRowEditAction(path, status)}</span>`;
+  // An override inherited from a container is not this field's to change: the
+  // override replaced the whole container, so editing or reverting here is
+  // rejected. Show the state, offer no action that cannot work.
+  const inheritedOverride = !state.annotations[path] && isOverridden(controllingAnnotation(path));
+  const action = inheritedOverride ? "" : buildRowEditAction(path, status);
+  return `<span class="status-actions">${buildFieldStatus(path, status)}${action}</span>`;
 }
 
 function sourceSummaryForPath(path, explicitRanges = null) {
@@ -6194,10 +6204,26 @@ function mergeArticleSummaries(fresh) {
   // them while `state.deepLoaded` still claimed they were there, so deep-field
   // filters silently stopped matching and could not reload.
   const previous = new Map(state.articles.map((a) => [a.article_id, a]));
+  let stale = false;
   state.articles = fresh.map((summary) => {
     const old = previous.get(summary.article_id);
-    return old ? { ...old, ...summary } : summary;
+    if (!old) {
+      stale = true;
+      return summary;
+    }
+    // Deep fields belong to a specific run. If the article moved to another
+    // one, carrying them forward would filter on the previous extraction.
+    if (old.active_run_id !== summary.active_run_id) {
+      stale = true;
+      return summary;
+    }
+    return { ...old, ...summary };
   });
+  if (stale && state.deepLoaded) {
+    // Let the next deep-field filter reload rather than matching on data that
+    // is no longer this run's.
+    state.deepLoaded = false;
+  }
 }
 
 // ── Annotations ──
