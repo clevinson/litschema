@@ -679,26 +679,34 @@ def test_leaf_paths_excludes_empty_containers() -> None:
     ]
 
 
-def test_the_browser_flow_fixture_records_its_own_schema_hash() -> None:
-    """Keep the fixture a state the product can actually produce.
+def test_every_fixture_run_records_its_project_schema_hash() -> None:
+    """Fixtures must be states the product can produce.
 
     The verifier refuses to type edits for a run whose recorded schema hash no
-    longer matches the project's. If this fixture drifts, the browser flow
-    fails with disabled controls that look like a product bug rather than a
-    stale fixture. Computed through `schema_hash` itself, so a change to how
-    identity is derived shows up here instead of silently disagreeing.
+    longer matches its project's, so a stale fixture presents as a product bug
+    — disabled controls, "schema mismatch" — rather than as stale data. This
+    covers every fixture project, not just the one the browser flow drives:
+    changing how identity is derived silently invalidated five of them.
     """
     from litschema.config import load_config
     from litschema.schema_resolution import schema_hash
 
-    root = Path(__file__).resolve().parent / "fixtures" / "projects" / "verifier_flow"
-    expected = schema_hash(load_config(root / "litschema.yaml", reload=True))
+    projects = Path(__file__).resolve().parent / "fixtures" / "projects"
+    stale = []
+    checked = 0
+    for project in sorted(projects.iterdir()):
+        config = project / "litschema.yaml"
+        if not config.is_file():
+            continue
+        expected = schema_hash(load_config(config, reload=True))
+        for run_json in sorted(project.rglob("run.json")):
+            checked += 1
+            recorded = json.loads(run_json.read_text()).get("schema_hash")
+            if recorded != expected:
+                stale.append(f"{run_json.relative_to(projects)} (want {expected})")
 
-    recorded = {p: json.loads(p.read_text())["schema_hash"] for p in root.rglob("run.json")}
-
-    assert recorded, "the fixture has no published runs"
-    stale = {str(p.relative_to(root)): h for p, h in recorded.items() if h != expected}
-    assert not stale, f"re-record schema_hash as {expected} in: {sorted(stale)}"
+    assert checked, "no fixture runs found"
+    assert not stale, "re-record schema_hash in:\n  " + "\n  ".join(stale)
 
 
 def test_unreviewing_an_append_takes_the_appends_that_depend_on_it(tmp_path) -> None:
