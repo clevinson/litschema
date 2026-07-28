@@ -20,30 +20,33 @@ def _try_json(text: str):
 def _project_schema_hash(article_dir: Path) -> str:
     """The real hash of the schema this article's project is configured with.
 
-    Recording a placeholder made every fixture look like a run extracted
-    against some other schema, which is exactly the state the verifier now
-    refuses to interpret. Fixtures should be states the product can produce.
+    Computed through the product's own `schema_hash`, not a local reimplementation
+    — recording a placeholder (or a differently-derived digest) makes every
+    fixture look like a run extracted against some other schema, which is
+    exactly the state the verifier now refuses to interpret.
     """
-    import hashlib
-
     from litschema.config import load_config
-    from litschema.schema_resolution import extraction_schema_path
+    from litschema.schema_resolution import _schema_closure, schema_hash
 
-    # Prefer the project's own config; many tests build LitSchemaConfig in
-    # memory and never write litschema.yaml, so fall back to the conventional
-    # layout (<project>/schema/extraction.yaml) that those tests do create.
     for candidate in [article_dir, *article_dir.parents]:
         config = candidate / "litschema.yaml"
         if config.is_file():
             try:
-                schema = extraction_schema_path(load_config(config, reload=True))
+                return schema_hash(load_config(config, reload=True))
             except Exception:
-                schema = None
-            if schema is not None and schema.is_file():
-                return "sha256:" + hashlib.sha256(schema.read_bytes()).hexdigest()
+                break
+        # Many tests build LitSchemaConfig in memory and never write
+        # litschema.yaml, but they do create the conventional layout.
         default = candidate / "schema" / "extraction.yaml"
         if default.is_file():
-            return "sha256:" + hashlib.sha256(default.read_bytes()).hexdigest()
+            import hashlib
+
+            digest = hashlib.sha256()
+            for path in _schema_closure(default):
+                digest.update(path.name.encode())
+                digest.update(b"\0")
+                digest.update(path.read_bytes())
+            return "sha256:" + digest.hexdigest()
     return "sha256:test"
 
 

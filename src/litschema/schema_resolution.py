@@ -111,7 +111,7 @@ def coerce_to_slot(view: SchemaView, slot, value):
     """
     if slot is None or value is None:
         return value
-    range_name = getattr(slot, "range", None)
+    range_name, _ = _resolve_type(view, getattr(slot, "range", None))
     if range_name not in _SCALAR_COERCIONS or not isinstance(value, str):
         return value
     text = value.strip()
@@ -237,8 +237,11 @@ def _resolve_type(view: SchemaView, range_name) -> tuple[str | None, str | None]
 def _check_constraints(slot, base: str | None, value, type_pattern: str | None) -> None:
     import re
 
+    # JSON Schema `pattern` semantics: matches anywhere unless the pattern
+    # anchors itself. `fullmatch` here was stricter than the schema and refused
+    # edits the schema permits.
     pattern = getattr(slot, "pattern", None) or type_pattern
-    if pattern and isinstance(value, str) and not re.fullmatch(pattern, value):
+    if pattern and isinstance(value, str) and not re.search(pattern, value):
         raise ValueError(f"{value!r} does not match the pattern for {slot.name} ({pattern})")
 
     if base in ("integer", "float", "double", "decimal"):
@@ -256,9 +259,15 @@ def _check_constraints(slot, base: str | None, value, type_pattern: str | None) 
         parser = {"date": date.fromisoformat, "datetime": datetime.fromisoformat,
                   "time": _time.fromisoformat}[base]
         try:
-            parser(value)
+            parsed = parser(value)
         except ValueError:
             raise ValueError(f"{value!r} is not a valid {base} for {slot.name}") from None
+        # fromisoformat accepts "2024-01-01" as a datetime; a datetime slot
+        # wants a time component, not a midnight the author never wrote.
+        if base == "datetime" and not isinstance(parsed, datetime):
+            raise ValueError(f"{value!r} is a date, not a datetime, for {slot.name}")
+        if base == "datetime" and "T" not in value and " " not in value:
+            raise ValueError(f"{value!r} has no time component for {slot.name}")
 
 
 @lru_cache(maxsize=32)
@@ -396,14 +405,61 @@ def identifier_reference_slots(view: SchemaView, root_class: str) -> list[dict]:
 
 
 def schema_hash(cfg: LitSchemaConfig) -> str:
-    """Schema identity: the SHA-256 of the configured schema file's exact bytes.
+    """Schema identity: a digest over the schema and every file it imports.
 
-    The digest alone identifies the schema (specs/project-config/spec.md);
-    deterministic and independent of the working directory.
+    Hashing only the configured file is wrong wherever a project splits its
+    schema across files — `tests/fixtures/projects/organic_inherits` does
+    exactly that, importing a base schema and subclassing it with `is_a`.
+    Editing the imported file left the recorded hash unchanged, so a run's
+    provenance named bytes it was not extracted against and the
+    schema-mismatch check waved the difference through.
+
+    LinkML's own libraries (`linkml:...`) version with the dependency rather
+    than with the project, so they are not part of project schema identity.
+
+    Deterministic and independent of the working directory.
     """
     import hashlib
 
-    return "sha256:" + hashlib.sha256(extraction_schema_path(cfg).read_bytes()).hexdigest()
+    digest = hashlib.sha256()
+    for path in _schema_closure(extraction_schema_path(cfg)):
+        # File name as well as bytes: moving content between files is a change
+        # of schema even when the concatenated bytes happen to match.
+        digest.update(path.name.encode())
+        digest.update(b"\0")
+        digest.update(path.read_bytes())
+    return "sha256:" + digest.hexdigest()
+
+
+def _schema_closure(entry: Path) -> list[Path]:
+    """``entry`` plus every project schema file it transitively imports.
+
+    Sorted by resolved path so the digest never depends on traversal order.
+    Unreadable or missing imports are skipped: resolution reports those, and
+    computing an identity must not raise.
+    """
+    import yaml
+
+    seen: dict[str, Path] = {}
+    queue = [entry]
+    while queue:
+        current = queue.pop()
+        key = str(current.resolve())
+        if key in seen or not current.is_file():
+            continue
+        seen[key] = current
+        try:
+            document = yaml.safe_load(current.read_text()) or {}
+        except (OSError, yaml.YAMLError):
+            continue
+        if not isinstance(document, dict):
+            continue
+        for name in document.get("imports") or []:
+            name = str(name)
+            if name.startswith("linkml:") or ":" in name:
+                continue  # a CURIE, not a project file
+            queue.append((current.parent / name).with_suffix(".yaml"))
+    return [seen[key] for key in sorted(seen)]
 
 
 def resolve_extraction_schema(cfg: LitSchemaConfig) -> ResolvedExtractionSchema:

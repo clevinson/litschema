@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from litschema import schema_resolution
 from litschema.config import load_config
 
@@ -221,3 +223,51 @@ def test_doctor_names_the_resolved_schema_when_it_is_healthy(tmp_path) -> None:
     assert "extraction schema:" in output
     assert "ActualRoot" in output
     assert "cannot resolve the extraction schema" not in output
+
+
+def test_schema_identity_covers_imported_schema_files(tmp_path) -> None:
+    """A split schema's identity must include what it imports.
+
+    `organic_inherits` imports a base schema and subclasses it, so hashing only
+    the configured file meant editing the base left the recorded hash
+    unchanged: a run's provenance named bytes it was not extracted against, and
+    the schema-mismatch check waved the difference through.
+    """
+    import shutil
+
+    from litschema.schema_resolution import (
+        _schema_closure,
+        extraction_schema_path,
+        schema_hash,
+    )
+
+    source = Path("tests/fixtures/projects/organic_inherits")
+    project = tmp_path / "p"
+    shutil.copytree(source, project)
+    cfg = load_config(project / "litschema.yaml", reload=True)
+
+    entry = extraction_schema_path(cfg)
+    closure = _schema_closure(entry)
+    assert len(closure) == 2, [p.name for p in closure]
+
+    before = schema_hash(cfg)
+    imported = next(p for p in closure if p != entry)
+    imported.write_text(imported.read_text() + "\n# edited the imported base\n")
+
+    assert schema_hash(cfg) != before
+
+
+def test_schema_identity_ignores_linkml_library_imports(tmp_path) -> None:
+    """`linkml:types` versions with the dependency, not with the project."""
+    from litschema.schema_resolution import _schema_closure
+
+    schema_dir = tmp_path / "schema"
+    schema_dir.mkdir(parents=True)
+    entry = schema_dir / "extraction.yaml"
+    entry.write_text(
+        "id: https://example.org/t\nname: t\n"
+        "prefixes:\n  linkml: https://w3id.org/linkml/\n"
+        "imports: [linkml:types]\nclasses:\n  A:\n    tree_root: true\n"
+    )
+
+    assert _schema_closure(entry) == [entry]
