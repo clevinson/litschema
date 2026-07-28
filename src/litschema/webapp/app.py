@@ -180,9 +180,9 @@ def _active_artifact(files: ArticleFiles, name: str, run_id: str | None = None):
     return getattr(run, name)
 
 
-def _extraction_confidence(files: ArticleFiles) -> float | None:
+def _extraction_confidence(files: ArticleFiles, run=None) -> float | None:
     """The extractor's overall self-rated confidence from agent-reasoning.json."""
-    reasoning_path = _active_artifact(files, "reasoning")
+    reasoning_path = run.reasoning if run is not None else _active_artifact(files, "reasoning")
     if reasoning_path is None or not reasoning_path.exists():
         return None
     try:
@@ -212,31 +212,26 @@ def _leaf_paths(obj, base_path: str = "") -> list[str]:
     return paths
 
 
-def _active_run_summary(files: ArticleFiles) -> dict | None:
-    """What produced the active extraction, for display.
+def _run_summary_for(run) -> dict | None:
+    """What produced this run, for display.
 
-    The run id is opaque by contract, so it identifies but does not inform. A
-    reviewer judging an extraction wants to know what produced it and when —
-    the id is carried along only because run-level CLI commands take it.
-
-    Resolves the pointer once. Reporting `active_run_id` from a separate
-    resolution meant a listing entry could pair one run's id with another run's
-    metadata if the pointer moved between the two reads, and cost a second file
-    read per article for no benefit.
+    Takes an already-resolved run rather than resolving the pointer itself, so
+    every field a listing entry reports describes the same run. The run id is
+    opaque by contract, so it identifies but does not inform — a reviewer
+    judging an extraction wants to know what produced it and when; the id is
+    carried along only because run-level CLI commands take it.
     """
-    from ..runs import BrokenActiveRunError, active_run
-
-    try:
-        run = active_run(files)
-    except BrokenActiveRunError:
-        return None
     if run is None:
         return None
     try:
         record = run.read_run_json()
     except (OSError, ValueError):
         return {"run_id": run.run_id}
-    agent = record.get("agent") or {}
+    if not isinstance(record, dict):
+        return {"run_id": run.run_id}
+    agent = record.get("agent")
+    if not isinstance(agent, dict):
+        agent = {}
     return {
         "run_id": run.run_id,
         "created_at": record.get("created_at"),
@@ -369,16 +364,14 @@ def _identifier_paths(files: ArticleFiles, run) -> set[str]:
         return set()
 
 
-def _article_progress(files: ArticleFiles) -> dict:
-    """Review progress for an article's active run.
+def _article_progress(files: ArticleFiles, run) -> dict:
+    """Review progress for one already-resolved run.
 
     `specs/reviews/spec.md` owns effective state; this only aggregates. A
     corrupt review file nulls the counts rather than reporting them as zero —
     zero would read as "nothing reviewed yet", which is a different and much
     more comfortable claim than "we cannot tell".
     """
-    from ..runs import BrokenActiveRunError, active_run
-
     empty = {
         "n_fields": 0,
         "n_reviewed": 0,
@@ -390,10 +383,6 @@ def _article_progress(files: ArticleFiles) -> dict:
         "review_error": None,
         "schema_error": None,
     }
-    try:
-        run = active_run(files)
-    except BrokenActiveRunError as exc:
-        return {**empty, "review_error": str(exc)}
     if run is None:
         return empty
 
@@ -511,9 +500,9 @@ async def index():
     return (STATIC_DIR / "index.html").read_text()
 
 
-def _read_valid_extraction(files: ArticleFiles) -> dict | None:
+def _read_valid_extraction(files: ArticleFiles, run=None) -> dict | None:
     """Return the parsed extraction JSON, or None if absent, invalid, or errored."""
-    extraction_path = _active_artifact(files, "extraction")
+    extraction_path = run.extraction if run is not None else _active_artifact(files, "extraction")
     if extraction_path is None or not extraction_path.exists():
         return None
     try:
@@ -555,7 +544,20 @@ async def list_articles(cfg: CfgDep):
             "metadata_source": bib.get("metadata_source"),
         }
 
-        data = _read_valid_extraction(files)
+        # One snapshot of the active run per article. Resolving the pointer
+        # separately for the extraction, the progress, the confidence, and the
+        # provenance let a listing entry combine data from one run with
+        # metadata from another if activation moved mid-request.
+        from ..runs import BrokenActiveRunError as _Broken
+        from ..runs import active_run as _active_run
+
+        try:
+            run = _active_run(files)
+            run_error = None
+        except _Broken as exc:
+            run, run_error = None, str(exc)
+
+        data = None if run is None else _read_valid_extraction(files, run)
         if data is None:
             entry.update(
                 {
@@ -564,17 +566,21 @@ async def list_articles(cfg: CfgDep):
                     "n_setups": 0,
                     "active_run_id": None,
                     "active_run": None,
-                    **_article_progress(files),
+                    **(
+                        {**_article_progress(files, None), "review_error": run_error}
+                        if run_error
+                        else _article_progress(files, run)
+                    ),
                 }
             )
         else:
             setups = data.get("experimental_setups") or []
-            progress = _article_progress(files)
-            run_summary = _active_run_summary(files)
+            progress = _article_progress(files, run)
+            run_summary = _run_summary_for(run)
             entry.update(
                 {
                     "has_extraction": True,
-                    "confidence": _extraction_confidence(files),
+                    "confidence": _extraction_confidence(files, run),
                     "study_types": data.get("study_types", []),
                     "focus_areas": data.get("focus_areas", []),
                     "document_type": data.get("document_type"),

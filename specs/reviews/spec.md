@@ -13,10 +13,11 @@ Live today: the stored model, effective state, canonical hierarchy, the `add`
 op, subtree unreview, corrupt handling, and the run-explicit annotation API.
 Version 1 is gone rather than migrated — its keys are rejected as corrupt.
 
-Pending: the verifier frontend still speaks the version-1 vocabulary
-(verified/flagged) and has not been rebuilt against these endpoints, so
-in-browser review editing does not work until `ka84` lands. Every other
-consumer — export, the explore store, progress aggregation — reads v2.
+The verifier frontend reads and writes these endpoints: status rendering,
+progress counting, bulk selection, and clearing all resolve a path's
+controlling entry — the exact one, else the nearest stored ancestor — so
+container coverage behaves the same on screen as it does in the store. Export,
+the explore store, and progress aggregation read v2 as well.
 
 ## Stored model
 
@@ -236,9 +237,10 @@ Because a review binds to one immutable run, rerunning an article will one day
 need its reviews carried forward conservatively — copied only where the source
 meaning and target mapping are proven, with everything unproven left for a
 human. That reconciliation workflow is developed on the `feat/multirun` branch
-and is deliberately not specified here; nothing in this release creates a
-second run to reconcile against. Run-bound storage is what makes it possible
-later without changing this format.
+and is deliberately not specified here. Re-extraction does create a further
+run and activate it, and `runs activate` can select between published runs;
+what is absent is carrying reviews across them. Run-bound storage is what makes
+that possible later without changing this format.
 
 ## User surface
 

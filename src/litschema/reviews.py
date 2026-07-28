@@ -496,6 +496,21 @@ def effective_extraction(run: RunFiles, fields: dict[str, dict] | None = None) -
     return data
 
 
+def _added_leaf_paths(path: str, value) -> list[str]:
+    """The leaf paths an ``add`` contributes beneath its target path.
+
+    A scalar contributes the target itself; a container contributes its leaves,
+    with the same empty-container rule `leaf_paths` uses.
+    """
+    if not isinstance(value, dict | list):
+        return [path]
+    nested = leaf_paths(value)
+    if not nested:
+        return []
+    parts = parse_path(path)
+    return [format_path((*parts, *parse_path(leaf))) for leaf in nested]
+
+
 def _resolve_parts(data, parts: tuple[str | int, ...]):
     try:
         return resolve(data, format_path(parts))
@@ -522,8 +537,15 @@ def review_progress(
     paths = [p for p in leaf_paths(extraction) if p not in skip]
     for path, entry in fields.items():
         override = entry.get("override")
-        if override and override["op"] == "add" and path not in paths and path not in skip:
-            paths.append(path)
+        if not override or override["op"] != "add":
+            continue
+        # An added object contributes its leaves, not one container path.
+        # Counting the container as a single field made a reviewer who supplied
+        # a whole missing measurement look one field further along than they
+        # were, and made completion possible with fields still unreviewed.
+        for added in _added_leaf_paths(path, override.get("value")):
+            if added not in paths and added not in skip:
+                paths.append(added)
 
     verified = overridden = 0
     for path in paths:

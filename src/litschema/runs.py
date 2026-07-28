@@ -151,9 +151,17 @@ def active_run(files: ArticleFiles) -> RunFiles | None:
 
 
 def _write_active_pointer(files: ArticleFiles, run_id: str) -> None:
-    tmp = files.active_run_file.with_suffix(".json.tmp")
+    # Unique temp name per write, in the same directory so the replace stays
+    # atomic. A shared `.json.tmp` let two concurrent publishers overwrite each
+    # other's staging file, after which the losing one could tear down a run the
+    # pointer had already been moved to.
+    tmp = files.active_run_file.with_suffix(f".json.tmp.{os.getpid()}.{run_id}")
     tmp.write_text(json.dumps({"run_id": run_id}) + "\n")
-    os.replace(tmp, files.active_run_file)
+    try:
+        os.replace(tmp, files.active_run_file)
+    except OSError:
+        tmp.unlink(missing_ok=True)
+        raise
 
 
 class RunActivationError(Exception):
@@ -208,6 +216,15 @@ def activate_run(files: ArticleFiles, run_id: str) -> None:
     if not run.reasoning.is_file():
         raise RunActivationError(
             f"{run_id} has no agent-reasoning.json; the verifier needs it to show evidence"
+        )
+    try:
+        reasoning = json.loads(run.reasoning.read_text())
+    except (OSError, ValueError) as exc:
+        raise RunActivationError(f"{run_id} has unreadable reasoning: {exc}") from None
+    if not isinstance(reasoning, dict) or not isinstance(reasoning.get("fields"), list):
+        raise RunActivationError(
+            f"{run_id} has reasoning with no usable fields list; the verifier reads it "
+            f"on every document load"
         )
 
     _write_active_pointer(files, run.run_id)
