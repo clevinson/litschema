@@ -684,12 +684,15 @@ def test_the_browser_flow_fixture_records_its_own_schema_hash() -> None:
 
     The verifier refuses to type edits for a run whose recorded schema hash no
     longer matches the project's. If this fixture drifts, the browser flow
-    fails with 409s that look like a product bug rather than a stale fixture.
+    fails with disabled controls that look like a product bug rather than a
+    stale fixture. Computed through `schema_hash` itself, so a change to how
+    identity is derived shows up here instead of silently disagreeing.
     """
-    import hashlib
+    from litschema.config import load_config
+    from litschema.schema_resolution import schema_hash
 
     root = Path(__file__).resolve().parent / "fixtures" / "projects" / "verifier_flow"
-    expected = "sha256:" + hashlib.sha256((root / "schema" / "extraction.yaml").read_bytes()).hexdigest()
+    expected = schema_hash(load_config(root / "litschema.yaml", reload=True))
 
     recorded = {p: json.loads(p.read_text())["schema_hash"] for p in root.rglob("run.json")}
 
