@@ -305,6 +305,12 @@ def test_schema_closure_keeps_an_explicit_yml_import(tmp_path) -> None:
         ("date", "2024-01-01T10:00:00", False),
         ("time", "10:30:00", True),
         ("time", "1030", False),
+        # xsd:date takes a timezone even though date.fromisoformat cannot
+        # parse one, and XSD bounds offsets at +/-14:00.
+        ("date", "2024-01-01Z", True),
+        ("date", "2024-01-01+05:30", True),
+        ("date", "2024-01-01+15:00", False),
+        ("date", "2024-13-01", False),
     ],
 )
 def test_temporal_values_follow_xsd_lexical_forms(tmp_path, range_name, value, valid) -> None:
@@ -328,3 +334,17 @@ def test_temporal_values_follow_xsd_lexical_forms(tmp_path, range_name, value, v
     else:
         with pytest.raises(ValueError):
             _check_single_value(view, slot, value)
+
+
+def test_only_one_file_answers_a_suffixless_import(tmp_path) -> None:
+    """Both candidates in the digest would let an unused sibling change identity.
+
+    LinkML resolves one file for `imports: [base]`. Including both `base.yaml`
+    and `base.yml` meant editing the one it never reads changed the schema hash.
+    """
+    from litschema.schema_resolution import _import_candidates
+
+    (tmp_path / "base.yaml").write_text("id: https://example.org/a\nname: a\n")
+    (tmp_path / "base.yml").write_text("id: https://example.org/b\nname: b\n")
+
+    assert [p.name for p in _import_candidates(tmp_path, "base")] == ["base.yaml"]

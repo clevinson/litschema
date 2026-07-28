@@ -261,21 +261,33 @@ def _check_constraints(slot, base: str | None, value, type_pattern: str | None) 
         from datetime import time as _time
 
         lexical = {
-            "date": r"-?\d{4}-\d{2}-\d{2}(Z|[+-]\d{2}:\d{2})?",
-            "time": r"\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})?",
+            "date": r"-?\d{4}-\d{2}-\d{2}(?P<tz>Z|[+-]\d{2}:\d{2})?",
+            "time": r"\d{2}:\d{2}:\d{2}(\.\d+)?(?P<tz>Z|[+-]\d{2}:\d{2})?",
             "datetime": (
-                r"-?\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})?"
+                r"-?\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}"
+                r"(\.\d+)?(?P<tz>Z|[+-]\d{2}:\d{2})?"
             ),
         }[base]
-        if not re.fullmatch(lexical, value):
+        match = re.fullmatch(lexical, value)
+        if not match:
             raise ValueError(f"{value!r} is not a valid {base} for {slot.name}")
+        offset = match.group("tz")
+        if offset and offset != "Z":
+            # XSD bounds timezone offsets at ±14:00; the regex alone would take
+            # +15:00, and Python's parser accepts it too.
+            hours, minutes = (int(part) for part in offset[1:].split(":"))
+            if hours * 60 + minutes > 14 * 60:
+                raise ValueError(f"{offset} is not a valid timezone offset for {slot.name}")
         parser = {
             "date": date.fromisoformat,
             "datetime": datetime.fromisoformat,
             "time": _time.fromisoformat,
         }[base]
+        # `date.fromisoformat` cannot parse a timezone, though xsd:date allows
+        # one, so the calendar check runs on the bare date.
+        parseable = value[: match.start("tz")] if (offset and base == "date") else value
         try:
-            parser(value.replace("Z", "+00:00"))
+            parser(parseable.replace("Z", "+00:00"))
         except ValueError:
             raise ValueError(f"{value!r} is not a valid {base} for {slot.name}") from None
 
@@ -483,7 +495,13 @@ def _import_candidates(directory: Path, name: str) -> list[Path]:
     target = directory / name
     if target.suffix in (".yaml", ".yml"):
         return [target]
-    return [Path(f"{target}.yaml"), Path(f"{target}.yml")]
+    # Exactly one candidate: enqueueing both would fold an unused sibling into
+    # the identity digest, so editing a file LinkML never reads would change
+    # the schema hash. `.yaml` wins, matching LinkML's own preference order.
+    for candidate in (Path(f"{target}.yaml"), Path(f"{target}.yml")):
+        if candidate.is_file():
+            return [candidate]
+    return []
 
 
 def resolve_extraction_schema(cfg: LitSchemaConfig) -> ResolvedExtractionSchema:

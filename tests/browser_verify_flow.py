@@ -191,6 +191,22 @@ def api(base: str, path: str):
 # ── the flow ─────────────────────────────────────────────────────────────────
 
 
+def await_document(page) -> None:
+    """Wait for the document to be loaded, not merely for its panels to exist.
+
+    Fixed sleeps went marginal as soon as document load grew another request,
+    which showed up as an intermittent section-verify failure rather than as
+    anything to do with the fetch that caused it.
+    """
+    page.wait_for_selector("#panels", state="visible", timeout=20000)
+    page.wait_for_function(
+        "() => state.extraction !== null && state.currentRunId !== null"
+        " && Object.keys(state.schemaFields || {}).length > 0",
+        timeout=20000,
+    )
+    page.wait_for_load_state("networkidle")
+
+
 def status_class(page, path: str) -> str:
     btn = page.locator(f'button.field-status[data-path="{path}"]').first
     return btn.get_attribute("class") or ""
@@ -296,9 +312,7 @@ def run_flow(harness: Harness) -> None:
 
         print("\n[open a document]")
         page.locator(f'#overview-rows tr[data-article="{article}"]').click()
-        page.wait_for_selector("#panels", state="visible", timeout=20000)
-        page.wait_for_load_state("networkidle")
-        page.wait_for_timeout(800)
+        await_document(page)
         check("routed to document", f"#/doc/{article}" in page.url)
         check("document is pinned to one run",
               bool(page.evaluate("() => state.currentRunId")),
@@ -335,8 +349,7 @@ def run_flow(harness: Harness) -> None:
             check("exit returns to the overview", page.url.rstrip("/").endswith("#/")
                   or page.locator("#overview-route").is_visible(), page.url)
             page.goto(f"{base}/#/doc/{article}", wait_until="networkidle")
-            page.wait_for_selector("#panels", state="visible", timeout=20000)
-            page.wait_for_timeout(900)
+            await_document(page)
 
         print("\n[deep links honour the view they name]")
         for view, expected in (("review", "review"), ("data", "data")):
@@ -346,8 +359,7 @@ def run_flow(harness: Harness) -> None:
                   page.evaluate("() => state.viewMode") == expected,
                   str(page.evaluate("() => state.viewMode")))
         page.goto(f"{base}/#/doc/{article}", wait_until="networkidle")
-        page.wait_for_selector("#panels", state="visible", timeout=20000)
-        page.wait_for_timeout(900)
+        await_document(page)
 
         print("\n[verify a field]")
         target = strings[0]
@@ -362,8 +374,7 @@ def run_flow(harness: Harness) -> None:
 
         print("\n[verify survives a reload]")
         page.reload(wait_until="networkidle")
-        page.wait_for_selector("#panels", state="visible", timeout=20000)
-        page.wait_for_timeout(1200)
+        await_document(page)
         check("still verified after reload", "status-verified" in status_class(page, target),
               status_class(page, target))
 
