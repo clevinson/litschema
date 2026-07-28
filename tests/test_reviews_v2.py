@@ -538,6 +538,8 @@ classes:
         range: float
       tillage:
         range: Tillage
+      notes:
+        multivalued: true
 """
 
 VALIDATION_DATA = {
@@ -755,18 +757,14 @@ def test_review_progress_matches_what_the_effective_extraction_contains(tmp_path
     assert review_progress(run)["n_reviewed"] == 0
 
 
+# Same schema, but `ph` becomes required — so an added Experiment that omits
+# it is incomplete rather than merely sparse.
 REQUIRED_SLOT_SCHEMA = VALIDATION_SCHEMA.replace(
-    """  Experiment:
-    attributes:
-      ph:
+    """      ph:
         range: float""",
-    """  Experiment:
-    attributes:
-      ph:
+    """      ph:
         range: float
-        required: true
-      notes:
-        multivalued: true""",
+        required: true""",
 )
 
 
@@ -842,3 +840,23 @@ def test_an_append_under_a_verified_ancestor_can_be_taken_back(tmp_path) -> None
 
     assert "experiments[1]" not in fields
     assert len(effective_extraction(run)["experiments"]) == 1
+
+
+def test_adding_a_list_valued_property_counts_its_elements(tmp_path) -> None:
+    """`leaf_paths` walks from an object root, so a bare list has no start path.
+
+    Passing an added list straight to it raised `InvalidReviewPathError` — a
+    500 — for the ordinary case of supplying a missing multivalued field.
+    """
+    run, schema = _schema_run(tmp_path)
+    before = review_progress(run)["n_fields"]
+
+    fields = upsert_review(
+        run,
+        "experiments[0].notes",
+        {"override": {"op": "add", "value": ["one", "two", "three"]}},
+        schema=schema,
+    )
+
+    assert "experiments[0].notes" in fields
+    assert review_progress(run)["n_fields"] == before + 3

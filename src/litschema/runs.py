@@ -69,11 +69,15 @@ def is_error_marker(data: object) -> bool:
         return False
     if not isinstance(data.get("reason"), str) or not data["reason"].strip():
         return False
-    # Exactly the marker keys, not a subset: the extraction contract defines
-    # the shape as `{"article_id": ..., "error": true, "reason": ...}`, and an
-    # anonymous `{"error": true, "reason": "..."}` names no article, so nothing
-    # downstream can tell which document failed.
-    return set(data) == {"article_id", "error", "reason"}
+    # Exactly the marker keys, and an `article_id` that actually identifies
+    # something: the contract's shape is
+    # `{"article_id": ..., "error": true, "reason": ...}`, and a marker whose
+    # id is null, empty, or not a string names no document, so nothing
+    # downstream can say which one failed.
+    if set(data) != {"article_id", "error", "reason"}:
+        return False
+    article_id = data["article_id"]
+    return isinstance(article_id, str) and bool(article_id.strip())
 
 
 def new_run_id() -> str:
@@ -236,6 +240,16 @@ def activate_run(files: ArticleFiles, run_id: str) -> None:
         raise RunActivationError(
             f"{run_id} has reasoning with no usable fields list; the verifier reads it "
             f"on every document load"
+        )
+    # Every entry must carry a string `path`: the verifier calls
+    # `entry.path.startsWith(...)` on each one, so a single malformed entry
+    # breaks every document load for this article.
+    if not all(
+        isinstance(entry, dict) and isinstance(entry.get("path"), str)
+        for entry in reasoning["fields"]
+    ):
+        raise RunActivationError(
+            f"{run_id} has reasoning entries without a string `path`"
         )
 
     _write_active_pointer(files, run.run_id)

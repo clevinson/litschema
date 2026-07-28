@@ -33,6 +33,7 @@ from ..review_paths import InvalidReviewPathError, canonical_review_path
 from ..reviews import (
     ReviewContractError,
     ReviewCorruptError,
+    effective_extraction,
     effective_state,
     read_reviews,
     review_progress,
@@ -359,9 +360,21 @@ def _identifier_paths(files: ArticleFiles, run) -> set[str]:
     except Exception:
         return set()
     try:
-        return identifier_leaf_paths(resolved.view, resolved.root_class, data)
+        excluded = identifier_leaf_paths(resolved.view, resolved.root_class, data)
     except Exception:
         return set()
+    # Added objects contribute their own leaves to the denominator, so their
+    # identifier slots have to be excluded too — derived from the raw
+    # extraction alone, an added measurement's id counted as review work and
+    # then as overridden, which the verifier contract excludes.
+    try:
+        from ..reviews import read_reviews
+
+        effective = effective_extraction(run, read_reviews(run))
+        excluded |= identifier_leaf_paths(resolved.view, resolved.root_class, effective)
+    except Exception:
+        pass
+    return excluded
 
 
 def _article_progress(files: ArticleFiles, run) -> dict:

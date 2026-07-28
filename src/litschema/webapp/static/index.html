@@ -3197,6 +3197,14 @@ function updateFilterBadge() {
 function evaluateFilterPreview(expr) {
   const input = $("#filter-input");
   const countEl = $("#filter-count");
+  if (state.filterUnconfirmed && expr === state.filterExpr) {
+    // Still the expression that arrived in the URL. Evaluating it to show a
+    // match count runs it just as surely as applying it, so reopening the
+    // filter row must not become a way around the confirmation.
+    countEl.textContent = "From this link — review it, then press Apply to run it.";
+    countEl.classList.add("error");
+    return null;
+  }
   const { fn, error } = compileFilter(expr);
   if (error) {
     input.classList.add("error");
@@ -3552,7 +3560,7 @@ async function loadArticle(id) {
   // while this tab stayed open.
   const listing = await fetchJson("/api/articles").catch(() => null);
   if (listing && Array.isArray(listing.articles)) {
-    state.articles = listing.articles;
+    mergeArticleSummaries(listing.articles);
     if (id !== state.currentId) return;
   }
   const summary = state.articles.find(a => a.article_id === id);
@@ -4596,9 +4604,9 @@ function buildFieldStatus(path, status) {
 }
 
 function buildRowEditAction(path, status) {
-  if (state.schemaError) {
-    // No schema identity, no typed editing. Showing an enabled control and
-    // rejecting the save with a 409 makes the user do the work twice.
+  // Reverting removes an override and needs no schema, so it stays available;
+  // only opening a typed editor is gated.
+  if (state.schemaError && status !== "flagged") {
     return `<button type="button" class="row-edit-action" data-path="${path}" disabled` +
       ` aria-label="Editing unavailable" title="This run was extracted with a different` +
       ` schema, so values cannot be typed against it">&#9998;</button>`;
@@ -6161,10 +6169,14 @@ async function syncCurrentArticleProgress() {
   // with the document and call articles complete that were not.
   if (!state.currentId || !state.extraction) return;
   const id = state.currentId;
+  // Serialize refreshes: two annotation actions in quick succession otherwise
+  // race, and the older snapshot can land last and overwrite newer counts.
+  const token = ++progressRefreshToken;
   const listing = await fetchJson("/api/articles").catch(() => null);
-  if (!listing || !Array.isArray(listing.articles) || id !== state.currentId) return;
+  if (!listing || !Array.isArray(listing.articles)) return;
+  if (token !== progressRefreshToken || id !== state.currentId) return;
 
-  state.articles = listing.articles;
+  mergeArticleSummaries(listing.articles);
   const article = state.articles.find(a => a.article_id === id);
   if (!article) return;
 
@@ -6172,6 +6184,20 @@ async function syncCurrentArticleProgress() {
   if (option) option.textContent = articleOptionLabel(article);
   if ($("#overview-route")?.style.display === "block") renderOverview();
   updateReviewWorkspace();
+}
+
+let progressRefreshToken = 0;
+
+function mergeArticleSummaries(fresh) {
+  // Server counts win, but deep extraction fields loaded for the filter do
+  // not come back in a summary listing. Replacing the array outright emptied
+  // them while `state.deepLoaded` still claimed they were there, so deep-field
+  // filters silently stopped matching and could not reload.
+  const previous = new Map(state.articles.map((a) => [a.article_id, a]));
+  state.articles = fresh.map((summary) => {
+    const old = previous.get(summary.article_id);
+    return old ? { ...old, ...summary } : summary;
+  });
 }
 
 // ── Annotations ──
@@ -6427,6 +6453,13 @@ async function toggleFieldVerification(path) {
     return;
   }
   if (isOverridden(ann)) {
+    if (state.schemaError) {
+      setSaveStatus(
+        "This run was extracted with a different schema, so values cannot be edited.",
+        "error",
+      );
+      return;
+    }
     openInlineEdit(path);
     return;
   }
@@ -6564,7 +6597,9 @@ function orderedReviewPaths() {
 function selectNextReviewPath(kind) {
   const paths = orderedReviewPaths().filter(path => {
     const ann = controllingAnnotation(path);
-    if (kind === "flagged") return isOverridden(ann);
+    // Only paths whose override is their own: one inherited from a container
+    // cannot be edited or cleared here, so landing on it is a dead end.
+    if (kind === "flagged") return isOverridden(state.annotations[path]);
     return !ann;
   });
   if (paths.length === 0) return;
@@ -6604,7 +6639,9 @@ async function verifyRowAnnotations(rowPath) {
 }
 
 async function clearRowAnnotations(rowPath) {
-  const paths = rowCellPaths(rowPath).filter(controllingAnnotation);
+  // Exact entries only: a cell covered by a container override has nothing of
+  // its own to clear, and asking to clear it returns 409.
+  const paths = rowCellPaths(rowPath).filter(path => state.annotations[path]);
   for (const path of paths) {
     await clearAnnotation(path, { render: false });
   }

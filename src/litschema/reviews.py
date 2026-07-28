@@ -510,10 +510,16 @@ def _added_leaf_paths(path: str, value) -> list[str]:
     """
     if not isinstance(value, dict | list):
         return [path]
-    nested = leaf_paths(value)
-    if not nested:
-        return []
     parts = parse_path(path)
+    if isinstance(value, list):
+        # `leaf_paths` walks from an object root, so a bare list has no valid
+        # path syntax to start from — `[0]` is not a parseable review path.
+        # Enumerate the indices here and recurse per element instead.
+        out: list[str] = []
+        for index, item in enumerate(value):
+            out.extend(_added_leaf_paths(format_path((*parts, index)), item))
+        return out
+    nested = leaf_paths(value)
     return [format_path((*parts, *parse_path(leaf))) for leaf in nested]
 
 
