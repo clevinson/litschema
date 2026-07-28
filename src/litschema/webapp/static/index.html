@@ -6075,15 +6075,15 @@ function reviewStateCounts() {
     return { total: 0, reviewed: 0, verified: 0, overridden: 0, remaining: 0 };
   }
   const leafPaths = collectLeafPaths(state.extraction);
-  const reviewedAnnotations = leafPaths.map(path => state.annotations[path]).filter(Boolean);
-  const verified = reviewedAnnotations.filter(isVerified).length;
-  const overridden = reviewedAnnotations.filter(isOverridden).length;
+  const controlling = leafPaths.map(controllingAnnotation).filter(Boolean);
+  const verified = controlling.filter(isVerified).length;
+  const overridden = controlling.filter(isOverridden).length;
   return {
     total: leafPaths.length,
     reviewed: verified + overridden,
     verified,
     overridden,
-    remaining: leafPaths.filter(path => !state.annotations[path]).length,
+    remaining: leafPaths.filter(path => !controllingAnnotation(path)).length,
   };
 }
 
@@ -6223,8 +6223,12 @@ async function saveAnnotation(path, extra = {}, options = {}) {
 
 async function clearAnnotation(path, options = {}) {
   const id = state.currentId;  // captured now; the user may navigate mid-flight
+  // Guard on the controlling entry, not the exact one: a path covered by an
+  // ancestor has no entry of its own, and bailing here would make its control
+  // look clickable and do nothing. DELETE is a subtree unreview, which is
+  // exactly the right request for inherited state.
+  if (!controllingAnnotation(path)) return;
   const previous = state.annotations[path];
-  if (!previous) return;
   const render = options.render !== false;
   setSaveStatus("Clearing...", "saving");
 
@@ -6346,7 +6350,10 @@ async function loadAnnotations(id) {
 
 async function toggleFieldVerification(path) {
   if (!path) return;
-  const ann = state.annotations[path];
+  // Act on the entry that actually governs this path. Reading only the exact
+  // one made a parent-covered field look verified and then, on click, add a
+  // second verification underneath instead of clearing what the user saw.
+  const ann = controllingAnnotation(path);
   if (!ann) {
     state.selectedPath = path;
     state.selectedSourceIndex = 0;
@@ -6411,7 +6418,7 @@ function collectReviewablePaths(basePath = null) {
   // silently unavailable for exactly the nested sections it is most useful for.
   return collectLeafPaths(state.extraction).filter(path =>
     pathInScope(path, basePath) &&
-    !state.annotations[path] &&
+    !controllingAnnotation(path) &&
     getValueAtPath(state.extraction, path) !== undefined &&
     !!reasoningFor(path)?.source_lines
   );
