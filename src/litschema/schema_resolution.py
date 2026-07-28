@@ -253,21 +253,31 @@ def _check_constraints(slot, base: str | None, value, type_pattern: str | None) 
             raise ValueError(f"{value!r} is above the maximum for {slot.name} ({maximum})")
 
     if base in ("date", "datetime", "time") and isinstance(value, str):
+        # These are xsd:date / xsd:dateTime / xsd:time. `fromisoformat` is more
+        # permissive than that — it takes compact forms (20240101T103000), a
+        # space separator, and date-only strings for a datetime — so check the
+        # lexical form first, then confirm it is a real calendar instant.
         from datetime import date, datetime
         from datetime import time as _time
 
-        parser = {"date": date.fromisoformat, "datetime": datetime.fromisoformat,
-                  "time": _time.fromisoformat}[base]
+        lexical = {
+            "date": r"-?\d{4}-\d{2}-\d{2}(Z|[+-]\d{2}:\d{2})?",
+            "time": r"\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})?",
+            "datetime": (
+                r"-?\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})?"
+            ),
+        }[base]
+        if not re.fullmatch(lexical, value):
+            raise ValueError(f"{value!r} is not a valid {base} for {slot.name}")
+        parser = {
+            "date": date.fromisoformat,
+            "datetime": datetime.fromisoformat,
+            "time": _time.fromisoformat,
+        }[base]
         try:
-            parsed = parser(value)
+            parser(value.replace("Z", "+00:00"))
         except ValueError:
             raise ValueError(f"{value!r} is not a valid {base} for {slot.name}") from None
-        # fromisoformat accepts "2024-01-01" as a datetime; a datetime slot
-        # wants a time component, not a midnight the author never wrote.
-        if base == "datetime" and not isinstance(parsed, datetime):
-            raise ValueError(f"{value!r} is a date, not a datetime, for {slot.name}")
-        if base == "datetime" and "T" not in value and " " not in value:
-            raise ValueError(f"{value!r} has no time component for {slot.name}")
 
 
 @lru_cache(maxsize=32)
@@ -458,8 +468,22 @@ def _schema_closure(entry: Path) -> list[Path]:
             name = str(name)
             if name.startswith("linkml:") or ":" in name:
                 continue  # a CURIE, not a project file
-            queue.append((current.parent / name).with_suffix(".yaml"))
+            queue.extend(_import_candidates(current.parent, name))
     return [seen[key] for key in sorted(seen)]
+
+
+def _import_candidates(directory: Path, name: str) -> list[Path]:
+    """Files a LinkML import name could refer to, most specific first.
+
+    `with_suffix(".yaml")` was wrong: it *replaces* an existing suffix, so an
+    explicit `imports: [base.yml]` resolved to a `base.yaml` that does not
+    exist and dropped the real file out of the identity digest silently — the
+    exact failure the closure hash was added to prevent.
+    """
+    target = directory / name
+    if target.suffix in (".yaml", ".yml"):
+        return [target]
+    return [Path(f"{target}.yaml"), Path(f"{target}.yml")]
 
 
 def resolve_extraction_schema(cfg: LitSchemaConfig) -> ResolvedExtractionSchema:

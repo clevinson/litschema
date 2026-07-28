@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from litschema import schema_resolution
 from litschema.config import load_config
 
@@ -271,3 +273,58 @@ def test_schema_identity_ignores_linkml_library_imports(tmp_path) -> None:
     )
 
     assert _schema_closure(entry) == [entry]
+
+
+def test_schema_closure_keeps_an_explicit_yml_import(tmp_path) -> None:
+    """`with_suffix` replaces a suffix rather than adding one.
+
+    So `imports: [base.yml]` resolved to a `base.yaml` that does not exist, and
+    the real file dropped out of the identity digest silently — the exact
+    failure the closure hash exists to prevent.
+    """
+    from litschema.schema_resolution import _schema_closure
+
+    (tmp_path / "base.yml").write_text("id: https://example.org/b\nname: base\n")
+    entry = tmp_path / "extraction.yaml"
+    entry.write_text("id: https://example.org/e\nname: e\nimports: [base.yml]\n")
+
+    assert [p.name for p in _schema_closure(entry)] == ["base.yml", "extraction.yaml"]
+
+
+@pytest.mark.parametrize(
+    ("range_name", "value", "valid"),
+    [
+        ("datetime", "2024-01-01T10:30:00", True),
+        ("datetime", "2024-01-01T10:30:00Z", True),
+        # fromisoformat takes all of these; xsd:dateTime does not.
+        ("datetime", "2024-01-01", False),
+        ("datetime", "20240101T103000", False),
+        ("datetime", "2024-01-01 10:30:00", False),
+        ("date", "2024-01-01", True),
+        ("date", "20240101", False),
+        ("date", "2024-01-01T10:00:00", False),
+        ("time", "10:30:00", True),
+        ("time", "1030", False),
+    ],
+)
+def test_temporal_values_follow_xsd_lexical_forms(tmp_path, range_name, value, valid) -> None:
+    from linkml_runtime.utils.schemaview import SchemaView
+
+    from litschema.schema_resolution import _check_single_value
+
+    path = tmp_path / "s.yaml"
+    path.write_text(
+        "id: https://example.org/t\nname: t\n"
+        "prefixes:\n  linkml: https://w3id.org/linkml/\n"
+        "imports: [linkml:types]\ndefault_range: string\n"
+        f"classes:\n  A:\n    tree_root: true\n    attributes:\n"
+        f"      v:\n        range: {range_name}\n"
+    )
+    view = SchemaView(str(path))
+    slot = {s.name: s for s in view.class_induced_slots("A")}["v"]
+
+    if valid:
+        _check_single_value(view, slot, value)
+    else:
+        with pytest.raises(ValueError):
+            _check_single_value(view, slot, value)
