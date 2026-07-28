@@ -400,6 +400,9 @@ def test_agent_record_extraction_error_marker_publishes_inactive(
         ({"article_id": "a", "error": True}, False),
         ({"article_id": "a", "error": True, "reason": "   "}, False),
         ({"article_id": "a", "error": False, "reason": "x"}, False),
+        # A marker carries nothing but the marker. Real data that happens to
+        # have both keys must not skip validation and publish inactive.
+        ({"article_id": "a", "error": True, "reason": "x", "site_name": "Rothamsted"}, False),
         ([1, 2, 3], False),
         ("a string", False),
         (None, False),

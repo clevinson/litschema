@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 
 from linkml_runtime.utils.schemaview import SchemaView
@@ -208,21 +210,48 @@ def _check_single_value(view: SchemaView, slot, value) -> None:
             raise ValueError(f"{value!r} is not a finite {range_name}")
 
 
+@lru_cache(maxsize=32)
+def _class_validator(schema_path: str, schema_digest: str, class_name: str):
+    """A cached LinkML validator for one class of one exact schema.
+
+    Keyed by digest as well as path so editing the schema builds a new one
+    rather than validating against a stale copy. Bounded because a project has
+    few classes; validators are expensive to construct and reviews are written
+    one human click at a time.
+    """
+    from .schema_validation import create_linkml_validator
+
+    return create_linkml_validator(Path(schema_path), class_name)
+
+
 def _check_class_value(view: SchemaView, class_name: str, value, label: str) -> None:
-    """A class-range value must be an object whose properties the class defines."""
+    """A class-range value must be a complete, valid instance of that class.
+
+    Validated by LinkML rather than by hand: checking only that the supplied
+    properties are defined accepted an object missing its required slots, and
+    a scalar where a nested multivalued slot needs a list. Both would export as
+    reviewed truth that the schema rejects.
+    """
     if not isinstance(value, dict):
         raise ValueError(f"{label} holds {class_name} objects, not {type(value).__name__}")
-    slots = {s.name: s for s in view.class_induced_slots(class_name)}
-    unknown = sorted(set(value) - set(slots))
-    if unknown:
-        raise ValueError(f"{class_name} does not define {', '.join(unknown)}")
-    for key, item in value.items():
-        slot = slots[key]
-        if getattr(slot, "multivalued", False) and isinstance(item, list):
-            for entry in item:
-                _check_single_value(view, slot, entry)
-        else:
-            _check_single_value(view, slot, item)
+
+    source = getattr(view, "schema", None)
+    schema_path = getattr(source, "source_file", None)
+    if not schema_path:
+        # No file to validate against (an in-memory view): fall back to the
+        # structural check rather than silently accepting anything.
+        slots = {s.name: s for s in view.class_induced_slots(class_name)}
+        unknown = sorted(set(value) - set(slots))
+        if unknown:
+            raise ValueError(f"{class_name} does not define {', '.join(unknown)}")
+        for key, item in value.items():
+            _check_single_value(view, slots[key], item)
+        return
+
+    digest = hashlib.sha256(Path(schema_path).read_bytes()).hexdigest()
+    errors = _class_validator(str(schema_path), digest, class_name).validate(value)
+    if errors:
+        raise ValueError(f"invalid {class_name}: {errors[0]}")
 
 
 def identifier_leaf_paths(view: SchemaView, root_class: str, data) -> set[str]:

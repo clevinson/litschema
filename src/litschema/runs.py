@@ -53,16 +53,23 @@ def is_error_marker(data: object) -> bool:
     error, standard error): a truthiness test would let a real extraction skip
     schema validation and publish inactive whenever that value was non-zero.
 
+    A marker carries nothing but the marker: `article_id`, `error: true`, and a
+    nonempty `reason`. Accepting any object that merely *contains* those would
+    let real extraction data — which may legitimately have an `error` slot —
+    skip schema validation and publish inactive, which is the same failure the
+    truthiness test caused, only rarer and so harder to notice.
+
     Every consumer must share this predicate. Three independent copies of the
     test are how validation and publication came to disagree about what a
     marker is.
     """
-    return (
-        isinstance(data, dict)
-        and data.get("error") is True
-        and isinstance(data.get("reason"), str)
-        and bool(data["reason"].strip())
-    )
+    if not isinstance(data, dict):
+        return False
+    if data.get("error") is not True:
+        return False
+    if not isinstance(data.get("reason"), str) or not data["reason"].strip():
+        return False
+    return not set(data) - {"article_id", "error", "reason"}
 
 
 def new_run_id() -> str:

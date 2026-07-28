@@ -753,3 +753,71 @@ def test_review_progress_matches_what_the_effective_extraction_contains(tmp_path
 
     assert read_reviews(run) == {}
     assert review_progress(run)["n_reviewed"] == 0
+
+
+REQUIRED_SLOT_SCHEMA = VALIDATION_SCHEMA.replace(
+    """  Experiment:
+    attributes:
+      ph:
+        range: float""",
+    """  Experiment:
+    attributes:
+      ph:
+        range: float
+        required: true
+      notes:
+        multivalued: true""",
+)
+
+
+def _required_slot_run(tmp_path: Path):
+    from litschema.schema_resolution import resolve_extraction_schema
+
+    cfg = _cfg(tmp_path)
+    (tmp_path / "schema").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "schema" / "extraction.yaml").write_text(REQUIRED_SLOT_SCHEMA)
+    files = article_files(cfg, "a")
+    files.article_dir.mkdir(parents=True, exist_ok=True)
+    files.metadata.write_text(json.dumps({"id": "a"}))
+    publish_test_run(files.article_dir, VALIDATION_DATA)
+    return run_files(files, TEST_RUN_ID), resolve_extraction_schema(cfg)
+
+
+def test_an_added_entity_missing_a_required_slot_is_refused(tmp_path) -> None:
+    """Checking only that supplied properties exist accepted incomplete entities."""
+    run, schema = _required_slot_run(tmp_path)
+
+    with pytest.raises(ReviewContractError):
+        upsert_review(
+            run,
+            "experiments[1]",
+            {"override": {"op": "add", "value": {"tillage": "no_till"}}},
+            schema=schema,
+        )
+
+    assert read_reviews(run) == {}
+
+
+def test_a_scalar_where_a_multivalued_slot_belongs_is_refused(tmp_path) -> None:
+    run, schema = _required_slot_run(tmp_path)
+
+    with pytest.raises(ReviewContractError):
+        upsert_review(
+            run,
+            "experiments[1]",
+            {"override": {"op": "add", "value": {"ph": 6.5, "notes": "not a list"}}},
+            schema=schema,
+        )
+
+
+def test_a_complete_added_entity_is_accepted(tmp_path) -> None:
+    run, schema = _required_slot_run(tmp_path)
+
+    fields = upsert_review(
+        run,
+        "experiments[1]",
+        {"override": {"op": "add", "value": {"ph": 6.5, "notes": ["a", "b"]}}},
+        schema=schema,
+    )
+
+    assert fields["experiments[1]"]["override"]["value"]["ph"] == 6.5
