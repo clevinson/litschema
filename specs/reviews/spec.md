@@ -201,7 +201,16 @@ Unreviewing path `p` means the entire `p` subtree becomes unreviewed:
    `p`, add verification at the highest sibling nodes not containing `p`;
 3. retain pre-existing overrides and notes outside `p`; do not add an empty
    verification where a retained explicit entry already preserves coverage;
-4. canonicalize using the exact redundancy rule.
+4. when `p` is itself an `add` at an array index, also remove the contiguous
+   run of `add` entries after it on that array;
+5. canonicalize using the exact redundancy rule.
+
+Rule 4 is the one place unreviewing removes an entry outside the `p` subtree,
+and it follows from what an append means. `items[n+1]` only has an index
+because `items[n]` is there: leaving it behind produced an entry the effective
+extraction could not place — silently skipped when applying overrides, while
+progress went on counting it as reviewed work. Appends are a stack, so they
+unwind as one.
 
 This produces one unique minimal frontier. For
 `{"groups":[{"x":1,"y":2},{"x":3}]}` with `groups` verified, unreviewing

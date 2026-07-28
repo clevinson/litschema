@@ -2793,6 +2793,10 @@ const state = {
   // The run the open document was loaded from; every read and write for it
   // names this id rather than re-resolving whatever is active at the time.
   currentRunId: null,
+  // Why this run cannot be interpreted with the project's current schema, or
+  // null. Refreshed on every document load rather than read from the listing
+  // captured at page load, which went stale as soon as the schema moved.
+  schemaError: null,
   markdown: null,
   extraction: null,
   reasoning: null,
@@ -3494,6 +3498,7 @@ $("#article-select").addEventListener("change", (e) => {
 async function loadArticle(id) {
   state.currentId = id;
   state.currentRunId = null;
+  state.schemaError = null;
   state.selectedPath = null;
   state.editingPath = null;
   updateSelectedFieldBar(null);
@@ -3514,6 +3519,15 @@ async function loadArticle(id) {
   // Assembled-but-unextracted articles have no extraction JSON yet —
   // /api/article would 404, so skip the extraction-side fetches and let
   // renderExtractionPanel() show the no-extraction placeholder.
+  // Re-read this article's summary rather than trusting the listing captured
+  // at page load: the run, its schema identity, and its counts can all have
+  // moved since — by a re-extraction, or by the schema being edited or fixed
+  // while this tab stayed open.
+  const listing = await fetchJson("/api/articles").catch(() => null);
+  if (listing && Array.isArray(listing.articles)) {
+    state.articles = listing.articles;
+    if (id !== state.currentId) return;
+  }
   const summary = state.articles.find(a => a.article_id === id);
   const hasExtraction = !summary || summary.has_extraction !== false;
 
@@ -3522,6 +3536,7 @@ async function loadArticle(id) {
   // writes used this cached id, so re-extracting in another terminal while the
   // page was open showed the new run and filed the reviews against the old one.
   state.currentRunId = summary ? summary.active_run_id || null : null;
+  state.schemaError = summary ? summary.schema_error || null : null;
   const runQuery = state.currentRunId ? `?run_id=${encodeURIComponent(state.currentRunId)}` : "";
 
   const [mdData, extraction, reasoningData, annData, bibData] = await Promise.all([
@@ -4551,6 +4566,13 @@ function buildFieldStatus(path, status) {
 }
 
 function buildRowEditAction(path, status) {
+  if (state.schemaError) {
+    // No schema identity, no typed editing. Showing an enabled control and
+    // rejecting the save with a 409 makes the user do the work twice.
+    return `<button type="button" class="row-edit-action" data-path="${path}" disabled` +
+      ` aria-label="Editing unavailable" title="This run was extracted with a different` +
+      ` schema, so values cannot be typed against it">&#9998;</button>`;
+  }
   if (status === "flagged") {
     return `<button type="button" class="row-clear-edit-action" data-path="${path}" aria-label="Revert edited value" title="Revert edited value">&#8634;</button>`;
   }
@@ -6298,8 +6320,7 @@ function renderSchemaErrorBanner() {
   // when an edit failed. Say it before they start, not after.
   const el = $("#schema-error-warning");
   if (!el) return;
-  const meta = state.articles.find(a => a.article_id === state.currentId);
-  const problem = meta && meta.schema_error;
+  const problem = state.schemaError;
   if (!problem) {
     el.style.display = "none";
     return;
@@ -6425,19 +6446,16 @@ function collectReviewablePaths(basePath = null) {
 }
 
 function verifiedPathsInScope(basePath = null) {
-  return collectLeafPaths(state.extraction).filter(path =>
-    pathInScope(path, basePath) &&
-    state.annotations[path] &&
-    isVerified(state.annotations[path])
-  );
+  return collectLeafPaths(state.extraction).filter(path => {
+    if (!pathInScope(path, basePath)) return false;
+    const ann = controllingAnnotation(path);
+    return !!ann && isVerified(ann);
+  });
 }
 
 function sectionReviewState(basePath = null) {
   const leafPaths = collectLeafPaths(state.extraction).filter(path => pathInScope(path, basePath));
-  const reviewedPaths = leafPaths.filter(path => {
-    const ann = state.annotations[path];
-    return !!ann;
-  });
+  const reviewedPaths = leafPaths.filter(path => !!controllingAnnotation(path));
   return {
     total: leafPaths.length,
     reviewed: reviewedPaths.length,
@@ -6513,7 +6531,7 @@ function orderedReviewPaths() {
 
 function selectNextReviewPath(kind) {
   const paths = orderedReviewPaths().filter(path => {
-    const ann = state.annotations[path];
+    const ann = controllingAnnotation(path);
     if (kind === "flagged") return isOverridden(ann);
     return !ann;
   });
@@ -6528,7 +6546,7 @@ function selectNextReviewPath(kind) {
 }
 
 function selectAdjacentReviewPath(direction) {
-  const paths = orderedReviewPaths().filter(path => !state.annotations[path]);
+  const paths = orderedReviewPaths().filter(path => !controllingAnnotation(path));
   if (paths.length === 0) return;
   const currentIndex = state.selectedPath ? paths.indexOf(state.selectedPath) : -1;
   let nextIndex;
@@ -6554,7 +6572,7 @@ async function verifyRowAnnotations(rowPath) {
 }
 
 async function clearRowAnnotations(rowPath) {
-  const paths = rowCellPaths(rowPath).filter(path => state.annotations[path]);
+  const paths = rowCellPaths(rowPath).filter(controllingAnnotation);
   for (const path of paths) {
     await clearAnnotation(path, { render: false });
   }

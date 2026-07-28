@@ -540,8 +540,18 @@ def runs_list(
         files = article_files(cfg, current_id)
         run_ids = iter_run_ids(files)
         if not run_ids:
-            if article_id is not None:
-                typer.echo(f"{current_id}: no published runs")
+            # Check the pointer before concluding there is nothing here: an
+            # article whose only run was deleted has a pointer naming it, and
+            # reporting "no published runs" hides exactly the damage this
+            # command exists to surface.
+            try:
+                active_run(files)
+            except BrokenActiveRunError as exc:
+                broken += 1
+                typer.secho(f"{CROSS} {current_id}: {exc}", fg=typer.colors.RED)
+            else:
+                if article_id is not None:
+                    typer.echo(f"{current_id}: no published runs")
             continue
         # Resolve through active_run(), not active_run_id(): the latter only
         # parses the pointer, so one naming a deleted run listed no active

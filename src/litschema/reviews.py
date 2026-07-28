@@ -381,8 +381,14 @@ def unreview_subtree(run: RunFiles, path: str, *, discard_note: bool = False) ->
         # The frontier walk descends from the ancestor toward the target, so a
         # target that does not resolve sends it into a node that is not there.
         # That surfaced as an uncaught KeyError, i.e. a 500.
+        #
+        # An appended path is the legitimate exception: it does not exist in the
+        # raw extraction *by construction*, so requiring it to resolve made a
+        # reviewer unable to take back an append they had just made under a
+        # verified ancestor.
         extraction = json.loads(run.extraction.read_text())
-        if not path_resolves(extraction, key):
+        appended = (fields.get(key, {}).get("override") or {}).get("op") == "add"
+        if not appended and not path_resolves(extraction, key):
             raise ReviewContractError(
                 f"{key} does not resolve against this run's extraction"
             )

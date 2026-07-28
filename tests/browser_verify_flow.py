@@ -54,6 +54,9 @@ DEFAULT_PROJECT = REPO_ROOT / "tests" / "fixtures" / "projects" / "verifier_flow
 
 failures: list[str] = []
 page_errors: list[str] = []
+# Set while the flow is deliberately aborting requests to prove that failures
+# get reported. Errors recorded inside that window are ours, not the page's.
+injecting_failures = False
 
 
 def check(label: str, ok: bool, detail: str = "") -> None:
@@ -240,8 +243,12 @@ def run_flow(harness: Harness) -> None:
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         page = browser.new_page(viewport={"width": 1500, "height": 950})
-        page.on("pageerror", lambda e: page_errors.append(str(e)))
-        page.on("console", lambda m: page_errors.append(m.text) if m.type == "error" else None)
+        def record(message: str) -> None:
+            if not injecting_failures:
+                page_errors.append(message)
+
+        page.on("pageerror", lambda e: record(str(e)))
+        page.on("console", lambda m: record(m.text) if m.type == "error" else None)
 
         print("\n[overview]")
         page.goto(base, wait_until="networkidle")
@@ -434,6 +441,11 @@ def run_flow(harness: Harness) -> None:
             after = stored()
             check("section verify wrote several entries", len(after) > before,
                   f"{before} -> {len(after)}")
+            # Read the status slot here, while the bulk action is the last thing
+            # that touched it — a later single-field clear resets it, and this
+            # check would then pass no matter what the bulk action said.
+            chatter = page.locator("#save-status").inner_text().strip()
+            check("a bulk action that succeeds says nothing", chatter == "", chatter[:60])
             check("section reads complete",
                   "section-complete" in (toggles.nth(idx).get_attribute("class") or ""),
                   toggles.nth(idx).get_attribute("class") or "")
@@ -460,13 +472,9 @@ def run_flow(harness: Harness) -> None:
                 page.mouse.move(5, 5)
                 page.wait_for_timeout(300)
 
-        print("\n[a bulk action that succeeds says nothing]")
-        # Success is visible in every control that changed; only failure is
-        # stated. A count on success is chatter that has to be dismissed.
-        status_text = page.locator("#save-status").inner_text().strip()
-        check("no success chatter after bulk verify", status_text == "", status_text[:60])
-
         print("\n[a bulk action that fails says so]")
+        global injecting_failures
+        injecting_failures = True
         # Break the write path, then bulk-verify a section. Silence here is the
         # failure mode that matters: the section looks done and is not.
         page.route("**/api/annotations/**", lambda route: route.abort()
@@ -481,6 +489,8 @@ def run_flow(harness: Harness) -> None:
                   page.locator("#save-status").get_attribute("data-status") == "error",
                   str(page.locator("#save-status").get_attribute("data-status")))
         page.unroute("**/api/annotations/**")
+        page.wait_for_timeout(300)
+        injecting_failures = False
 
         print("\n[clear-arming follows the pointer, not the write]")
         # The control the pointer is on when it becomes verified must not clear
@@ -523,10 +533,7 @@ def run_flow(harness: Harness) -> None:
               status_class(page, target))
 
         print("\n[console]")
-        # ERR_FAILED comes from the aborted requests this flow injected on
-        # purpose to prove failures are reported; it is not a page defect.
-        ignore = ("favicon", "err_failed", "failed to load resource")
-        real = [e for e in page_errors if not any(token in e.lower() for token in ignore)]
+        real = [e for e in page_errors if "favicon" not in e.lower()]
         check("no page errors", not real, "; ".join(real[:3])[:200])
 
         browser.close()

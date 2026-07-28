@@ -821,3 +821,24 @@ def test_a_complete_added_entity_is_accepted(tmp_path) -> None:
     )
 
     assert fields["experiments[1]"]["override"]["value"]["ph"] == 6.5
+
+
+def test_an_append_under_a_verified_ancestor_can_be_taken_back(tmp_path) -> None:
+    """An appended path does not exist in the raw extraction by construction.
+
+    Requiring it to resolve made the frontier guard reject the one operation
+    that undoes an append made under a verifying ancestor.
+    """
+    run, schema = _schema_run(tmp_path)
+    upsert_review(run, "experiments", {})
+    upsert_review(
+        run,
+        "experiments[1]",
+        {"override": {"op": "add", "value": {"ph": 7.2}}},
+        schema=schema,
+    )
+
+    fields = unreview_subtree(run, "experiments[1]")
+
+    assert "experiments[1]" not in fields
+    assert len(effective_extraction(run)["experiments"]) == 1
