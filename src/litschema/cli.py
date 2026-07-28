@@ -1092,9 +1092,14 @@ def doctor(ctx: typer.Context):
         else:
             detail = "changed since approval" if marker.is_file() else "not yet approved"
             typer.echo(f"{WARN} dev override {detail} — agents will stop and ask before using it")
+            # Quote the paths: XDG_CONFIG_HOME may contain spaces, and an
+            # unquoted suggestion is a command that fails when pasted.
+            import shlex
+
             issues.append(
                 "if you trust this command, approve it for agent use: "
-                f"`mkdir -p {marker.parent} && echo {current} > {marker}`"
+                f"`mkdir -p {shlex.quote(str(marker.parent))} && "
+                f"echo {current} > {shlex.quote(str(marker))}`"
             )
         stale = cfg.project_root / ".litschema" / "dev-cli-approved"
         if stale.exists():

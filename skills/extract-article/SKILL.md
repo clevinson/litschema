@@ -20,9 +20,12 @@ Do not assume `uv` or `litschema` is available just because this skill is instal
    Approval lives in the user's own config, outside the project, keyed by project path and by the hash of the approved content:
 
    ```bash
-   PROJECT_KEY=$(printf '%s' "$(pwd -P)" | shasum -a 256 | cut -d' ' -f1)
+   PROJECT_ROOT=$(cd "$(dirname "$(
+     d=$PWD; while [ ! -f "$d/litschema.yaml" ] && [ "$d" != / ]; do d=$(dirname "$d"); done
+     echo "$d/litschema.yaml")")" && pwd -P)
+   PROJECT_KEY=$(printf '%s' "$PROJECT_ROOT" | shasum -a 256 | cut -d' ' -f1)
    MARKER="${XDG_CONFIG_HOME:-$HOME/.config}/litschema/dev-cli-approved/$PROJECT_KEY"
-   CURRENT=$(shasum -a 256 .litschema/dev-cli | cut -d' ' -f1)
+   CURRENT=$(shasum -a 256 "$PROJECT_ROOT/.litschema/dev-cli" | cut -d' ' -f1)
    cat "$MARKER" 2>/dev/null
    echo "$CURRENT"
    ```
@@ -35,6 +38,11 @@ Do not assume `uv` or `litschema` is available just because this skill is instal
      ```
 
    - **If the user declines**, do not use the override. Fall through to options 2 and 3 below.
+
+   The key is the **project root** — the directory holding `litschema.yaml` —
+   not the current directory. This skill runs from subdirectories too, and a
+   cwd-derived key would produce a different marker from the one `doctor`
+   writes, so the user would be asked again in every subdirectory.
 
    Editing `dev-cli` revokes the old approval automatically, because its hash no longer matches. Any `.litschema/dev-cli-approved` inside the project is ignored; it grants nothing.
 2. Otherwise, set `LITSCHEMA` to `uv run litschema` (prefer the project's Python environment when uv is available).

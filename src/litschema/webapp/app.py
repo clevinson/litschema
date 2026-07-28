@@ -331,10 +331,18 @@ def _schema_error(files: ArticleFiles, run) -> str | None:
     except OSError:
         return "the project's extraction schema cannot be read"
     try:
-        recorded = run.read_run_json().get("schema_hash")
+        record = run.read_run_json()
     except (OSError, ValueError):
         return f"run {run.run_id} has an unreadable run.json"
-    if recorded and current != recorded:
+    if not isinstance(record, dict):
+        return f"run {run.run_id} has a run.json that is not an object"
+    recorded = record.get("schema_hash")
+    # A run that does not say which schema it was extracted against cannot be
+    # judged against one. Treating a missing or malformed hash as "compatible"
+    # is the same silent assumption this check exists to remove.
+    if not isinstance(recorded, str) or not recorded.strip():
+        return f"run {run.run_id} records no usable schema hash"
+    if current != recorded:
         return (
             f"run {run.run_id} was extracted against a different schema "
             f"({recorded[:14]}…, now {current[:14]}…)"
@@ -876,19 +884,23 @@ async def put_annotation(article_id: str, run_id: str, request: Request, cfg: Cf
             f"(set {REQUIRE_REVIEWER_KEY}: false in litschema.yaml to change that)",
         )
 
-    # A value can only be typed against the schema the run was extracted with.
-    # Verification needs no schema at all — it asserts the agent was right about
-    # what is already there — so only writes that carry a value are refused.
-    # Blocking plain verification too would strand a reviewer mid-audit over a
-    # schema edit that never touched the field in front of them.
+    # Any override is judged against the schema: a value by its slot type, a
+    # removal by whether that slot is an identifier. Neither is safe once the
+    # run's schema identity cannot be established — a changed schema could
+    # permit removing what used to be an identifier, or refuse a removal that
+    # was legitimate when the run was extracted.
+    #
+    # Plain verification needs no schema at all: it asserts the agent was right
+    # about what is already there. Refusing it too would strand a reviewer
+    # mid-audit over a schema edit that never touched the field in front of them.
     schema = _resolved_schema(cfg)
-    if entry.get("override", {}).get("op") in ("replace", "add"):
+    if entry.get("override") is not None:
         schema_error = _schema_error(article_files(cfg, article_id), run)
         if schema_error is not None:
             raise HTTPException(
                 409,
-                f"cannot type this edit: {schema_error}. Verification still works; "
-                f"restore the schema or re-extract to edit values again.",
+                f"cannot judge this override against the run's schema: {schema_error}. "
+                f"Verification still works; restore the schema or re-extract to edit again.",
             )
 
     try:

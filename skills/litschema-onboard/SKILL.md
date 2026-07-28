@@ -94,10 +94,17 @@ Approval lives in the user's own config, outside the project, keyed by project
 path and by the hash of the approved content:
 
 ```bash
-PROJECT_KEY=$(printf '%s' "$(pwd -P)" | shasum -a 256 | cut -d' ' -f1)
+PROJECT_ROOT=$(cd "$(dirname "$(
+  d=$PWD; while [ ! -f "$d/litschema.yaml" ] && [ "$d" != / ]; do d=$(dirname "$d"); done
+  echo "$d/litschema.yaml")")" && pwd -P)
+PROJECT_KEY=$(printf '%s' "$PROJECT_ROOT" | shasum -a 256 | cut -d' ' -f1)
 MARKER="${XDG_CONFIG_HOME:-$HOME/.config}/litschema/dev-cli-approved/$PROJECT_KEY"
-CURRENT=$(shasum -a 256 .litschema/dev-cli | cut -d' ' -f1)
+CURRENT=$(shasum -a 256 "$PROJECT_ROOT/.litschema/dev-cli" | cut -d' ' -f1)
 ```
+
+The key is the project root — the directory holding `litschema.yaml` — not the
+current directory, so it matches what `doctor` writes and stays stable when an
+agent works from a subdirectory.
 
 If `$MARKER` exists and matches `$CURRENT`, use the override silently — this
 user approved this exact command for this project. Otherwise ask once, in ONE

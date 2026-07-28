@@ -744,6 +744,16 @@
     min-width: 0;
   }
 
+  #schema-error-warning {
+    margin: 8px 12px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    background: #4a2c00;
+    color: #ffd8a8;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
   #review-error-warning {
     padding: 8px 14px;
     font-size: 12.5px;
@@ -2694,6 +2704,7 @@ e.g. year >= 2024 && study_types.includes("review")'
   </div>
   <div class="panel panel-right">
     <div id="review-error-warning" style="display:none"></div>
+    <div id="schema-error-warning" style="display:none"></div>
     <div class="panel-header" id="extraction-panel-header">
       <div class="panel-header-row review-panel-top">
         <div class="review-title-group">
@@ -3557,6 +3568,7 @@ async function loadArticle(id) {
   updateStats();
   updateConfidenceChip();
   renderRunChip();
+  renderSchemaErrorBanner();
 }
 
 // ── Bibliographic header ──
@@ -6274,6 +6286,26 @@ function renderRunChip() {
     `Run: ${run.run_id}`,
   ].filter(Boolean).join("\n");
   chip.style.display = "inline";
+}
+
+function renderSchemaErrorBanner() {
+  // Without this the document looked entirely normal — typed editors and all —
+  // for a run the schema no longer describes, and the reviewer found out only
+  // when an edit failed. Say it before they start, not after.
+  const el = $("#schema-error-warning");
+  if (!el) return;
+  const meta = state.articles.find(a => a.article_id === state.currentId);
+  const problem = meta && meta.schema_error;
+  if (!problem) {
+    el.style.display = "none";
+    return;
+  }
+  el.textContent =
+    "\u26a0 This extraction was made with a different schema than the project " +
+    "now has, so values here cannot be typed against it. You can still verify " +
+    "what the extractor produced; editing is disabled until the schema matches " +
+    "or the document is re-extracted. " + problem;
+  el.style.display = "block";
 }
 
 function renderReviewErrorBanner() {

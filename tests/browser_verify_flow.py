@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import shutil
 import socket
 import subprocess
@@ -93,6 +94,42 @@ class Harness:
         self.port = free_port()
         self.base = f"http://127.0.0.1:{self.port}"
         self.server: subprocess.Popen | None = None
+        self.cfg = self._isolated_config()
+
+    def _isolated_config(self):
+        """The copy's config, once it is proven to stay inside the copy.
+
+        Copying a directory does not isolate a project whose `litschema.yaml`
+        names absolute paths: the copied config still points the verifier at
+        the original article store, and this flow would write reviews there.
+        Refuse rather than damage — the whole reason this runs against a copy
+        is that review work cannot be recovered.
+        """
+        sys.path.insert(0, str(REPO_ROOT / "src"))
+        from litschema.config import load_config
+
+        cfg = load_config(self.project / "litschema.yaml", reload=True)
+        root = self.project.resolve()
+        escaping = {
+            name: path
+            for name, path in (
+                ("project_root", cfg.project_root),
+                ("data_dir", cfg.data_dir),
+                ("article_store_dir", cfg.article_store_dir),
+                ("schema_dir", cfg.schema_dir),
+            )
+            if not path.resolve().is_relative_to(root)
+        }
+        if escaping:
+            listed = "\n  ".join(f"{name}: {path}" for name, path in sorted(escaping.items()))
+            # Constructed before the caller's try/finally, so clean up here.
+            shutil.rmtree(self.tmp, ignore_errors=True)
+            raise SystemExit(
+                "refusing to run: this project's config names paths outside the "
+                f"temporary copy, so the flow would write to the real project.\n  {listed}\n"
+                "Use relative paths in litschema.yaml, or run against a copy you made."
+            )
+        return cfg
 
     def start(self) -> None:
         self.server = subprocess.Popen(
@@ -131,7 +168,10 @@ class Harness:
         Resolved through active-run.json rather than by globbing and taking the
         first hit, which is unordered and can name an inactive run.
         """
-        pointer = self.project / "data" / "papers" / article / "active-run.json"
+        # Through the project's configured store, not a hard-coded `data/papers`
+        # — a project may put its articles somewhere else, and this would then
+        # silently report "no reviews" for every assertion.
+        pointer = self.cfg.article_store_dir / article / "active-run.json"
         if not pointer.is_file():
             return {}
         run_id = json.loads(pointer.read_text())["run_id"]
@@ -179,7 +219,20 @@ def run_flow(harness: Harness) -> None:
             yield prefix, node
 
     all_leaves = list(leaves(extraction))
-    strings = [p for p, v in all_leaves if isinstance(v, str) and p != "article_id"]
+    # Exclude enum-ranged slots from the "string" pool: their editor is a
+    # <select>, which `fill()` cannot drive. Schema metadata is the only place
+    # that distinction exists — the raw value is a plain string either way.
+    schema_fields = api(base, "/api/schema/fields").get("fields", {})
+
+    def kind_of(path):
+        generic = re.sub(r"\[\d+\]", "[]", path)
+        entry = schema_fields.get(path) or schema_fields.get(generic) or {}
+        return entry.get("kind")
+
+    strings = [
+        p for p, v in all_leaves
+        if isinstance(v, str) and p != "article_id" and kind_of(p) != "enum"
+    ]
     numbers = [p for p, v in all_leaves if isinstance(v, (int, float)) and not isinstance(v, bool)]
     if not strings or not numbers:
         raise SystemExit("need at least one string and one numeric leaf to drive the flow")
@@ -384,7 +437,12 @@ def run_flow(harness: Harness) -> None:
             check("section reads complete",
                   "section-complete" in (toggles.nth(idx).get_attribute("class") or ""),
                   toggles.nth(idx).get_attribute("class") or "")
-            under = {k: v for k, v in after.items() if k.startswith(f"{section_path}.")}
+            # A section scope covers both `section.leaf` and `section[0].leaf`,
+            # depending on whether the section path names an array.
+            under = {
+                k: v for k, v in after.items()
+                if k.startswith(f"{section_path}.") or k.startswith(f"{section_path}[")
+            }
             added = {k: v for k, v in under.items() if not v.get("override")}
             check("added entries are plain verifications",
                   bool(added) and all(v == {} for v in added.values()),

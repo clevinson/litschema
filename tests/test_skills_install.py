@@ -181,7 +181,9 @@ def test_skill_setup_gates_resolve_cli_with_dev_override() -> None:
         # look it up under the user's config, keyed by project and content hash.
         assert "XDG_CONFIG_HOME" in skill
         assert "litschema/dev-cli-approved/$PROJECT_KEY" in skill
-        assert "shasum -a 256 .litschema/dev-cli" in skill
+        assert 'shasum -a 256 "$PROJECT_ROOT/.litschema/dev-cli"' in skill
+        # Keyed by the project root, so a subdirectory does not mint a new key.
+        assert "PROJECT_ROOT" in skill
         # An in-project marker must be explicitly disregarded, not just unused.
         assert "grants nothing" in skill or "ignored" in skill
 

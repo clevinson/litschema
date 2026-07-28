@@ -833,10 +833,10 @@ def test_progress_is_null_with_a_schema_error_when_the_schema_moved(tmp_path) ->
     assert entry["is_complete"] is None
 
 
-def test_a_typed_edit_is_refused_when_the_schema_moved_but_verification_is_not(
+def test_overrides_are_refused_when_the_schema_moved_but_verification_is_not(
     tmp_path,
 ) -> None:
-    """Only writes that carry a value need the schema.
+    """Only overrides need the schema.
 
     Verification asserts the agent was right about what is already there, so
     blocking it too would strand a reviewer mid-audit over a schema edit that
@@ -860,7 +860,15 @@ def test_a_typed_edit_is_refused_when_the_schema_moved_but_verification_is_not(
         json={"path": "ph", "override": {"op": "replace", "value": "7.2"}},
     )
     assert edit.status_code == 409
-    assert "cannot type this edit" in edit.json()["detail"]
+    assert "cannot judge this override" in edit.json()["detail"]
+
+    # A removal is judged against the schema too — by whether the slot is an
+    # identifier — so it is refused on the same grounds, not waved through.
+    removal = client.put(
+        f"/api/annotations/a/{run_id}",
+        json={"path": "ph", "override": {"op": "remove"}},
+    )
+    assert removal.status_code == 409
 
     verify = client.put(f"/api/annotations/a/{run_id}", json={"path": "ph"})
     assert verify.status_code == 200, verify.text
