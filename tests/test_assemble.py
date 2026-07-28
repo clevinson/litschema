@@ -403,6 +403,9 @@ def test_agent_record_extraction_error_marker_publishes_inactive(
         # A marker carries nothing but the marker. Real data that happens to
         # have both keys must not skip validation and publish inactive.
         ({"article_id": "a", "error": True, "reason": "x", "site_name": "Rothamsted"}, False),
+        # A marker that names no article tells nothing downstream which
+        # document failed, so it is not a marker either.
+        ({"error": True, "reason": "no extractable text"}, False),
         ([1, 2, 3], False),
         ("a string", False),
         (None, False),

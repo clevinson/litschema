@@ -2814,6 +2814,10 @@ const state = {
   suppressClearHoverSections: new Set(),
   filterExpr: "",
   filterFn: null,
+  // True while an expression that arrived in the URL is loaded but not yet run.
+  // A filter is JavaScript this app evaluates; one the user typed is theirs to
+  // run, one that arrived in a link needs their say-so first.
+  filterUnconfirmed: false,
   deepLoaded: false,
   deepLoading: null,
 };
@@ -3153,18 +3157,28 @@ function safeFilterCall(fn) {
 }
 
 function applyInitialFilterFromUrl() {
+  // A filter is a JavaScript expression this app evaluates. One the user typed
+  // is theirs to run; one that arrived in a link is not — a crafted verifier
+  // URL would otherwise execute code against the local project APIs the moment
+  // the page loaded. `specs/verifier/spec.md` therefore requires a URL filter
+  // to be shown but never evaluated until the user confirms it, so this loads
+  // the expression into the editor and stops there. Pressing Apply runs it.
   const expr = new URLSearchParams(window.location.search).get("filter");
   if (!expr) return false;
-  const { fn } = compileFilter(expr);
-  if (!fn) return false;
   state.filterExpr = expr;
-  state.filterFn = fn;
+  state.filterFn = null;          // inert until confirmed
+  state.filterUnconfirmed = true; // and the live preview must not run it either
   $("#filter-input").value = expr;
-  // Leave the filter row closed on initial load — the toolbar badge already
-  // signals the active filter. The user can click Filter to re-open and edit
-  // if they want; auto-popping the drawer on every refresh is noise.
+  // Opened, not collapsed: an unconfirmed filter is a decision waiting on the
+  // user, and the toolbar badge alone would not tell them one is pending.
+  $("#filter-row").style.display = "";
   $("#btn-filter-toggle").classList.add("active");
-  return true;
+  const count = $("#filter-count");
+  if (count) {
+    count.textContent = "From this link — review it, then press Apply to run it.";
+    count.classList.add("error");
+  }
+  return false;  // nothing to evaluate, so no deep field load is needed yet
 }
 
 function updateFilterBadge() {
@@ -3209,6 +3223,7 @@ async function applyFilter(expr) {
   await ensureDeepFields();
   state.filterExpr = expr.trim();
   state.filterFn = fn;
+  state.filterUnconfirmed = false;
   const url = new URL(window.location.href);
   if (state.filterExpr) {
     url.searchParams.set("filter", state.filterExpr);
@@ -3235,7 +3250,12 @@ async function ensureDeepFields() {
   state.deepLoading = (async () => {
     setDeepLoadingHint(true);
     const byId = new Map(state.articles.map((a) => [a.article_id, a]));
-    const ids = state.articles.map((a) => a.article_id);
+    // Only articles that have an extraction to deepen. Asking for the rest
+    // returned a 404 per article — swallowed here, but still logged by the
+    // browser, and a wasted request either way.
+    const ids = state.articles
+      .filter((a) => a.has_extraction !== false)
+      .map((a) => a.article_id);
     const concurrency = 12;
     let cursor = 0;
     async function worker() {
@@ -3284,6 +3304,7 @@ function setDeepLoadingHint(loading) {
 function clearFilter() {
   state.filterExpr = "";
   state.filterFn = null;
+  state.filterUnconfirmed = false;
   $("#filter-input").value = "";
   $("#filter-input").classList.remove("error");
   $("#filter-count").classList.remove("error");
@@ -3342,7 +3363,13 @@ function wireFilterControls() {
   });
   // Seed the live count display
   $("#filter-count").textContent = `${state.articles.length}/${state.articles.length}`;
-  if (state.filterExpr) evaluateFilterPreview(state.filterExpr);
+  if (state.filterUnconfirmed) {
+    const countEl = $("#filter-count");
+    countEl.textContent = "From this link — review it, then press Apply to run it.";
+    countEl.classList.add("error");
+  } else if (state.filterExpr) {
+    evaluateFilterPreview(state.filterExpr);
+  }
 }
 
 // ── Filter help modal ──
@@ -3529,7 +3556,10 @@ async function loadArticle(id) {
     if (id !== state.currentId) return;
   }
   const summary = state.articles.find(a => a.article_id === id);
-  const hasExtraction = !summary || summary.has_extraction !== false;
+  // Default to NOT requesting an extraction we cannot confirm exists. Assuming
+  // one when the summary is missing turned an ordinary "not extracted yet"
+  // article into a 404 in the console on every visit.
+  const hasExtraction = !!summary && summary.has_extraction !== false;
 
   // Pin the run for this document, once, and read AND write through it. The
   // reads used to resolve the active run server-side on each request while the
@@ -6123,22 +6153,24 @@ function updateReviewWorkspace() {
   updateSelectedFieldBar();
 }
 
-function syncCurrentArticleProgress() {
+async function syncCurrentArticleProgress() {
+  // Re-read the server's summary rather than recomputing it here. The local
+  // count walks the raw extraction, so it misses the leaves an `add` override
+  // contributes and counts nested identifier slots the server excludes —
+  // overwriting the authoritative record with it made the overview disagree
+  // with the document and call articles complete that were not.
   if (!state.currentId || !state.extraction) return;
-  const article = state.articles.find(a => a.article_id === state.currentId);
-  if (!article) return;
-  const counts = reviewStateCounts();
-  article.n_fields = counts.total;
-  article.n_verified = counts.verified;
-  article.n_overridden = counts.overridden;
-  if ($("#overview-route")?.style.display === "block") renderOverview();
-  article.n_reviewed = counts.reviewed;
-  article.n_annotated = article.n_reviewed;
-  article.is_complete = article.n_fields > 0 && article.n_reviewed >= article.n_fields;
-  article.has_flags = article.n_flagged > 0;
+  const id = state.currentId;
+  const listing = await fetchJson("/api/articles").catch(() => null);
+  if (!listing || !Array.isArray(listing.articles) || id !== state.currentId) return;
 
-  const option = $(`#article-select option[value="${CSS.escape(state.currentId)}"]`);
+  state.articles = listing.articles;
+  const article = state.articles.find(a => a.article_id === id);
+  if (!article) return;
+
+  const option = $(`#article-select option[value="${CSS.escape(id)}"]`);
   if (option) option.textContent = articleOptionLabel(article);
+  if ($("#overview-route")?.style.display === "block") renderOverview();
   updateReviewWorkspace();
 }
 

@@ -69,7 +69,11 @@ def is_error_marker(data: object) -> bool:
         return False
     if not isinstance(data.get("reason"), str) or not data["reason"].strip():
         return False
-    return not set(data) - {"article_id", "error", "reason"}
+    # Exactly the marker keys, not a subset: the extraction contract defines
+    # the shape as `{"article_id": ..., "error": true, "reason": ...}`, and an
+    # anonymous `{"error": true, "reason": "..."}` names no article, so nothing
+    # downstream can tell which document failed.
+    return set(data) == {"article_id", "error", "reason"}
 
 
 def new_run_id() -> str:

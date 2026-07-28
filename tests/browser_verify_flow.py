@@ -44,6 +44,7 @@ import sys
 import tempfile
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -247,6 +248,7 @@ def run_flow(harness: Harness) -> None:
             if not injecting_failures:
                 page_errors.append(message)
 
+        page.on("response", lambda r: record(f"HTTP {r.status} {r.url}") if r.status >= 400 else None)
         page.on("pageerror", lambda e: record(str(e)))
         page.on("console", lambda m: record(m.text) if m.type == "error" else None)
 
@@ -265,6 +267,24 @@ def run_flow(harness: Harness) -> None:
             check("an unextracted document is listed, not hidden", row.count() == 1)
             check("and reads as not extracted", "not extracted" in row.inner_text().lower(),
                   row.inner_text().replace("\n", " ")[:70])
+
+        print("\n[a filter from a URL does not run until confirmed]")
+        # A filter is JavaScript this app evaluates. One that arrived in a link
+        # is not the user's, so a crafted verifier URL must not execute code
+        # against the local project the moment the page opens. The live preview
+        # counts as execution too.
+        payload = "(window.__FLOW_RAN__ = true) || true"
+        page.goto(f"{base}/?filter={urllib.parse.quote(payload)}", wait_until="networkidle")
+        page.wait_for_timeout(1500)
+        check("not evaluated on load", page.evaluate("() => !window.__FLOW_RAN__"))
+        check("but shown to the user", page.locator("#filter-input").input_value() == payload)
+        check("with the filter row open", page.locator("#filter-row").is_visible())
+        page.locator("#btn-filter-apply").click()
+        page.wait_for_timeout(1000)
+        check("and runs once confirmed", page.evaluate("() => !!window.__FLOW_RAN__"))
+        page.goto(base, wait_until="networkidle")
+        page.wait_for_selector("#overview-route", state="visible", timeout=20000)
+        page.wait_for_timeout(700)
 
         print("\n[document-scoped controls belong to the document]")
         hidden_on_overview = [
