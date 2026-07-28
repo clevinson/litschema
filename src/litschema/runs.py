@@ -382,7 +382,7 @@ def publish_run(
             f"{type(extraction_data).__name__}: {staged_extraction}"
         )
     error_marker = is_error_marker(extraction_data)
-    if error_marker and extraction_data.get("article_id") not in (None, files.article_id):
+    if error_marker and extraction_data.get("article_id") != files.article_id:
         raise RunPublishError(
             f"the staged error marker names article "
             f"{extraction_data['article_id']!r}, not {files.article_id!r}"

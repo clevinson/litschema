@@ -886,3 +886,32 @@ def test_progress_names_an_unresolvable_schema_rather_than_reporting_zero(tmp_pa
 
     assert entry["schema_error"]
     assert entry["n_fields"] is None
+
+
+def test_unknown_annotation_fields_are_rejected_not_ignored(tmp_path) -> None:
+    """A typo must not become a silent "the extractor got this right".
+
+    Ignoring unrecognised keys meant a version-1 name like `override_value`, or
+    a misspelled `overide`, produced an entry with no override at all — which
+    stores as plain verification of the value the caller was trying to correct.
+    """
+    cfg = _project_cfg(tmp_path)
+    run_id = _article_with_run(cfg)
+    client = _client(cfg)
+
+    legacy = client.put(
+        f"/api/annotations/a/{run_id}",
+        json={"path": "ph", "override_value": 7.2},
+    )
+    assert legacy.status_code == 400
+    assert "override_value" in legacy.json()["detail"]
+
+    typo = client.put(
+        f"/api/annotations/a/{run_id}",
+        json={"path": "ph", "override": {"op": "replace", "valu": 7.2}},
+    )
+    assert typo.status_code == 400
+
+    # Nothing was recorded by either attempt.
+    listing = client.get(f"/api/annotations/a/{run_id}").json()
+    assert listing["annotations"] == []

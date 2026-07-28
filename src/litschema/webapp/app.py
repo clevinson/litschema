@@ -875,6 +875,13 @@ async def put_annotation(article_id: str, run_id: str, request: Request, cfg: Cf
     body = await request.json()
     if not isinstance(body, dict):
         raise HTTPException(400, "body must be a JSON object")
+    # Reject unknown keys rather than ignoring them. A typo or a version-1 name
+    # like `override_value` otherwise fell through to an entry with no override
+    # at all — recording "the extractor got this right" for a value the caller
+    # was trying to correct. Silence is the worst possible answer here.
+    unknown = sorted(set(body) - {"path", "override", "note", "reviewer"})
+    if unknown:
+        raise HTTPException(400, f"unknown fields: {', '.join(unknown)}")
 
     field_path = body.get("path")
     if not isinstance(field_path, str) or not field_path.strip():
@@ -885,6 +892,9 @@ async def put_annotation(article_id: str, run_id: str, request: Request, cfg: Cf
     if override is not None:
         if not isinstance(override, dict) or override.get("op") not in ("replace", "remove", "add"):
             raise HTTPException(400, "override.op must be replace, remove, or add")
+        unknown_override = sorted(set(override) - {"op", "value"})
+        if unknown_override:
+            raise HTTPException(400, f"unknown override fields: {', '.join(unknown_override)}")
         entry["override"] = override
     note = body.get("note")
     if note:
