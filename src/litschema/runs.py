@@ -232,13 +232,23 @@ def run_summary(run: RunFiles, *, active_run_id: str | None) -> dict:
     agent = record.get("agent")
     if not isinstance(agent, dict):
         agent = {}
+
+    def text(value):
+        """Displayed fields are rendered and sliced, so they must be strings.
+
+        Normalizing only the containers was not enough: a numeric non-empty
+        `schema_hash` survived to `[:14]` in the CLI and raised TypeError,
+        taking down the listing that exists to find the damaged run.
+        """
+        return value if isinstance(value, str) else None
+
     return {
         "run_id": run.run_id,
         "active": run.run_id == active_run_id,
         "error": is_error_run(run),
-        "created_at": record.get("created_at"),
-        "schema_hash": record.get("schema_hash"),
-        "model": agent.get("model"),
+        "created_at": text(record.get("created_at")),
+        "schema_hash": text(record.get("schema_hash")),
+        "model": text(agent.get("model")),
         "reviewed": run.review.is_file(),
     }
 

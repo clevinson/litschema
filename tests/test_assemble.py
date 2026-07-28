@@ -495,6 +495,9 @@ def test_runs_list_reports_a_pointer_naming_a_run_that_is_gone(
     result = runner.invoke(cli.app, ["runs", "list", "smith-2024"])
 
     assert "not a published run" in result.output
+    # The listing still completes — the point is to show which run is damaged —
+    # but the command fails, so automation can tell this from a healthy store.
+    assert result.exit_code == 1, result.output
 
 
 def test_runs_activate_refuses_a_run_missing_reasoning(tmp_path: Path, monkeypatch) -> None:

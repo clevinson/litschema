@@ -535,6 +535,7 @@ def runs_list(
         article_ids = [path.parent.name for path in iter_metadata_paths(cfg)]
 
     total = 0
+    broken = 0
     for current_id in article_ids:
         files = article_files(cfg, current_id)
         run_ids = iter_run_ids(files)
@@ -551,6 +552,7 @@ def runs_list(
             selected = selected.run_id if selected is not None else None
         except BrokenActiveRunError as exc:
             selected = None
+            broken += 1
             typer.secho(f"{CROSS} {current_id}: {exc}", fg=typer.colors.RED)
         typer.echo(current_id)
         for run_id in run_ids:
@@ -570,6 +572,10 @@ def runs_list(
             typer.echo(f"  {run_id}  {created}  {model}  {schema}…{flags}")
     if article_id is None and total == 0:
         typer.echo("no published runs")
+    # Finish the listing first — the point is to show which run is damaged —
+    # then fail, so automation can tell an integrity problem from a clean run.
+    if broken:
+        raise typer.Exit(code=1)
 
 
 @runs_app.command("activate", help="Select a published run as the article's active run.")
@@ -978,6 +984,7 @@ def status(ctx: typer.Context):
     broken_pointers = 0
     reviewed_articles = 0
     review_entries = 0
+    corrupt_reviews = 0
     try:
         current_hash = _schema_hash(cfg)
     except OSError:
@@ -1004,6 +1011,9 @@ def status(ctx: typer.Context):
         try:
             fields = read_reviews(run)
         except ReviewCorruptError:
+            # Skipping silently recreates the same lie in miniature: the
+            # article's real reviews get counted as none. Say so instead.
+            corrupt_reviews += 1
             continue
         if fields:
             reviewed_articles += 1
@@ -1037,6 +1047,11 @@ def status(ctx: typer.Context):
         f"reviewed:    {reviewed_articles} articles with reviews "
         f"({review_entries} entries on active runs)"
     )
+    if corrupt_reviews:
+        typer.echo(
+            f"{CROSS} unreadable:  {corrupt_reviews} review files could not be read "
+            f"— their reviews are not counted above"
+        )
 
 
 @app.command(help="Diagnose configuration and dependency issues.")

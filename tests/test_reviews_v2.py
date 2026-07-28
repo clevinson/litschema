@@ -694,3 +694,62 @@ def test_the_browser_flow_fixture_records_its_own_schema_hash() -> None:
     assert recorded, "the fixture has no published runs"
     stale = {str(p.relative_to(root)): h for p, h in recorded.items() if h != expected}
     assert not stale, f"re-record schema_hash as {expected} in: {sorted(stale)}"
+
+
+def test_unreviewing_an_append_takes_the_appends_that_depend_on_it(tmp_path) -> None:
+    """Appended elements are a stack, not a set.
+
+    `experiments[2]` only has an index because `experiments[1]` is there.
+    Removing the earlier one alone left the later one stored but unplaceable:
+    `effective_extraction` skipped it silently while `review_progress` still
+    counted it as reviewed work.
+    """
+    run, schema = _schema_run(tmp_path)
+    new = {"ph": 7.2, "tillage": "no_till"}
+    upsert_review(run, "experiments[1]", {"override": {"op": "add", "value": new}}, schema=schema)
+    upsert_review(run, "experiments[2]", {"override": {"op": "add", "value": new}}, schema=schema)
+    assert len(effective_extraction(run)["experiments"]) == 3
+
+    fields = unreview_subtree(run, "experiments[1]")
+
+    assert fields == {}
+    assert len(effective_extraction(run)["experiments"]) == 1
+
+
+def test_unreviewing_the_last_append_leaves_earlier_ones_alone(tmp_path) -> None:
+    run, schema = _schema_run(tmp_path)
+    new = {"ph": 7.2, "tillage": "no_till"}
+    upsert_review(run, "experiments[1]", {"override": {"op": "add", "value": new}}, schema=schema)
+    upsert_review(run, "experiments[2]", {"override": {"op": "add", "value": new}}, schema=schema)
+
+    fields = unreview_subtree(run, "experiments[2]")
+
+    assert sorted(fields) == ["experiments[1]"]
+    assert len(effective_extraction(run)["experiments"]) == 2
+
+
+def test_an_appended_element_can_be_corrected(tmp_path) -> None:
+    """Re-adding at an index this review appended is an edit, not a new append."""
+    run, schema = _schema_run(tmp_path)
+    upsert_review(
+        run, "experiments[1]", {"override": {"op": "add", "value": {"ph": 7.2}}}, schema=schema
+    )
+
+    fields = upsert_review(
+        run, "experiments[1]", {"override": {"op": "add", "value": {"ph": 6.4}}}, schema=schema
+    )
+
+    assert fields["experiments[1]"]["override"]["value"] == {"ph": 6.4}
+    assert len(effective_extraction(run)["experiments"]) == 2
+
+
+def test_review_progress_matches_what_the_effective_extraction_contains(tmp_path) -> None:
+    """The denominator must describe data that is actually there."""
+    run, schema = _schema_run(tmp_path)
+    new = {"ph": 7.2, "tillage": "no_till"}
+    upsert_review(run, "experiments[1]", {"override": {"op": "add", "value": new}}, schema=schema)
+    upsert_review(run, "experiments[2]", {"override": {"op": "add", "value": new}}, schema=schema)
+    unreview_subtree(run, "experiments[1]")
+
+    assert read_reviews(run) == {}
+    assert review_progress(run)["n_reviewed"] == 0

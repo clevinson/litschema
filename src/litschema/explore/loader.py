@@ -254,7 +254,7 @@ def load_reviewed_records(
     ``litschema export``.
     """
     from ..articles import iter_metadata_paths
-    from ..runs import BrokenActiveRunError, active_run
+    from ..runs import BrokenActiveRunError, active_run, is_error_marker
 
     records: list[dict] = []
     reviews_applied = 0
@@ -268,7 +268,9 @@ def load_reviewed_records(
         if run is None:
             continue
         raw = json.loads(run.extraction.read_text())
-        if raw.get("error"):
+        # Same predicate as the publisher: a truthiness test silently dropped
+        # any document whose schema has an `error` slot from the export.
+        if is_error_marker(raw):
             continue
         # The overlay is defined by specs/reviews/spec.md and applied there;
         # a corrupt review must not silently degrade to raw values.

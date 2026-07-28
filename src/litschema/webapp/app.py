@@ -512,7 +512,12 @@ def _read_valid_extraction(files: ArticleFiles) -> dict | None:
         data = json.loads(extraction_path.read_text())
     except json.JSONDecodeError:
         return None
-    if not isinstance(data, dict) or data.get("error"):
+    # Share the publisher's predicate. Testing `data.get("error")` for
+    # truthiness hid any extraction whose schema defines an `error` slot — a
+    # measurement error of 0.42 made the whole document read as unextracted.
+    from ..runs import is_error_marker
+
+    if not isinstance(data, dict) or is_error_marker(data):
         return None
     return data
 

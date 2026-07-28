@@ -286,6 +286,12 @@ def _validate_add_target(extraction: dict, path: str, fields: dict[str, dict]) -
         frontier = len(parent)
         while _added_index(fields, parent_path, frontier):
             frontier += 1
+        # Re-adding at an index this review already appended is an edit of that
+        # element, not a new append: counting it toward the frontier demanded
+        # the next index, while `replace` was refused because the path does not
+        # exist in the raw extraction. There was no way to correct it.
+        if _added_index(fields, parent_path, last):
+            return
         if last != frontier:
             raise ReviewContractError(
                 f"{path} must append one past the end of the array (index {frontier})"
@@ -381,7 +387,12 @@ def unreview_subtree(run: RunFiles, path: str, *, discard_note: bool = False) ->
                 f"{key} does not resolve against this run's extraction"
             )
 
-    for existing in [p for p in fields if p == key or is_ancestor(key, p)]:
+    # Appended elements are a stack: `items[n+1]` only has an index because
+    # `items[n]` is there. Removing an earlier add on its own left the later
+    # ones stored but unplaceable — `effective_extraction` silently skipped
+    # them while `review_progress` went on counting them as reviewed.
+    doomed = {key, *_dependent_appends(fields, key)}
+    for existing in [p for p in fields if p in doomed or any(is_ancestor(d, p) for d in doomed)]:
         del fields[existing]
 
     if covering is not None:
@@ -398,6 +409,30 @@ def unreview_subtree(run: RunFiles, path: str, *, discard_note: bool = False) ->
     fields = canonicalize(fields)
     write_reviews(run, fields)
     return fields
+
+
+def _dependent_appends(fields: dict[str, dict], key: str) -> set[str]:
+    """Adds that only have an index because ``key`` is there.
+
+    Empty unless ``key`` is itself an ``add`` at an array index; then it is the
+    contiguous run of adds after it on the same array.
+    """
+    entry = fields.get(key)
+    if not entry or (entry.get("override") or {}).get("op") != "add":
+        return set()
+    parts = parse_path(key)
+    if not isinstance(parts[-1], int):
+        return set()
+
+    parent_parts, index = parts[:-1], parts[-1]
+    dependents: set[str] = set()
+    while True:
+        index += 1
+        candidate = format_path((*parent_parts, index))
+        following = fields.get(candidate)
+        if not following or (following.get("override") or {}).get("op") != "add":
+            return dependents
+        dependents.add(candidate)
 
 
 def _sibling_frontier(extraction: dict, ancestor: str, target: str) -> list[str]:

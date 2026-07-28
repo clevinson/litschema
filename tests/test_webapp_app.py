@@ -256,13 +256,43 @@ def test_list_articles_carries_overall_confidence_from_reasoning(tmp_path) -> No
 def test_list_articles_treats_errored_extraction_as_unextracted(tmp_path) -> None:
     cfg = _project_cfg(tmp_path)
     _write_manifest(cfg, "bad", {"id": "bad", "source_metadata": {"title": "B", "metadata_source": "manual"}})
-    _write_extraction(cfg, "bad", {"article_id": "bad", "error": "extraction failed"})
+    # The marker shape the extraction contract defines, not a truthy `error`.
+    _write_extraction(
+        cfg, "bad", {"article_id": "bad", "error": True, "reason": "no extractable text"}
+    )
     client = _client(cfg)
 
     (article,) = client.get("/api/articles").json()["articles"]
 
     assert article["article_id"] == "bad"
     assert article["has_extraction"] is False
+
+
+def test_an_extraction_with_a_real_error_value_is_not_hidden(tmp_path) -> None:
+    """`error` is an ordinary slot name in this domain.
+
+    Treating any truthy `error` as a marker made a document with a measurement
+    error of 0.42 read as unextracted — the verifier showed nothing to review
+    and export dropped it, both silently.
+    """
+    cfg = _project_cfg(tmp_path)
+    _write_schema(
+        cfg,
+        "id: https://example.org/t\nname: t\n"
+        "prefixes:\n  linkml: https://w3id.org/linkml/\n"
+        "imports: [linkml:types]\ndefault_range: string\n"
+        "classes:\n  Article:\n    tree_root: true\n    attributes:\n"
+        "      article_id:\n        identifier: true\n"
+        "      error:\n        range: float\n",
+    )
+    _write_manifest(cfg, "sci", {"id": "sci"})
+    _write_extraction(cfg, "sci", {"article_id": "sci", "error": 0.42})
+    client = _client(cfg)
+
+    (article,) = client.get("/api/articles").json()["articles"]
+
+    assert article["has_extraction"] is True
+    assert client.get("/api/article/sci").json()["error"] == 0.42
 
 
 def _write_schema(cfg, text: str) -> None:
