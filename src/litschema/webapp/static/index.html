@@ -3255,6 +3255,7 @@ async function applyFilter(expr) {
 async function ensureDeepFields() {
   if (state.deepLoaded) return;
   if (state.deepLoading) return state.deepLoading;
+  const generation = state.deepGeneration || 0;
   state.deepLoading = (async () => {
     setDeepLoadingHint(true);
     const byId = new Map(state.articles.map((a) => [a.article_id, a]));
@@ -3276,6 +3277,14 @@ async function ensureDeepFields() {
       }
     }
     await Promise.all(Array.from({ length: concurrency }, worker));
+    // If the article set moved while this was running, the objects merged into
+    // are no longer the current ones — claiming success would strand the new
+    // summaries without deep fields and block another load.
+    if (generation !== (state.deepGeneration || 0)) {
+      state.deepLoading = null;
+      setDeepLoadingHint(false);
+      return;
+    }
     state.deepLoaded = true;
     state.deepLoading = null;
     setDeepLoadingHint(false);
@@ -6219,10 +6228,17 @@ function mergeArticleSummaries(fresh) {
     }
     return { ...old, ...summary };
   });
-  if (stale && state.deepLoaded) {
-    // Let the next deep-field filter reload rather than matching on data that
-    // is no longer this run's.
+  if (stale) {
+    // Deep fields belong to a run. Invalidate the cache, and bump the
+    // generation so a load already in flight cannot mark stale data as loaded.
     state.deepLoaded = false;
+    state.deepGeneration = (state.deepGeneration || 0) + 1;
+    if (state.filterFn) {
+      // An applied filter is still holding the previous run's matches, and the
+      // dropdown and navigation read from that list.
+      populateDropdown();
+      updateFilterBadge();
+    }
   }
 }
 
@@ -6476,6 +6492,13 @@ async function toggleFieldVerification(path) {
     state.selectedPath = path;
     state.selectedSourceIndex = 0;
     await clearAnnotation(path);
+    return;
+  }
+  if (isOverridden(ann) && !state.annotations[path]) {
+    setSaveStatus(
+      "A correction on the enclosing section covers this field; edit or clear it there.",
+      "error",
+    );
     return;
   }
   if (isOverridden(ann)) {
