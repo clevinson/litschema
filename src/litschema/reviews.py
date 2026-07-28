@@ -60,13 +60,26 @@ class ReviewContractError(Exception):
     """A proposed review entry violates the review contract."""
 
 
-def read_reviews(run: RunFiles) -> dict[str, dict]:
+def read_reviews(run: RunFiles, *, check_semantics: bool = True) -> dict[str, dict]:
     """Return the stored ``fields`` map for this run, or ``{}`` when absent.
 
     Raises :class:`ReviewCorruptError` for an unreadable file, a bad shape, a
-    malformed path, or a legacy version-1 entry. Callers that need to render
-    an error rather than fail should catch it.
+    malformed path, a legacy version-1 entry, or an entry that cannot apply to
+    this run. Callers that need to render an error rather than fail should
+    catch it.
+
+    Semantic validation is on by default because this project's answer to two
+    reviewers is "work in separate clones and reconcile by merge"
+    (`specs/reviews/spec.md`). A merge can produce a file where every entry is
+    individually well-formed and the set is nonsense — a replace at a path the
+    run does not have, an add that no longer appends, an entry beneath someone
+    else's container override. `effective_extraction` skips those silently
+    while progress keeps counting them, so the failure is invisible in exactly
+    the situation where two people are relying on it.
+
+    Pass ``check_semantics=False`` for a pure syntax read.
     """
+
     path = run.review
     if not path.is_file():
         return {}
@@ -97,7 +110,43 @@ def read_reviews(run: RunFiles) -> dict[str, dict]:
             raise ReviewCorruptError(f"{path}: duplicate entry for {key!r}")
         _validate_entry_shape(key, entry, source=str(path))
         fields[key] = entry
+    if check_semantics:
+        _validate_semantics(run, fields, source=str(path))
     return fields
+
+
+def _validate_semantics(run: RunFiles, fields: dict[str, dict], *, source: str) -> None:
+    """Every entry must be one this run could actually have accepted."""
+    if not fields:
+        return
+    try:
+        extraction = json.loads(run.extraction.read_text())
+    except (OSError, ValueError):
+        return  # the run itself is unreadable; its own consumers report that
+
+    for key in sorted(fields, key=lambda p: len(parse_path(p))):
+        entry = fields[key]
+        blocked = terminal_override_ancestor(key, fields)
+        if blocked is not None:
+            raise ReviewCorruptError(
+                f"{source}: {blocked} carries a container override, so the entry at "
+                f"{key!r} beneath it cannot apply"
+            )
+        override = entry.get("override")
+        op = override.get("op") if override else None
+        if op == "add":
+            if path_resolves(extraction, key):
+                raise ReviewCorruptError(
+                    f"{source}: {key!r} is recorded as an add but already exists in this run"
+                )
+            try:
+                _validate_add_target(extraction, key, fields, updating=key)
+            except ReviewContractError as exc:
+                raise ReviewCorruptError(f"{source}: {exc}") from None
+        elif not path_resolves(extraction, key):
+            raise ReviewCorruptError(
+                f"{source}: the entry at {key!r} names a path this run does not have"
+            )
 
 
 def _validate_entry_shape(key: str, entry: dict, *, source: str) -> None:
@@ -262,7 +311,9 @@ def _validate_against_run(
                 )
 
 
-def _validate_add_target(extraction: dict, path: str, fields: dict[str, dict]) -> None:
+def _validate_add_target(
+    extraction: dict, path: str, fields: dict[str, dict], *, updating: str | None = None
+) -> None:
     """An add appends one past an array's length, or fills an absent property.
 
     "The end of the array" counts the adds already recorded in this review, not
@@ -284,13 +335,17 @@ def _validate_add_target(extraction: dict, path: str, fields: dict[str, dict]) -
         if not isinstance(parent, list):
             raise ReviewContractError(f"{path} indexes something that is not an array")
         frontier = len(parent)
-        while _added_index(fields, parent_path, frontier):
+        while _added_index(fields, parent_path, frontier, skip=updating):
             frontier += 1
         # Re-adding at an index this review already appended is an edit of that
         # element, not a new append: counting it toward the frontier demanded
         # the next index, while `replace` was refused because the path does not
         # exist in the raw extraction. There was no way to correct it.
-        if _added_index(fields, parent_path, last):
+        # On a write, `fields` is the stored set and does not yet contain the
+        # proposed entry, so a hit here means a previously stored add — an
+        # edit. When re-validating a whole file the entry IS in `fields`, so
+        # `skip` keeps it from vacuously approving itself.
+        if _added_index(fields, parent_path, last, skip=updating):
             return
         if last != frontier:
             raise ReviewContractError(
@@ -301,9 +356,13 @@ def _validate_add_target(extraction: dict, path: str, fields: dict[str, dict]) -
             raise ReviewContractError(f"the parent of {path} is not an object")
 
 
-def _added_index(fields: dict[str, dict], parent_path: str | None, index: int) -> bool:
+def _added_index(
+    fields: dict[str, dict], parent_path: str | None, index: int, *, skip: str | None = None
+) -> bool:
     """True when this review already records an ``add`` at ``parent[index]``."""
     candidate = format_path((*parse_path(parent_path), index) if parent_path else (index,))
+    if skip is not None and candidate == skip:
+        return False
     entry = fields.get(candidate)
     return bool(entry and (entry.get("override") or {}).get("op") == "add")
 

@@ -860,3 +860,37 @@ def test_adding_a_list_valued_property_counts_its_elements(tmp_path) -> None:
 
     assert "experiments[0].notes" in fields
     assert review_progress(run)["n_fields"] == before + 3
+
+
+def test_a_merge_that_produces_inapplicable_entries_is_reported_corrupt(tmp_path) -> None:
+    """Two reviewers reconcile by merge, so this file can be machine-made.
+
+    Every entry below is individually well-formed; the set is not applicable to
+    this run. `effective_extraction` skipped them silently while progress kept
+    counting them — invisible in exactly the case two people rely on.
+    """
+    run = _run(tmp_path, NESTED)
+    run.review.parent.mkdir(parents=True, exist_ok=True)
+
+    for fields, because in [
+        ({"experiments[9].ph": {"override": {"op": "replace", "value": 1.0}}},
+         "names a path this run does not have"),
+        ({"experiments[7]": {"override": {"op": "add", "value": {"id": "E9"}}}},
+         "an add that does not append"),
+        ({"title": {"override": {"op": "replace", "value": "X"}},
+          "title.sub": {}},
+         "an entry beneath a terminal override"),
+    ]:
+        run.review.write_text(json.dumps({"version": 2, "fields": fields}))
+        with pytest.raises(ReviewCorruptError):
+            read_reviews(run)
+        # The syntax-only read still works, for tooling that wants to inspect it.
+        assert read_reviews(run, check_semantics=False), because
+
+
+def test_a_healthy_review_file_still_reads(tmp_path) -> None:
+    run = _run(tmp_path, NESTED)
+    upsert_review(run, "title", {})
+    upsert_review(run, "experiments[0].ph", {"override": {"op": "replace", "value": 6.5}})
+
+    assert set(read_reviews(run)) == {"title", "experiments[0].ph"}

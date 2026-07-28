@@ -196,18 +196,69 @@ def _check_single_value(view: SchemaView, slot, value) -> None:
             )
         return
 
-    expected = _RANGE_PYTHON_TYPES.get(range_name)
+    # A custom type declares its own base and may carry a pattern; resolve to
+    # the base so `range: PositiveFloat` is checked like the float it is.
+    base, type_pattern = _resolve_type(view, range_name)
+    expected = _RANGE_PYTHON_TYPES.get(base)
     if expected is None:
         return  # a range we do not model; leave it to schema validation
     if isinstance(value, bool) and bool not in expected:
         raise ValueError(f"{value!r} is a boolean, but {slot.name} is {range_name}")
     if not isinstance(value, expected):
         raise ValueError(f"{value!r} is not a valid {range_name} for {slot.name}")
-    if expected == (float, int) or range_name in ("float", "double", "decimal"):
+    if base in ("float", "double", "decimal"):
         import math
 
         if not math.isfinite(value):
             raise ValueError(f"{value!r} is not a finite {range_name}")
+
+    # The schema's own constraints, not just its Python type. Without these a
+    # reviewer could store a value the schema forbids and export it as truth.
+    _check_constraints(slot, base, value, type_pattern)
+
+
+def _resolve_type(view: SchemaView, range_name) -> tuple[str | None, str | None]:
+    """(base type, pattern) for a range, following custom type definitions."""
+    types = view.all_types() or {}
+    pattern = None
+    seen: set[str] = set()
+    current = range_name
+    while current in types and current not in seen:
+        seen.add(current)
+        definition = types[current]
+        pattern = pattern or getattr(definition, "pattern", None)
+        base = getattr(definition, "typeof", None)
+        if not base:
+            return getattr(definition, "base", None) and current or current, pattern
+        current = base
+    return current, pattern
+
+
+def _check_constraints(slot, base: str | None, value, type_pattern: str | None) -> None:
+    import re
+
+    pattern = getattr(slot, "pattern", None) or type_pattern
+    if pattern and isinstance(value, str) and not re.fullmatch(pattern, value):
+        raise ValueError(f"{value!r} does not match the pattern for {slot.name} ({pattern})")
+
+    if base in ("integer", "float", "double", "decimal"):
+        minimum = getattr(slot, "minimum_value", None)
+        maximum = getattr(slot, "maximum_value", None)
+        if minimum is not None and value < minimum:
+            raise ValueError(f"{value!r} is below the minimum for {slot.name} ({minimum})")
+        if maximum is not None and value > maximum:
+            raise ValueError(f"{value!r} is above the maximum for {slot.name} ({maximum})")
+
+    if base in ("date", "datetime", "time") and isinstance(value, str):
+        from datetime import date, datetime
+        from datetime import time as _time
+
+        parser = {"date": date.fromisoformat, "datetime": datetime.fromisoformat,
+                  "time": _time.fromisoformat}[base]
+        try:
+            parser(value)
+        except ValueError:
+            raise ValueError(f"{value!r} is not a valid {base} for {slot.name}") from None
 
 
 @lru_cache(maxsize=32)
