@@ -581,9 +581,24 @@ def test_package_metadata_is_complete_for_a_public_release() -> None:
 
 
 def test_publish_workflow_gates_on_tests_and_a_matching_tag() -> None:
-    workflow = (REPO_ROOT / ".github" / "workflows" / "publish.yml").read_text()
+    """Parse the trigger; do not grep for it.
 
-    assert 'tags: ["v*"]' in workflow
+    A substring check for 'tags: [\"v*\"]' passed while the trigger was
+    manual-only, because the sentence explaining why it is manual-only
+    contains that string. Read the parsed `on:` block instead.
+    """
+    import yaml
+
+    path = REPO_ROOT / ".github" / "workflows" / "publish.yml"
+    workflow = path.read_text()
+    # PyYAML reads a bare `on:` key as the boolean True (YAML 1.1 truthiness).
+    parsed = yaml.safe_load(workflow)
+    triggers = parsed.get("on", parsed.get(True))
+
+    # 0.1.0 tags on GitHub without publishing, so a v* tag must NOT fire this.
+    assert "workflow_dispatch" in triggers, triggers
+    assert "push" not in triggers, f"a tag would fire an unconfigured publish: {triggers}"
+
     assert "uv run pytest -q" in workflow          # never publish an untested build
     assert "does not match project version" in workflow  # tag/version agreement
     assert "id-token: write" in workflow           # trusted publishing, no stored token

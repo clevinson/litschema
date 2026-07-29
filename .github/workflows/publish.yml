@@ -14,9 +14,13 @@ name: publish
 #
 # Tagging is deliberate and manual: `git tag v0.1.0 && git push origin v0.1.0`.
 
+# Manual only, deliberately. 0.1.0 tags on GitHub and does not publish; a tag
+# trigger would fire this on v0.1.0 and fail at the trusted-publishing step,
+# because neither PyPI human gate above has been done — the release tag would
+# carry a red X for a job nobody asked to run. The workflow is complete and one
+# click away. Restore the tag trigger when PyPI is set up (kata 0f2h).
 on:
-  push:
-    tags: ["v*"]
+  workflow_dispatch:
 
 jobs:
   build:
