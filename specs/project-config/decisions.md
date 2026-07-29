@@ -64,3 +64,48 @@ explicitly inlined slot has already opted out, so neither warns.
 language the schema is written in; failing schema resolution outright, since
 identifier references are legitimate when nothing is lost; and documenting the
 trap only, which the five independent rediscoveries showed to be insufficient.
+
+## 2026-07-29 — Multi-file schemas are permitted; identity is the byte closure (supersedes "The configured schema file is the complete closure")
+
+**Context:** the 2026-07-14 entry above decided that project extraction schemas
+contain no LinkML imports, and rejected "hashing a root file while allowing
+mutable imports." The code had drifted from it in both directions: nothing
+enforced the no-imports rule, `tests/fixtures/projects/organic_inherits`
+imported and subclassed across files with two tests pinning that, and
+`schema_hash` digested only the configured file — so editing an imported base
+left run identity unchanged, which is exactly the failure the 2026-07-14 entry
+was written to prevent.
+
+**Decision:** multi-file schemas are permitted. Splitting a schema across files
+is ordinary LinkML practice and worth preserving as an option, though not one
+to reach for without reason. Schema identity is the SHA-256 over the byte
+closure: the configured file plus every project file it transitively imports,
+each contributing its name and its exact bytes, sorted by resolved path.
+LinkML's own libraries (`linkml:...`) are excluded — they version with the
+dependency, not with the project.
+
+This answers the 2026-07-14 objection rather than ignoring it. That entry's
+stated reason was that hashing only the root cannot reconstruct historical
+induced types when imports change independently; a closure hash moves whenever
+any contributing file moves, so the reconstruction property holds.
+
+Scope stays narrow: no template composition mechanism, no cross-project schema
+sharing, no `--template` flag, and no tooling that assumes more than one file.
+Permitted, not promoted.
+
+**Rejected:** hashing a *merged* schema (via `--merge-imports` or an equivalent
+serialization). It hashes the semantic result, which is appealing — file
+reorganisation that changes nothing would keep the hash stable. But the merged
+form depends on the LinkML version, so a dependency upgrade could silently
+change every historical run's hash and make every stored run read as "schema
+mismatch". Bytes do not move when a dependency moves. For a provenance record,
+over-sensitivity (a comment edit shifts the hash, prompting a re-check) is the
+safe direction to fail; under-sensitivity is not.
+
+**Rejected:** resolving imports ourselves. A hand-rolled walk was wrong twice
+in one day — `with_suffix` replaced rather than appended, silently dropping a
+`.yml` import out of the digest, and offering both `.yaml` and `.yml`
+candidates let an unused sibling change identity. `SchemaView.imports_closure()`
+already resolves imports correctly, including that LinkML appends `.yaml`
+unconditionally, so `imports: [base.yml]` is not valid LinkML at all and fails
+at resolution rather than yielding a confident wrong hash.

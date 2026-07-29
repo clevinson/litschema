@@ -275,20 +275,32 @@ def test_schema_identity_ignores_linkml_library_imports(tmp_path) -> None:
     assert _schema_closure(entry) == [entry]
 
 
-def test_schema_closure_keeps_an_explicit_yml_import(tmp_path) -> None:
-    """`with_suffix` replaces a suffix rather than adding one.
+def test_a_yml_import_is_not_valid_linkml_and_fails_loudly(tmp_path) -> None:
+    """LinkML appends `.yaml` to an import name unconditionally.
 
-    So `imports: [base.yml]` resolved to a `base.yaml` that does not exist, and
-    the real file dropped out of the identity digest silently — the exact
-    failure the closure hash exists to prevent.
+    `load_import` does `load_schema_wrap(sname + ".yaml")`, so
+    `imports: [base.yml]` looks for `base.yml.yaml` and the schema does not
+    load at all. There is therefore no such thing as a `.yml` import to
+    include in the digest — and resolution must be what reports it, so a
+    broken import can never yield a confident-looking hash.
     """
-    from litschema.schema_resolution import _schema_closure
+    schema_dir = tmp_path / "schema"
+    schema_dir.mkdir(parents=True)
+    (schema_dir / "base.yml").write_text(
+        "id: https://example.org/b\nname: base\ndefault_range: string\n"
+    )
+    (schema_dir / "extraction.yaml").write_text(
+        "id: https://example.org/e\nname: e\nimports: [base.yml]\n"
+        "classes:\n  Root:\n    tree_root: true\n    attributes:\n"
+        "      article_id:\n        identifier: true\n"
+    )
+    (tmp_path / "litschema.yaml").write_text('project_root: "."\nschema_dir: "schema"\n')
 
-    (tmp_path / "base.yml").write_text("id: https://example.org/b\nname: base\n")
-    entry = tmp_path / "extraction.yaml"
-    entry.write_text("id: https://example.org/e\nname: e\nimports: [base.yml]\n")
-
-    assert [p.name for p in _schema_closure(entry)] == ["base.yml", "extraction.yaml"]
+    # FileNotFoundError for base.yml.yaml — the name LinkML actually looks for.
+    with pytest.raises(FileNotFoundError, match=r"base\.yml\.yaml"):
+        schema_resolution.resolve_extraction_schema(
+            load_config(tmp_path / "litschema.yaml", reload=True)
+        )
 
 
 @pytest.mark.parametrize(
@@ -336,18 +348,23 @@ def test_temporal_values_follow_xsd_lexical_forms(tmp_path, range_name, value, v
             _check_single_value(view, slot, value)
 
 
-def test_only_one_file_answers_a_suffixless_import(tmp_path) -> None:
-    """Both candidates in the digest would let an unused sibling change identity.
-
-    LinkML resolves one file for `imports: [base]`. Including both `base.yaml`
-    and `base.yml` meant editing the one it never reads changed the schema hash.
+def test_a_suffixless_import_resolves_to_exactly_one_file(tmp_path) -> None:
+    """Including both `base.yaml` and `base.yml` would let a file LinkML never
+    reads change the schema identity. LinkML picks one; the digest follows it.
     """
-    from litschema.schema_resolution import _import_candidates
+    from litschema.schema_resolution import _schema_closure
 
-    (tmp_path / "base.yaml").write_text("id: https://example.org/a\nname: a\n")
+    (tmp_path / "base.yaml").write_text(
+        "id: https://example.org/a\nname: a\ndefault_range: string\n"
+    )
     (tmp_path / "base.yml").write_text("id: https://example.org/b\nname: b\n")
+    entry = tmp_path / "extraction.yaml"
+    entry.write_text(
+        "id: https://example.org/e\nname: e\nimports: [base]\n"
+        "classes:\n  Root:\n    tree_root: true\n"
+    )
 
-    assert [p.name for p in _import_candidates(tmp_path, "base")] == ["base.yaml"]
+    assert [p.name for p in _schema_closure(entry)] == ["base.yaml", "extraction.yaml"]
 
 
 # ── the root class must address a document by article_id ────────────────────

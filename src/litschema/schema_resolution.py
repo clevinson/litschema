@@ -456,52 +456,41 @@ def schema_hash(cfg: LitSchemaConfig) -> str:
 def _schema_closure(entry: Path) -> list[Path]:
     """``entry`` plus every project schema file it transitively imports.
 
+    Import resolution is LinkML's, not ours. Hand-rolling it went wrong twice
+    in a single day: ``with_suffix`` *replaces* a suffix, so an explicit
+    ``imports: [base.yml]`` resolved to a nonexistent ``base.yaml`` and dropped
+    the real file out of the digest silently; and offering both ``.yaml`` and
+    ``.yml`` candidates let an unused sibling change the schema identity.
+    Resolving imports is SchemaView's job and it already gets these right.
+
+    LinkML's own libraries are excluded: they resolve into site-packages and
+    version with the dependency rather than with the project, so folding them
+    in would make a LinkML upgrade look like a schema change.
+
     Sorted by resolved path so the digest never depends on traversal order.
-    Unreadable or missing imports are skipped: resolution reports those, and
-    computing an identity must not raise.
+    Never raises — computing an identity must not be the thing that fails.
     """
-    import yaml
+    paths: dict[str, Path] = {str(entry.resolve()): entry}
+    try:
+        view = SchemaView(str(entry))
+        closure = view.imports_closure()
+    except Exception:
+        return list(paths.values())  # resolution reports the real error
 
-    seen: dict[str, Path] = {}
-    queue = [entry]
-    while queue:
-        current = queue.pop()
-        key = str(current.resolve())
-        if key in seen or not current.is_file():
+    for name in closure:
+        if str(name).startswith("linkml:"):
             continue
-        seen[key] = current
-        try:
-            document = yaml.safe_load(current.read_text()) or {}
-        except (OSError, yaml.YAMLError):
+        source = getattr(view.schema_map.get(name), "source_file", None)
+        if not source:
             continue
-        if not isinstance(document, dict):
-            continue
-        for name in document.get("imports") or []:
-            name = str(name)
-            if name.startswith("linkml:") or ":" in name:
-                continue  # a CURIE, not a project file
-            queue.extend(_import_candidates(current.parent, name))
-    return [seen[key] for key in sorted(seen)]
-
-
-def _import_candidates(directory: Path, name: str) -> list[Path]:
-    """Files a LinkML import name could refer to, most specific first.
-
-    `with_suffix(".yaml")` was wrong: it *replaces* an existing suffix, so an
-    explicit `imports: [base.yml]` resolved to a `base.yaml` that does not
-    exist and dropped the real file out of the identity digest silently — the
-    exact failure the closure hash was added to prevent.
-    """
-    target = directory / name
-    if target.suffix in (".yaml", ".yml"):
-        return [target]
-    # Exactly one candidate: enqueueing both would fold an unused sibling into
-    # the identity digest, so editing a file LinkML never reads would change
-    # the schema hash. `.yaml` wins, matching LinkML's own preference order.
-    for candidate in (Path(f"{target}.yaml"), Path(f"{target}.yml")):
+        candidate = Path(source)
+        if not candidate.is_absolute() and not candidate.is_file():
+            # LinkML records an import's source relative to the file that
+            # imported it; resolve it against the entry's directory.
+            candidate = entry.parent / candidate
         if candidate.is_file():
-            return [candidate]
-    return []
+            paths[str(candidate.resolve())] = candidate
+    return [paths[key] for key in sorted(paths)]
 
 
 def resolve_extraction_schema(cfg: LitSchemaConfig) -> ResolvedExtractionSchema:
