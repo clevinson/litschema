@@ -4,8 +4,8 @@ Manifest-driven: iterates assembled articles (``data/papers/*/
 article-metadata.json``) and queries OpenAlex for every manifest that
 carries a DOI. Extracts authors, affiliations, ORCIDs, ROR IDs, abstracts,
 keywords. Saves raw JSON per article and writes the provenance-tagged
-``source_metadata`` block. Articles whose metadata a human edited
-(``metadata_source: manual``) are never touched.
+``bib_metadata`` block. Articles whose metadata a human edited
+(``bib_source: manual``) are never touched.
 
 Usage:
     uv run python -m litschema.ingest.openalex_harvest [--email EMAIL]
@@ -22,8 +22,8 @@ import requests
 
 from ..article_registry import is_valid_doi, normalize_doi
 from ..articles import article_files, iter_metadata_paths, write_article_metadata
+from ..bib_metadata import BIB_FIELDS, read_bib_metadata, update_bib_metadata
 from ..config import LitSchemaConfig
-from ..source_metadata import SOURCE_FIELDS, read_source_metadata, update_source_metadata
 from . import harvest_cache_dir
 
 logger = logging.getLogger(__name__)
@@ -67,13 +67,13 @@ def reconstruct_abstract(inverted_index: dict | None) -> str | None:
 
 
 def _manifest_doi(manifest: dict) -> str | None:
-    """Return the article's DOI from the source_metadata block.
+    """Return the article's DOI from the bib_metadata block.
 
     The block is the DOI's only home — litschema carries no awareness of
     legacy manifest layouts (alpha policy, specs/README.md); unmigrated
     corpora update their manifests in their own repo.
     """
-    candidate = read_source_metadata(manifest).get("doi")
+    candidate = read_bib_metadata(manifest).get("doi")
     if candidate and is_valid_doi(str(candidate)):
         return normalize_doi(str(candidate))
     return None
@@ -116,8 +116,8 @@ def _enrich_article(cfg: LitSchemaConfig, article_id: str, extracted: dict) -> b
     if open_access is not None:
         identity["open_access"] = open_access
     write_article_metadata(files, identity)
-    replacement = {field: fields.get(field) for field in SOURCE_FIELDS}
-    update_source_metadata(files, replacement, source="doi")
+    replacement = {field: fields.get(field) for field in BIB_FIELDS}
+    update_bib_metadata(files, replacement, source="doi")
     return True
 
 
@@ -156,7 +156,7 @@ def sync_article(
     (cache_dir / f"{doi_to_slug(doi)}.json").write_text(
         json.dumps(extracted, indent=2, ensure_ascii=False)
     )
-    return read_source_metadata(files.read_metadata())
+    return read_bib_metadata(files.read_metadata())
 
 
 def fetch_openalex(doi: str, email: str | None = None) -> dict | None:
@@ -275,7 +275,7 @@ def harvest(
 ) -> dict:
     """Enrich every assembled article whose manifest carries a DOI.
 
-    The DOI is read from the ``source_metadata`` block — there is no
+    The DOI is read from the ``bib_metadata`` block — there is no
     registry file to author. Raw responses are cached under
     ``.litschema/cache``; with ``skip_existing`` (the default) a cached
     response is applied to the manifest without re-fetching. Returns summary
@@ -302,7 +302,7 @@ def harvest(
         article_id = metadata_path.parent.name
         manifest = article_files(cfg, article_id).read_metadata()
 
-        if read_source_metadata(manifest).get("metadata_source") == "manual":
+        if read_bib_metadata(manifest).get("bib_source") == "manual":
             stats["manual"] += 1
             logger.info("Keeping manual metadata for %s; harvest skipped", article_id)
             continue

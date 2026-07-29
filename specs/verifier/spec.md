@@ -32,7 +32,7 @@ a green suite.
 
 `litschema verify` is the loopback-only human review application. It consumes
 active runs and run-bound reviews but does not own their storage or lifecycle.
-Source metadata is owned by `specs/source-metadata/spec.md`.
+Source metadata is owned by `specs/bib-metadata/spec.md`.
 
 ## Launch and distribution
 

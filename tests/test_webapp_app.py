@@ -84,32 +84,32 @@ def test_article_meta_returns_provenance_and_editability(tmp_path) -> None:
         "a",
         {
             "id": "a",
-            "source_metadata": {
+            "bib_metadata": {
                 "title": "T",
                 "authors": ["Jane Smith"],
                 "year": 2024,
-                "metadata_source": "doi",
+                "bib_source": "doi",
             },
         },
     )
     meta = webapp._article_meta(cfg, "a")
     assert meta["title"] == "T"
     assert meta["authors"] == ["Jane Smith"]
-    assert meta["metadata_source"] == "doi"
+    assert meta["bib_source"] == "doi"
     assert meta["editable"] is False
 
 
 def test_article_meta_marks_auto_editable_and_ignores_legacy_keys(tmp_path) -> None:
     cfg = _project_cfg(tmp_path)
     _write_manifest(
-        cfg, "f", {"id": "f", "source_metadata": {"title": "T", "metadata_source": "auto"}}
+        cfg, "f", {"id": "f", "bib_metadata": {"title": "T", "bib_source": "auto"}}
     )
     _write_manifest(cfg, "l", {"id": "l", "title": "Old", "year": 2019})
 
     assert webapp._article_meta(cfg, "f")["editable"] is True
     # Legacy top-level bib keys are dead: the manifest reads as an empty
     # editable record, same as any article with no source metadata yet.
-    assert webapp._article_meta(cfg, "l") == {"metadata_source": "auto", "editable": True}
+    assert webapp._article_meta(cfg, "l") == {"bib_source": "auto", "editable": True}
 
 
 def test_article_meta_identity_only_manifest_is_editable_empty(tmp_path) -> None:
@@ -205,12 +205,12 @@ def test_list_articles_includes_assembled_but_unextracted(tmp_path) -> None:
     _write_manifest(
         cfg,
         "noext",
-        {"id": "noext", "source_metadata": {"title": "Unextracted Title", "metadata_source": "auto"}},
+        {"id": "noext", "bib_metadata": {"title": "Unextracted Title", "bib_source": "auto"}},
     )
     _write_manifest(
         cfg,
         "ext",
-        {"id": "ext", "source_metadata": {"title": "Extracted Title", "metadata_source": "auto"}},
+        {"id": "ext", "bib_metadata": {"title": "Extracted Title", "bib_source": "auto"}},
     )
     _write_extraction(cfg, "ext", {"article_id": "ext", "study_types": ["review"]})
     client = _client(cfg)
@@ -222,7 +222,7 @@ def test_list_articles_includes_assembled_but_unextracted(tmp_path) -> None:
     noext = by_id["noext"]
     assert noext["has_extraction"] is False
     assert noext["title"] == "Unextracted Title"
-    assert noext["metadata_source"] == "auto"
+    assert noext["bib_source"] == "auto"
     assert noext["n_setups"] == 0
     assert noext["n_fields"] == 0
     assert noext["n_reviewed"] == 0
@@ -255,7 +255,7 @@ def test_list_articles_carries_overall_confidence_from_reasoning(tmp_path) -> No
 
 def test_list_articles_treats_errored_extraction_as_unextracted(tmp_path) -> None:
     cfg = _project_cfg(tmp_path)
-    _write_manifest(cfg, "bad", {"id": "bad", "source_metadata": {"title": "B", "metadata_source": "manual"}})
+    _write_manifest(cfg, "bad", {"id": "bad", "bib_metadata": {"title": "B", "bib_source": "manual"}})
     # The marker shape the extraction contract defines, not a truthy `error`.
     _write_extraction(
         cfg, "bad", {"article_id": "bad", "error": True, "reason": "no extractable text"}
@@ -341,10 +341,10 @@ def test_schema_fields_reports_kind_for_every_scalar_slot(tmp_path) -> None:
     assert fields["label"]["kind"] == "string"
 
 
-def test_put_bibliography_writes_manual_source_metadata(tmp_path) -> None:
+def test_put_bibliography_writes_manual_bib_metadata(tmp_path) -> None:
     cfg = _project_cfg(tmp_path)
     _write_manifest(
-        cfg, "a", {"id": "a", "source_metadata": {"title": "Seed", "metadata_source": "auto"}}
+        cfg, "a", {"id": "a", "bib_metadata": {"title": "Seed", "bib_source": "auto"}}
     )
     client = _client(cfg)
 
@@ -364,10 +364,10 @@ def test_put_bibliography_writes_manual_source_metadata(tmp_path) -> None:
     assert body["year"] == 2023                      # coerced to int
     assert body["authors"] == ["Jane Smith", "Mo Doe"]  # comma string split
     assert body["corporate_author"] == "Carbon Direct"  # accepted verbatim, never split
-    assert body["metadata_source"] == "manual"
+    assert body["bib_source"] == "manual"
     assert body["editable"] is True
     on_disk = _json.loads((cfg.article_store_dir / "a" / "article-metadata.json").read_text())
-    assert on_disk["source_metadata"]["metadata_source"] == "manual"
+    assert on_disk["bib_metadata"]["bib_source"] == "manual"
 
 
 def test_put_bibliography_clears_a_field_with_null(tmp_path) -> None:
@@ -375,7 +375,7 @@ def test_put_bibliography_clears_a_field_with_null(tmp_path) -> None:
     _write_manifest(
         cfg,
         "a",
-        {"id": "a", "source_metadata": {"title": "T", "doi": "10.1/x", "metadata_source": "manual"}},
+        {"id": "a", "bib_metadata": {"title": "T", "doi": "10.1/x", "bib_source": "manual"}},
     )
     client = _client(cfg)
     resp = client.put("/api/bibliography/a", json={"doi": None})
@@ -395,7 +395,7 @@ def test_put_bibliography_rejects_garbage(tmp_path) -> None:
 def test_put_bibliography_validates_doi_and_clears_on_empty_string(tmp_path) -> None:
     cfg = _project_cfg(tmp_path)
     _write_manifest(
-        cfg, "a", {"id": "a", "source_metadata": {"title": "T", "metadata_source": "manual"}}
+        cfg, "a", {"id": "a", "bib_metadata": {"title": "T", "bib_source": "manual"}}
     )
     client = _client(cfg)
 
@@ -428,10 +428,10 @@ def test_cleared_doi_does_not_resurrect_from_legacy_identity(tmp_path) -> None:
         {
             "id": "l",
             "doi": "10.1234/wrong",
-            "source_metadata": {
+            "bib_metadata": {
                 "title": "Fixed",
                 "doi": "10.1234/wrong",
-                "metadata_source": "manual",
+                "bib_source": "manual",
             },
         },
     )
@@ -456,10 +456,10 @@ def test_sync_bibliography_overwrites_manual_and_locks(tmp_path, monkeypatch) ->
         "a",
         {
             "id": "a",
-            "source_metadata": {
+            "bib_metadata": {
                 "title": "Hand Fixed",
                 "doi": "10.1234/x",
-                "metadata_source": "manual",
+                "bib_source": "manual",
             },
         },
     )
@@ -480,10 +480,10 @@ def test_sync_bibliography_overwrites_manual_and_locks(tmp_path, monkeypatch) ->
     assert resp.status_code == 200
     body = resp.json()
     assert body["title"] == "Registry Title"
-    assert body["metadata_source"] == "doi"
+    assert body["bib_source"] == "doi"
     assert body["editable"] is False  # explicit consent overwrote manual and locked
     on_disk = _json.loads((cfg.article_store_dir / "a" / "article-metadata.json").read_text())
-    assert on_disk["source_metadata"]["metadata_source"] == "doi"
+    assert on_disk["bib_metadata"]["bib_source"] == "doi"
 
 
 def test_sync_bibliography_error_paths(tmp_path, monkeypatch) -> None:
@@ -494,7 +494,7 @@ def test_sync_bibliography_error_paths(tmp_path, monkeypatch) -> None:
     _write_manifest(
         cfg,
         "gone",
-        {"id": "gone", "source_metadata": {"doi": "10.1234/x", "metadata_source": "auto"}},
+        {"id": "gone", "bib_metadata": {"doi": "10.1234/x", "bib_source": "auto"}},
     )  # valid block doi: exercises the true registry-miss path
     monkeypatch.setattr(openalex_harvest, "fetch_openalex", lambda doi, email=None: None)
     client = _client(cfg)

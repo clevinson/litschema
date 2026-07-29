@@ -42,7 +42,7 @@ def _write_manifest(cfg: LitSchemaConfig, article_id: str, manifest: dict) -> Pa
 
 def _block(cfg: LitSchemaConfig, article_id: str) -> dict:
     path = cfg.article_store_dir / article_id / "article-metadata.json"
-    return json.loads(path.read_text()).get("source_metadata", {})
+    return json.loads(path.read_text()).get("bib_metadata", {})
 
 
 runner = CliRunner()
@@ -70,7 +70,7 @@ def test_meta_set_and_show_round_trip(tmp_path: Path, monkeypatch) -> None:
     assert block["title"] == "Real Title"
     assert block["authors"] == ["Jane Smith", "Mo Doe"]  # comma string split
     assert block["year"] == 2023                          # typer coerced to int
-    assert block["metadata_source"] == "manual"
+    assert block["bib_source"] == "manual"
 
     shown = runner.invoke(cli.app, ["meta", "show", "a"])
     assert shown.exit_code == 0
@@ -95,7 +95,7 @@ def test_meta_set_auto_refuses_to_overwrite_manual_without_force(
 ) -> None:
     cfg = _project(tmp_path, monkeypatch)
     _write_manifest(
-        cfg, "a", {"id": "a", "source_metadata": {"title": "Hand Fixed", "metadata_source": "manual"}}
+        cfg, "a", {"id": "a", "bib_metadata": {"title": "Hand Fixed", "bib_source": "manual"}}
     )
 
     refused = runner.invoke(cli.app, ["meta", "set", "a", "--source", "auto", "--title", "Guess"])
@@ -112,7 +112,7 @@ def test_meta_set_auto_refuses_to_overwrite_manual_without_force(
 def test_meta_set_auto_refuses_locked_but_manual_always_wins(tmp_path: Path, monkeypatch) -> None:
     cfg = _project(tmp_path, monkeypatch)
     _write_manifest(
-        cfg, "a", {"id": "a", "source_metadata": {"title": "Registry", "metadata_source": "doi"}}
+        cfg, "a", {"id": "a", "bib_metadata": {"title": "Registry", "bib_source": "doi"}}
     )
 
     assert runner.invoke(
@@ -123,13 +123,13 @@ def test_meta_set_auto_refuses_locked_but_manual_always_wins(tmp_path: Path, mon
     assert result.exit_code == 0, result.output
     block = _block(cfg, "a")
     assert block["title"] == "Fixed"
-    assert block["metadata_source"] == "manual"  # unlocked by the human edit
+    assert block["bib_source"] == "manual"  # unlocked by the human edit
 
 
 def test_meta_set_auto_over_auto_is_allowed(tmp_path: Path, monkeypatch) -> None:
     cfg = _project(tmp_path, monkeypatch)
     _write_manifest(
-        cfg, "a", {"id": "a", "source_metadata": {"title": "Seed", "metadata_source": "auto"}}
+        cfg, "a", {"id": "a", "bib_metadata": {"title": "Seed", "bib_source": "auto"}}
     )
     result = runner.invoke(cli.app, ["meta", "set", "a", "--source", "auto", "--title", "Better"])
     assert result.exit_code == 0, result.output
@@ -141,7 +141,7 @@ def test_meta_set_clear_removes_fields_and_rejects_unknown(tmp_path: Path, monke
     _write_manifest(
         cfg,
         "a",
-        {"id": "a", "source_metadata": {"title": "T", "url": "http://x", "metadata_source": "manual"}},
+        {"id": "a", "bib_metadata": {"title": "T", "url": "http://x", "bib_source": "manual"}},
     )
 
     result = runner.invoke(cli.app, ["meta", "set", "a", "--source", "manual", "--clear", "url"])
@@ -171,7 +171,7 @@ def test_meta_set_empty_string_clears_and_clear_conflict_errors(
     _write_manifest(
         cfg,
         "a",
-        {"id": "a", "source_metadata": {"title": "T", "url": "http://x", "metadata_source": "manual"}},
+        {"id": "a", "bib_metadata": {"title": "T", "url": "http://x", "bib_source": "manual"}},
     )
 
     # Explicit empty string clears, matching the webapp form's convention.
@@ -240,7 +240,7 @@ def test_meta_set_sync_requires_exactly_a_doi(tmp_path: Path, monkeypatch) -> No
         assert result.exit_code == 2, result.output
         assert "--sync requires --doi" in result.output
     manifest = json.loads((cfg.article_store_dir / "a" / "article-metadata.json").read_text())
-    assert "source_metadata" not in manifest  # the refusals wrote nothing
+    assert "bib_metadata" not in manifest  # the refusals wrote nothing
 
 
 def test_meta_set_sync_locks_from_registry_in_one_command(
@@ -248,7 +248,7 @@ def test_meta_set_sync_locks_from_registry_in_one_command(
 ) -> None:
     cfg = _project(tmp_path, monkeypatch)
     _write_manifest(
-        cfg, "a", {"id": "a", "source_metadata": {"title": "Seed", "metadata_source": "auto"}}
+        cfg, "a", {"id": "a", "bib_metadata": {"title": "Seed", "bib_source": "auto"}}
     )
     monkeypatch.setattr(openalex_harvest, "fetch_openalex", _fake_fetch)
 
@@ -259,7 +259,7 @@ def test_meta_set_sync_locks_from_registry_in_one_command(
     assert result.exit_code == 0, result.output
     assert "locked (was auto)" in result.output
     block = _block(cfg, "a")
-    assert block["metadata_source"] == "doi"
+    assert block["bib_source"] == "doi"
     assert block["title"] == "Registry Title"
 
 
@@ -268,7 +268,7 @@ def test_meta_set_sync_keeps_doi_retryable_when_registry_has_no_record(
 ) -> None:
     cfg = _project(tmp_path, monkeypatch)
     _write_manifest(
-        cfg, "a", {"id": "a", "source_metadata": {"title": "Seed", "metadata_source": "auto"}}
+        cfg, "a", {"id": "a", "bib_metadata": {"title": "Seed", "bib_source": "auto"}}
     )
     monkeypatch.setattr(openalex_harvest, "fetch_openalex", lambda doi, email=None: None)
 
@@ -280,7 +280,7 @@ def test_meta_set_sync_keeps_doi_retryable_when_registry_has_no_record(
     assert "NOT locked" in result.output
     block = _block(cfg, "a")
     assert block["doi"] == "10.1234/miss"  # recorded — the sweep can retry
-    assert block["metadata_source"] == "auto"  # the lock was not earned
+    assert block["bib_source"] == "auto"  # the lock was not earned
     assert block["title"] == "Seed"  # untouched
 
 
@@ -301,7 +301,7 @@ def test_meta_set_sync_survives_registry_outage(tmp_path: Path, monkeypatch) -> 
     assert "NOT locked" in result.output
     block = _block(cfg, "a")
     assert block["doi"] == "10.1234/x"
-    assert block["metadata_source"] == "auto"
+    assert block["bib_source"] == "auto"
 
 
 def test_meta_set_sync_guard_refusal_never_consults_the_registry(
@@ -311,7 +311,7 @@ def test_meta_set_sync_guard_refusal_never_consults_the_registry(
     _write_manifest(
         cfg,
         "a",
-        {"id": "a", "source_metadata": {"title": "Hand Fixed", "metadata_source": "manual"}},
+        {"id": "a", "bib_metadata": {"title": "Hand Fixed", "bib_source": "manual"}},
     )
     calls: list[str] = []
 
@@ -348,7 +348,7 @@ def test_meta_set_sync_manual_failure_hint_omits_the_sweep(
     assert result.exit_code == 0, result.output
     assert "NOT locked" in result.output
     assert "--all sweep" not in result.output
-    assert _block(cfg, "a")["metadata_source"] == "manual"
+    assert _block(cfg, "a")["bib_source"] == "manual"
 
 
 def test_meta_set_sync_force_demotes_manual_without_the_lock(
@@ -361,7 +361,7 @@ def test_meta_set_sync_force_demotes_manual_without_the_lock(
     _write_manifest(
         cfg,
         "a",
-        {"id": "a", "source_metadata": {"title": "Hand Fixed", "metadata_source": "manual"}},
+        {"id": "a", "bib_metadata": {"title": "Hand Fixed", "bib_source": "manual"}},
     )
     monkeypatch.setattr(openalex_harvest, "fetch_openalex", lambda doi, email=None: None)
 
@@ -373,7 +373,7 @@ def test_meta_set_sync_force_demotes_manual_without_the_lock(
     assert result.exit_code == 0, result.output
     assert "NOT locked" in result.output
     block = _block(cfg, "a")
-    assert block["metadata_source"] == "auto"  # demoted by --force
+    assert block["bib_source"] == "auto"  # demoted by --force
     assert block["doi"] == "10.1234/x"
     assert block["title"] == "Hand Fixed"  # per-field merge kept the title
 
@@ -383,7 +383,7 @@ def test_meta_set_sync_manual_is_explicit_consent(tmp_path: Path, monkeypatch) -
     _write_manifest(
         cfg,
         "a",
-        {"id": "a", "source_metadata": {"title": "Hand Fixed", "metadata_source": "manual"}},
+        {"id": "a", "bib_metadata": {"title": "Hand Fixed", "bib_source": "manual"}},
     )
     monkeypatch.setattr(openalex_harvest, "fetch_openalex", _fake_fetch)
 
@@ -394,7 +394,7 @@ def test_meta_set_sync_manual_is_explicit_consent(tmp_path: Path, monkeypatch) -
     assert result.exit_code == 0, result.output
     assert "locked (was manual)" in result.output  # the transition is narrated
     block = _block(cfg, "a")
-    assert block["metadata_source"] == "doi"
+    assert block["bib_source"] == "doi"
     assert block["title"] == "Registry Title"
 
 
@@ -405,10 +405,10 @@ def test_meta_sync_locks_from_recorded_doi(tmp_path: Path, monkeypatch) -> None:
         "a",
         {
             "id": "a",
-            "source_metadata": {
+            "bib_metadata": {
                 "title": "Hand Fixed",
                 "doi": "10.1234/x",
-                "metadata_source": "manual",
+                "bib_source": "manual",
             },
         },
     )
@@ -419,7 +419,7 @@ def test_meta_sync_locks_from_recorded_doi(tmp_path: Path, monkeypatch) -> None:
     assert result.exit_code == 0, result.output
     block = _block(cfg, "a")
     assert block["title"] == "Registry Title"  # explicit consent overwrote manual
-    assert block["metadata_source"] == "doi"
+    assert block["bib_source"] == "doi"
 
 
 def test_meta_sync_doi_flag_is_passthrough_and_atomic(tmp_path: Path, monkeypatch) -> None:
@@ -434,8 +434,8 @@ def test_meta_sync_doi_flag_is_passthrough_and_atomic(tmp_path: Path, monkeypatc
     assert result.exit_code == 0, result.output
     manifest = json.loads((cfg.article_store_dir / "a" / "article-metadata.json").read_text())
     assert "doi" not in manifest  # single home: the block, not the identity level
-    assert manifest["source_metadata"]["metadata_source"] == "doi"
-    assert manifest["source_metadata"]["doi"] == "10.1234/found"
+    assert manifest["bib_metadata"]["bib_source"] == "doi"
+    assert manifest["bib_metadata"]["doi"] == "10.1234/found"
 
     bad = runner.invoke(cli.app, ["meta", "sync", "a", "--doi", "not-a-doi"])
     assert bad.exit_code == 2
@@ -454,7 +454,7 @@ def test_meta_sync_doi_flag_records_nothing_on_registry_miss(
     assert "meta set" in result.output  # points at the escape hatch
     manifest = json.loads((cfg.article_store_dir / "a" / "article-metadata.json").read_text())
     assert "doi" not in manifest
-    assert "source_metadata" not in manifest  # atomic: the miss wrote nothing
+    assert "bib_metadata" not in manifest  # atomic: the miss wrote nothing
 
 
 def test_meta_sync_errors(tmp_path: Path, monkeypatch) -> None:
@@ -476,7 +476,7 @@ def test_meta_sync_all_is_the_batch_harvest(tmp_path: Path, monkeypatch) -> None
         "smith-2024",
         {
             "id": "smith-2024",
-            "source_metadata": {"doi": "10.1234/x", "metadata_source": "auto"},
+            "bib_metadata": {"doi": "10.1234/x", "bib_source": "auto"},
         },
     )
     _write_manifest(
@@ -484,7 +484,7 @@ def test_meta_sync_all_is_the_batch_harvest(tmp_path: Path, monkeypatch) -> None
         "fixed",
         {
             "id": "fixed",
-            "source_metadata": {"title": "H", "doi": "10.1234/y", "metadata_source": "manual"},
+            "bib_metadata": {"title": "H", "doi": "10.1234/y", "bib_source": "manual"},
         },
     )
     monkeypatch.setattr(openalex_harvest.time, "sleep", lambda _: None)
@@ -496,7 +496,7 @@ def test_meta_sync_all_is_the_batch_harvest(tmp_path: Path, monkeypatch) -> None
     stats = json.loads(result.output)
     assert stats["fetched"] == 1
     assert stats["manual"] == 1  # batch sweep never touches manual
-    assert _block(cfg, "smith-2024")["metadata_source"] == "doi"
+    assert _block(cfg, "smith-2024")["bib_source"] == "doi"
     assert _block(cfg, "fixed")["title"] == "H"
 
     assert runner.invoke(cli.app, ["meta", "sync", "a", "--all"]).exit_code == 2
@@ -509,7 +509,7 @@ def test_meta_sync_all_refresh_bypasses_cache(tmp_path: Path, monkeypatch) -> No
         "smith-2024",
         {
             "id": "smith-2024",
-            "source_metadata": {"doi": "10.1234/x", "metadata_source": "auto"},
+            "bib_metadata": {"doi": "10.1234/x", "bib_source": "auto"},
         },
     )
     from litschema.ingest import harvest_cache_dir

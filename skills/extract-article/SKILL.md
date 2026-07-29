@@ -171,7 +171,7 @@ one is a false record that nothing downstream can detect.
 
 After recording provenance, backfill what the document IS (as opposed to what it
 SAYS — the extraction above). The contract is defined in
-`specs/source-metadata/spec.md` in the litschema source repository (it is not
+`specs/bib-metadata/spec.md` in the litschema source repository (it is not
 copied into user projects); everything you need is below. Two rules apply
 throughout: never edit `article-metadata.json` by hand, and never invent
 values not visible in the document.

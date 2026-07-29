@@ -49,7 +49,7 @@ profile mismatch (keeps a special case alive to serve output text).
 `document_profile: journal_article | generic`. Its entire surface was one
 hint line in init/status output and one conditional harvest step in the
 onboard skill. It never touched schema scaffolding or pipeline behavior, and
-after the source-metadata lock model landed, registry enrichment became a
+after the bib-metadata lock model landed, registry enrichment became a
 per-article, data-driven decision (`meta set --doi` at extraction, then
 `meta sync`).
 
@@ -101,7 +101,7 @@ records the DOI and attempts the registry lock; title-page transcription is
 an explicit fallback (no DOI, or the sync half failed). The placement
 decision above is unchanged: the post-batch `meta sync --all` sweep remains
 the transient-failure net. Full rationale and rejected alternatives:
-`specs/source-metadata/decisions.md` (2026-07-07 entry).
+`specs/bib-metadata/decisions.md` (2026-07-07 entry).
 
 
 ## 2026-07-14 — Onboarding creates initial runs; refinement stays separate

@@ -153,7 +153,7 @@ def test_extract_skill_backfills_bib_metadata_via_meta_cli() -> None:
     assert "do NOT retry with `--force`" in extract
     assert "never invent" in extract.lower()
     assert "never edit" in extract.lower()
-    assert "specs/source-metadata/spec.md" in extract
+    assert "specs/bib-metadata/spec.md" in extract
 
 
 def test_onboard_skill_sweeps_registry_sync_after_batch() -> None:
@@ -163,7 +163,7 @@ def test_onboard_skill_sweeps_registry_sync_after_batch() -> None:
     # backfill), not at intake where fresh repos have none.
     assert "meta sync --all" in onboard
     assert onboard.index("extract-article") < onboard.index("meta sync --all")
-    assert "specs/source-metadata/spec.md" in onboard
+    assert "specs/bib-metadata/spec.md" in onboard
 
 
 def test_skill_setup_gates_resolve_cli_with_dev_override() -> None:

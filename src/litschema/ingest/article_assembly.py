@@ -19,8 +19,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from ..articles import ArticleFiles, article_files, write_article_metadata
+from ..bib_metadata import title_from_filename, update_bib_metadata
 from ..config import LitSchemaConfig, require_config_or_exit
-from ..source_metadata import title_from_filename, update_source_metadata
 
 logger = logging.getLogger(__name__)
 
@@ -138,7 +138,7 @@ def _process_inbox_pdf(
             "added_at": datetime.now(UTC).isoformat(),
         },
     )
-    update_source_metadata(
+    update_bib_metadata(
         files, {"title": title_from_filename(pdf_path.stem)}, source="auto"
     )
     existing_ids.add(article_id)

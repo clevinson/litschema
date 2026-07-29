@@ -115,7 +115,7 @@ not grow into it.
 
 ## Source metadata
 
-Assemble seeds automatic filename metadata. Extraction uses the source-metadata
+Assemble seeds automatic filename metadata. Extraction uses the bib-metadata
 CLI for registry-first DOI enrichment or title-page fallback. A post-batch
 `meta sync --all` retries transient registry failures. Skills never edit the
 manifest directly.
@@ -161,6 +161,6 @@ Implementation coverage must pin:
 - batch creation and activation of initial runs;
 - skip of active current-schema articles and retry of missing/error attempts;
 - interruption before and after publication;
-- source-metadata CLI use and post-batch sync placement;
+- bib-metadata CLI use and post-batch sync placement;
 - handoff to the verifier;
 - absence of refinement behavior from the onboarding conductor.

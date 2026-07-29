@@ -244,7 +244,7 @@ Tell the user in one line when their papers are in and ready.
 4. Run `$LITSCHEMA meta sync --all` — extraction already syncs each paper whose
    document shows a DOI, so this is the sweep that catches any that failed
    transiently. It skips papers without DOIs and skips human-edited (`manual`)
-   metadata (the contract is `specs/source-metadata/spec.md` in the litschema
+   metadata (the contract is `specs/bib-metadata/spec.md` in the litschema
    source repo). If it fails (offline), say so in a line and continue —
    nothing downstream breaks.
 5. Run `$LITSCHEMA validate` and `$LITSCHEMA status`; report the counts and any

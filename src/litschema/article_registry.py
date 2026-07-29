@@ -2,7 +2,7 @@
 
 Historical note: this module once held the ``data/sources/articles.csv``
 registry machinery, retired when harvest became manifest-driven (see
-``specs/source-metadata/decisions.md``). Only the DOI helpers survive.
+``specs/bib-metadata/decisions.md``). Only the DOI helpers survive.
 """
 
 from __future__ import annotations

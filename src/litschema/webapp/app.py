@@ -27,6 +27,11 @@ from ..articles import (
     iter_metadata_paths,
     read_article_metadata,
 )
+from ..bib_metadata import (
+    BIB_FIELDS,
+    read_bib_metadata,
+    update_bib_metadata,
+)
 from ..config import LitSchemaConfig
 from ..ingest.openalex_harvest import RegistryUnavailableError, sync_article
 from ..review_paths import InvalidReviewPathError, canonical_review_path
@@ -41,11 +46,6 @@ from ..reviews import (
     upsert_review,
 )
 from ..schema_resolution import resolve_extraction_schema
-from ..source_metadata import (
-    SOURCE_FIELDS,
-    read_source_metadata,
-    update_source_metadata,
-)
 from .search import strip_references
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -90,8 +90,8 @@ def _article_meta(cfg: LitSchemaConfig, article_id: str) -> dict:
     manifest = read_article_metadata(article_files(cfg, article_id))
     if not manifest:
         return {}
-    meta = read_source_metadata(manifest) or {"metadata_source": "auto"}
-    meta["editable"] = meta.get("metadata_source") != "doi"
+    meta = read_bib_metadata(manifest) or {"bib_source": "auto"}
+    meta["editable"] = meta.get("bib_source") != "doi"
     return meta
 
 
@@ -554,7 +554,7 @@ async def list_articles(cfg: CfgDep):
             "journal": bib.get("journal"),
             "authors": bib.get("authors", []),
             "corporate_author": bib.get("corporate_author"),
-            "metadata_source": bib.get("metadata_source"),
+            "bib_source": bib.get("bib_source"),
         }
 
         # One snapshot of the active run per article. Resolving the pointer
@@ -674,14 +674,14 @@ async def get_bibliography(article_id: str, cfg: CfgDep):
 async def put_bibliography(article_id: str, request: Request, cfg: CfgDep):
     """Apply a human edit to the verify header; provenance becomes 'manual'.
 
-    Accepts a partial record of SOURCE_FIELDS. ``null`` clears a field.
+    Accepts a partial record of BIB_FIELDS. ``null`` clears a field.
     Header metadata lives in the article manifest — review.json is never
-    touched by header edits (distinct layers; see specs/source-metadata/spec.md).
+    touched by header edits (distinct layers; see specs/bib-metadata/spec.md).
     """
     body = await request.json()
     if not isinstance(body, dict):
         raise HTTPException(400, "body must be a JSON object")
-    unknown = set(body) - set(SOURCE_FIELDS)
+    unknown = set(body) - set(BIB_FIELDS)
     if unknown:
         raise HTTPException(400, f"unknown fields: {', '.join(sorted(unknown))}")
     if not body:
@@ -707,7 +707,7 @@ async def put_bibliography(article_id: str, request: Request, cfg: CfgDep):
     files = article_files(cfg, article_id)
     if not files.metadata.exists():
         raise HTTPException(404, f"Unknown article {article_id}")
-    block = update_source_metadata(files, fields, source="manual")
+    block = update_bib_metadata(files, fields, source="manual")
     block["editable"] = True
     return block
 

@@ -3668,10 +3668,10 @@ function renderBibHeader(meta) {
   // Fallback payloads (e.g. the dropdown entry when /api/bibliography fails)
   // carry no `editable`; derive it from the lock model.
   const editable = meta
-    ? (meta.editable !== undefined ? meta.editable : meta.metadata_source !== "doi")
+    ? (meta.editable !== undefined ? meta.editable : meta.bib_source !== "doi")
     : false;
   const hasAny = meta && (
-    meta.title || meta.year || meta.journal || meta.doi || meta.metadata_source
+    meta.title || meta.year || meta.journal || meta.doi || meta.bib_source
   );
   if (!hasAny) {
     bar.style.display = "none";
@@ -3703,7 +3703,7 @@ function renderBibHeader(meta) {
   }
 
   const badge = $("#bib-badge");
-  const info = PROVENANCE_BADGES[meta.metadata_source];
+  const info = PROVENANCE_BADGES[meta.bib_source];
   badge.hidden = !info;
   if (info) {
     badge.textContent = info.label;
@@ -3731,7 +3731,7 @@ function applyBibBlock(articleId, block) {
   if (entry) {
     for (const key of ["title", "year", "journal", "doi", "corporate_author"]) entry[key] = block[key] ?? null;
     entry.authors = block.authors || [];
-    entry.metadata_source = block.metadata_source;
+    entry.bib_source = block.bib_source;
     populateDropdown();
   }
   if (articleId === state.currentId) renderBibHeader(block);
@@ -3774,7 +3774,7 @@ $("#bib-edit-form").addEventListener("submit", async (ev) => {
 $("#bib-sync-btn").addEventListener("click", async () => {
   const id = bibArticleId;  // captured now; the user may navigate mid-flight
   if (!id) return;
-  if (lastBibMeta && lastBibMeta.metadata_source === "manual" &&
+  if (lastBibMeta && lastBibMeta.bib_source === "manual" &&
       !confirm("Replace your manual edits with registry data for this DOI?")) return;
   const btn = $("#bib-sync-btn");
   btn.disabled = true;

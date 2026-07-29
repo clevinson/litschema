@@ -606,20 +606,20 @@ def runs_activate(
     typer.echo(f"{CHECK} {article_id} now active: {run_id}")
 
 
-@meta_app.command("show", help="Print the article's source-metadata block as JSON.")
+@meta_app.command("show", help="Print the article's bib-metadata block as JSON.")
 def meta_show(ctx: typer.Context, article_id: str):
-    from .source_metadata import read_source_metadata
+    from .bib_metadata import read_bib_metadata
 
     cfg = _require_project(ctx).config
     files = _require_article(cfg, article_id)
     typer.echo(
-        json.dumps(read_source_metadata(files.read_metadata()), indent=2, ensure_ascii=False)
+        json.dumps(read_bib_metadata(files.read_metadata()), indent=2, ensure_ascii=False)
     )
 
 
 @meta_app.command(
     "set",
-    help="Merge fields into the source-metadata block. Provenance is caller-asserted: "
+    help="Merge fields into the bib-metadata block. Provenance is caller-asserted: "
     "--source auto for machine-inferred values (agents, scripts), --source manual for "
     "human-authored values. An explicit empty-string value clears a field. The doi "
     "state is earned via `meta sync` (or `meta set --doi ... --sync`), never asserted.",
@@ -655,11 +655,11 @@ def meta_set(
         False, "--force", help="Let an auto write overwrite manual/doi metadata"
     ),
 ):
-    from .source_metadata import (
-        SOURCE_FIELDS,
+    from .bib_metadata import (
+        BIB_FIELDS,
         can_overwrite,
-        read_source_metadata,
-        update_source_metadata,
+        read_bib_metadata,
+        update_bib_metadata,
     )
 
     if source not in ("auto", "manual"):
@@ -684,7 +684,7 @@ def meta_set(
 
     values = (title, authors, corporate_author, year, journal, doi, publisher, url, abstract)
     fields: dict = {}
-    for key, value in zip(SOURCE_FIELDS, values, strict=True):
+    for key, value in zip(BIB_FIELDS, values, strict=True):
         if value is None:
             continue
         # An explicit empty string clears the field (the webapp's convention).
@@ -702,7 +702,7 @@ def meta_set(
             raise typer.Exit(code=2)
         fields["doi"] = normalized_doi
     for field in clear:
-        if field not in SOURCE_FIELDS:
+        if field not in BIB_FIELDS:
             typer.secho(f"{CROSS} unknown field: {field}", fg=typer.colors.RED)
             raise typer.Exit(code=2)
         if fields.get(field) is not None:
@@ -716,7 +716,7 @@ def meta_set(
         typer.secho(f"{CROSS} nothing to change (pass field options or --clear)", fg=typer.colors.RED)
         raise typer.Exit(code=2)
 
-    existing = read_source_metadata(files.read_metadata()).get("metadata_source")
+    existing = read_bib_metadata(files.read_metadata()).get("bib_source")
     if not force and not can_overwrite(existing, source):
         typer.secho(
             f"{CROSS} refusing: metadata is {existing!r} and auto writes never overwrite "
@@ -726,7 +726,7 @@ def meta_set(
         )
         raise typer.Exit(code=1)
 
-    block = update_source_metadata(files, fields, source=source)
+    block = update_bib_metadata(files, fields, source=source)
     if not sync:
         typer.echo(json.dumps(block, indent=2, ensure_ascii=False))
         return
