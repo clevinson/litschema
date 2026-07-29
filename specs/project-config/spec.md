@@ -41,10 +41,19 @@ select a schema version or maintain schema history.
 
 `schema_dir/<extraction_schema_file>` is the project's only current LinkML
 extraction schema. Resolution loads it with the LinkML Python API and requires
-exactly one locally defined class with `tree_root: true`. Validation is
-closed-world. The extraction schema imports no project or framework schema
-files; the configured file is the complete schema identity. Templates may be
-copied into that file as starting material.
+exactly one locally defined class with `tree_root: true`. That class MUST
+declare `article_id` as an `identifier: true` slot, whether directly or by
+inheritance, so every consumer knows how to address a document without
+consulting the project. Validation is closed-world. Templates may be copied
+into the schema file as starting material.
+
+The schema MAY span multiple files, since LinkML supports imports; schema
+identity is then the transitive closure of project schema files rather than
+the configured file alone, and `schema_hash` digests that closure. LinkML's own
+libraries (`linkml:...`) version with the dependency, not the project, and are
+excluded. Multi-file schemas are permitted, not promoted: there is no template
+composition mechanism, no cross-project schema sharing, and no tooling that
+assumes more than one file.
 
 Git is the schema and domain-context history. Runs record, but do not copy, the
 current schema. Parallel versioned schema files, run-local schema files, and an
@@ -117,8 +126,10 @@ Implementation coverage must pin:
 - deterministic byte hashing independent of the working directory, and
   identity resolution inside a repository, outside one, and after the schema
   file is renamed;
-- rejection of schema imports, parallel schema-history configuration, and
-  run-local schemas;
+- rejection of parallel schema-history configuration and run-local schemas;
+- schema identity spanning imported project files, and excluding `linkml:`
+  library imports;
+- the `article_id` identifier requirement on the root class;
 - hash-based same-schema versus upgrade classification;
 - common exit codes and project-scoped config flags;
 - status counts across missing, active, and current-schema-active runs, and

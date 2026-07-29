@@ -513,8 +513,36 @@ def resolve_extraction_schema(cfg: LitSchemaConfig) -> ResolvedExtractionSchema:
             "at the default location."
         )
     sv = SchemaView(str(schema_path))
+    root_class = _find_tree_root_class(sv)
+    _require_root_identifier(sv, root_class, schema_path)
     return ResolvedExtractionSchema(
         path=schema_path,
         view=sv,
-        root_class=_find_tree_root_class(sv),
+        root_class=root_class,
     )
+
+
+def _require_root_identifier(sv: SchemaView, root_class: str, schema_path: Path) -> None:
+    """The root class must address a document by `article_id`.
+
+    Every consumer — the CLI, the verifier, export, the review path algebra —
+    needs one agreed way to say which document a record is about. Leaving that
+    to convention meant it held only because every template happened to do it;
+    a project that named the slot something else would fail later, somewhere
+    else, for reasons that pointed at the wrong thing.
+
+    Checked against induced slots, so inheriting `article_id` from a parent
+    class satisfies it just as declaring it directly does.
+    """
+    slots = {slot.name: slot for slot in sv.class_induced_slots(root_class)}
+    article_id = slots.get("article_id")
+    if article_id is None:
+        raise ValueError(
+            f"{schema_path}: the root class {root_class} must declare an `article_id` "
+            f"slot — it is how every part of litschema addresses a document"
+        )
+    if not article_id.identifier:
+        raise ValueError(
+            f"{schema_path}: `article_id` on {root_class} must be `identifier: true`, "
+            f"so it identifies the document rather than merely describing it"
+        )

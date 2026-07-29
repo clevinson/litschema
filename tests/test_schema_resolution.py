@@ -19,11 +19,11 @@ def test_resolve_extraction_schema_uses_tree_root_only(tmp_path) -> None:
         "    tree_root: true\n"
         "    attributes:\n"
         "      article_id:\n"
-        "        range: string\n"
+        "        identifier: true\n"
         "  SecondaryClass:\n"
         "    attributes:\n"
         "      article_id:\n"
-        "        range: string\n"
+        "        identifier: true\n"
     )
     config_path = tmp_path / "litschema.yaml"
     config_path.write_text('project_root: "."\nschema_dir: "schema"\n')
@@ -217,7 +217,7 @@ def test_doctor_names_the_resolved_schema_when_it_is_healthy(tmp_path) -> None:
         tmp_path,
         "id: https://example.org/t\nname: t\nclasses:\n"
         "  ActualRoot:\n    tree_root: true\n    attributes:\n"
-        "      article_id:\n        range: string\n",
+        "      article_id:\n        identifier: true\n",
     )
 
     code, output = _doctor(project)
@@ -348,3 +348,70 @@ def test_only_one_file_answers_a_suffixless_import(tmp_path) -> None:
     (tmp_path / "base.yml").write_text("id: https://example.org/b\nname: b\n")
 
     assert [p.name for p in _import_candidates(tmp_path, "base")] == ["base.yaml"]
+
+
+# ── the root class must address a document by article_id ────────────────────
+
+
+def _root_schema(tmp_path, root_body: str, extra: str = "") -> Path:
+    schema_dir = tmp_path / "schema"
+    schema_dir.mkdir(parents=True, exist_ok=True)
+    (schema_dir / "extraction.yaml").write_text(
+        "id: https://example.org/t\nname: t\n"
+        "prefixes:\n  linkml: https://w3id.org/linkml/\n"
+        "imports: [linkml:types]\ndefault_range: string\n"
+        f"classes:\n  Root:\n    tree_root: true\n    attributes:\n{root_body}{extra}"
+    )
+    (tmp_path / "litschema.yaml").write_text('project_root: "."\nschema_dir: "schema"\n')
+    return tmp_path / "litschema.yaml"
+
+
+def test_root_class_without_article_id_is_refused(tmp_path) -> None:
+    """One agreed way to say which document a record is about.
+
+    Leaving it to convention meant it held only because every template happened
+    to do it; a project naming the slot something else would have failed later,
+    somewhere else, pointing at the wrong thing.
+    """
+    config = _root_schema(tmp_path, "      title: {}\n")
+
+    with pytest.raises(ValueError, match="must declare an `article_id` slot"):
+        schema_resolution.resolve_extraction_schema(load_config(config, reload=True))
+
+
+def test_article_id_that_is_not_an_identifier_is_refused(tmp_path) -> None:
+    config = _root_schema(tmp_path, "      article_id:\n        range: string\n")
+
+    with pytest.raises(ValueError, match="must be `identifier: true`"):
+        schema_resolution.resolve_extraction_schema(load_config(config, reload=True))
+
+
+def test_article_id_inherited_from_a_parent_class_satisfies_the_rule(tmp_path) -> None:
+    """Inheriting the identifier is as good as declaring it."""
+    schema_dir = tmp_path / "schema"
+    schema_dir.mkdir(parents=True)
+    (schema_dir / "extraction.yaml").write_text(
+        "id: https://example.org/t\nname: t\n"
+        "prefixes:\n  linkml: https://w3id.org/linkml/\n"
+        "imports: [linkml:types]\ndefault_range: string\n"
+        "classes:\n"
+        "  Base:\n    attributes:\n      article_id:\n        identifier: true\n"
+        "  Root:\n    is_a: Base\n    tree_root: true\n    attributes:\n      title: {}\n"
+    )
+    (tmp_path / "litschema.yaml").write_text('project_root: "."\nschema_dir: "schema"\n')
+
+    resolved = schema_resolution.resolve_extraction_schema(
+        load_config(tmp_path / "litschema.yaml", reload=True)
+    )
+
+    assert resolved.root_class == "Root"
+
+
+def test_doctor_explains_a_root_class_missing_its_identifier(tmp_path) -> None:
+    config = _root_schema(tmp_path, "      title: {}\n")
+
+    code, output = _doctor(config.parent)
+
+    assert code == 1, output
+    assert "article_id" in output
+    assert "fix the extraction schema" in output

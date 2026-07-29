@@ -22,7 +22,7 @@ def test_prepare_schema_context_writes_runtime_extraction_schema(tmp_path, monke
         "    tree_root: true\n"
         "    attributes:\n"
         "      article_id:\n"
-        "        range: string\n"
+        "        identifier: true\n"
     )
     config_path = tmp_path / "litschema.yaml"
     config_path.write_text(
@@ -62,7 +62,7 @@ def test_prepare_schema_context_writes_bundled_reasoning_schema(tmp_path, monkey
         "    tree_root: true\n"
         "    attributes:\n"
         "      article_id:\n"
-        "        range: string\n"
+        "        identifier: true\n"
     )
     config_path = project / "litschema.yaml"
     config_path.write_text('project_root: "."\nschema_dir: "schema"\n')
