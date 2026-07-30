@@ -189,15 +189,57 @@ def test_main_honors_port_argument(monkeypatch, tmp_path) -> None:
 
     cfg = SimpleNamespace(article_store_dir=tmp_path / "data" / "papers", paper_inbox_dir=tmp_path)
     opened = []
-    runs = []
+    served = []
 
     monkeypatch.setattr(webapp.webbrowser, "open", opened.append)
-    monkeypatch.setattr(uvicorn, "run", lambda *args, **kwargs: runs.append((args, kwargs)))
+    # Read the socket inside the stub: run_app closes it on the way out.
+    monkeypatch.setattr(
+        uvicorn.Server,
+        "run",
+        lambda self, sockets=None: served.append(
+            (self.config, [s.getsockname() for s in sockets or []])
+        ),
+    )
 
     webapp.run_app(cfg, port=8017)
 
     assert opened == ["http://localhost:8017"]
-    assert runs == [((webapp.app,), {"host": "127.0.0.1", "port": 8017})]
+    (config, socknames) = served[0]
+    # The listening socket is bound before the URL is announced, and handed to
+    # uvicorn, so a browser can never be pointed at a port we do not hold.
+    assert socknames == [("127.0.0.1", 8017)]
+    assert config.timeout_graceful_shutdown == 5
+
+
+def test_verify_refuses_a_port_already_in_use(monkeypatch, tmp_path) -> None:
+    """Announcing a URL we do not own sent reviewers to someone else's project.
+
+    uvicorn logged the bind failure and exited, but the browser had already
+    been opened on a port another verifier was serving — indistinguishable
+    from your own project being empty.
+    """
+    import socket
+
+    import uvicorn
+
+    cfg = SimpleNamespace(article_store_dir=tmp_path / "data" / "papers", paper_inbox_dir=tmp_path)
+    opened = []
+    monkeypatch.setattr(webapp.webbrowser, "open", opened.append)
+    monkeypatch.setattr(uvicorn.Server, "run", lambda self, sockets=None: None)
+
+    holder = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    holder.bind(("127.0.0.1", 0))
+    holder.listen()
+    port = holder.getsockname()[1]
+    try:
+        with pytest.raises(SystemExit) as excinfo:
+            webapp.run_app(cfg, port=port)
+    finally:
+        holder.close()
+
+    assert "already in use" in str(excinfo.value)
+    assert f"--port {port + 1}" in str(excinfo.value)
+    assert opened == []
 
 
 def test_list_articles_includes_assembled_but_unextracted(tmp_path) -> None:

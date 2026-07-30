@@ -1006,9 +1006,51 @@ async def delete_annotation(
 
 
 def run_app(cfg: LitSchemaConfig, *, port: int = 8000, open_browser: bool = True) -> None:
+    """Serve the verifier, announcing the URL only once the port is ours.
+
+    Announcing first meant that when the port was already taken — a verifier
+    left running for another project, most likely — uvicorn logged a bind error
+    and exited while the user had already been sent to http://localhost:<port>,
+    where somebody else's project was serving. That is indistinguishable from
+    your own project being empty. Even without a collision, the browser could
+    beat startup and land on a connection refused.
+    """
+    import socket
+
     import uvicorn
 
     app.state.litschema_config = cfg
+
+    # Claim the port before saying anything, and report the conflict in terms
+    # of the fix rather than as a traceback.
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    try:
+        sock.bind(("127.0.0.1", port))
+    except OSError as exc:
+        sock.close()
+        raise SystemExit(
+            f"port {port} is already in use, so litschema verify cannot start "
+            f"({exc.strerror}).\nSomething else is serving there — quite possibly "
+            f"another `litschema verify`. Stop it, or pick another port with "
+            f"`--port {port + 1}`."
+        ) from exc
+    sock.listen()
+
+    # Warm the schema so the first page load does not pay for it and an
+    # unresolvable schema is reported now rather than one article at a time.
+    try:
+        from ..schema_resolution import resolve_extraction_schema, schema_hash
+
+        resolve_extraction_schema(cfg)
+        schema_hash(cfg)
+    except Exception as exc:  # noqa: BLE001 - degraded serving is the contract
+        # Deliberately not fatal: the verifier still shows headers, PDFs and
+        # prepared text for every article, and says per-article why counts are
+        # unavailable. Refusing to start would take that away too.
+        print(f"warning: the extraction schema could not be resolved ({exc})")
+        print("         the verifier will start, but review progress is unavailable")
+
     print(f"Article store: {cfg.article_store_dir}")
     print(f"Paper inbox: {cfg.paper_inbox_dir}")
     url = f"http://localhost:{port}"
@@ -1016,4 +1058,12 @@ def run_app(cfg: LitSchemaConfig, *, port: int = 8000, open_browser: bool = True
         webbrowser.open(url)
     else:
         print(f"Open {url}")
-    uvicorn.run(app, host="127.0.0.1", port=port)
+
+    # Without a bound on graceful shutdown, uvicorn waits forever for open
+    # connections to drain, and an idle browser tab holding a keep-alive socket
+    # never does — so Ctrl+C appeared to do nothing at all.
+    config = uvicorn.Config(app, timeout_graceful_shutdown=5)
+    try:
+        uvicorn.Server(config).run(sockets=[sock])
+    finally:
+        sock.close()

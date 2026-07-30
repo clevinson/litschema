@@ -41,6 +41,25 @@ window. There is no public-bind flag. Project configuration is injected through
 application state; invalid article and run IDs return 404 rather than escaping
 the store.
 
+The port is claimed before the URL is announced or a browser opened, and the
+listening socket is handed to the server. Announcing first meant that when the
+port was already held — most often by a verifier left running for another
+project — the reviewer was sent to that other project's data, which is
+indistinguishable from their own being empty. A port already in use is now a
+non-zero exit naming the port and suggesting another, not a traceback.
+
+Shutdown is bounded. Without a limit the server waits indefinitely for open
+connections to drain, and an idle browser tab holding a keep-alive socket never
+does, so Ctrl+C appeared to do nothing.
+
+The extraction schema is resolved once at startup, so the first page load does
+not pay for it and an unresolvable schema is reported immediately rather than
+one article at a time. Failure to resolve is a warning, not a fatal error: the
+verifier still serves headers, PDFs and prepared text, and says per article why
+counts are unavailable. Resolution is memoized against a stamp of the schema
+files rather than held, so a schema edited while the verifier runs is picked up
+on the next request — a held snapshot would report no drift after a change.
+
 The frontend has no framework and no build step. The current static monolith is
 split into native ES modules. Third-party JavaScript, components, fonts, and
 styles previously loaded from CDNs are pinned, vendored with license/source
