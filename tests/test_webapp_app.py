@@ -805,12 +805,15 @@ def test_settings_reports_repo_context_for_the_backfill_warning(tmp_path) -> Non
 # ── schema identity between a run and the schema used to interpret it ────────
 
 
-def test_progress_is_null_with_a_schema_error_when_the_schema_moved(tmp_path) -> None:
-    """A review is only meaningful against the schema the run was extracted with.
+def test_a_moved_schema_is_reported_as_drift_without_blanking_progress(tmp_path) -> None:
+    """Schema drift is a footnote on real counts, not a failure that hides them.
 
-    Silently aggregating against today's schema reported confident numbers for
-    a run it no longer describes. `specs/verifier/spec.md` requires the counts
-    to be null and the reason to be named.
+    The run is entirely readable — extraction, reasoning and reviews all parse
+    — so its counts are as true as they were before the schema moved. Reporting
+    them as unknown meant one added comment line made every document in a
+    326-paper project read as broken, because schema identity is a byte hash.
+    Only editing depends on the schema matching, and that is gated on the write
+    path. `specs/verifier/spec.md` owns the distinction.
     """
     cfg = _project_cfg(tmp_path)
     _write_manifest(cfg, "a", {"id": "a"})
@@ -826,8 +829,39 @@ def test_progress_is_null_with_a_schema_error_when_the_schema_moved(tmp_path) ->
 
     entry = {a["article_id"]: a for a in client.get("/api/articles").json()["articles"]}["a"]
 
+    assert entry["schema_drift"]
+    assert "different schema" in entry["schema_drift"]
+    # Not an error, and the counts survive.
+    assert entry["schema_error"] is None
+    assert entry["n_fields"] == 2
+    assert entry["n_reviewed"] == 0
+
+
+def test_progress_is_null_when_the_schema_cannot_be_resolved(tmp_path) -> None:
+    """An unresolvable schema is the case where counts genuinely are unknown.
+
+    Nothing can be computed, so the counts are null rather than zero — zero
+    reads as "nothing reviewed yet", a confident claim we cannot make.
+    """
+    cfg = _project_cfg(tmp_path)
+    _write_manifest(cfg, "a", {"id": "a"})
+    from .helpers import publish_test_run
+
+    publish_test_run(
+        cfg.article_store_dir / "a",
+        {"article_id": "a", "title": "T", "ph": 6.1},
+        run_id="01OLDSCHEMA00000000000000",
+    )
+    from litschema.schema_resolution import extraction_schema_path
+
+    extraction_schema_path(cfg).write_text("this: is not( a valid schema\n")
+    client = _client(cfg)
+
+    entry = {a["article_id"]: a for a in client.get("/api/articles").json()["articles"]}["a"]
+
     assert entry["schema_error"]
-    assert "different schema" in entry["schema_error"]
+    assert entry["schema_drift"] is None
+    assert entry["n_fields"] is None
     assert entry["n_fields"] is None
     assert entry["n_verified"] is None
     assert entry["is_complete"] is None

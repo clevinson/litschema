@@ -308,42 +308,63 @@ def _resolved_schema(cfg: LitSchemaConfig):
         return None
 
 
-def _schema_error(files: ArticleFiles, run) -> str | None:
-    """Why this run cannot be interpreted with the current schema, or None.
+def _schema_status(files: ArticleFiles, run) -> tuple[str | None, str | None]:
+    """How this run stands against the current schema: (unreadable, drifted).
 
-    A review is only meaningful relative to the schema the run was extracted
-    against. Resolving the current schema and using it regardless meant a
-    changed schema silently retyped a reviewer's edits, and an unresolvable one
-    silently switched typing off — in both cases with a perfectly normal-looking
-    page. `specs/verifier/spec.md` requires this to be said instead.
+    Two very different situations, which this used to collapse into one string:
+
+    `unreadable` — the schema will not resolve, or the run does not say which
+    schema it was extracted against. Nothing about this run can be computed, so
+    counts are reported as unknown rather than zero.
+
+    `drifted` — the schema resolves and the run names a hash, they simply
+    differ. Everything is still readable: the extraction, the reasoning, and
+    the review file all parse, and every count is exactly as true as it was
+    before the schema moved. Treating this as a failure blanked an entire
+    326-paper project over one added comment line, since the hash is over bytes.
+
+    Only overrides genuinely depend on the schema matching — a changed slot
+    range could retype an edit — so that is where drift is enforced (see
+    `put_annotation`). Verification needs no schema at all, and the listing
+    needs none either. `specs/verifier/spec.md` owns the distinction.
     """
     from ..schema_resolution import schema_hash
 
     resolved = _resolved_schema(files.cfg)
     if resolved is None:
-        return "the project's extraction schema cannot be resolved"
+        return "the project's extraction schema cannot be resolved", None
     try:
         current = schema_hash(files.cfg)
     except OSError:
-        return "the project's extraction schema cannot be read"
+        return "the project's extraction schema cannot be read", None
     try:
         record = run.read_run_json()
     except (OSError, ValueError):
-        return f"run {run.run_id} has an unreadable run.json"
+        return f"run {run.run_id} has an unreadable run.json", None
     if not isinstance(record, dict):
-        return f"run {run.run_id} has a run.json that is not an object"
+        return f"run {run.run_id} has a run.json that is not an object", None
     recorded = record.get("schema_hash")
     # A run that does not say which schema it was extracted against cannot be
     # judged against one. Treating a missing or malformed hash as "compatible"
     # is the same silent assumption this check exists to remove.
     if not isinstance(recorded, str) or not recorded.strip():
-        return f"run {run.run_id} records no usable schema hash"
+        return f"run {run.run_id} records no usable schema hash", None
     if current != recorded:
-        return (
+        return None, (
             f"run {run.run_id} was extracted against a different schema "
             f"({recorded[:14]}…, now {current[:14]}…)"
         )
-    return None
+    return None, None
+
+
+def _schema_blocker(files: ArticleFiles, run) -> str | None:
+    """Why an override cannot be typed against this run, or None.
+
+    Both halves block an edit: an unresolvable schema switches typing off, and
+    a drifted one could type the edit against a slot the run never used.
+    """
+    unreadable, drifted = _schema_status(files, run)
+    return unreadable or drifted
 
 
 def _identifier_paths(files: ArticleFiles, run) -> set[str]:
@@ -395,27 +416,36 @@ def _article_progress(files: ArticleFiles, run) -> dict:
         "is_complete": False,
         "review_error": None,
         "schema_error": None,
+        "schema_drift": None,
     }
+    reported = ("review_error", "schema_error", "schema_drift")
     if run is None:
         return empty
 
-    def unknown(key: str, message: str) -> dict:
+    def unknown(key: str, message: str, **extra) -> dict:
         """Counts we cannot stand behind are null, never zero.
 
         Zero reads as "nothing reviewed yet" — a confident claim about the
         work. Null says we cannot tell, which is what is actually true.
         """
-        return {**{k: None for k in empty if k not in ("review_error", "schema_error")},
-                "review_error": None, "schema_error": None, key: message}
+        return {
+            **{k: None for k in empty if k not in reported},
+            **{k: None for k in reported},
+            key: message,
+            **extra,
+        }
 
-    schema_error = _schema_error(files, run)
+    schema_error, schema_drift = _schema_status(files, run)
     if schema_error is not None:
         return unknown("schema_error", schema_error)
+    # Drift is reported alongside real counts, not instead of them. The run is
+    # fully readable; only editing it is gated, and that gate lives on the
+    # write path where the risk actually is.
     try:
         progress = review_progress(run, exclude=_identifier_paths(files, run))
     except ReviewCorruptError as exc:
-        return unknown("review_error", str(exc))
-    return {**progress, "review_error": None, "schema_error": None}
+        return unknown("review_error", str(exc), schema_drift=schema_drift)
+    return {**progress, "review_error": None, "schema_error": None, "schema_drift": schema_drift}
 
 
 #: LinkML scalar range -> editor "kind" reported by /api/schema/fields.
@@ -924,11 +954,11 @@ async def put_annotation(article_id: str, run_id: str, request: Request, cfg: Cf
     # mid-audit over a schema edit that never touched the field in front of them.
     schema = _resolved_schema(cfg)
     if entry.get("override") is not None:
-        schema_error = _schema_error(article_files(cfg, article_id), run)
-        if schema_error is not None:
+        blocker = _schema_blocker(article_files(cfg, article_id), run)
+        if blocker is not None:
             raise HTTPException(
                 409,
-                f"cannot judge this override against the run's schema: {schema_error}. "
+                f"cannot judge this override against the run's schema: {blocker}. "
                 f"Verification still works; restore the schema or re-extract to edit again.",
             )
 

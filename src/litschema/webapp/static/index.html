@@ -929,6 +929,14 @@
   .ov-state { font-size: 12px; color: var(--text-dim); }
   .ov-state.done { color: var(--green, #3fb950); }
   .ov-state.problem { color: var(--red, #f85149); }
+  /* A mark, not an alarm: the run is readable and its progress is real. */
+  .ov-drift {
+    color: var(--amber, #d29922);
+    font-weight: 600;
+    cursor: help;
+    text-decoration: none;
+    border: none;
+  }
   .ov-none td { color: var(--text-dim); font-style: italic; }
   .panel-left {
     border-right: 1px solid var(--border);
@@ -3041,7 +3049,7 @@ function renderOverview() {
     return;
   }
 
-  let sumFields = 0, sumReviewed = 0, complete = 0, unextracted = 0;
+  let sumFields = 0, sumReviewed = 0, complete = 0, unextracted = 0, stale = 0;
   let html = "";
   for (const a of rows) {
     const nFields = a.n_fields ?? 0;
@@ -3050,24 +3058,36 @@ function renderOverview() {
     // Either kind of "we cannot tell" reads the same in this table: the counts
     // are dashes, not zeros, because zero is a confident claim about the work.
     const problem = !!a.review_error || !!a.schema_error;
+    // Drift is NOT a problem here. The run is fully readable and every count
+    // below is true; only editing it is gated. Blanking these rows meant one
+    // added comment line made every document read as broken, because schema
+    // identity is a hash over bytes.
+    const drifted = !problem && !!a.schema_drift;
     // An article with no active run is listed, never hidden — it is exactly
     // the work someone still has to do.
     const noRun = !a.active_run_id;
     if (!problem) { sumFields += nFields; sumReviewed += nReviewed; }
     if (a.is_complete && nFields > 0) complete++;
     if (noRun) unextracted++;
+    if (drifted) stale++;
 
     const pct = nFields > 0 ? Math.round((nReviewed / nFields) * 100) : 0;
+    // Shown beside real progress, never in place of it.
+    const driftMark = drifted
+      ? ` <abbr class="ov-drift" title="Schema is out of date: this run was extracted` +
+        ` against an earlier version of the schema. Verification still works;` +
+        ` editing is disabled until it is re-extracted.">*</abbr>`
+      : "";
     let stateCell;
     if (a.schema_error) {
-      stateCell = `<span class="ov-state problem" title="${escapeHtml(a.schema_error)}">schema mismatch</span>`;
+      stateCell = `<span class="ov-state problem" title="${escapeHtml(a.schema_error)}">schema unreadable</span>`;
     } else if (problem) stateCell = '<span class="ov-state problem">review unreadable</span>';
     else if (noRun) stateCell = '<span class="ov-state">not extracted</span>';
     // A run that produced no reviewable field is complete by arithmetic, but
     // calling it "complete" reads as audited work. Say what actually happened.
-    else if (nFields === 0) stateCell = '<span class="ov-state">nothing extracted</span>';
-    else if (a.is_complete) stateCell = '<span class="ov-state done">complete</span>';
-    else stateCell = `<div class="ov-bar"><span style="width:${pct}%"></span></div>`;
+    else if (nFields === 0) stateCell = `<span class="ov-state">nothing extracted</span>${driftMark}`;
+    else if (a.is_complete) stateCell = `<span class="ov-state done">complete</span>${driftMark}`;
+    else stateCell = `<div class="ov-bar"><span style="width:${pct}%"></span></div>${driftMark}`;
 
     const title = a.title || a.article_id;
     html += `<tr data-article="${escapeHtml(a.article_id)}">`;
@@ -3087,6 +3107,7 @@ function renderOverview() {
     const pct = sumFields > 0 ? Math.round((sumReviewed / sumFields) * 100) : 0;
     const bits = [`${rows.length} documents`, `${complete} complete`, `${sumReviewed}/${sumFields} fields reviewed (${pct}%)`];
     if (unextracted) bits.push(`${unextracted} not extracted`);
+    if (stale) bits.push(`${stale} on an older schema`);
     totals.textContent = bits.join(" \u00b7 ");
   }
 
@@ -3588,7 +3609,10 @@ async function loadArticle(id) {
   // writes used this cached id, so re-extracting in another terminal while the
   // page was open showed the new run and filed the reviews against the old one.
   state.currentRunId = summary ? summary.active_run_id || null : null;
-  state.schemaError = summary ? summary.schema_error || null : null;
+  // Either one blocks editing, matching what the write path enforces: an
+  // unresolvable schema switches typing off, a drifted one could type an edit
+  // against a slot the run never used. Verification is unaffected by both.
+  state.schemaError = summary ? summary.schema_error || summary.schema_drift || null : null;
   const runQuery = state.currentRunId ? `?run_id=${encodeURIComponent(state.currentRunId)}` : "";
 
   const [mdData, extraction, reasoningData, annData, bibData] = await Promise.all([

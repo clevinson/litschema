@@ -114,10 +114,25 @@ Metrics are schema-derived; no ERW field names are hard-coded.
 
 `specs/reviews/spec.md` owns effective state for a path. The verifier API owns
 aggregation. It interprets fields with the schema whose hash the displayed
-active run records; when the current project schema's bytes no longer match
-that hash, the API sets `schema_error` and makes field counts, progress,
-completion, and typed editor metadata `null` rather than silently aggregating
-against the wrong schema.
+active run records, and distinguishes two ways that can go wrong.
+
+**Unresolvable** — the project schema does not resolve, or the run records no
+usable schema hash. Nothing can be computed, so the API sets `schema_error` and
+makes field counts, progress, completion, and typed editor metadata `null`
+rather than silently aggregating against a schema it cannot read.
+
+**Drifted** — the schema resolves and the run names a hash; they simply differ.
+The run is fully readable, so the API sets `schema_drift` to the reason and
+reports every count normally. Drifted articles keep their progress and stay in
+project totals; the client marks them as extracted against an older schema.
+Reporting drift as an error blanked every document in a project over a single
+added comment line, because schema identity is a hash over bytes — a change of
+identity is not a loss of meaning.
+
+Only overrides depend on the schema still matching, since a changed slot range
+could retype an edit. Both conditions therefore block an override on the write
+path (see Document review), and neither blocks verification, which asserts what
+the extractor already produced and needs no schema at all.
 
 For a valid active run with a resolved schema, it returns:
 
@@ -157,6 +172,14 @@ Writes identify the displayed run explicitly. If another process changes
 `active-run.json`, the page does not silently retarget a pending edit: it
 requires reload or explicit acknowledgement. Articles without an active run
 retain metadata/PDF access and show a clear extraction placeholder.
+
+An override is refused with 409 when the run's schema is unresolvable *or*
+drifted, because typing a value or judging a removal against the wrong schema
+is how an edit gets silently retyped. Verification is always available: it
+asserts the extractor was right about what is already there and consults no
+schema, so a schema edit that never touched the field in front of a reviewer
+does not strand them mid-audit. The document view disables typed editors and
+says why before the reviewer starts, rather than after an edit fails.
 
 #### Feedback
 
