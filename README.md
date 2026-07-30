@@ -1,131 +1,151 @@
 # litschema
 
-Schema-driven extraction and verification for document collections.
+**Turn a folder of PDFs into a dataset you can defend.**
 
-`litschema` is a local-first toolkit for turning a folder of PDFs into
-structured, schema-valid JSON with line-cited reasoning, human review, and a
-queryable database. It is built around [LinkML](https://linkml.io) schemas,
-agent-executed extraction skills, a review webapp, and a DuckDB/MCP
-exploration layer. Everything runs on your machine; the only network calls
-are optional DOI-registry lookups and the verifier's ORCID name resolution.
+Extraction gets you structured data. `litschema` gets you structured data where
+every value carries the lines it came from, a record of which model produced
+it, and a human's verdict on whether it's right — because in a systematic
+review or meta-analysis, "the model said so" is not a citation.
 
-## The flow
+Everything runs on your machine. The only network calls are optional DOI
+lookups and the verifier's ORCID name resolution.
 
-```text
-litschema init my-review        # scaffold a project (no questions asked)
-  → drop PDFs in papers-inbox/
-  → /litschema-onboard          # agent: schema drafting, intake, pilot, batch
-  → litschema verify            # you: review what was extracted
-  → litschema export            # the reviewed data, ready for analysis
-```
+## What you get
 
-The source of truth is an article store on disk — one directory per
-document, everything in git-friendly JSON:
+For each document, three artifacts that stay in step:
 
 ```text
 data/papers/<article-id>/
-  article-metadata.json    # identity + bibliographic metadata (provenance-locked)
+  article-metadata.json                  identity + bibliographic block
   <article-id>.pdf
-  article.md               # prepared full text
-  agent-extraction.json    # what the document SAYS (schema-valid)
-  agent-reasoning.json     # why — per-field evidence with line citations
-  review.json              # human verdicts: verify / flag / override
+  article.md                             prepared full text
+  active-run.json                        which extraction is current
+  extraction-runs/<run-id>/
+    agent-extraction.json                what the document SAYS (schema-valid)
+    agent-reasoning.json                 why — per-field evidence, line-cited
+    run.json                             inputs hashed, model recorded
+    review.json                          your verdicts on this run
 ```
+
+Plain JSON on disk, one directory per document, diffable in git. A run is
+immutable once published: its extraction, reasoning, and `run.json` never
+change, so a review written against it stays meaningful forever. Re-extracting
+creates a new run rather than overwriting the old one.
+
+## The flow
+
+```bash
+litschema init my-review        # scaffold a project (no questions asked)
+                                # drop PDFs into papers-inbox/
+/litschema-onboard              # agent: drafts your schema, extracts, pilots
+litschema verify                # you: check what was extracted
+litschema export                # the reviewed data, ready for analysis
+```
+
+`/litschema-onboard` is a bundled agent skill, installed into `.claude/skills/`
+by `init`. It interviews you to draft a LinkML schema from your own papers,
+runs intake, extracts one article as a pilot so you can course-correct, then
+batches the rest.
 
 ## Install
 
+No PyPI release yet — clone and run from the checkout:
+
 ```bash
+git clone https://github.com/clevinson/litschema && cd litschema
 uv sync
-uv run litschema status
-uv run pytest
+uv run litschema --help
 ```
 
-Against a sibling data repo:
+Against a project in a sibling directory:
 
 ```bash
 cd ../my-review
 uv run --project ../litschema litschema status
 ```
 
-Agent skills resolve the CLI the same way you would (dev override, then
-`uv run litschema`, then bare `litschema`). To pin them to a development
-checkout, write the command to `.litschema/dev-cli` in the project root
-(gitignored, machine-local; `doctor` reports what will be resolved):
-
-```bash
-mkdir -p .litschema
-echo 'uv run --project ../litschema litschema' > .litschema/dev-cli
-```
+Agent skills resolve the CLI the way you would: a project dev override, then
+`uv run litschema`, then bare `litschema`. To pin them to a checkout, write the
+command to `.litschema/dev-cli`. Because that file executes whatever it
+contains, an agent will ask before using it, and records your approval in your
+own config rather than in the project — a repository cannot approve itself.
 
 ## Commands
 
 ```bash
-litschema init <dir>             # scaffold a project; installs agent skills locally
-litschema status                 # counts: inbox, manifests, text, extractions, reviews
-litschema doctor                 # diagnose environment + skill installation
-litschema assemble               # papers-inbox PDFs -> per-article folders (offline)
-litschema prepare-text <id>|--all  # PDF -> article.md (offline)
-litschema meta show <id>         # print source metadata (what the document IS)
-litschema meta set <id> ...      # write it (--source auto|manual; --sync locks from DOI)
-litschema meta sync <id>|--all   # fetch + lock metadata from the DOI registry
-litschema validate [target]      # validate extractions against the schema (closed-world)
-litschema verify [--port 8000]   # local review webapp (loopback only)
-litschema export [-f jsonl|csv]  # the reviewed data as flat files (pandas/R/jq-ready)
-litschema mcp                    # build the DuckDB store and serve it over MCP (experimental)
-litschema skills install         # install the agent skills globally
-litschema agent ...              # deterministic steps the extraction skill calls
+litschema init <dir>               scaffold a project; installs agent skills locally
+litschema doctor                   diagnose config, schema, and skill installation
+litschema status                   counts: inbox, articles, runs, reviews
+litschema assemble                 papers-inbox PDFs -> per-article folders (offline)
+litschema prepare-text <id>|--all  PDF -> article.md (offline)
+litschema meta show|set|sync <id>  bibliographic metadata, provenance-tagged
+litschema validate [target]        validate extractions against the schema
+litschema runs list|activate       inspect published runs; choose the active one
+litschema verify [--port 8000]     local review webapp (loopback only)
+litschema export [-f jsonl|csv]    reviewed data as flat files (pandas/R/jq-ready)
+litschema mcp                      DuckDB store served over MCP (experimental)
+litschema skills install           install the agent skills globally
+litschema agent ...                deterministic steps the extraction skill calls
 ```
+
+There is no `litschema extract`: extraction is judgment work, so it runs as an
+agent skill (`/extract-article <id>`) with the framework checking the output.
+The verb exists only to say so.
 
 ## How it works
 
 **Intake is offline and content-addressed.** `assemble` derives a stable
-article id from each PDF's filename (content-hash suffix on collisions),
-moves the PDF into the store, and writes a minimal manifest. No DOI,
-bibliography file, or network access is needed to reach extraction — and
-re-dropping the same PDF is a no-op.
+article id from each PDF's filename, moves the PDF into the store, and writes a
+minimal manifest. No DOI, bibliography file, or network access is needed to
+reach extraction, and re-dropping the same PDF is a no-op.
 
-**Extraction is agent-executed, framework-checked.** `init` installs the
-bundled skills into `.claude/skills/`; run `/litschema-onboard` in your
-agent CLI for the guided first run (it interviews you to draft the LinkML
-schema, runs intake, pilots one article, then batches the rest), or
-`/extract-article <id>` directly. The agent extracts only from the prepared
-text, writes the extraction and a line-cited reasoning file, and loops until
-both validate — closed-world, so nothing the schema doesn't define gets in.
+**Extraction is agent-executed, framework-checked.** The agent reads only the
+prepared text, writes an extraction plus a line-cited reasoning file, and loops
+until both validate. Validation is closed-world — nothing the schema doesn't
+define gets in — and citations must resolve to real lines in the prepared text,
+so a reference to a line that doesn't exist fails rather than shipping.
 
-**Bibliographic metadata is provenance-locked.** When a document shows a
-DOI, extraction records it and locks the metadata from the registry in one
-guarded command (`meta set --source auto --doi ... --sync`); a post-batch
-`meta sync --all` sweep retries transient failures. Human edits (`manual`)
-are never overwritten by machines — per-article sync (or the verifier's
-"⟳ from DOI" button) is the explicit-consent exception. Documents without a
-DOI flow through the whole pipeline unchanged.
+**Runs are immutable and provenance-bearing.** Publishing records the SHA-256
+of every input — prepared text, domain context, and the skill that conducted
+the extraction — alongside the schema hash and what produced it. Reproduction
+data is computed by the publisher; attribution is recorded as asserted, since
+an agent cannot verify its own model. Nothing is overwritten.
 
-**Review is field-by-field and git-native.** `litschema verify` shows each
-extracted value beside its cited source lines and confidence; you verify,
-flag, or override with typed editors. One review per field lives in
-`review.json` — diffs of that file are the audit log, and reviews know which
-extraction they were written against (re-extraction raises a staleness
-warning until stale fields are re-reviewed).
+**Bibliographic metadata is provenance-locked.** Values fetched from a DOI
+registry are marked and locked; machine-written values may be upgraded but
+human edits are never overwritten without explicit consent. Documents with no
+DOI flow through unchanged.
 
-**Use the reviewed truth.** `litschema export` writes the review-applied
-extractions as JSONL or CSV for pandas, R, or jq; `litschema mcp`
-(experimental) derives a DuckDB database from the schema and serves it
-read-only over MCP: `run_sql`, `describe_schema`, `get_linkml_schema`. Both
-surfaces produce the same records — overrides applied, error markers
-skipped.
+**Review is field-by-field and git-native.** `litschema verify` shows every
+extracted value beside its cited source lines, with the model and effort that
+produced it. You verify a value, correct it, or remove it — one entry per
+field, stored inside the run it reviews. Diffs of `review.json` are the audit
+log. Because a run's payload can never change, a review never goes stale.
+
+**Use the reviewed truth.** `export` writes the review-applied extractions as
+JSONL or CSV for pandas, R, or jq. `mcp` (experimental) derives a DuckDB
+database from your schema and serves it read-only. Both apply overrides and
+skip error markers, so they agree.
 
 ## Project layout
 
 - `src/litschema/` — package code and CLI
-- `specs/` — capability specs (current truth) and decision logs — start at
-  `specs/README.md`
+- `specs/` — capability specs and decision logs; start at `specs/README.md`
 - `skills/` — the agent-facing extraction and onboarding instructions
 - `tests/` — framework tests and small project fixtures
 
 ## Status
 
-Pre-release alpha. Formats change without migration paths
-(`specs/README.md` § Alpha status); the improvements backlog lives in
-`specs/improvements.md`. The MVP target: PDFs → text → extraction →
-review → local SQL, demonstrated end to end on a small open-access demo
-project.
+Pre-release alpha. Formats change without migration paths (`specs/README.md`
+§ Alpha status). The specs describe only what is implemented; anything deferred
+says so and names where it is tracked.
+
+Known limits worth knowing before you start:
+
+- **Tables lose row-level provenance.** PDF conversion collapses some tables
+  onto one line, so a citation into a table can name the table but not the row.
+  This matters most for measurement-heavy schemas.
+- **Supplying omitted values is API-only.** The `add` override works through
+  the annotation API; the verifier has no control for it yet.
+- **Multi-run selection is minimal.** `runs list` and `runs activate` ship;
+  trash, restore, and reconciliation between runs do not.
