@@ -199,3 +199,54 @@ def test_an_override_survives_into_the_export(client, run_cli) -> None:
         if line.startswith("{")
     }
     assert records[article_id]["site_name"] == "Corrected Site"
+
+
+# ── the fixture's own citations must be true ─────────────────────────────────
+
+
+def test_every_fixture_citation_resolves_to_real_content() -> None:
+    """A fixture with wrong citations cannot test citation handling.
+
+    This fixture was hand-authored, and its first version had `source_lines`
+    written by eye rather than read off the file: two citations landed on a
+    blank line one past the sentence they meant. That is the same failure mode
+    `21c4` exists to catch, sitting inside the fixture that work would be
+    tested against.
+
+    This is also a working miniature of the check `21c4` proposes — every
+    `L<n>` in range, ranges well-ordered, and at least one cited line carrying
+    content — which is why it is worth having even before that lands.
+    """
+    import re
+
+    problems: list[str] = []
+    for reasoning_path in sorted(FIXTURE.rglob("extraction-runs/*/agent-reasoning.json")):
+        article_dir = reasoning_path.parent.parent.parent
+        lines = (article_dir / "article.md").read_text().splitlines()
+        payload = json.loads(reasoning_path.read_text())
+
+        for entry in payload["fields"]:
+            spec = entry["source_lines"]
+            cited: list[int] = []
+            for part in str(spec).split(","):
+                span = re.fullmatch(r"L(\d+)(?:-L?(\d+))?", part.strip())
+                assert span, f"{article_dir.name}: unparseable source_lines {spec!r}"
+                start = int(span.group(1))
+                end = int(span.group(2)) if span.group(2) else start
+                if end < start:
+                    problems.append(f"{article_dir.name} {entry['path']}: {spec} runs backwards")
+                cited.extend(range(start, end + 1))
+
+            out_of_range = [n for n in cited if not 1 <= n <= len(lines)]
+            if out_of_range:
+                problems.append(
+                    f"{article_dir.name} {entry['path']}: {spec} exceeds "
+                    f"{len(lines)} lines"
+                )
+                continue
+            if not any(lines[n - 1].strip() for n in cited):
+                problems.append(
+                    f"{article_dir.name} {entry['path']}: {spec} cites only blank lines"
+                )
+
+    assert not problems, "fixture citations do not resolve:\n  " + "\n  ".join(problems)
