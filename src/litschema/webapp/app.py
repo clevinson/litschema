@@ -975,11 +975,15 @@ async def delete_annotation(
     return {"unreviewed": canonical_review_path(field_path)}
 
 
-def run_app(cfg: LitSchemaConfig, *, port: int = 8000) -> None:
+def run_app(cfg: LitSchemaConfig, *, port: int = 8000, open_browser: bool = True) -> None:
     import uvicorn
 
     app.state.litschema_config = cfg
     print(f"Article store: {cfg.article_store_dir}")
     print(f"Paper inbox: {cfg.paper_inbox_dir}")
-    webbrowser.open(f"http://localhost:{port}")
+    url = f"http://localhost:{port}"
+    if open_browser:
+        webbrowser.open(url)
+    else:
+        print(f"Open {url}")
     uvicorn.run(app, host="127.0.0.1", port=port)

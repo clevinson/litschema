@@ -117,7 +117,10 @@ def test_articles_listing_includes_the_unextracted_one(client) -> None:
         assert entry["review_error"] is None
         assert entry["n_fields"] > 0
         assert entry["n_reviewed"] == 0
-        assert entry["active_run"]["model"] == "claude-sonnet-5"
+        # "fixture", not a model name: nothing extracted this, and a run
+        # record claiming otherwise is a provenance lie in a tool whose point
+        # is provenance.
+        assert entry["active_run"]["model"] == "fixture"
 
 
 def test_every_read_endpoint_serves_an_extracted_article(client) -> None:

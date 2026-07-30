@@ -121,12 +121,42 @@ def test_verify_command_accepts_port_option(monkeypatch) -> None:
         REPO_ROOT / "tests" / "fixtures" / "projects" / "agriculture_demo" / "litschema.yaml"
     )
     monkeypatch.setattr(cli, "_require_project", lambda ctx=None: project)
-    monkeypatch.setattr(webapp, "run_app", lambda cfg, *, port: calls.append((cfg, port)))
+    monkeypatch.setattr(
+        webapp,
+        "run_app",
+        lambda cfg, *, port, open_browser=True: calls.append((cfg, port, open_browser)),
+    )
 
     result = CliRunner().invoke(cli.app, ["verify", "--port", "8017"])
 
     assert result.exit_code == 0, result.output
-    assert calls == [(project.config, 8017)]
+    assert calls == [(project.config, 8017, True)]
+
+
+def test_verify_can_start_without_opening_a_browser(monkeypatch) -> None:
+    """Scripted and headless callers must not pop a window on someone's desktop.
+
+    tests/browser_verify_flow.py starts a real server and drives its own
+    Chromium; before this flag every run also opened the developer's actual
+    browser.
+    """
+    from litschema import cli
+    from litschema.project import Project
+    from litschema.webapp import app as webapp
+
+    calls = []
+    project = Project.open(
+        REPO_ROOT / "tests" / "fixtures" / "projects" / "agriculture_demo" / "litschema.yaml"
+    )
+    monkeypatch.setattr(cli, "_require_project", lambda ctx=None: project)
+    monkeypatch.setattr(
+        webapp, "run_app", lambda cfg, *, port, open_browser: calls.append(open_browser)
+    )
+
+    result = CliRunner().invoke(cli.app, ["verify", "--no-browser"])
+
+    assert result.exit_code == 0, result.output
+    assert calls == [False]
 
 
 def test_no_old_aggregate_surface_remains() -> None:
@@ -459,7 +489,7 @@ def test_verify_calls_webapp_runner_with_explicit_config(
 
     calls = []
 
-    def fake_run_app(cfg, *, port):
+    def fake_run_app(cfg, *, port, open_browser=True):
         calls.append((cfg.config_path, port))
 
     def fail_subprocess(*args, **kwargs):

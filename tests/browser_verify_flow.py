@@ -146,6 +146,9 @@ class Harness:
                 "verify",
                 "--port",
                 str(self.port),
+                # Headless: this flow drives its own Chromium. Without it,
+                # every run popped a real browser window on the user's desktop.
+                "--no-browser",
             ],
             cwd=REPO_ROOT,
             stdout=subprocess.DEVNULL,

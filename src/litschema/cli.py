@@ -377,11 +377,16 @@ def validate(ctx: typer.Context):
 def verify(
     ctx: typer.Context,
     port: int = typer.Option(8000, "--port", "-p", help="Port for the local web server."),
+    open_browser: bool = typer.Option(
+        True,
+        "--browser/--no-browser",
+        help="Open a browser window on start. --no-browser for scripted or headless use.",
+    ),
 ):
     project = _require_project(ctx)
     from .webapp import app as webapp_app
 
-    webapp_app.run_app(project.config, port=port)
+    webapp_app.run_app(project.config, port=port, open_browser=open_browser)
 
 
 @app.command(
