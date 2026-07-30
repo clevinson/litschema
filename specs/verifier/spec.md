@@ -14,9 +14,9 @@ Live today: both routes, the dataset overview with progress aggregation, the
 document review against an explicit active run, deep links that survive reload
 and the back button, and explicit surfacing of a corrupt review file.
 
-Pending: the show-all-fields toggle and the array add control described under
-Supplying omitted values. The `add` op works end to end through the API; only
-its affordance in the document view is unbuilt.
+Pending: any UI for supplying omitted values. The `add` op works end to end
+through the API; the document view exposes no affordance for it. Tracked in
+kata `ncw4`, which holds the requirements.
 
 Browser coverage lives in `tests/browser_verify_flow.py`, which drives the real
 click path and asserts both what lands in `review.json` and what the page
@@ -123,9 +123,8 @@ For a valid active run with a resolved schema, it returns:
 
 - `field_paths`: canonical leaf paths in the raw active extraction plus the
   leaves contributed by `add` overrides, excluding every slot marked
-  `identifier: true`; containers are not leaves. Omitted slots a reviewer has
-  not supplied never enter the denominator, so revealing them with the
-  show-all-fields toggle does not change progress;
+  `identifier: true`; containers are not leaves. Slots the extraction omitted
+  and no reviewer has supplied never enter the denominator;
 - `n_fields = len(field_paths)`;
 - `n_verified`: paths controlled by exact or ancestor verification without an
   override;
@@ -195,19 +194,16 @@ human already corrected is not re-verified by a section-wide action.
 
 #### Supplying omitted values
 
-The default view shows only what the extraction contains. Omitted fields are
-not review state and do not clutter the reviewer's default surface. A "show all
-fields" toggle reveals every schema-defined slot the extraction omitted,
-derived from the schema field metadata the route already loads.
+The `add` override defined by `specs/reviews/spec.md` works end to end through
+the annotation API: a client may append past the raw basis, and added leaves
+enter the review denominator. The verifier exposes no affordance for it — no
+show-all-fields toggle, no array add control, and no distinct rendering for
+human-supplied values.
 
-An array whose items the reviewer may extend offers an explicit add control.
-Adding an entity opens a focused form over the item class rather than inline
-tree editing, so a reviewer fills a labelled set of slots and the client can
-enforce required slots before submitting. The resulting write is an `add`
-override under `specs/reviews/spec.md`, appended past the raw basis.
-
-Added values render as human-origin wherever a raw value would otherwise
-appear, so a reviewer can always see which values no agent produced.
+That UI is deliberately unspecified here rather than specified-and-unbuilt.
+Its requirements, including why added values must render distinctly from
+uncited extracted ones, are held in kata `ncw4` and return to this spec when
+the affordance ships.
 
 ## Queue filter trust boundary
 

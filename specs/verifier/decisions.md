@@ -150,3 +150,39 @@ message are all removed.
 large to verify by eye — the counts restate per-control state that is already
 visible, and the one genuinely invisible thing, why a field was passed over,
 belongs in that field's row rather than in a message that vanishes.
+
+## 2026-07-30 — Unbuilt affordances leave the spec; their requirements move to the issue
+
+**Context:** § Supplying omitted values specified a show-all-fields toggle, an
+array add control, and distinct rendering for human-supplied values. None of it
+was built. The `add` op behind it does work end to end through the annotation
+API, so the spec read as though the capability shipped and only a detail was
+missing. A spec that describes unbuilt UI cannot be used to tell whether the
+product does what it claims — which is the one job it has on a release line.
+
+**Decision:** the 0.1.0 verifier spec describes only implemented behaviour. The
+section states plainly that the `add` op is API-only and that no affordance
+exists, and points at kata `ncw4`, which now holds the requirements verbatim.
+They return to the spec when the affordance ships. The progress-metric clause
+that referenced the toggle was rewritten to describe the denominator without
+it.
+
+`specs/reviews/spec.md` keeps its human-origin claim, because that one is true:
+an `add` op IS the record — no other op can produce a value the extraction
+never had. What did not exist was carrying the distinction to consumers, so its
+cross-reference now names the verifier rendering (`ncw4`) and the export audit
+sidecar (`bmwn`) as unbuilt rather than asserting export already does it.
+
+**Why the human-origin clause is called out by name in `ncw4`:** it is the
+clause most likely to be lost in a move. The evidence column has two states, a
+line range or "No citation". An added value has no citation and none is
+possible, so without distinct rendering it is indistinguishable from an
+extracted value the agent failed to cite — and those are opposites. An uncited
+model value is the least trustworthy thing in the table; a human-supplied one
+is the most. Shipping the add control without the marking is the defect;
+neither alone harms anyone, since no user can currently create an added value.
+
+**Rejected:** keeping the section and marking it Pending, which is what it
+already was — the Pending line did not stop the section reading as a contract.
+Also rejected: deleting the requirements outright, which would have lost the
+reasoning above along with them.

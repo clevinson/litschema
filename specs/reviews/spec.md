@@ -152,7 +152,10 @@ renumbers an array.
 
 Because a human-supplied value has no line-cited reasoning behind it, an add is
 recorded as human-origin and stays distinguishable from an agent value a human
-merely confirmed. `specs/explore/spec.md` carries that distinction into export.
+merely confirmed: the `add` op is itself the record, since no other op can
+produce a value the extraction never had. Carrying that distinction to
+consumers — rendering it in the verifier, and emitting it in the export audit
+sidecar — is not built; see kata `ncw4` and `bmwn`.
 
 ## Canonical hierarchy
 
