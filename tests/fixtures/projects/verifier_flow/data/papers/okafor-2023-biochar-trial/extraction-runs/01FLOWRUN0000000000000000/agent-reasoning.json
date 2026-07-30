@@ -1,33 +1,42 @@
 {
   "confidence": 0.72,
+  "confidence_reasoning": "Short report; the measurement is given in prose rather than a table.",
   "fields": [
     {
       "path": ".site_name",
-      "source_lines": "L5"
+      "source_lines": "L5",
+      "value": "Nsukka Research Farm"
     },
     {
       "path": ".site_country",
-      "source_lines": "L5"
+      "source_lines": "L5",
+      "value": "Nigeria"
     },
     {
       "path": ".mean_annual_temperature_c",
-      "source_lines": "L6"
-    },
-    {
-      "path": ".replicates",
-      "source_lines": "L8"
-    },
-    {
-      "path": ".tillage",
-      "source_lines": "L8"
+      "source_lines": "L6",
+      "value": "26.1"
     },
     {
       "path": ".crops",
-      "source_lines": "L7"
+      "source_lines": "L6-L7",
+      "value": "maize, cowpea"
+    },
+    {
+      "path": ".replicates",
+      "source_lines": "L9",
+      "value": "three"
+    },
+    {
+      "path": ".tillage",
+      "source_lines": "L9",
+      "value": "no-till"
     },
     {
       "path": ".measurements[0]",
-      "source_lines": "L14"
+      "source_lines": "L13-L14",
+      "value": "soil organic carbon 11.5 g/kg at 0-20 cm, SE 0.9",
+      "note": "reported in prose, not a table"
     }
   ]
 }
