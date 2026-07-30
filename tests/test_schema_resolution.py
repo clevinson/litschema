@@ -432,3 +432,77 @@ def test_doctor_explains_a_root_class_missing_its_identifier(tmp_path) -> None:
     assert code == 1, output
     assert "article_id" in output
     assert "fix the extraction schema" in output
+
+
+def _memo_project(tmp_path):
+    schema_dir = tmp_path / "schema"
+    schema_dir.mkdir()
+    (schema_dir / "extraction.yaml").write_text(
+        "id: https://example.org/memo\n"
+        "name: memo\n"
+        "classes:\n"
+        "  Root:\n"
+        "    tree_root: true\n"
+        "    attributes:\n"
+        "      article_id:\n"
+        "        identifier: true\n"
+        "      title:\n"
+    )
+    config_path = tmp_path / "litschema.yaml"
+    config_path.write_text('project_root: "."\nschema_dir: "schema"\n')
+    return load_config(config_path, reload=True)
+
+
+def test_repeated_resolution_reuses_one_schema_view(tmp_path) -> None:
+    """Resolving is ~22ms and callers ask per article.
+
+    The verifier's listing asked 975 times to render one page, reparsing the
+    same files 6825 times and taking 19 seconds over a 326-paper project. The
+    answer depends only on the schema files, so it is computed once.
+    """
+    cfg = _memo_project(tmp_path)
+
+    first = schema_resolution.resolve_extraction_schema(cfg)
+    second = schema_resolution.resolve_extraction_schema(cfg)
+
+    assert first is second
+    assert schema_resolution.schema_hash(cfg) == schema_resolution.schema_hash(cfg)
+
+
+def test_a_schema_edited_in_place_is_picked_up_without_a_restart(tmp_path) -> None:
+    """The memo must not become a snapshot.
+
+    Resolving once at startup and holding it would report "no schema drift"
+    to someone editing their schema with the verifier open — the exact silent
+    staleness the mismatch check exists to catch.
+    """
+    cfg = _memo_project(tmp_path)
+    schema_file = schema_resolution.extraction_schema_path(cfg)
+
+    before_hash = schema_resolution.schema_hash(cfg)
+    before_view = schema_resolution.resolve_extraction_schema(cfg)
+    assert "added_later" not in {
+        slot.name for slot in before_view.view.class_induced_slots(before_view.root_class)
+    }
+
+    schema_file.write_text(schema_file.read_text() + "      added_later:\n")
+
+    assert schema_resolution.schema_hash(cfg) != before_hash
+    after = schema_resolution.resolve_extraction_schema(cfg)
+    assert "added_later" in {
+        slot.name for slot in after.view.class_induced_slots(after.root_class)
+    }
+
+
+def test_an_edit_that_preserves_file_size_is_still_detected(tmp_path) -> None:
+    """Size alone would miss a same-length edit; the stamp carries mtime too."""
+    cfg = _memo_project(tmp_path)
+    schema_file = schema_resolution.extraction_schema_path(cfg)
+
+    before = schema_resolution.schema_hash(cfg)
+    original = schema_file.read_text()
+    swapped = original.replace("      title:\n", "      other:\n")
+    assert len(swapped) == len(original)
+    schema_file.write_text(swapped)
+
+    assert schema_resolution.schema_hash(cfg) != before

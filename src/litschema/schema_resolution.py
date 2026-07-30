@@ -21,6 +21,82 @@ class ResolvedExtractionSchema:
     root_class: str
 
 
+#: Resolving a schema costs ~22ms and hashing it ~14ms, and callers ask per
+#: article: the verifier's listing asked 975 times for one page, parsing the
+#: same six files 6825 times and taking 19 seconds over a 326-paper project.
+#: Both answers depend only on the schema files, so they are memoized against a
+#: stamp of those files rather than recomputed.
+_CLOSURE_MEMO: dict[str, list[Path]] = {}
+_RESOLVE_MEMO: dict[tuple, ResolvedExtractionSchema] = {}
+_HASH_MEMO: dict[tuple, str] = {}
+
+#: One project per process, plus room for a schema being actively edited.
+_MEMO_LIMIT = 4
+
+
+def _closure_paths(entry: Path) -> list[Path]:
+    """The schema's import closure, remembered so stamping stays cheap.
+
+    Deriving the closure needs a SchemaView, which is the expensive thing being
+    avoided — so the file list is cached and only rebuilt when the stamp says
+    something changed.
+    """
+    key = str(entry)
+    paths = _CLOSURE_MEMO.get(key)
+    if paths is None:
+        paths = _schema_closure(entry)
+        _CLOSURE_MEMO[key] = paths
+    return paths
+
+
+def _closure_stamp(entry: Path) -> tuple:
+    """Identity of the schema files on disk right now: (path, mtime, size).
+
+    Checked on every call — ~9us over a six-file closure — which is what lets
+    the memo stay honest. Resolving once at startup and holding it would report
+    "no schema drift" after someone edited the schema with the verifier open,
+    which is the silent-staleness bug the mismatch check exists to prevent.
+
+    Stats the *previous* closure. Safe because adding an import means editing a
+    file already in the set, so a changed closure is always caught.
+    """
+    stamp = []
+    for path in _closure_paths(entry):
+        try:
+            info = path.stat()
+        except OSError:
+            stamp.append((str(path), None, None))
+        else:
+            stamp.append((str(path), info.st_mtime_ns, info.st_size))
+    return tuple(stamp)
+
+
+def _memoized(store: dict, entry: Path, build):
+    """Return a memoized value for `entry`, rebuilding when its files moved."""
+    stamp = _closure_stamp(entry)
+    if stamp in store:
+        return store[stamp]
+    # A miss can mean the closure itself changed, so discard the cached file
+    # list and re-derive both it and the stamp from disk.
+    _CLOSURE_MEMO.pop(str(entry), None)
+    value = build()
+    if len(store) >= _MEMO_LIMIT:
+        store.clear()
+    store[_closure_stamp(entry)] = value
+    return value
+
+
+def clear_schema_memo() -> None:
+    """Drop every memoized schema resolution.
+
+    For tests that rewrite a schema within one mtime granule, where the stamp
+    cannot see the change.
+    """
+    _CLOSURE_MEMO.clear()
+    _RESOLVE_MEMO.clear()
+    _HASH_MEMO.clear()
+
+
 def extraction_schema_path(cfg: LitSchemaConfig) -> Path:
     """Resolve the extraction schema file path from config.
 
@@ -441,16 +517,19 @@ def schema_hash(cfg: LitSchemaConfig) -> str:
 
     Deterministic and independent of the working directory.
     """
-    import hashlib
+    entry = extraction_schema_path(cfg)
 
-    digest = hashlib.sha256()
-    for path in _schema_closure(extraction_schema_path(cfg)):
-        # File name as well as bytes: moving content between files is a change
-        # of schema even when the concatenated bytes happen to match.
-        digest.update(path.name.encode())
-        digest.update(b"\0")
-        digest.update(path.read_bytes())
-    return "sha256:" + digest.hexdigest()
+    def build() -> str:
+        digest = hashlib.sha256()
+        for path in _closure_paths(entry):
+            # File name as well as bytes: moving content between files is a
+            # change of schema even when the concatenated bytes happen to match.
+            digest.update(path.name.encode())
+            digest.update(b"\0")
+            digest.update(path.read_bytes())
+        return "sha256:" + digest.hexdigest()
+
+    return _memoized(_HASH_MEMO, entry, build)
 
 
 def _schema_closure(entry: Path) -> list[Path]:
@@ -501,14 +580,17 @@ def resolve_extraction_schema(cfg: LitSchemaConfig) -> ResolvedExtractionSchema:
             "Set `extraction_schema_file` in litschema.yaml or place a file "
             "at the default location."
         )
-    sv = SchemaView(str(schema_path))
-    root_class = _find_tree_root_class(sv)
-    _require_root_identifier(sv, root_class, schema_path)
-    return ResolvedExtractionSchema(
-        path=schema_path,
-        view=sv,
-        root_class=root_class,
-    )
+    def build() -> ResolvedExtractionSchema:
+        sv = SchemaView(str(schema_path))
+        root_class = _find_tree_root_class(sv)
+        _require_root_identifier(sv, root_class, schema_path)
+        return ResolvedExtractionSchema(
+            path=schema_path,
+            view=sv,
+            root_class=root_class,
+        )
+
+    return _memoized(_RESOLVE_MEMO, schema_path, build)
 
 
 def _require_root_identifier(sv: SchemaView, root_class: str, schema_path: Path) -> None:
