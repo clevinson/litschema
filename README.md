@@ -37,7 +37,12 @@ creates a new run rather than overwriting the old one.
 **litschema is early software. Extracted data may need regenerating
 when updating litschema versions.**
 
-Each release will document breaking changes in the [CHANGELOG.md](./CHANGELOG.md).
+One limit qualifies the line-level citations promised above: PDF conversion
+collapses some tables onto a single line, so a citation into a table can name
+the table but not the row. This matters most for measurement-heavy schemas.
+
+Each release documents its breaking changes and known limits in the
+[CHANGELOG.md](./CHANGELOG.md).
 
 ## Specs
 
@@ -72,7 +77,7 @@ uv run litschema --help
 Against a project in a sibling directory:
 
 ```bash
-cd ../my-review
+cd ../my-project
 uv run --project ../litschema litschema status
 ```
 

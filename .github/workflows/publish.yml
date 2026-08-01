@@ -49,6 +49,14 @@ jobs:
 
       - name: The tag must match the version in pyproject.toml
         run: |
+          # Dispatched from a branch, GITHUB_REF_NAME is the branch name, and
+          # the comparison below fails with a message about a version mismatch
+          # that never happened. Say what actually went wrong instead.
+          if [ "$GITHUB_REF_TYPE" != "tag" ]; then
+            echo "run this workflow against a tag, not the $GITHUB_REF_TYPE '$GITHUB_REF_NAME'" >&2
+            echo "re-run it and pick the release tag (for example v0.1.0) in the ref dropdown" >&2
+            exit 1
+          fi
           TAG="${GITHUB_REF_NAME#v}"
           PKG=$(uv run python -c "import tomllib;print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
           if [ "$TAG" != "$PKG" ]; then

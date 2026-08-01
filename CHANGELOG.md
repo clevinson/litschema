@@ -45,7 +45,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
-## [0.1.0] — 2026-07-30
+## [0.1.0] — 2026-08-01
 
 First tagged release. Not published to PyPI — install from a checkout (see the
 README). There is no prior tag, so this entry describes what the release *is*

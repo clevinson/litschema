@@ -81,3 +81,11 @@ git push origin main v0.2.0
 Tag the release commit itself, so the tree at the tag contains the changelog
 describing it. `.github/workflows/publish.yml` checks that the tag matches the
 version in `pyproject.toml`, so keep them in step even while publishing is off.
+
+That check reads `GITHUB_REF_NAME`, which is whatever ref the workflow ran
+against. While the workflow is `workflow_dispatch`-only, **dispatch it from the
+tag**, not from `main` — pick `v0.2.0` in the ref dropdown. Run from a branch,
+`GITHUB_REF_NAME` is the branch name, the comparison fails, and the build goes
+red for a reason that has nothing to do with the release. Whoever restores the
+tag trigger (kata `0f2h`) makes this moot, since a tag push sets that ref
+correctly on its own.
