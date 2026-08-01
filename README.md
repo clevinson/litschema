@@ -32,10 +32,22 @@ immutable once published: its extraction, reasoning, and `run.json` never
 change, so a review written against it stays meaningful forever. Re-extracting
 creates a new run rather than overwriting the old one.
 
+## Alpha Software
+
+**litschema is early software. Extracted data may need regenerating
+when updating litschema versions.**
+
+Each release will document breaking changes in the [CHANGELOG.md](./CHANGELOG.md).
+
+## Specs
+
+The [specs](specs/README.md) describe what is currently implemented; anything
+deferred says so and names where it is tracked.
+
 ## The flow
 
 ```bash
-litschema init my-review        # scaffold a project (no questions asked)
+litschema init my-project       # scaffold a project
                                 # drop PDFs into papers-inbox/
 /litschema-onboard              # agent: drafts your schema, extracts, pilots
 litschema verify                # you: check what was extracted
@@ -133,19 +145,3 @@ skip error markers, so they agree.
 - `specs/` — capability specs and decision logs; start at `specs/README.md`
 - `skills/` — the agent-facing extraction and onboarding instructions
 - `tests/` — framework tests and small project fixtures
-
-## Status
-
-Pre-release alpha. Formats change without migration paths (`specs/README.md`
-§ Alpha status). The specs describe only what is implemented; anything deferred
-says so and names where it is tracked.
-
-Known limits worth knowing before you start:
-
-- **Tables lose row-level provenance.** PDF conversion collapses some tables
-  onto one line, so a citation into a table can name the table but not the row.
-  This matters most for measurement-heavy schemas.
-- **Supplying omitted values is API-only.** The `add` override works through
-  the annotation API; the verifier has no control for it yet.
-- **Multi-run selection is minimal.** `runs list` and `runs activate` ship;
-  trash, restore, and reconciliation between runs do not.
