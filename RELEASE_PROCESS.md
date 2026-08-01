@@ -49,11 +49,20 @@ alternatives, if that becomes annoying:
   an unused or missing definition is easy to introduce and invisible until
   someone clicks.
 
-What goes in: anything that changes what a user can do, what the tool produces,
-or what it refuses. What stays out: internal refactors, test-only work,
-dependency bumps with no behavioural effect, and anything implemented and then
-reverted before the tag — the reader wants the delta between releases, not a
-diary.
+What goes in the sections above: anything that changes what a user can do, what
+the tool produces, or what it refuses.
+
+Work with no user-visible effect — refactors, test and build infrastructure,
+performance — goes under a final `Internal` heading rather than being dropped.
+Keep it below the user-facing sections and say so in a line at the top of it,
+so a reader skimming for what changed is never wading through it. The point is
+that this project asks people to trust extracted data, and how it is tested is
+part of that argument.
+
+What still stays out: anything implemented and then reverted before the tag,
+and pure churn — formatting passes, dependency bumps that changed nothing,
+commits that only fix an earlier commit in the same release. The reader wants
+the delta between releases, not a diary.
 
 **Spec changes follow the same rule.** List a spec edit only when it changes
 what the product does or admits. Correcting a spec to match code that never

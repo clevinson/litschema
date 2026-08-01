@@ -31,8 +31,14 @@ ______________________________________________________________________
 ## What goes in this file
 
 Changes that affect someone *using* litschema: new capability, changed
-behaviour, removed surface, fixed defect. Internal refactors, test-only work,
-and anything implemented then reverted before a release do not appear.
+behaviour, removed surface, fixed defect. Anything implemented and then
+reverted before a release does not appear.
+
+Work with no user-visible effect — refactors, test and build infrastructure,
+performance — is listed under **Internal**, kept separate so the sections above
+stay readable as a record of what changed for you. It is here because this
+project asks people to trust extracted data, and how the thing is tested and
+kept honest is part of that case.
 
 Specs follow the same rule. A spec edit is listed only when it changes what the
 product does or admits; correcting a spec to match code that never moved is
@@ -135,6 +141,49 @@ None — this is the first release.
   including by the live preview — until you press Apply ([`fc61b79`](https://github.com/clevinson/litschema/commit/fc61b79), [`27c091e`](https://github.com/clevinson/litschema/commit/27c091e))
 - Overrides are refused when the run's schema identity cannot be established,
   rather than typed against the wrong schema ([`2bdd0d9`](https://github.com/clevinson/litschema/commit/2bdd0d9))
+
+### Internal
+
+No user-visible effect. Recorded because how this project is tested is part of
+why its output can be trusted.
+
+**Vocabulary**
+
+- `source_metadata` renamed to `bib_metadata` throughout, so one word means one
+  thing across config, manifests, API, and specs ([`be55ecd`](https://github.com/clevinson/litschema/commit/be55ecd))
+- The dead `schema_root` config key is no longer written by `init` ([`0d80a10`](https://github.com/clevinson/litschema/commit/0d80a10))
+
+**Performance**
+
+- Schema resolution is memoized against a stamp of the schema files rather than
+  recomputed per article. The verifier's listing was resolving the same schema
+  975 times to render one page — 19 seconds over a 326-paper project, now under
+  half a second. The stamp is checked on every call, so a schema edited while
+  the verifier runs is still picked up ([`715f569`](https://github.com/clevinson/litschema/commit/715f569))
+
+**Tests**
+
+- End-to-end smoke over a complete fixture project: doctor, status, validate,
+  export, every verifier read endpoint, and a review round trip asserted
+  through both the API and the CLI ([`1e6007f`](https://github.com/clevinson/litschema/commit/1e6007f))
+- The browser flow runs against an isolated copy of a fixture project and
+  serves it itself, so it can never touch real review work ([`e1f9b3a`](https://github.com/clevinson/litschema/commit/e1f9b3a))
+- Verifier behaviour is pinned by driving the real click path rather than by
+  matching substrings in `index.html`, which had let a dead status key, a
+  parse-time dead zone, and a routing bug all ship past a green suite ([`196059c`](https://github.com/clevinson/litschema/commit/196059c))
+- Every fixture's schema hash is derived through `schema_hash` itself and
+  guarded against drift ([`27cc313`](https://github.com/clevinson/litschema/commit/27cc313), [`3d6d7de`](https://github.com/clevinson/litschema/commit/3d6d7de))
+- Fixture projects that the `data/` ignore rule had been silently dropping are
+  now tracked ([`ca5ec24`](https://github.com/clevinson/litschema/commit/ca5ec24))
+
+**Build and CI**
+
+- Test workflow with a wheel build and a public-surface import smoke, so a
+  package that cannot be imported fails before it is published ([`9c1b1c7`](https://github.com/clevinson/litschema/commit/9c1b1c7))
+- `pymupdf4llm` pinned to 1.28: conversion output feeds every citation, so it
+  must not drift under an unattended upgrade ([`8480de9`](https://github.com/clevinson/litschema/commit/8480de9))
+- Complete package metadata and a trusted-publishing workflow, currently manual
+  only so a `v0.1.0` tag does not fire an unconfigured release ([`8f79d5b`](https://github.com/clevinson/litschema/commit/8f79d5b), [`4af1a62`](https://github.com/clevinson/litschema/commit/4af1a62))
 
 ### Known limits
 
