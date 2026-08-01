@@ -578,6 +578,35 @@ def test_ci_imports_the_public_surface_from_the_built_wheel() -> None:
     assert "litschema-onboard" in workflow  # bundled skills ship
 
 
+def test_every_module_the_workflows_import_still_exists() -> None:
+    """A rename must not be able to break CI silently.
+
+    `source_metadata` became `bib_metadata` in the source, the specs, the API
+    and the manifests — but not in this workflow's import list, which lives in
+    YAML where no rename touches it. CI then failed on the wheel job for every
+    push and pull request, naming a module nobody had heard of in months.
+
+    The assertion above it cannot catch that: checking that the workflow
+    contains the string `import litschema.analysis` says nothing about whether
+    `litschema.analysis` is still a module.
+    """
+    import importlib.util
+    import re
+
+    workflows = sorted((REPO_ROOT / ".github" / "workflows").glob("*.yml"))
+    assert workflows, "no workflows found"
+
+    cited: set[str] = set()
+    for path in workflows:
+        text = path.read_text()
+        cited |= set(re.findall(r"^\s*import (litschema[\w.]*)", text, re.M))
+        cited |= set(re.findall(r"^\s*from (litschema[\w.]*) import", text, re.M))
+
+    assert cited, "no litschema imports found in any workflow"
+    missing = sorted(name for name in cited if importlib.util.find_spec(name) is None)
+    assert missing == [], f"workflows import modules that no longer exist: {missing}"
+
+
 def test_package_metadata_is_complete_for_a_public_release() -> None:
     """PyPI shows what this declares, and a version cannot be re-uploaded."""
     import tomllib

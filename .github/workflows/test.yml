@@ -1,8 +1,10 @@
 name: test
 
+# Pull requests only. Branch pushes ran this a second time for the same commit
+# on any branch already open as a PR, and there is nothing special about a
+# `release/**` branch here — 0.1.0's was an ordinary feature branch collecting
+# the last issues, not a maintained release line.
 on:
-  push:
-    branches: [main, "release/**", "feat/**"]
   pull_request:
 
 concurrency:
@@ -57,7 +59,7 @@ jobs:
           import litschema.articles
           import litschema.config
           import litschema.schema_resolution
-          import litschema.source_metadata
+          import litschema.bib_metadata
           import litschema.export
           import litschema.analysis          # must not need pandas to import
           import litschema.explore.loader
