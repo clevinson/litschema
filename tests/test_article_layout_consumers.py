@@ -8,6 +8,8 @@ from litschema.config import LitSchemaConfig
 from litschema.ingest import pdf_to_markdown
 from litschema.webapp import app as webapp
 
+from .helpers import publish_test_run
+
 
 def _cfg(project: Path) -> LitSchemaConfig:
     return LitSchemaConfig(
@@ -95,8 +97,9 @@ def test_analysis_loads_extractions_from_article_folders(
     cfg = _cfg(tmp_path)
     article_dir = cfg.article_store_dir / "smith-2024"
     article_dir.mkdir(parents=True)
-    (article_dir / "agent-extraction.json").write_text(
-        json.dumps({"article_id": "smith-2024", "document_type": "journal_article"})
+    (article_dir / "article-metadata.json").write_text(json.dumps({"id": "smith-2024"}))
+    publish_test_run(
+        article_dir, {"article_id": "smith-2024", "document_type": "journal_article"}
     )
     monkeypatch.setattr(analysis, "load_config", lambda: cfg)
 
@@ -128,36 +131,7 @@ def test_webapp_reads_bibliography_and_pdf_filename_from_article_metadata(
     # Legacy top-level bib keys (doi included) are never read — alpha
     # policy: unmigrated corpora update their manifests in the domain repo.
     assert webapp._article_meta(cfg, "smith-2024") == {
-        "metadata_source": "auto",
+        "bib_source": "auto",
         "editable": True,
     }
     assert webapp._article_pdf_filename(cfg, "smith-2024") == "smith.pdf"
-
-
-def test_webapp_computes_article_review_progress() -> None:
-    extraction = {
-        "article_id": "smith-2024",
-        "document_type": "journal_article",
-        "study_types": ["experimental", "modeling"],
-        "experimental_setups": [
-            {
-                "experimental_scale": "field",
-                "soil": {"texture_class": "silt"},
-            }
-        ],
-    }
-    annotations = [
-        {"path": ".document_type", "status": "verified"},
-        {"path": ".study_types[0]", "status": "flagged"},
-        {"path": ".study_types[1]", "status": "cleared"},
-        {"path": ".experimental_setups[0].experimental_scale", "status": "verified"},
-    ]
-
-    assert webapp._review_progress(extraction, annotations) == {
-        "n_fields": 5,
-        "n_reviewed": 3,
-        "n_verified": 2,
-        "n_flagged": 1,
-        "is_complete": False,
-        "has_flags": True,
-    }

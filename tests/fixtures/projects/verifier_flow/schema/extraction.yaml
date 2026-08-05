@@ -1,0 +1,70 @@
+id: https://example.org/verifier-flow
+name: verifier_flow
+title: Verifier flow fixture schema
+description: >-
+  A deliberately small field-trial schema for the browser flow check. It carries
+  one of each shape the verifier has to render: scalars of several types, an
+  enum, an array of plain strings (so element removal is exercisable), and an
+  array of objects (so section-wide controls exist).
+prefixes:
+  linkml: https://w3id.org/linkml/
+imports:
+  - linkml:types
+default_range: string
+
+enums:
+  TillageSystem:
+    permissible_values:
+      no_till:
+      reduced_till:
+      conventional:
+
+classes:
+  FieldTrial:
+    tree_root: true
+    description: One agricultural field trial reported by one article.
+    attributes:
+      article_id:
+        identifier: true
+        description: Stable identifier for the source article.
+      site_name:
+        description: Name of the experimental site.
+      site_country:
+        description: Country the site sits in.
+      mean_annual_temperature_c:
+        range: float
+        description: Site mean annual temperature in degrees Celsius.
+      replicates:
+        range: integer
+        description: Number of field replicates per treatment.
+      tillage:
+        range: TillageSystem
+        description: Tillage system used at the site.
+      crops:
+        multivalued: true
+        description: Crops grown in the rotation, as reported.
+      measurements:
+        range: Measurement
+        multivalued: true
+        inlined_as_list: true
+        description: Reported soil measurements.
+
+  Measurement:
+    description: One reported measurement at one depth.
+    attributes:
+      outcome:
+        description: What was measured.
+      value:
+        range: float
+        description: Reported central value.
+      unit:
+        description: Unit the value is reported in.
+      depth_min_cm:
+        range: float
+        description: Shallow bound of the sampled depth.
+      depth_max_cm:
+        range: float
+        description: Deep bound of the sampled depth.
+      standard_error:
+        range: float
+        description: Reported standard error, where given.

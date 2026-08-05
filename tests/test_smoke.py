@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -120,12 +121,42 @@ def test_verify_command_accepts_port_option(monkeypatch) -> None:
         REPO_ROOT / "tests" / "fixtures" / "projects" / "agriculture_demo" / "litschema.yaml"
     )
     monkeypatch.setattr(cli, "_require_project", lambda ctx=None: project)
-    monkeypatch.setattr(webapp, "run_app", lambda cfg, *, port: calls.append((cfg, port)))
+    monkeypatch.setattr(
+        webapp,
+        "run_app",
+        lambda cfg, *, port, open_browser=True: calls.append((cfg, port, open_browser)),
+    )
 
     result = CliRunner().invoke(cli.app, ["verify", "--port", "8017"])
 
     assert result.exit_code == 0, result.output
-    assert calls == [(project.config, 8017)]
+    assert calls == [(project.config, 8017, True)]
+
+
+def test_verify_can_start_without_opening_a_browser(monkeypatch) -> None:
+    """Scripted and headless callers must not pop a window on someone's desktop.
+
+    tests/browser_verify_flow.py starts a real server and drives its own
+    Chromium; before this flag every run also opened the developer's actual
+    browser.
+    """
+    from litschema import cli
+    from litschema.project import Project
+    from litschema.webapp import app as webapp
+
+    calls = []
+    project = Project.open(
+        REPO_ROOT / "tests" / "fixtures" / "projects" / "agriculture_demo" / "litschema.yaml"
+    )
+    monkeypatch.setattr(cli, "_require_project", lambda ctx=None: project)
+    monkeypatch.setattr(
+        webapp, "run_app", lambda cfg, *, port, open_browser: calls.append(open_browser)
+    )
+
+    result = CliRunner().invoke(cli.app, ["verify", "--no-browser"])
+
+    assert result.exit_code == 0, result.output
+    assert calls == [False]
 
 
 def test_no_old_aggregate_surface_remains() -> None:
@@ -251,7 +282,8 @@ def test_cli_status_exits_zero() -> None:
     )
     assert result.returncode == 0, result.stderr
     assert "inbox:" in result.stdout
-    assert "extracted:" in result.stdout
+    assert "runs:" in result.stdout
+    assert "active:" in result.stdout
 
 
 def test_status_uses_per_article_store(tmp_path: Path, monkeypatch) -> None:
@@ -325,7 +357,9 @@ def test_prepare_text_calls_python_api_for_one_article(
     def fail_subprocess(*args, **kwargs):
         raise AssertionError("litschema prepare-text should call the Python conversion function")
 
-    monkeypatch.setattr(cli.subprocess, "run", fail_subprocess)
+    import subprocess
+
+    monkeypatch.setattr(subprocess, "run", fail_subprocess)
     monkeypatch.setattr(pdf_to_markdown, "run", fake_prepare_text)
 
     result = CliRunner().invoke(
@@ -455,13 +489,15 @@ def test_verify_calls_webapp_runner_with_explicit_config(
 
     calls = []
 
-    def fake_run_app(cfg, *, port):
+    def fake_run_app(cfg, *, port, open_browser=True):
         calls.append((cfg.config_path, port))
 
     def fail_subprocess(*args, **kwargs):
         raise AssertionError("litschema verify should call the Python webapp function")
 
-    monkeypatch.setattr(cli.subprocess, "run", fail_subprocess)
+    import subprocess
+
+    monkeypatch.setattr(subprocess, "run", fail_subprocess)
     monkeypatch.setattr(webapp, "run_app", fake_run_app)
 
     result = CliRunner().invoke(
@@ -503,10 +539,145 @@ def test_validate_defaults_to_article_store(
     def fail_subprocess(*args, **kwargs):
         raise AssertionError("litschema validate should call the Python validation function")
 
-    monkeypatch.setattr(cli.subprocess, "run", fail_subprocess)
+    import subprocess
+
+    monkeypatch.setattr(subprocess, "run", fail_subprocess)
     monkeypatch.setattr(validate_extraction, "run", fake_validate)
 
     result = CliRunner().invoke(cli.app, ["validate"])
 
     assert result.exit_code == 0, result.output
     assert calls == [([], tmp_path / "litschema.yaml")]
+
+
+def test_analysis_imports_without_pandas_at_module_scope() -> None:
+    """The wheel must import with runtime deps only.
+
+    `litschema.analysis` is a notebook helper and pandas is a development
+    dependency, so importing pandas at module scope makes `import
+    litschema.analysis` fail in a plain install. A `--help` smoke never reaches
+    this module, which is why CI imports the public surface from the wheel.
+    """
+    source = (REPO_ROOT / "src" / "litschema" / "analysis" / "__init__.py").read_text()
+
+    assert "\nimport pandas as pd" not in source
+    assert "def _pandas():" in source
+    assert "if TYPE_CHECKING:" in source
+
+
+def test_ci_imports_the_public_surface_from_the_built_wheel() -> None:
+    workflow = (REPO_ROOT / ".github" / "workflows" / "test.yml").read_text()
+
+    assert "uv run pytest" in workflow
+    assert "uv run ruff check ." in workflow
+    assert "uv build" in workflow
+    # --isolated --no-project is what makes the check meaningful: it proves the
+    # wheel stands up without the dev group.
+    assert "--isolated --no-project" in workflow
+    assert "import litschema.analysis" in workflow
+    assert "litschema-onboard" in workflow  # bundled skills ship
+
+
+def test_every_module_the_workflows_import_still_exists() -> None:
+    """A rename must not be able to break CI silently.
+
+    `source_metadata` became `bib_metadata` in the source, the specs, the API
+    and the manifests — but not in this workflow's import list, which lives in
+    YAML where no rename touches it. CI then failed on the wheel job for every
+    push and pull request, naming a module nobody had heard of in months.
+
+    The assertion above it cannot catch that: checking that the workflow
+    contains the string `import litschema.analysis` says nothing about whether
+    `litschema.analysis` is still a module.
+    """
+    import importlib.util
+    import re
+
+    workflows = sorted((REPO_ROOT / ".github" / "workflows").glob("*.yml"))
+    assert workflows, "no workflows found"
+
+    cited: set[str] = set()
+    for path in workflows:
+        text = path.read_text()
+        cited |= set(re.findall(r"^\s*import (litschema[\w.]*)", text, re.M))
+        cited |= set(re.findall(r"^\s*from (litschema[\w.]*) import", text, re.M))
+
+    assert cited, "no litschema imports found in any workflow"
+    missing = sorted(name for name in cited if importlib.util.find_spec(name) is None)
+    assert missing == [], f"workflows import modules that no longer exist: {missing}"
+
+
+def test_package_metadata_is_complete_for_a_public_release() -> None:
+    """PyPI shows what this declares, and a version cannot be re-uploaded."""
+    import tomllib
+
+    with (REPO_ROOT / "pyproject.toml").open("rb") as fh:
+        project = tomllib.load(fh)["project"]
+
+    assert project["license"] == "Apache-2.0"
+    assert project["readme"] == "README.md"
+    assert project["authors"]
+    assert project["classifiers"]
+    assert project["urls"]["Repository"].startswith("https://")
+
+    # The dependency rationale comment names the pipeline's steps as its
+    # argument against extras, so every verb it cites must still be a real one.
+    # Asserting the absence of specific dead names only catches the ones we
+    # already thought of — `extract-skill` outlived a `harvest`-only check.
+    from typer.main import get_command
+
+    from litschema.cli import app
+
+    verbs = set(get_command(app).commands)
+    rationale = re.search(
+        r"the pipeline's steps \(([^)]*)\)",
+        (REPO_ROOT / "pyproject.toml").read_text(),
+        re.DOTALL,
+    )
+    assert rationale, "the dependency rationale no longer names the pipeline's steps"
+    cited = {step.strip() for step in rationale.group(1).replace("\n#", " ").split("/")}
+    assert cited <= verbs, f"rationale cites verbs the CLI does not have: {sorted(cited - verbs)}"
+
+
+def test_publish_workflow_gates_on_tests_and_a_matching_tag() -> None:
+    """Parse the trigger; do not grep for it.
+
+    A substring check for 'tags: [\"v*\"]' passed while the trigger was
+    manual-only, because the sentence explaining why it is manual-only
+    contains that string. Read the parsed `on:` block instead.
+    """
+    import yaml
+
+    path = REPO_ROOT / ".github" / "workflows" / "publish.yml"
+    workflow = path.read_text()
+    # PyYAML reads a bare `on:` key as the boolean True (YAML 1.1 truthiness).
+    parsed = yaml.safe_load(workflow)
+    triggers = parsed.get("on", parsed.get(True))
+
+    # 0.1.0 tags on GitHub without publishing, so a v* tag must NOT fire this.
+    assert "workflow_dispatch" in triggers, triggers
+    assert "push" not in triggers, f"a tag would fire an unconfigured publish: {triggers}"
+
+    assert "uv run pytest -q" in workflow          # never publish an untested build
+    assert "does not match project version" in workflow  # tag/version agreement
+    assert "id-token: write" in workflow           # trusted publishing, no stored token
+    assert "pypa/gh-action-pypi-publish" in workflow
+
+
+def test_pdf_converter_is_pinned_to_one_minor() -> None:
+    """Conversion output is hashed into run provenance, so it must not drift.
+
+    pymupdf4llm 1.27 -> 1.28 changed the markdown it produces (proper <sup>
+    markup, a real H1 title, more table rows). That is an improvement, but it
+    means the same PDF converts to different bytes — and `inputs.prepared_text`
+    in run.json hashes exactly those bytes. An unbounded requirement would let
+    a resolver change every future run's provenance silently.
+    """
+    import tomllib
+
+    with (REPO_ROOT / "pyproject.toml").open("rb") as fh:
+        deps = tomllib.load(fh)["project"]["dependencies"]
+
+    pin = next(d for d in deps if d.startswith("pymupdf4llm"))
+    assert ">=1.28" in pin
+    assert "<1.29" in pin

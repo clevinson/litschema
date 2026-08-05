@@ -10,21 +10,29 @@ article's extraction, markdown and PDF panes, review editing against the
 version-1 model, and ORCID lookup. Its read API is the `/api/...` surface named
 under API ownership below.
 
-Pending: the route architecture. There is no hash routing at all today — no
-`#/`, `#/doc/{id}`, or `#/runs`, and therefore no dataset summary, no
-progress-metric aggregation, and no run or refinement visibility. Deep links,
-encoded queue state, and the schema-error/review-error null-out contract are
-part of that pending work.
+Live today: both routes, the dataset overview with progress aggregation, the
+document review against an explicit active run, deep links that survive reload
+and the back button, and explicit surfacing of a corrupt review file.
 
-The 0.1.0 scope, tracked by `ka84` (blocked on `tdv3` and `2gd1`), is the `#/`
-dataset overview and `#/doc/{id}` document review against the active run, with
-review progress metrics. The `#/runs` route, refinement metrics, and the
-`needs_refinement_attention` flag are multirun (0.2.0), developed on the
-`feat/multirun` branch; in 0.1.0 those metrics are absent, not null-filled.
+Pending: any UI for supplying omitted values. The `add` op works end to end
+through the API; the document view exposes no affordance for it. Tracked in
+kata `ncw4`, which holds the requirements.
+
+Browser coverage lives in `tests/browser_verify_flow.py`, which drives the real
+click path and asserts both what lands in `review.json` and what the page
+renders. It runs against a copy of a fixture project in a temp directory,
+serving it itself, so it never touches a real one. It is not in the pytest
+suite because playwright is not a project dependency.
+
+Every behavioural requirement below is pinned there. `tests/test_verifier_static.py`
+asserts only that removed surfaces stay removed: a substring in index.html
+cannot detect a control that renders but does nothing, which is how a v1 status
+key, a parse-time dead zone, and a `?view=review` routing bug all shipped past
+a green suite.
 
 `litschema verify` is the loopback-only human review application. It consumes
 active runs and run-bound reviews but does not own their storage or lifecycle.
-Source metadata is owned by `specs/source-metadata/spec.md`.
+Source metadata is owned by `specs/bib-metadata/spec.md`.
 
 ## Launch and distribution
 
@@ -32,6 +40,25 @@ Source metadata is owned by `specs/source-metadata/spec.md`.
 window. There is no public-bind flag. Project configuration is injected through
 application state; invalid article and run IDs return 404 rather than escaping
 the store.
+
+The port is claimed before the URL is announced or a browser opened, and the
+listening socket is handed to the server. Announcing first meant that when the
+port was already held — most often by a verifier left running for another
+project — the reviewer was sent to that other project's data, which is
+indistinguishable from their own being empty. A port already in use is now a
+non-zero exit naming the port and suggesting another, not a traceback.
+
+Shutdown is bounded. Without a limit the server waits indefinitely for open
+connections to drain, and an idle browser tab holding a keep-alive socket never
+does, so Ctrl+C appeared to do nothing.
+
+The extraction schema is resolved once at startup, so the first page load does
+not pay for it and an unresolvable schema is reported immediately rather than
+one article at a time. Failure to resolve is a warning, not a fatal error: the
+verifier still serves headers, PDFs and prepared text, and says per article why
+counts are unavailable. Resolution is memoized against a stamp of the schema
+files rather than held, so a schema edited while the verifier runs is picked up
+on the next request — a held snapshot would report no drift after a change.
 
 The frontend has no framework and no build step. The current static monolith is
 split into native ES modules. Third-party JavaScript, components, fonts, and
@@ -43,13 +70,39 @@ review.
 
 ## Hash routes
 
-One application shell exposes three route-level pages:
+One application shell exposes two route-level pages:
 
-| route | purpose | since |
-|---|---|---|
-| `#/` | dataset summary and work queue | 0.1.0 |
-| `#/doc/{article-id}` | one document's active-run review | 0.1.0 |
-| `#/runs` | minimal run and refinement visibility | multirun (0.2.0) |
+| route | purpose |
+|---|---|
+| `#/` | dataset summary and work queue |
+| `#/doc/{article-id}` | one document's active-run review |
+
+The hash-route shell is also where future run-level visibility will hang — a
+route showing an article's runs and their states once articles can have more
+than one. That surface is developed on the `feat/multirun` branch and is not
+specified here.
+
+Each route states where the user is and offers a marked way out. A document
+shows a breadcrumb back to the overview and a persistent control returning to
+it, so leaving never depends on the browser's back button. Controls scoped to a
+document — the article selector, previous/next, and the view-mode toggle — are
+hidden on the overview rather than shown inert, since a visible control implies
+a context the user is not in.
+
+Provenance is reported where it can be acted on. The document view names the
+model that produced the extraction being reviewed — enough context while
+weighing one value. Effort and extraction time are comparative: they answer
+whether a document is unlike its neighbours, which is a question about the
+whole set, so they appear on the overview where documents sit side by side. The
+run identifier is opaque by contract and so identifies without informing; it
+stays available for the run-level commands that take it, and is not
+foregrounded anywhere.
+
+No word names two things. The per-document render toggle switches how one
+document's *data* is displayed and is labelled accordingly; "overview" names
+the dataset route and nothing else. A control labelled for the route but wired
+to something else is worse than a missing control, because it silently does the
+wrong thing.
 
 Routes are deep-linkable and survive reload. Filter, sort, and view state use
 fragment query parameters and travel from the summary to a document route.
@@ -61,27 +114,51 @@ Unknown routes render a recoverable not-found view.
 ### Dataset summary
 
 The summary lists every assembled article, including articles with no active
-run. It reports source metadata, active run ID, active schema hash, extraction
-and reasoning availability, effective review progress, override count, and
-whether the article needs refinement attention. Metrics are schema-derived; no
-ERW field names are hard-coded.
+run. It reports source metadata, what produced the active run (model, effort,
+extraction time), active schema hash, extraction and reasoning availability,
+effective review progress, and override count. Reporting provenance per row is
+what makes an inconsistent extraction visible: one document run by a different
+model, at a different effort, or long apart from the rest shows up by
+comparison, which no single document view can reveal. Extraction time is its
+own column so dates align and can be scanned; counts are right-aligned so
+magnitudes compare at a glance.
+
+An article whose active run produced no reviewable field is reported as having
+nothing extracted, not as complete, and does not count toward the completed
+tally. Completion by arithmetic over an empty set is true but reads as audited
+work, which is the opposite of what it means.
+Metrics are schema-derived; no ERW field names are hard-coded.
 
 ### Progress metrics
 
 `specs/reviews/spec.md` owns effective state for a path. The verifier API owns
-aggregation. It interprets fields with the exact schema bytes associated with
-the displayed active run, using the historical resolution contract in the
-reviews spec. It never substitutes the current project schema for an older run.
-If that schema is unavailable, the API sets `schema_error` and makes field
-counts, progress, completion, and typed editor metadata `null`.
+aggregation. It interprets fields with the schema whose hash the displayed
+active run records, and distinguishes two ways that can go wrong.
+
+**Unresolvable** — the project schema does not resolve, or the run records no
+usable schema hash. Nothing can be computed, so the API sets `schema_error` and
+makes field counts, progress, completion, and typed editor metadata `null`
+rather than silently aggregating against a schema it cannot read.
+
+**Drifted** — the schema resolves and the run names a hash; they simply differ.
+The run is fully readable, so the API sets `schema_drift` to the reason and
+reports every count normally. Drifted articles keep their progress and stay in
+project totals; the client marks them as extracted against an older schema.
+Reporting drift as an error blanked every document in a project over a single
+added comment line, because schema identity is a hash over bytes — a change of
+identity is not a loss of meaning.
+
+Only overrides depend on the schema still matching, since a changed slot range
+could retype an edit. Both conditions therefore block an override on the write
+path (see Document review), and neither blocks verification, which asserts what
+the extractor already produced and needs no schema at all.
 
 For a valid active run with a resolved schema, it returns:
 
 - `field_paths`: canonical leaf paths in the raw active extraction plus the
   leaves contributed by `add` overrides, excluding every slot marked
-  `identifier: true`; containers are not leaves. Omitted slots a reviewer has
-  not supplied never enter the denominator, so revealing them with the
-  show-all-fields toggle does not change progress;
+  `identifier: true`; containers are not leaves. Slots the extraction omitted
+  and no reviewer has supplied never enter the denominator;
 - `n_fields = len(field_paths)`;
 - `n_verified`: paths controlled by exact or ancestor verification without an
   override;
@@ -102,26 +179,6 @@ and completion `null`; the API never reports them as zero. An article without a
 valid active run reports `n_fields = 0`, review counts `0`, progress `0.0`, and
 `is_complete = false`.
 
-Live refinement metrics come only from the sole nonterminal ledger owned by
-`specs/refinement/spec.md`. When none exists, live refinement metrics are null.
-A completed ledger is displayed only when its refinement ID is explicitly
-selected; the verifier never chooses one by timestamp or directory order:
-
-- `eligible_total`, `excluded_total`, and `added_after_baseline` use ledger
-  scope;
-- `candidate_ready`, `reconciled`, and `activated` count eligible entries in
-  the corresponding recorded state;
-- `cleanup_remaining` counts abandoned candidates not yet `trashed`;
-- `current_schema_coverage = activated / eligible_total`, or `1.0` when the
-  eligible set is empty;
-- `refinement_complete` is the ledger's completion predicate, not a frontend
-  inference.
-
-An eligible article has `needs_refinement_attention` when its ledger entry lacks
-a valid candidate, resolved/omitted reconciliation, or active accepted run, or
-when it owns a pending proposal or cleanup error. Excluded and later-added
-articles display their scope status but do not enter the denominator.
-
 ### Document review
 
 The document route shows article metadata, prepared text/PDF, active extraction,
@@ -135,34 +192,60 @@ Writes identify the displayed run explicitly. If another process changes
 requires reload or explicit acknowledgement. Articles without an active run
 retain metadata/PDF access and show a clear extraction placeholder.
 
+An override is refused with 409 when the run's schema is unresolvable *or*
+drifted, because typing a value or judging a removal against the wrong schema
+is how an edit gets silently retyped. Verification is always available: it
+asserts the extractor was right about what is already there and consults no
+schema, so a schema edit that never touched the field in front of a reviewer
+does not strand them mid-audit. The document view disables typed editors and
+says why before the reviewer starts, rather than after an edit fails.
+
+#### Feedback
+
+A successful review needs no message: the field control moves between
+unreviewed, verified, and edited, and narrating that in the header is chatter.
+A failure is the opposite — it has no other signal, so it is stated in words
+and stays until the next action. Writing failures nowhere is how a rejected
+edit can look identical to a saved one.
+
+The same rule governs bulk actions. Everything a bulk verification succeeds at
+is already on screen: the controls it changed turn verified, and clearing
+reverts them. A field it deliberately left alone shows that its evidence is
+missing in its own row, permanently and beside the value the decision concerns
+— which is both more durable and better placed than a count that disappears.
+Only failures are stated, in the same place a single failure is stated.
+
+#### Verification affordances
+
+A verified control is armed to clear on the next click, and shows that by
+swapping its check for a clear icon under the cursor. Arming is suppressed for
+the control the pointer is on at the moment it becomes verified, until the
+pointer leaves it, so the click that verified a field cannot immediately undo
+it.
+
+Suppression follows the pointer, not the write. A bulk action leaves the
+pointer on the section control, having never touched the fields it verified,
+so those fields stay armed and accept their next click. Suppressing them
+instead would make each one silently swallow a genuine click and appear
+unresponsive.
+
+Bulk verification covers the unreviewed leaves in scope that have evidence
+behind them, resolving evidence through ancestors under
+`specs/extraction/spec.md`. It never overwrites an existing override: a value a
+human already corrected is not re-verified by a section-wide action.
+
 #### Supplying omitted values
 
-The default view shows only what the extraction contains. Omitted fields are
-not review state and do not clutter the reviewer's default surface. A "show all
-fields" toggle reveals every schema-defined slot the extraction omitted,
-derived from the schema field metadata the route already loads.
+The `add` override defined by `specs/reviews/spec.md` works end to end through
+the annotation API: a client may append past the raw basis, and added leaves
+enter the review denominator. The verifier exposes no affordance for it — no
+show-all-fields toggle, no array add control, and no distinct rendering for
+human-supplied values.
 
-An array whose items the reviewer may extend offers an explicit add control.
-Adding an entity opens a focused form over the item class rather than inline
-tree editing, so a reviewer fills a labelled set of slots and the client can
-enforce required slots before submitting. The resulting write is an `add`
-override under `specs/reviews/spec.md`, appended past the raw basis.
-
-Added values render as human-origin wherever a raw value would otherwise
-appear, so a reviewer can always see which values no agent produced.
-
-### Runs and refinement visibility (multirun, 0.2.0)
-
-`#/runs` shows live and trashed runs, active selection, schema hash,
-creation time, model, reviewed/corrupt state, and the sole
-nonterminal refinement ledger's phase, scoped coverage, exclusions, pending
-proposals, and cleanup count. A completed ledger appears only after explicit ID
-selection. The page does not infer ledger selection, phase, or completion.
-
-The page is visibility-oriented. List, activate, trash, restore, purge, and
-reviewed-run confirmation remain `litschema runs` operations. The frontend
-must not add an unprotected mutation path or imply that destructive actions
-succeeded.
+That UI is deliberately unspecified here rather than specified-and-unbuilt.
+Its requirements, including why added values must render distinctly from
+uncited extracted ones, are held in kata `ncw4` and return to this spec when
+the affordance ships.
 
 ## Queue filter trust boundary
 
@@ -172,14 +255,50 @@ filter loaded from a URL is displayed but never evaluated during navigation;
 the user must explicitly confirm its first execution. Core navigation and
 review do not depend on the filter.
 
+## Settings and project policy
+
+Reviewer identity is a property of the person, not of the document on screen,
+so it lives in a settings dialog reachable from either route rather than in a
+per-document header. It is entered inline there: collecting one value should
+not open a dialog on top of a dialog. A connected identity displays as a name
+beside its identifier, with an explicit control to change it that returns to
+the input without discarding the current identity until a new one is confirmed.
+Registry lookup is a convenience, not a gate — an unreachable registry records
+the identifier as entered rather than blocking the reviewer.
+
+`require_reviewer` is project policy: when set, every review must name a
+reviewer. Its wording states what is required and whom it binds — everyone
+auditing extractions in the project, not only people on the machine that set
+it — because a policy read as a local preference will be set with the wrong
+expectations. It is stored in `litschema.yaml` and enforced at the write endpoint,
+so it binds every caller — scripts and agents included — rather than being a
+rule the browser politely follows. Writing it is the one place the verifier
+mutates project configuration; the write preserves unknown keys, and clearing
+the policy removes the key rather than recording a false value.
+
+Backfilling attribution onto previously anonymous reviews never reassigns an
+entry that already names someone. Whether the offer carries a warning follows
+the same signal used elsewhere: outside a Git repository the project is
+presumed local and its anonymous reviews the reviewer's own; inside one they
+may be a collaborator's, and the dialog says so with a count before proceeding,
+because the file cannot distinguish afterwards.
+
+## Extractor explanations
+
+The reasoning artifact's overall confidence and its accompanying explanation
+are shown together, the explanation behind a visible affordance rather than a
+bare tooltip — an explanation nobody knows is there is not an explanation. This
+is the only place a run states why it extracted little or nothing, which is
+exactly when a reviewer most needs it.
+
 ## API ownership
 
 The target read surface retains `GET /api/articles`, `/api/markdown/{id}`,
 `/api/pdf/{id}`, `/api/schema/fields`, and optional ORCID lookup. Extraction and
-reasoning reads accept an explicit run ID; run and refinement summary endpoints
-serve `#/runs`. Review endpoints follow `specs/reviews/spec.md` and always carry
-a run ID. After a review write, the document and summary use server-recomputed
-effective state. Route entry and explicit refresh reread disk state so CLI run
+reasoning reads accept an explicit run ID. Review endpoints follow
+`specs/reviews/spec.md` and always carry a run ID. Project settings are read and written at `/api/settings`; attribution
+backfill posts to its own endpoint. After a review write, the document and
+summary use server-recomputed effective state. Route entry and explicit refresh reread disk state so CLI run
 changes appear without restarting the server. Run mutation endpoints are out of
 scope. Server handlers call Python APIs in process and never shell out to CLI
 commands.
@@ -191,7 +310,6 @@ commands.
 - All assembled articles remain visible, including those without active runs.
 - Each document edit is bound to the run displayed when the edit began.
 - Stored and effective review state are not conflated.
-- The runs page is read-only visibility; CLI protections own mutation.
 - Route state is deep-linkable and recoverable.
 - Traversal-shaped IDs fail as 404s.
 
@@ -202,21 +320,36 @@ Implementation coverage must replace brittle source-substring assertions with:
 - structural checks for the application shell, native module graph, pinned
   local assets and licenses, packaged-wheel inclusion, semantic landmarks,
   labels, and route containers;
-- browser behavior on `#/`, `#/doc/{id}`, and `#/runs`, including direct load,
-  fragment query state, filtered next/previous, exclusion of the open article,
+- browser behavior on `#/` and `#/doc/{id}`, including direct load, fragment
+  query state, filtered next/previous, exclusion of the open article,
   navigation, back/forward, and reload;
+- a marked exit from every document route, breadcrumb linking, and hiding of
+  document-scoped controls on the overview;
+- displayed run provenance (model, effort, extraction time) with the opaque
+  identifier available but not foregrounded, and its absence for an
+  unextracted article;
+- the absence of any label naming both a route and a view mode;
+- silence on successful saves and a visible, persistent message on failure;
+- server-side refusal of an unattributed review under `require_reviewer`,
+  preservation of unknown config keys across a policy write, and removal rather
+  than falsification when the policy is cleared;
+- backfill touching only unattributed entries, and warning inside a repository;
+- the extractor explanation surfacing behind its own affordance, including for
+  a run that extracted nothing;
+- silence from a bulk action that succeeds, and a stated failure when one does
+  not;
+- clear-arming suppressed for a single verification's own control and not for
+  fields written by a bulk action, which accept their next click directly;
+- bulk verification of a section whose evidence is cited only on an ancestor,
+  and preservation of existing overrides within it;
 - exact active-run schema selection, unavailable-schema errors, and review
   metric formulas for no-run, zero-leaf, verified, overridden, parent-covered,
   terminal-container, invalid-path, and corrupt-review cases;
-- ledger-derived eligibility, exclusions, later additions, candidate,
-  reconciliation, activation, cleanup, coverage, completion, and attention
-  metrics;
 - document selection, raw/effective values, inherited parent coverage,
   replace/remove overrides, notes, and no-active-run placeholders;
 - server-recomputed summaries after review writes, explicit refresh after CLI
   file changes, and stale displayed-run protection when active selection changes
   concurrently;
-- live/inactive/trashed run visibility without mutation controls;
 - offline startup with external network blocked, zero core external requests,
   and graceful optional ORCID failure;
 - parity for document loading, typed filters, keyboard navigation, view modes,

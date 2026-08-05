@@ -6,10 +6,10 @@ mcp / status / doctor / skills install / agent / init.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import shutil
-import subprocess
 import sys
 from datetime import UTC, datetime
 from importlib import resources
@@ -19,12 +19,8 @@ import typer
 
 from .articles import (
     article_files,
-    iter_extraction_paths,
     iter_markdown_paths,
     iter_metadata_paths,
-    iter_reasoning_paths,
-    iter_review_paths,
-    record_extraction_provenance,
 )
 from .config import ConfigNotFoundError, LitSchemaConfig
 from .ingest import article_assembly, validate_extraction
@@ -76,22 +72,64 @@ def main(
     ctx.obj = config
 
 
+def _unattributed_review_count(cfg: LitSchemaConfig) -> int:
+    """Review entries carrying no reviewer, across every published run.
+
+    Corrupt review files are skipped rather than counted: they are reported by
+    their own consumers, and guessing at their contents here would be worse
+    than saying nothing.
+    """
+    from .reviews import ReviewCorruptError, read_reviews
+    from .runs import iter_run_ids, run_files
+
+    total = 0
+    for metadata_path in iter_metadata_paths(cfg):
+        files = article_files(cfg, metadata_path.parent.name)
+        for run_id in iter_run_ids(files):
+            try:
+                fields = read_reviews(run_files(files, run_id))
+            except ReviewCorruptError:
+                continue
+            total += sum(1 for entry in fields.values() if not entry.get("reviewer"))
+    return total
+
+
+def dev_cli_approval_path(project_root: Path) -> Path:
+    """Where this machine's user records approval of a project's dev override.
+
+    Outside the checkout, deliberately. The marker used to live beside the
+    override it approves, so a repository could commit both `.litschema/dev-cli`
+    and a matching `.litschema/dev-cli-approved` — and every agent that cloned
+    it would run that command silently, believing the user had approved it. A
+    content hash proves the file has not changed since approval; it cannot
+    prove *this user* ever approved it. Only user-owned state can.
+
+    Keyed by the real project path so approving one checkout says nothing about
+    another, and by content hash so editing the override revokes it.
+    """
+    base = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config")
+    key = hashlib.sha256(str(project_root.resolve()).encode()).hexdigest()
+    return base / "litschema" / "dev-cli-approved" / key
+
+
+def dev_cli_is_approved(project_root: Path, dev_cli: Path) -> bool:
+    marker = dev_cli_approval_path(project_root)
+    if not marker.is_file():
+        return False
+    return marker.read_text().strip() == hashlib.sha256(dev_cli.read_bytes()).hexdigest()
+
+
+def _in_git_repo(start: Path) -> bool:
+    """True when ``start`` sits inside a Git working tree.
+
+    Checked by walking for `.git` rather than shelling out, so a project
+    without Git never pays for a subprocess — and needs no `git` on PATH.
+    """
+    return any((candidate / ".git").exists() for candidate in [start, *start.parents])
+
+
 def _count_files(path: Path, pattern: str = "*") -> int:
     return len(list(path.glob(pattern))) if path.is_dir() else 0
-
-
-def _schema_commit(cfg: LitSchemaConfig) -> str | None:
-    try:
-        result = subprocess.run(
-            ["git", "rev-parse", "--short", "HEAD"],
-            cwd=cfg.project_root,
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-    except Exception:
-        return None
-    return result.stdout.strip() or None
 
 
 class _AssembleCliReporter:
@@ -339,11 +377,16 @@ def validate(ctx: typer.Context):
 def verify(
     ctx: typer.Context,
     port: int = typer.Option(8000, "--port", "-p", help="Port for the local web server."),
+    open_browser: bool = typer.Option(
+        True,
+        "--browser/--no-browser",
+        help="Open a browser window on start. --no-browser for scripted or headless use.",
+    ),
 ):
     project = _require_project(ctx)
     from .webapp import app as webapp_app
 
-    webapp_app.run_app(project.config, port=port)
+    webapp_app.run_app(project.config, port=port, open_browser=open_browser)
 
 
 @app.command(
@@ -460,6 +503,12 @@ meta_app = typer.Typer(
 )
 app.add_typer(meta_app, name="meta")
 
+runs_app = typer.Typer(
+    help="Inspect an article's extraction runs and choose the active one.",
+    no_args_is_help=True,
+)
+app.add_typer(runs_app, name="runs")
+
 
 def _require_article(cfg: LitSchemaConfig, article_id: str):
     from .articles import InvalidArticleIdError
@@ -475,20 +524,107 @@ def _require_article(cfg: LitSchemaConfig, article_id: str):
     return files
 
 
-@meta_app.command("show", help="Print the article's source-metadata block as JSON.")
+@runs_app.command("list", help="List an article's extraction runs, or every article's.")
+def runs_list(
+    ctx: typer.Context,
+    article_id: str | None = typer.Argument(None, help="Article to list; omit for all"),
+):
+    project = _require_project(ctx)
+    cfg = project.config
+    from .articles import iter_metadata_paths
+    from .runs import BrokenActiveRunError, active_run, iter_run_ids, run_files, run_summary
+
+    if article_id is not None:
+        article_ids = [_require_article(cfg, article_id).article_id]
+    else:
+        article_ids = [path.parent.name for path in iter_metadata_paths(cfg)]
+
+    total = 0
+    broken = 0
+    for current_id in article_ids:
+        files = article_files(cfg, current_id)
+        run_ids = iter_run_ids(files)
+        if not run_ids:
+            # Check the pointer before concluding there is nothing here: an
+            # article whose only run was deleted has a pointer naming it, and
+            # reporting "no published runs" hides exactly the damage this
+            # command exists to surface.
+            try:
+                active_run(files)
+            except BrokenActiveRunError as exc:
+                broken += 1
+                typer.secho(f"{CROSS} {current_id}: {exc}", fg=typer.colors.RED)
+            else:
+                if article_id is not None:
+                    typer.echo(f"{current_id}: no published runs")
+            continue
+        # Resolve through active_run(), not active_run_id(): the latter only
+        # parses the pointer, so one naming a deleted run listed no active
+        # marker and exited 0 — indistinguishable from an article nobody has
+        # activated yet, which is the opposite of what this command is for.
+        try:
+            selected = active_run(files)
+            selected = selected.run_id if selected is not None else None
+        except BrokenActiveRunError as exc:
+            selected = None
+            broken += 1
+            typer.secho(f"{CROSS} {current_id}: {exc}", fg=typer.colors.RED)
+        typer.echo(current_id)
+        for run_id in run_ids:
+            total += 1
+            info = run_summary(run_files(files, run_id), active_run_id=selected)
+            marks = []
+            if info["active"]:
+                marks.append("active")
+            if info["error"]:
+                marks.append("error")
+            if info["reviewed"]:
+                marks.append("reviewed")
+            flags = f"  [{', '.join(marks)}]" if marks else ""
+            created = info["created_at"] or "?"
+            model = info["model"] or "unknown model"
+            schema = (info["schema_hash"] or "sha256:?")[:14]
+            typer.echo(f"  {run_id}  {created}  {model}  {schema}…{flags}")
+    if article_id is None and total == 0:
+        typer.echo("no published runs")
+    # Finish the listing first — the point is to show which run is damaged —
+    # then fail, so automation can tell an integrity problem from a clean run.
+    if broken:
+        raise typer.Exit(code=1)
+
+
+@runs_app.command("activate", help="Select a published run as the article's active run.")
+def runs_activate(
+    ctx: typer.Context,
+    article_id: str = typer.Argument(..., help="Article whose active run to change"),
+    run_id: str = typer.Argument(..., help="Run to activate"),
+):
+    project = _require_project(ctx)
+    files = _require_article(project.config, article_id)
+    from .runs import RunActivationError, activate_run
+
+    try:
+        activate_run(files, run_id)
+    except RunActivationError as exc:
+        typer.secho(f"{CROSS} {exc}", fg=typer.colors.RED)
+        raise typer.Exit(code=1) from None
+    typer.echo(f"{CHECK} {article_id} now active: {run_id}")
+
+
+@meta_app.command("show", help="Print the article's bib-metadata block as JSON.")
 def meta_show(ctx: typer.Context, article_id: str):
-    from .source_metadata import read_source_metadata
+    from .bib_metadata import read_bib_metadata
 
     cfg = _require_project(ctx).config
     files = _require_article(cfg, article_id)
     typer.echo(
-        json.dumps(read_source_metadata(files.read_metadata()), indent=2, ensure_ascii=False)
+        json.dumps(read_bib_metadata(files.read_metadata()), indent=2, ensure_ascii=False)
     )
 
 
 @meta_app.command(
     "set",
-    help="Merge fields into the source-metadata block. Provenance is caller-asserted: "
+    help="Merge fields into the bib-metadata block. Provenance is caller-asserted: "
     "--source auto for machine-inferred values (agents, scripts), --source manual for "
     "human-authored values. An explicit empty-string value clears a field. The doi "
     "state is earned via `meta sync` (or `meta set --doi ... --sync`), never asserted.",
@@ -524,11 +660,11 @@ def meta_set(
         False, "--force", help="Let an auto write overwrite manual/doi metadata"
     ),
 ):
-    from .source_metadata import (
-        SOURCE_FIELDS,
+    from .bib_metadata import (
+        BIB_FIELDS,
         can_overwrite,
-        read_source_metadata,
-        update_source_metadata,
+        read_bib_metadata,
+        update_bib_metadata,
     )
 
     if source not in ("auto", "manual"):
@@ -553,7 +689,7 @@ def meta_set(
 
     values = (title, authors, corporate_author, year, journal, doi, publisher, url, abstract)
     fields: dict = {}
-    for key, value in zip(SOURCE_FIELDS, values, strict=True):
+    for key, value in zip(BIB_FIELDS, values, strict=True):
         if value is None:
             continue
         # An explicit empty string clears the field (the webapp's convention).
@@ -571,7 +707,7 @@ def meta_set(
             raise typer.Exit(code=2)
         fields["doi"] = normalized_doi
     for field in clear:
-        if field not in SOURCE_FIELDS:
+        if field not in BIB_FIELDS:
             typer.secho(f"{CROSS} unknown field: {field}", fg=typer.colors.RED)
             raise typer.Exit(code=2)
         if fields.get(field) is not None:
@@ -585,7 +721,7 @@ def meta_set(
         typer.secho(f"{CROSS} nothing to change (pass field options or --clear)", fg=typer.colors.RED)
         raise typer.Exit(code=2)
 
-    existing = read_source_metadata(files.read_metadata()).get("metadata_source")
+    existing = read_bib_metadata(files.read_metadata()).get("bib_source")
     if not force and not can_overwrite(existing, source):
         typer.secho(
             f"{CROSS} refusing: metadata is {existing!r} and auto writes never overwrite "
@@ -595,7 +731,7 @@ def meta_set(
         )
         raise typer.Exit(code=1)
 
-    block = update_source_metadata(files, fields, source=source)
+    block = update_bib_metadata(files, fields, source=source)
     if not sync:
         typer.echo(json.dumps(block, indent=2, ensure_ascii=False))
         return
@@ -725,17 +861,24 @@ def agent_validate_reasoning(ctx: typer.Context):
 
 
 @agent_app.command(
-    "record-extraction", help="Record extraction provenance in article-metadata.json."
+    "record-extraction",
+    help="Publish the staged extraction as an immutable run and activate it.",
 )
 def agent_record_extraction(
     ctx: typer.Context,
     article_id: str = typer.Argument(..., help="Article identifier that was extracted"),
     provider: str | None = typer.Option(None, "--provider", help="Extraction provider, if known"),
     model: str | None = typer.Option(None, "--model", help="Extraction model, if known"),
+    skill_file: Path | None = typer.Option(
+        None, "--skill-file", help="Override the conducting skill file to hash"
+    ),
 ):
     project = _require_project(ctx)
     cfg = project.config
     from .articles import InvalidArticleIdError
+    from .ingest import validate_extraction as _validate_extraction
+    from .runs import RunPublishError, publish_run
+    from .schema_resolution import resolve_extraction_schema as _resolve_schema
 
     try:
         files = article_files(cfg, article_id)
@@ -745,14 +888,45 @@ def agent_record_extraction(
     if not files.article_dir.is_dir():
         typer.secho(f"{CROSS} unknown article: {article_id}", fg=typer.colors.RED)
         raise typer.Exit(code=2)
-    record_extraction_provenance(
-        files,
-        provider=provider,
-        model=model,
-        extraction_date=datetime.now(UTC).isoformat(),
-        schema_commit=_schema_commit(cfg),
+    if not files.staged_extraction.is_file():
+        typer.secho(
+            f"{CROSS} no staged extraction at {files.staged_extraction}", fg=typer.colors.RED
+        )
+        raise typer.Exit(code=1)
+
+    # The deterministic publication gate: both artifacts must validate before
+    # anything is written to the run layout (error markers are legal artifacts
+    # but skip schema validation and never activate).
+    resolved = _resolve_schema(cfg)
+    valid, errors = _validate_extraction.validate_file(
+        files.staged_extraction, resolved.path, resolved.root_class
     )
-    typer.echo(f"{CHECK} recorded extraction provenance for {article_id}")
+    if not valid:
+        typer.secho(f"{CROSS} staged extraction is invalid:", fg=typer.colors.RED)
+        for err in errors[:10]:
+            typer.echo(f"  {err}")
+        raise typer.Exit(code=1)
+    if files.staged_reasoning.is_file():
+        from .agent import validate_reasoning as _validate_reasoning
+
+        if _validate_reasoning.run([str(files.staged_reasoning)]) != 0:
+            typer.secho(f"{CROSS} staged reasoning is invalid", fg=typer.colors.RED)
+            raise typer.Exit(code=1)
+
+    try:
+        run, activated = publish_run(
+            cfg,
+            files,
+            provider=provider,
+            model=model,
+            skill_file=skill_file,
+            created_at=datetime.now(UTC).isoformat(timespec="seconds"),
+        )
+    except RunPublishError as exc:
+        typer.secho(f"{CROSS} {exc}", fg=typer.colors.RED)
+        raise typer.Exit(code=1) from None
+    state = "activated" if activated else "published inactive (error marker)"
+    typer.echo(f"{CHECK} published run {run.run_id} for {article_id} — {state}")
 
 
 @skills_app.command(
@@ -812,11 +986,53 @@ def status(ctx: typer.Context):
     project = _require_project(ctx)
     cfg = project.config
 
+    from .reviews import ReviewCorruptError, read_reviews
+    from .runs import BrokenActiveRunError, active_run, iter_run_ids
+    from .schema_resolution import schema_hash as _schema_hash
+
     metadata = len(list(iter_metadata_paths(cfg)))
     converted = len(list(iter_markdown_paths(cfg)))
-    extractions = len(list(iter_extraction_paths(cfg)))
-    reasoning = len(list(iter_reasoning_paths(cfg)))
-    annotations = len(list(iter_review_paths(cfg)))
+
+    live_runs = 0
+    active_runs = 0
+    current_schema_active = 0
+    broken_pointers = 0
+    reviewed_articles = 0
+    review_entries = 0
+    corrupt_reviews = 0
+    try:
+        current_hash = _schema_hash(cfg)
+    except OSError:
+        current_hash = None
+    for metadata_path in iter_metadata_paths(cfg):
+        files = article_files(cfg, metadata_path.parent.name)
+        live_runs += len(iter_run_ids(files))
+        try:
+            run = active_run(files)
+        except BrokenActiveRunError:
+            broken_pointers += 1
+            continue
+        if run is None:
+            continue
+        active_runs += 1
+        try:
+            if current_hash and run.read_run_json().get("schema_hash") == current_hash:
+                current_schema_active += 1
+        except (OSError, ValueError):
+            pass
+        # Reviews bind to a run, so they must be counted through one. Globbing
+        # the old article-root path reported 0 unconditionally, which reads as
+        # "no review work yet" rather than "this counter is broken".
+        try:
+            fields = read_reviews(run)
+        except ReviewCorruptError:
+            # Skipping silently recreates the same lie in miniature: the
+            # article's real reviews get counted as none. Say so instead.
+            corrupt_reviews += 1
+            continue
+        if fields:
+            reviewed_articles += 1
+            review_entries += len(fields)
 
     schema_yaml = extraction_schema_path(cfg)
     papers = _count_files(cfg.paper_inbox_dir, "*.pdf")
@@ -837,9 +1053,20 @@ def status(ctx: typer.Context):
     typer.echo(f"inbox:       {papers} PDFs in {cfg.paper_inbox_dir.name}/")
     typer.echo(f"articles:    {metadata} metadata files")
     typer.echo(f"converted:   {converted} markdown files")
-    typer.echo(f"extracted:   {extractions} extractions")
-    typer.echo(f"reasoning:   {reasoning} reasoning files")
-    typer.echo(f"annotations: {annotations}")
+    typer.echo(f"runs:        {live_runs} published")
+    typer.echo(f"active:      {active_runs} articles with an active run")
+    typer.echo(f"current:     {current_schema_active} active runs on the current schema")
+    if broken_pointers:
+        typer.echo(f"{CROSS} broken:      {broken_pointers} broken active-run pointers")
+    typer.echo(
+        f"reviewed:    {reviewed_articles} articles with reviews "
+        f"({review_entries} entries on active runs)"
+    )
+    if corrupt_reviews:
+        typer.echo(
+            f"{CROSS} unreadable:  {corrupt_reviews} review files could not be read "
+            f"— their reviews are not counted above"
+        )
 
 
 @app.command(help="Diagnose configuration and dependency issues.")
@@ -870,6 +1097,32 @@ def doctor(ctx: typer.Context):
     if dev_cli.is_file():
         override = dev_cli.read_text().strip()
         typer.echo(f"{CHECK} CLI dev override (.litschema/dev-cli): {override}")
+        # Agents run this file, so it needs the user's approval — recorded in
+        # this user's own config, not in the project, so a repository cannot
+        # ship its own approval.
+        marker = dev_cli_approval_path(cfg.project_root)
+        current = hashlib.sha256(dev_cli.read_bytes()).hexdigest()
+        if dev_cli_is_approved(cfg.project_root, dev_cli):
+            typer.echo(f"{CHECK} dev override approved for agent use")
+        else:
+            detail = "changed since approval" if marker.is_file() else "not yet approved"
+            typer.echo(f"{WARN} dev override {detail} — agents will stop and ask before using it")
+            # Quote the paths: XDG_CONFIG_HOME may contain spaces, and an
+            # unquoted suggestion is a command that fails when pasted.
+            import shlex
+
+            issues.append(
+                "if you trust this command, approve it for agent use: "
+                f"`mkdir -p {shlex.quote(str(marker.parent))} && "
+                f"echo {current} > {shlex.quote(str(marker))}`"
+            )
+        stale = cfg.project_root / ".litschema" / "dev-cli-approved"
+        if stale.exists():
+            typer.echo(
+                f"{WARN} {stale} is ignored — approval now lives in your own config, "
+                f"because a checkout could otherwise approve itself"
+            )
+            issues.append(f"delete {stale}; it no longer grants anything")
     elif legacy_dev_cli.is_file():
         typer.echo(f"{WARN} legacy .litschema/cli found — agent skills now read .litschema/dev-cli")
         issues.append("rename .litschema/cli to .litschema/dev-cli")
@@ -897,6 +1150,40 @@ def doctor(ctx: typer.Context):
     else:
         typer.echo(f"{CROSS} schema dir missing: {cfg.schema_dir}")
         issues.append(f"create {cfg.schema_dir}")
+
+    # The schema is the one thing every other verb depends on, so a failure to
+    # resolve it is the headline diagnosis, not something to skip past. Staying
+    # quiet here let `doctor` report a clean bill of health for an unparseable
+    # schema and pushed the confusing failure downstream into `extract`.
+    from .schema_resolution import identifier_reference_slots, resolve_extraction_schema
+
+    try:
+        resolved = resolve_extraction_schema(cfg)
+        typer.echo(f"{CHECK} extraction schema: {resolved.path} (root class {resolved.root_class})")
+    except Exception as exc:
+        resolved = None
+        typer.echo(f"{CROSS} cannot resolve the extraction schema: {exc}")
+        issues.append(
+            f"fix the extraction schema at {cfg.schema_dir} — every other command "
+            "reads it, and it must parse and declare exactly one `tree_root: true` class"
+        )
+
+    # A multivalued class-range slot whose range has an identifier serializes
+    # as bare ID strings, so every other attribute on that class silently has
+    # nowhere to land. The extraction still validates, so nothing else catches
+    # it — the loss only shows up as missing data once documents are extracted.
+    if resolved is not None:
+        for finding in identifier_reference_slots(resolved.view, resolved.root_class):
+            lost = ", ".join(finding["lost"])
+            typer.echo(
+                f"{WARN} `{finding['owner']}.{finding['slot']}` stores only "
+                f"{finding['range']} identifiers — {lost} cannot be recorded"
+            )
+            issues.append(
+                f"add `inlined_as_list: true` to the `{finding['slot']}` slot so "
+                f"{finding['range']} objects are stored inline, not as "
+                f"`{finding['identifier']}` references"
+            )
 
     # Skills check — project-local .claude/skills/ is the init default;
     # global installs are the alternative. Only litschema's bundled skills
@@ -942,6 +1229,22 @@ def doctor(ctx: typer.Context):
         issues.append(
             "install an agentic CLI that reads installed skills (e.g. Claude Code or Codex)"
         )
+
+    # Attribution only matters where the work might be shared, and a Git
+    # repository is the available signal for that. Outside one, a project is
+    # presumed local and anonymous reviews are simply how it works — nagging
+    # a lone reviewer to identify themselves to themselves helps nobody.
+    if _in_git_repo(cfg.project_root):
+        unattributed = _unattributed_review_count(cfg)
+        if unattributed:
+            typer.echo(
+                f"{WARN} {unattributed} review entries have no reviewer — this project is "
+                "in Git, so it may be shared"
+            )
+            typer.echo(
+                f"{DIM}     connect an ORCID in `litschema verify` to attribute new "
+                f"reviews; existing ones are unchanged{RESET}"
+            )
 
     if issues:
         typer.echo("\nNext steps:")
@@ -1109,7 +1412,6 @@ def init(
     config_path.write_text(
         'project_root: "."\n'
         'schema_dir: "schema"\n'
-        'schema_root: "extraction.yaml"\n'
         'extraction_schema_file: "extraction.yaml"\n'
         'data_dir: "data"\n'
         'article_store_dir: "data/papers"\n'

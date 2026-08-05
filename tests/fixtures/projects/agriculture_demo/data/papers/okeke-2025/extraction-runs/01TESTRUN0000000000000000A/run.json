@@ -1,0 +1,13 @@
+{
+  "agent": {},
+  "article_id": "okeke-2025",
+  "created_at": "2026-01-01T00:00:00+00:00",
+  "inputs": {
+    "domain_context": "sha256:test",
+    "prepared_text": "sha256:test",
+    "skill": "sha256:test"
+  },
+  "run_id": "01TESTRUN0000000000000000A",
+  "schema_hash": "sha256:7826c53abb5c8f17258b7807ae38bb0fb512966d4365b7b3103d21cda1ff7650",
+  "version": 1
+}

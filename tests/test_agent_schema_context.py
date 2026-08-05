@@ -22,7 +22,7 @@ def test_prepare_schema_context_writes_runtime_extraction_schema(tmp_path, monke
         "    tree_root: true\n"
         "    attributes:\n"
         "      article_id:\n"
-        "        range: string\n"
+        "        identifier: true\n"
     )
     config_path = tmp_path / "litschema.yaml"
     config_path.write_text(
@@ -62,7 +62,7 @@ def test_prepare_schema_context_writes_bundled_reasoning_schema(tmp_path, monkey
         "    tree_root: true\n"
         "    attributes:\n"
         "      article_id:\n"
-        "        range: string\n"
+        "        identifier: true\n"
     )
     config_path = project / "litschema.yaml"
     config_path.write_text('project_root: "."\nschema_dir: "schema"\n')
@@ -141,6 +141,7 @@ def test_validate_reasoning_file_reports_schema_errors(tmp_path) -> None:
         "      source_lines:\n"
         "        required: true\n"
     )
+    (tmp_path / "article.md").write_text("first line of the prepared text\n")
     valid = tmp_path / "valid.json"
     valid.write_text('{"fields": [{"path": ".x", "source_lines": "L1"}]}')
     invalid = tmp_path / "invalid.json"
@@ -162,6 +163,9 @@ def test_validate_reasoning_uses_bundled_schema_when_project_schema_absent(
     schema_dir = tmp_path / "schema"
     schema_dir.mkdir()
     (tmp_path / "litschema.yaml").write_text('project_root: "."\nschema_dir: "schema"\n')
+    (tmp_path / "article.md").write_text(
+        "\n".join(f"line {n} of the prepared text" for n in range(1, 21)) + "\n"
+    )
     reasoning = tmp_path / "agent-reasoning.json"
     reasoning.write_text(
         json.dumps(
@@ -187,6 +191,9 @@ def test_bundled_reasoning_schema_accepts_confidence_fields(tmp_path) -> None:
 
     (tmp_path / "litschema.yaml").write_text('project_root: "."\nschema_dir: "schema"\n')
     (tmp_path / "schema").mkdir()
+    (tmp_path / "article.md").write_text(
+        "\n".join(f"line {n} of the prepared text" for n in range(1, 21)) + "\n"
+    )
     reasoning = tmp_path / "agent-reasoning.json"
     reasoning.write_text(
         json.dumps(
@@ -287,6 +294,9 @@ def test_agent_validate_reasoning_cli_command_does_not_require_project_config(
     from litschema import cli
 
     monkeypatch.delenv("LITSCHEMA_CONFIG", raising=False)
+    (tmp_path / "article.md").write_text(
+        "\n".join(f"line {n} of the prepared text" for n in range(1, 21)) + "\n"
+    )
     reasoning = tmp_path / "agent-reasoning.json"
     reasoning.write_text(
         json.dumps(
@@ -307,3 +317,88 @@ def test_agent_validate_reasoning_cli_command_does_not_require_project_config(
 
     assert result.exit_code == 0, result.output
     assert f"Reasoning valid: {reasoning}" in result.output
+
+
+# ── citations must resolve against the prepared text ────────────────────────
+
+
+def _reasoning_project(tmp_path, source_lines: str, *, lines: list[str] | None = None):
+    """A reasoning file beside a prepared text, as every real caller has."""
+    body = lines if lines is not None else [f"line {n}" for n in range(1, 11)]
+    (tmp_path / "article.md").write_text("\n".join(body) + "\n")
+    reasoning = tmp_path / "agent-reasoning.json"
+    reasoning.write_text(
+        json.dumps({"fields": [{"path": ".site", "source_lines": source_lines}]})
+    )
+    return reasoning
+
+
+@pytest.mark.parametrize(
+    ("source_lines", "because"),
+    [
+        ("L99", "past the end of the document"),
+        ("L5-L2", "a range that runs backwards"),
+        ("L3", "a line that is blank"),
+        ("L3-L4", "a range wholly inside a blank run"),
+        ("line 4", "not a line reference at all"),
+    ],
+)
+def test_unresolvable_citations_are_rejected(tmp_path, source_lines, because) -> None:
+    """Shape validation passed all of these; nothing ever opened article.md."""
+    from litschema.agent.reasoning_schema import reasoning_schema_source_path
+    from litschema.agent.validate_reasoning import validate_file
+
+    reasoning = _reasoning_project(
+        tmp_path, source_lines, lines=["intro", "body", "", "", "tail"]
+    )
+
+    ok, errors = validate_file(reasoning, reasoning_schema_source_path())
+
+    assert ok is False, because
+    assert errors
+
+
+@pytest.mark.parametrize("source_lines", ["L1", "L1-L2", "L1,L5", "L2-L2", "L3-L5"])
+def test_resolvable_citations_are_accepted(tmp_path, source_lines) -> None:
+    """Including a range that merely STARTS on a blank line.
+
+    `L3-L5` spans a blank line and a real one. Rejecting it would flag a
+    correct citation whose range happens to open on a paragraph break — which
+    is most of what naive blank-line checking would catch.
+    """
+    from litschema.agent.reasoning_schema import reasoning_schema_source_path
+    from litschema.agent.validate_reasoning import validate_file
+
+    reasoning = _reasoning_project(
+        tmp_path, source_lines, lines=["intro", "body", "", "", "tail"]
+    )
+
+    ok, errors = validate_file(reasoning, reasoning_schema_source_path())
+
+    assert ok is True, errors
+
+
+def test_missing_prepared_text_fails_rather_than_skipping(tmp_path) -> None:
+    """A silent skip is how the hole existed in the first place."""
+    from litschema.agent.reasoning_schema import reasoning_schema_source_path
+    from litschema.agent.validate_reasoning import validate_file
+
+    reasoning = tmp_path / "agent-reasoning.json"
+    reasoning.write_text(json.dumps({"fields": [{"path": ".x", "source_lines": "L1"}]}))
+
+    ok, errors = validate_file(reasoning, reasoning_schema_source_path())
+
+    assert ok is False
+    assert "no prepared text" in errors[0]
+
+
+def test_citations_resolve_against_a_run_bound_reasoning_file(tmp_path) -> None:
+    """Reasoning inside a run directory cites the article root's prepared text."""
+    from litschema.agent.validate_reasoning import prepared_text_for
+
+    run_dir = tmp_path / "data" / "papers" / "a" / "extraction-runs" / "01RUN"
+    run_dir.mkdir(parents=True)
+
+    assert prepared_text_for(run_dir / "agent-reasoning.json") == (
+        tmp_path / "data" / "papers" / "a" / "article.md"
+    )

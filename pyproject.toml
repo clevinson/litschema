@@ -3,9 +3,22 @@ name = "litschema"
 version = "0.1.0"
 description = "Schema-driven, agentic extraction of structured data from scientific literature. LinkML-native, local-first, with bundled agent skills."
 requires-python = ">=3.13"
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "Cory Levinson", email = "cjlevinson@gmail.com" }]
+keywords = ["linkml", "extraction", "systematic-review", "meta-analysis", "pdf", "schema"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+    "Topic :: Text Processing :: Markup",
+]
 # All runtime deps live here. We deliberately do NOT split into extras —
-# the pipeline's five steps (harvest / prepare-text / extract-skill / verify /
-# mcp) form a coherent tool surface, and anyone reaching for litschema is
+# the pipeline's steps (assemble / prepare-text / extract / verify /
+# export / mcp) form a coherent tool surface, and anyone reaching for litschema is
 # almost certainly going to use the full pipeline. Forcing `--extra X`
 # incantations for first-time users was a net DX loss against a ~130 MB
 # total install, which is unremarkable by scientific-Python standards.
@@ -16,12 +29,21 @@ dependencies = [
     "requests>=2.31.0",
     "pyyaml>=6.0",
     "typer>=0.12.0",
-    "pymupdf4llm>=0.0.17",       # `prepare-text` — PDF → markdown
-    "openpyxl>=3.1.0",           # paper-tracking spreadsheet reader
+    # `prepare-text` — PDF → markdown. Pinned to one minor: 1.27 -> 1.28
+    # changed conversion output materially (better markup, more table rows),
+    # and that output is hashed into run.json as `inputs.prepared_text`, so a
+    # silent bump would change every run's provenance. Widen deliberately,
+    # after comparing output, not by resolution.
+    "pymupdf4llm>=1.28.0,<1.29",
     "fastapi[standard]>=0.115",  # `verify` — verification webapp
     "duckdb>=1.0.0",             # `mcp` — explore store
     "mcp>=1.27.0",               # `mcp` — Model Context Protocol server
 ]
+
+[project.urls]
+Homepage = "https://github.com/clevinson/litschema"
+Repository = "https://github.com/clevinson/litschema"
+Issues = "https://github.com/clevinson/litschema/issues"
 
 [project.scripts]
 litschema = "litschema.cli:app"

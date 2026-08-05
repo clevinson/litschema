@@ -744,7 +744,17 @@
     min-width: 0;
   }
 
-  #base-stale-warning {
+  #schema-error-warning {
+    margin: 8px 12px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    background: #4a2c00;
+    color: #ffd8a8;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
+  #review-error-warning {
     padding: 8px 14px;
     font-size: 12.5px;
     line-height: 1.4;
@@ -767,19 +777,19 @@
     margin-top: 6px;
   }
 
-  .overview-mode-toggle {
+  .data-mode-toggle {
     display: none;
   }
 
-  .panel-header.overview-active .overview-mode-toggle {
+  .panel-header.data-active .data-mode-toggle {
     display: inline-flex;
   }
 
-  .panel-header.overview-active .review-queue-actions {
+  .panel-header.data-active .review-queue-actions {
     display: none;
   }
 
-  .panel-header.overview-active .review-identity {
+  .panel-header.data-active .review-identity {
     display: none !important;
   }
 
@@ -822,6 +832,112 @@
     margin-right: 6px;
   }
 
+  .save-status { font-size: 12px; color: var(--text-dim); }
+  .save-status[data-status="saving"] { color: var(--text-dim); }
+  .save-status[data-status="saved"] { color: var(--green, #3fb950); }
+  .save-status[data-status="error"] { color: var(--red, #f85149); font-weight: 500; }
+  .run-chip {
+    font-size: 11px; font-family: ui-monospace, monospace; color: var(--text-dim);
+    border: 1px solid var(--border); border-radius: 10px; padding: 1px 7px;
+  }
+  .back-to-overview { white-space: nowrap; }
+  .doc-breadcrumb {
+    font-size: 12px; color: var(--text-dim); margin-bottom: 6px;
+  }
+  .doc-breadcrumb a { color: var(--text-dim); text-decoration: none; }
+  .doc-breadcrumb a:hover { text-decoration: underline; }
+  .reasoning-note { position: relative; display: inline-flex; cursor: help; }
+  .reasoning-note-icon {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 15px; height: 15px; border-radius: 50%;
+    border: 1px solid var(--border); color: var(--text-dim);
+    font-size: 10px; font-style: italic; font-family: Georgia, serif; line-height: 1;
+  }
+  .reasoning-note:hover .reasoning-note-icon,
+  .reasoning-note:focus .reasoning-note-icon { color: var(--text); border-color: var(--text-dim); }
+  .reasoning-note-body {
+    display: none; position: absolute; top: 22px; left: 0; z-index: 40;
+    width: 460px; max-width: 60vw; max-height: 320px; overflow-y: auto;
+    padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px;
+    background: var(--bg); box-shadow: 0 6px 20px rgba(0,0,0,0.18);
+    font-size: 12px; line-height: 1.5; color: var(--text); white-space: pre-wrap;
+    text-align: left; font-weight: 400; cursor: text;
+  }
+  .reasoning-note:hover .reasoning-note-body,
+  .reasoning-note:focus .reasoning-note-body,
+  .reasoning-note:focus-within .reasoning-note-body { display: block; }
+  /* `.review-identity` was sized for a toolbar chip: inline-flex and
+     flex-shrink:0. In a dialog it must take the full width, or its flexible
+     input collapses to zero and the whole control disappears while still
+     computing as "visible". */
+  .settings-modal .review-identity { display: block; width: 100%; }
+  .identity-entry, .identity-connected { display: flex; align-items: center; gap: 8px; }
+  .identity-input {
+    flex: 1; min-width: 0; padding: 6px 9px;
+    border: 1px solid var(--border); border-radius: var(--radius);
+    background: var(--bg-input); color: var(--text);
+    font-family: var(--font-mono); font-size: 12px;
+  }
+  .identity-name { flex: 1; min-width: 0; font-size: 13px; }
+  .settings-modal { width: 480px; max-width: 92vw; }
+  /* `.orcid-modal` styles every label as an uppercase grid and defines no
+     header layout, so a dialog reusing the class inherits both. Reset what
+     this dialog needs rather than editing rules other dialogs depend on. */
+  .settings-modal header {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    margin-bottom: 4px;
+  }
+  .settings-modal header .close-btn {
+    background: none; border: 1px solid var(--border); border-radius: var(--radius);
+    color: var(--text-dim); cursor: pointer; padding: 2px 8px; line-height: 1;
+  }
+  .settings-modal header .close-btn:hover { color: var(--text); border-color: var(--text-dim); }
+  .settings-modal label.settings-toggle {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 13px; font-weight: 400; text-transform: none; color: var(--text);
+  }
+  .settings-modal label.settings-toggle input { width: auto; margin: 0; }
+  .settings-body { padding: 4px 2px 2px; }
+  .settings-section { padding: 12px 0; border-bottom: 1px solid var(--border); }
+  .settings-section:last-of-type { border-bottom: none; }
+  .settings-section h4 { margin: 0 0 6px; font-size: 13px; font-weight: 600; }
+  .settings-hint { margin: 6px 0 0; font-size: 12px; color: var(--text-dim); line-height: 1.5; }
+  .settings-toggle { display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; }
+  .settings-action { margin-top: 10px; }
+  .settings-status { padding-top: 10px; font-size: 12px; color: var(--text-dim); min-height: 16px; }
+  .settings-status[data-status="error"] { color: var(--red, #f85149); }
+  .overview-route { padding: 28px 32px 48px; overflow-y: auto; height: 100%; }
+  .overview-head { display: flex; align-items: baseline; gap: 16px; margin-bottom: 20px; }
+  .overview-head h1 { font-size: 20px; font-weight: 600; margin: 0; }
+  .overview-totals { color: var(--text-dim); font-size: 13px; }
+  .overview-table-wrap { overflow-x: auto; }
+  .overview-table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  .overview-table th {
+    text-align: left; font-weight: 600; color: var(--text-dim);
+    border-bottom: 1px solid var(--border); padding: 8px 12px; white-space: nowrap;
+  }
+  .overview-table td { padding: 8px 12px; border-bottom: 1px solid var(--border); }
+  .overview-table tbody tr { cursor: pointer; }
+  .overview-table tbody tr:hover { background: var(--hover); }
+  .overview-table .ov-num, .overview-table td.ov-num { text-align: right; font-variant-numeric: tabular-nums; }
+  .ov-title { font-weight: 500; }
+  .ov-sub { color: var(--text-dim); font-size: 12px; margin-top: 2px; }
+  .ov-run-model { font-size: 12px; white-space: nowrap; }
+  .overview-table .ov-date { white-space: nowrap; color: var(--text-dim); font-size: 12px; }
+  .ov-bar { position: relative; width: 120px; height: 6px; border-radius: 3px; background: var(--border); }
+  .ov-bar span { position: absolute; inset: 0 auto 0 0; border-radius: 3px; background: var(--green, #3fb950); }
+  .ov-state { font-size: 12px; color: var(--text-dim); }
+  .ov-state.done { color: var(--green, #3fb950); }
+  .ov-state.problem { color: var(--red, #f85149); }
+  /* A mark, not an alarm: the run is readable and its progress is real. */
+  .ov-drift {
+    color: var(--amber, #d29922);
+    font-weight: 600;
+    cursor: help;
+    text-decoration: none;
+    border: none;
+  }
+  .ov-none td { color: var(--text-dim); font-style: italic; }
   .panel-left {
     border-right: 1px solid var(--border);
     position: relative;
@@ -969,17 +1085,17 @@
     margin-top: 18px;
   }
 
-  .overview-table colgroup .overview-col-field { width: 35%; }
-  .overview-table colgroup .overview-col-value { width: auto; }
+  .data-table colgroup .data-col-field { width: 35%; }
+  .data-table colgroup .data-col-value { width: auto; }
 
-  .overview-table td.overview-value-cell,
-  .overview-table .cell-value {
+  .data-table td.data-value-cell,
+  .data-table .cell-value {
     color: var(--text);
     font-family: var(--font-mono);
   }
 
-  .overview-table td:nth-child(3),
-  .overview-table td.status-cell {
+  .data-table td:nth-child(3),
+  .data-table td.status-cell {
     text-align: left;
     white-space: normal;
   }
@@ -2382,6 +2498,11 @@
 <body>
 
 <div class="toolbar">
+  <!-- The exit back to the document list. NN/g's "emergency exit": every
+       document route needs a clearly marked way out that is not the browser
+       back button. -->
+  <button class="toolbar-btn back-to-overview" id="btn-all-documents" type="button"
+          title="Back to all documents">&#8592;&nbsp;All documents</button>
   <select id="article-select">
     <option value="">Select an article...</option>
   </select>
@@ -2396,9 +2517,55 @@
   </button>
   <div class="view-mode-toggle" aria-label="Extraction view mode">
     <button class="view-mode-btn active" id="view-mode-review" data-view-mode="review" type="button">Audit</button>
-    <button class="view-mode-btn" id="view-mode-overview" data-view-mode="overview" type="button">Overview</button>
+    <button class="view-mode-btn" id="view-mode-data" data-view-mode="data" type="button">Data</button>
   </div>
   <button class="theme-btn" id="btn-theme" title="Toggle theme">&#9790;</button>
+  <button class="theme-btn" id="btn-settings" title="Settings" aria-label="Settings">&#9881;</button>
+</div>
+
+<div class="orcid-modal-backdrop" id="settings-modal" role="dialog" aria-modal="true"
+     aria-labelledby="settings-modal-title">
+  <div class="orcid-modal settings-modal">
+    <header><h3 id="settings-modal-title">Settings</h3>
+      <button class="close-btn" id="btn-settings-close" type="button" aria-label="Close">&times;</button>
+    </header>
+    <div class="settings-body">
+      <section class="settings-section">
+        <h4>Reviewer identity</h4>
+        <p class="settings-hint">Optional. Connect an ORCID to record who reviewed each
+          field. Reviews save without one.</p>
+        <div class="review-identity" id="review-identity-controls">
+          <input type="hidden" class="reviewer-input" id="reviewer-id">
+          <div class="identity-entry" id="identity-entry">
+            <input type="text" id="orcid-input" class="identity-input"
+                   placeholder="0000-0002-1825-0097" aria-label="ORCID iD">
+            <button class="review-action-btn primary" id="btn-orcid-save">Connect</button>
+          </div>
+          <div class="identity-connected" id="identity-connected" style="display:none">
+            <span class="identity-name" id="orcid-profile-name"></span>
+            <button class="review-action-btn" id="btn-orcid-edit">Change</button>
+            <button class="review-action-btn" id="btn-orcid-profile">Disconnect</button>
+          </div>
+          <div class="settings-hint" id="orcid-result"></div>
+        </div>
+        <div class="settings-action" id="backfill-row" style="display:none">
+          <button class="review-action-btn" id="btn-backfill">Attribute past reviews to me</button>
+          <span class="settings-hint" id="backfill-hint"></span>
+        </div>
+      </section>
+      <section class="settings-section">
+        <h4>Project policy</h4>
+        <label class="settings-toggle">
+          <input type="checkbox" id="toggle-require-reviewer">
+          <span>Reviews and audits require an ORCID iD</span>
+        </label>
+        <p class="settings-hint">Saved to <code>litschema.yaml</code> and enforced when reviews
+          are saved, so it applies to everyone auditing extractions in this project &mdash; not
+          only people working on this computer.</p>
+      </section>
+      <div class="settings-status" id="settings-status" aria-live="polite"></div>
+    </div>
+  </div>
 </div>
 
 <div class="filter-row" id="filter-row" style="display:none">
@@ -2454,27 +2621,27 @@ e.g. year >= 2024 && study_types.includes("review")'
   </div>
 </div>
 
-<div class="orcid-modal-backdrop" id="orcid-modal" role="dialog" aria-modal="true" aria-labelledby="orcid-modal-title">
-  <div class="orcid-modal">
-    <h3 id="orcid-modal-title">Connect ORCID</h3>
-    <label>ORCID iD
-      <input type="text" id="orcid-input" placeholder="0000-0002-1825-0097">
-    </label>
-    <div class="orcid-result" id="orcid-result">Enter an ORCID iD to connect your reviewer identity.</div>
-    <div class="selected-edit-actions">
-      <button class="review-action-btn" id="btn-orcid-cancel">Cancel</button>
-      <button class="review-action-btn primary" id="btn-orcid-save">Save</button>
-    </div>
-  </div>
-</div>
 
-<div class="welcome" id="welcome">
-  <div class="welcome-content">
+<div class="overview-route" id="overview-route">
+  <header class="overview-head">
     <h1>litschema verify</h1>
-    <p>Select an article from the dropdown to begin reviewing extractions.</p>
-    <div class="welcome-shortcuts">
-      <span class="shortcut"><kbd>Cmd</kbd>+<kbd>]</kbd> / <kbd>Cmd</kbd>+<kbd>[</kbd> to cycle articles</span>
-    </div>
+    <div class="overview-totals" id="overview-totals"></div>
+  </header>
+  <div class="overview-table-wrap">
+    <table class="overview-table" id="overview-table">
+      <thead>
+        <tr>
+          <th class="ov-doc">Document</th>
+          <th class="ov-num">Fields</th>
+          <th class="ov-num">Reviewed</th>
+          <th class="ov-num">Edited</th>
+          <th class="ov-prog">Progress</th>
+          <th class="ov-run">Extracted by</th>
+          <th class="ov-date">Extraction date</th>
+        </tr>
+      </thead>
+      <tbody id="overview-rows"></tbody>
+    </table>
   </div>
 </div>
 
@@ -2482,6 +2649,7 @@ e.g. year >= 2024 && study_types.includes("review")'
   <div class="panel panel-left">
     <div class="panel-header">
       <div class="article-bibheader" id="article-bibheader" style="display:none">
+        <div class="doc-breadcrumb"><a href="#/">All documents</a> &rsaquo; this document</div>
         <span class="bib-title" id="bib-title"></span>
         <span class="bib-meta">
           <span class="bib-authors" id="bib-authors"></span>
@@ -2543,11 +2711,8 @@ e.g. year >= 2024 && study_types.includes("review")'
     </div>
   </div>
   <div class="panel panel-right">
-    <div id="base-stale-warning" style="display:none">
-      &#9888; Reviews below were written against an earlier extraction of this
-      article &mdash; field paths may no longer line up. Re-verify or clear the
-      affected fields; the warning clears itself once none remain stale.
-    </div>
+    <div id="review-error-warning" style="display:none"></div>
+    <div id="schema-error-warning" style="display:none"></div>
     <div class="panel-header" id="extraction-panel-header">
       <div class="panel-header-row review-panel-top">
         <div class="review-title-group">
@@ -2555,20 +2720,19 @@ e.g. year >= 2024 && study_types.includes("review")'
           <div class="review-progress-row">
             <span class="review-progress" id="review-progress" aria-live="polite"></span>
             <span class="confidence-chip" id="confidence-chip" style="display:none"></span>
+            <span class="reasoning-note" id="reasoning-note" style="display:none" tabindex="0"
+                  role="button" aria-label="Why the extractor rated it this way">
+              <span class="reasoning-note-icon" aria-hidden="true">i</span>
+              <span class="reasoning-note-body" id="reasoning-note-body"></span>
+            </span>
+            <span class="run-chip" id="run-chip" style="display:none" title="Active run"></span>
+            <span class="save-status" id="save-status" aria-live="polite"></span>
           </div>
         </div>
         <div class="review-actions" id="review-actions">
-          <div class="view-mode-toggle overview-mode-toggle" aria-label="Overview display mode">
-            <button class="view-mode-btn active" id="overview-mode-table" data-overview-mode="table" type="button">Table</button>
-            <button class="view-mode-btn" id="overview-mode-json" data-overview-mode="json" type="button">JSON</button>
-          </div>
-          <div class="review-identity" id="review-identity-controls">
-            <input type="hidden" class="reviewer-input" id="reviewer-id">
-            <button class="orcid-connect-btn" id="btn-orcid-connect" title="Connect ORCID">ORCID</button>
-            <button class="orcid-profile-btn" id="btn-orcid-profile" style="display:none" title="Disconnect ORCID">
-              <span class="orcid-name-label" id="orcid-profile-name"></span>
-              <span class="orcid-disconnect-label">Disconnect</span>
-            </button>
+          <div class="view-mode-toggle data-mode-toggle" aria-label="Data display mode">
+            <button class="view-mode-btn active" id="data-mode-table" data-data-mode="table" type="button">Table</button>
+            <button class="view-mode-btn" id="data-mode-json" data-data-mode="json" type="button">JSON</button>
           </div>
         </div>
       </div>
@@ -2586,19 +2750,67 @@ e.g. year >= 2024 && study_types.includes("review")'
 
 <script>
 const $ = (sel) => document.querySelector(sel);
-// Sentinel correct_value meaning "the extraction was wrong to include this field".
-const REMOVE_VALUE = "__remove__";
+
+// Review entries are stored exactly as specs/reviews/spec.md defines them:
+// an empty object is verified; `override` carries replace/remove/add. There is
+// no "flagged" state — you either accept a value, correct it, or remove it.
+const isVerified = (ann) => !!ann && !ann.override;
+const isOverridden = (ann) => !!ann && !!ann.override;
+const overrideOp = (ann) => ann?.override?.op ?? null;
+const isRemoved = (ann) => overrideOp(ann) === "remove";
+// Render token for a review entry. The table's visual vocabulary predates
+// version 2, so map onto it here rather than threading v2 names through every
+// cell builder: "" unreviewed, "verified", "flagged" (an override).
+const statusToken = (ann) => (isOverridden(ann) ? "flagged" : isVerified(ann) ? "verified" : "");
+// Mirrors `controlling_entry` in reviews.py: the exact entry, else the nearest
+// stored ancestor. The backend model is ancestor-aware — verifying a container
+// covers everything beneath it, and unreviewing part of a covered subtree
+// collapses the rest onto container paths — so a display that looked up only
+// the exact path would render covered leaves as unreviewed while the
+// server-computed counter counted them as done.
+function controllingAnnotation(path) {
+  const exact = state.annotations[path];
+  if (exact) return exact;
+  const parts = pathToParts(path);
+  for (let depth = parts.length - 1; depth > 0; depth--) {
+    const ancestor = partsToPath(parts.slice(0, depth));
+    const entry = state.annotations[ancestor];
+    if (entry) return entry;
+  }
+  return undefined;
+}
+
+function partsToPath(parts) {
+  return parts.reduce(
+    (acc, part) => (/^\d+$/.test(part) ? `${acc}[${part}]` : acc ? `${acc}.${part}` : part),
+    ""
+  );
+}
+// The value a reviewer supplied, or undefined when they only verified.
+const overrideValue = (ann) =>
+  ann?.override && ann.override.op !== "remove" ? ann.override.value : undefined;
+// Declared with module state, not beside its handlers: identity initialisation
+// runs at parse time and reads it, which a `let` further down cannot satisfy.
+let settingsState = { require_reviewer: false, in_git_repo: false, unattributed_reviews: 0 };
+
 const state = {
   articles: [],
   viewMode: "review",
-  overviewMode: "table",
+  dataMode: "table",
   currentId: null,
+  // The run the open document was loaded from; every read and write for it
+  // names this id rather than re-resolving whatever is active at the time.
+  currentRunId: null,
+  // Why this run cannot be interpreted with the project's current schema, or
+  // null. Refreshed on every document load rather than read from the listing
+  // captured at page load, which went stale as soon as the schema moved.
+  schemaError: null,
   markdown: null,
   extraction: null,
   reasoning: null,
   reasoningByPath: {},
   schemaFields: {},
-  annotations: {},  // path -> {status, reviewer, timestamp, note}
+  annotations: {},  // path -> {path, state, override?, note?}
   selectedPath: null,
   editingPath: null,
   selectedSourceIndex: 0,
@@ -2610,24 +2822,31 @@ const state = {
   suppressClearHoverSections: new Set(),
   filterExpr: "",
   filterFn: null,
+  // True while an expression that arrived in the URL is loaded but not yet run.
+  // A filter is JavaScript this app evaluates; one the user typed is theirs to
+  // run, one that arrived in a link needs their say-so first.
+  filterUnconfirmed: false,
   deepLoaded: false,
   deepLoading: null,
 };
 
 function initialViewMode() {
+  // Only `data` (and the legacy `json`) select the data view. Listing "review"
+  // among them sent `?view=review` — a link explicitly asking for review — to
+  // the data view instead.
   const mode = new URLSearchParams(window.location.search).get("view");
-  return ["review", "overview"].includes(mode) || mode === "json" ? "overview" : "review";
+  return mode === "data" || mode === "json" ? "data" : "review";
 }
 
-function initialOverviewMode() {
+function initialDataMode() {
   const params = new URLSearchParams(window.location.search);
-  const mode = params.get("overview");
+  const mode = params.get("data");
   if (["table", "json"].includes(mode)) return mode;
   return params.get("view") === "json" ? "json" : "table";
 }
 
 function setViewMode(mode, options = {}) {
-  if (!["review", "overview"].includes(mode)) return;
+  if (!["review", "data"].includes(mode)) return;
   state.viewMode = mode;
   state.editingPath = null;
   syncViewControls();
@@ -2635,27 +2854,27 @@ function setViewMode(mode, options = {}) {
     const url = new URL(window.location.href);
     if (mode === "review") {
       url.searchParams.delete("view");
-      url.searchParams.delete("overview");
+      url.searchParams.delete("data");
     } else {
-      url.searchParams.set("view", "overview");
-      if (state.overviewMode === "json") url.searchParams.set("overview", "json");
-      else url.searchParams.delete("overview");
+      url.searchParams.set("view", "data");
+      if (state.dataMode === "json") url.searchParams.set("data", "json");
+      else url.searchParams.delete("data");
     }
     history.replaceState(null, "", url);
   }
   renderExtractionPanel();
 }
 
-function setOverviewMode(mode, options = {}) {
+function setDataMode(mode, options = {}) {
   if (!["table", "json"].includes(mode)) return;
-  state.overviewMode = mode;
-  syncOverviewModeControls();
-  if (state.viewMode !== "overview") return;
+  state.dataMode = mode;
+  syncDataModeControls();
+  if (state.viewMode !== "data") return;
   if (options.updateUrl !== false) {
     const url = new URL(window.location.href);
-    url.searchParams.set("view", "overview");
-    if (mode === "json") url.searchParams.set("overview", "json");
-    else url.searchParams.delete("overview");
+    url.searchParams.set("view", "data");
+    if (mode === "json") url.searchParams.set("data", "json");
+    else url.searchParams.delete("data");
     history.replaceState(null, "", url);
   }
   renderExtractionPanel();
@@ -2669,20 +2888,20 @@ function syncViewControls() {
   });
   const title = $("#extraction-panel-title");
   if (title) {
-    title.textContent = state.viewMode === "overview"
-      ? "Extraction Overview"
+    title.textContent = state.viewMode === "data"
+      ? "Extraction Data"
       : "Extraction Review";
   }
   const header = $("#extraction-panel-header");
-  if (header) header.classList.toggle("overview-active", state.viewMode === "overview");
+  if (header) header.classList.toggle("data-active", state.viewMode === "data");
   const progress = $("#review-progress");
   if (progress) progress.style.display = state.viewMode === "review" ? "inline" : "none";
-  syncOverviewModeControls();
+  syncDataModeControls();
 }
 
-function syncOverviewModeControls() {
-  document.querySelectorAll(".view-mode-btn[data-overview-mode]").forEach(btn => {
-    const active = btn.dataset.overviewMode === state.overviewMode;
+function syncDataModeControls() {
+  document.querySelectorAll(".view-mode-btn[data-data-mode]").forEach(btn => {
+    const active = btn.dataset.dataMode === state.dataMode;
     btn.classList.toggle("active", active);
     btn.setAttribute("aria-pressed", active ? "true" : "false");
   });
@@ -2725,6 +2944,178 @@ initTheme();
 // ── Init ──
 state.filteredArticles = [];
 
+// ── Routes ───────────────────────────────────────────────────────────────────
+// Two routes: `#/` is the dataset overview, `#/doc/<article-id>` is one
+// document's review against its active run. Both are deep-linkable, so a
+// reviewer can send a colleague the exact document they are looking at.
+
+function parseRoute(hash = window.location.hash) {
+  const raw = (hash || "").replace(/^#/, "");
+  const [path] = raw.split("?");
+  const parts = path.split("/").filter(Boolean);
+  if (parts[0] === "doc" && parts[1]) {
+    return { name: "doc", articleId: decodeURIComponent(parts.slice(1).join("/")) };
+  }
+  return { name: "overview" };
+}
+
+function routeToDoc(articleId, { replace = false } = {}) {
+  const target = `#/doc/${encodeURIComponent(articleId)}`;
+  if (window.location.hash === target) return;
+  if (replace) window.location.replace(target);
+  else window.location.hash = target;
+}
+
+function setToolbarScope(inDocument) {
+  // Document-scoped controls are hidden on the overview rather than disabled:
+  // there is no document for them to act on, so showing them implies a context
+  // the user is not in.
+  for (const sel of ["#article-select", ".article-nav", ".view-mode-toggle", "#btn-all-documents"]) {
+    const el = document.querySelector(sel);
+    if (el) el.style.display = inDocument ? "" : "none";
+  }
+}
+
+function showOverview() {
+  $("#panels").style.display = "none";
+  $("#overview-route").style.display = "block";
+  setToolbarScope(false);
+  renderOverview();
+}
+
+async function applyRoute() {
+  const route = parseRoute();
+  if (route.name === "doc") {
+    const known = state.articles.some(a => a.article_id === route.articleId);
+    if (!known) {
+      // An unknown id is recoverable, not a dead end: say so and fall back.
+      showOverview();
+      const totals = $("#overview-totals");
+      if (totals) totals.textContent = `No document "${route.articleId}" in this project.`;
+      return;
+    }
+    const select = $("#article-select");
+    if (select && select.value !== route.articleId) {
+      select.value = route.articleId;
+    }
+    if (state.currentId !== route.articleId) await loadArticle(route.articleId);
+    else {
+      $("#overview-route").style.display = "none";
+      $("#panels").style.display = "flex";
+      setToolbarScope(true);
+    }
+    return;
+  }
+  state.currentId = null;
+  state.currentRunId = null;
+  const select = $("#article-select");
+  if (select) select.value = "";
+  showOverview();
+}
+
+function overviewRowsFor(articles) {
+  const filtered = state.filterFn ? articles.filter(safeFilterCall(state.filterFn)) : articles;
+  return filtered;
+}
+
+function runCellHtml(article) {
+  // Side by side across every document, this is where an inconsistent extraction
+  // shows up: one document run by a different model, or at a different effort,
+  // or months apart from the rest.
+  const run = article.active_run;
+  if (!run) return "&mdash;";
+  const model = run.model || "unknown model";
+  const title = `Run ${run.run_id}`;
+  return `<div class="ov-run-model" title="${escapeHtml(title)}">${escapeHtml(model)}</div>` +
+    (run.effort ? `<div class="ov-sub">${escapeHtml(run.effort)}</div>` : "");
+}
+
+function runDateHtml(article) {
+  const run = article.active_run;
+  const when = run && shortDate(run.created_at);
+  if (!when) return "&mdash;";
+  return `<span title="${escapeHtml(run.created_at)}">${escapeHtml(when)}</span>`;
+}
+
+function renderOverview() {
+  const body = $("#overview-rows");
+  const totals = $("#overview-totals");
+  if (!body) return;
+  const rows = overviewRowsFor(state.articles);
+
+  if (!rows.length) {
+    body.innerHTML = '<tr class="ov-none"><td colspan="7">No documents match.</td></tr>';
+    if (totals) totals.textContent = "";
+    return;
+  }
+
+  let sumFields = 0, sumReviewed = 0, complete = 0, unextracted = 0, stale = 0;
+  let html = "";
+  for (const a of rows) {
+    const nFields = a.n_fields ?? 0;
+    const nReviewed = a.n_reviewed ?? 0;
+    const nOverridden = a.n_overridden ?? 0;
+    // Either kind of "we cannot tell" reads the same in this table: the counts
+    // are dashes, not zeros, because zero is a confident claim about the work.
+    const problem = !!a.review_error || !!a.schema_error;
+    // Drift is NOT a problem here. The run is fully readable and every count
+    // below is true; only editing it is gated. Blanking these rows meant one
+    // added comment line made every document read as broken, because schema
+    // identity is a hash over bytes.
+    const drifted = !problem && !!a.schema_drift;
+    // An article with no active run is listed, never hidden — it is exactly
+    // the work someone still has to do.
+    const noRun = !a.active_run_id;
+    if (!problem) { sumFields += nFields; sumReviewed += nReviewed; }
+    if (a.is_complete && nFields > 0) complete++;
+    if (noRun) unextracted++;
+    if (drifted) stale++;
+
+    const pct = nFields > 0 ? Math.round((nReviewed / nFields) * 100) : 0;
+    // Shown beside real progress, never in place of it.
+    const driftMark = drifted
+      ? ` <abbr class="ov-drift" title="Schema is out of date: this run was extracted` +
+        ` against an earlier version of the schema. Verification still works;` +
+        ` editing is disabled until it is re-extracted.">*</abbr>`
+      : "";
+    let stateCell;
+    if (a.schema_error) {
+      stateCell = `<span class="ov-state problem" title="${escapeHtml(a.schema_error)}">schema unreadable</span>`;
+    } else if (problem) stateCell = '<span class="ov-state problem">review unreadable</span>';
+    else if (noRun) stateCell = '<span class="ov-state">not extracted</span>';
+    // A run that produced no reviewable field is complete by arithmetic, but
+    // calling it "complete" reads as audited work. Say what actually happened.
+    else if (nFields === 0) stateCell = `<span class="ov-state">nothing extracted</span>${driftMark}`;
+    else if (a.is_complete) stateCell = `<span class="ov-state done">complete</span>${driftMark}`;
+    else stateCell = `<div class="ov-bar"><span style="width:${pct}%"></span></div>${driftMark}`;
+
+    const title = a.title || a.article_id;
+    html += `<tr data-article="${escapeHtml(a.article_id)}">`;
+    html += `<td class="ov-doc"><div class="ov-title">${escapeHtml(title)}</div>`;
+    html += `<div class="ov-sub">${escapeHtml(a.article_id)}</div></td>`;
+    html += `<td class="ov-num">${problem || noRun ? "&mdash;" : nFields}</td>`;
+    html += `<td class="ov-num">${problem || noRun ? "&mdash;" : nReviewed}</td>`;
+    html += `<td class="ov-num">${problem || noRun ? "&mdash;" : nOverridden}</td>`;
+    html += `<td class="ov-prog">${stateCell}</td>`;
+    html += `<td class="ov-run">${runCellHtml(a)}</td>`;
+    html += `<td class="ov-date">${runDateHtml(a)}</td>`;
+    html += `</tr>`;
+  }
+  body.innerHTML = html;
+
+  if (totals) {
+    const pct = sumFields > 0 ? Math.round((sumReviewed / sumFields) * 100) : 0;
+    const bits = [`${rows.length} documents`, `${complete} complete`, `${sumReviewed}/${sumFields} fields reviewed (${pct}%)`];
+    if (unextracted) bits.push(`${unextracted} not extracted`);
+    if (stale) bits.push(`${stale} on an older schema`);
+    totals.textContent = bits.join(" \u00b7 ");
+  }
+
+  body.querySelectorAll("tr[data-article]").forEach(tr => {
+    tr.addEventListener("click", () => routeToDoc(tr.dataset.article));
+  });
+}
+
 async function init() {
   const [data, schemaData] = await Promise.all([
     fetchJson("/api/articles"),
@@ -2733,7 +3124,7 @@ async function init() {
   state.articles = data.articles;
   state.schemaFields = schemaData.fields || {};
   state.viewMode = initialViewMode();
-  state.overviewMode = initialOverviewMode();
+  state.dataMode = initialDataMode();
   syncViewControls();
   // If a URL filter is present, load deep fields up front so the first
   // dropdown render reflects accurate matches (the filter expression may
@@ -2752,11 +3143,19 @@ async function init() {
   document.querySelectorAll(".view-mode-btn[data-view-mode]").forEach(btn => {
     btn.addEventListener("click", () => setViewMode(btn.dataset.viewMode));
   });
-  document.querySelectorAll(".view-mode-btn[data-overview-mode]").forEach(btn => {
-    btn.addEventListener("click", () => setOverviewMode(btn.dataset.overviewMode));
+  document.querySelectorAll(".view-mode-btn[data-data-mode]").forEach(btn => {
+    btn.addEventListener("click", () => setDataMode(btn.dataset.dataMode));
   });
   wireFilterControls();
   wireSelectedFieldActions();
+
+  // Deep links survive reload, and the back button moves between the overview
+  // and a document rather than leaving the app.
+  $("#btn-all-documents").addEventListener("click", () => { window.location.hash = "#/"; });
+  wireSettings();
+  loadSettings();
+  window.addEventListener("hashchange", () => { applyRoute(); });
+  await applyRoute();
 }
 
 // ── Article queue filter ──
@@ -2779,18 +3178,28 @@ function safeFilterCall(fn) {
 }
 
 function applyInitialFilterFromUrl() {
+  // A filter is a JavaScript expression this app evaluates. One the user typed
+  // is theirs to run; one that arrived in a link is not — a crafted verifier
+  // URL would otherwise execute code against the local project APIs the moment
+  // the page loaded. `specs/verifier/spec.md` therefore requires a URL filter
+  // to be shown but never evaluated until the user confirms it, so this loads
+  // the expression into the editor and stops there. Pressing Apply runs it.
   const expr = new URLSearchParams(window.location.search).get("filter");
   if (!expr) return false;
-  const { fn } = compileFilter(expr);
-  if (!fn) return false;
   state.filterExpr = expr;
-  state.filterFn = fn;
+  state.filterFn = null;          // inert until confirmed
+  state.filterUnconfirmed = true; // and the live preview must not run it either
   $("#filter-input").value = expr;
-  // Leave the filter row closed on initial load — the toolbar badge already
-  // signals the active filter. The user can click Filter to re-open and edit
-  // if they want; auto-popping the drawer on every refresh is noise.
+  // Opened, not collapsed: an unconfirmed filter is a decision waiting on the
+  // user, and the toolbar badge alone would not tell them one is pending.
+  $("#filter-row").style.display = "";
   $("#btn-filter-toggle").classList.add("active");
-  return true;
+  const count = $("#filter-count");
+  if (count) {
+    count.textContent = "From this link — review it, then press Apply to run it.";
+    count.classList.add("error");
+  }
+  return false;  // nothing to evaluate, so no deep field load is needed yet
 }
 
 function updateFilterBadge() {
@@ -2809,6 +3218,14 @@ function updateFilterBadge() {
 function evaluateFilterPreview(expr) {
   const input = $("#filter-input");
   const countEl = $("#filter-count");
+  if (state.filterUnconfirmed) {
+    // Still the expression that arrived in the URL. Evaluating it to show a
+    // match count runs it just as surely as applying it, so reopening the
+    // filter row must not become a way around the confirmation.
+    countEl.textContent = "From this link — review it, then press Apply to run it.";
+    countEl.classList.add("error");
+    return null;
+  }
   const { fn, error } = compileFilter(expr);
   if (error) {
     input.classList.add("error");
@@ -2835,6 +3252,7 @@ async function applyFilter(expr) {
   await ensureDeepFields();
   state.filterExpr = expr.trim();
   state.filterFn = fn;
+  state.filterUnconfirmed = false;
   const url = new URL(window.location.href);
   if (state.filterExpr) {
     url.searchParams.set("filter", state.filterExpr);
@@ -2858,10 +3276,16 @@ async function applyFilter(expr) {
 async function ensureDeepFields() {
   if (state.deepLoaded) return;
   if (state.deepLoading) return state.deepLoading;
+  const generation = state.deepGeneration || 0;
   state.deepLoading = (async () => {
     setDeepLoadingHint(true);
     const byId = new Map(state.articles.map((a) => [a.article_id, a]));
-    const ids = state.articles.map((a) => a.article_id);
+    // Only articles that have an extraction to deepen. Asking for the rest
+    // returned a 404 per article — swallowed here, but still logged by the
+    // browser, and a wasted request either way.
+    const ids = state.articles
+      .filter((a) => a.has_extraction !== false)
+      .map((a) => a.article_id);
     const concurrency = 12;
     let cursor = 0;
     async function worker() {
@@ -2874,6 +3298,14 @@ async function ensureDeepFields() {
       }
     }
     await Promise.all(Array.from({ length: concurrency }, worker));
+    // If the article set moved while this was running, the objects merged into
+    // are no longer the current ones — claiming success would strand the new
+    // summaries without deep fields and block another load.
+    if (generation !== (state.deepGeneration || 0)) {
+      state.deepLoading = null;
+      setDeepLoadingHint(false);
+      return;
+    }
     state.deepLoaded = true;
     state.deepLoading = null;
     setDeepLoadingHint(false);
@@ -2910,6 +3342,7 @@ function setDeepLoadingHint(loading) {
 function clearFilter() {
   state.filterExpr = "";
   state.filterFn = null;
+  state.filterUnconfirmed = false;
   $("#filter-input").value = "";
   $("#filter-input").classList.remove("error");
   $("#filter-count").classList.remove("error");
@@ -2968,7 +3401,13 @@ function wireFilterControls() {
   });
   // Seed the live count display
   $("#filter-count").textContent = `${state.articles.length}/${state.articles.length}`;
-  if (state.filterExpr) evaluateFilterPreview(state.filterExpr);
+  if (state.filterUnconfirmed) {
+    const countEl = $("#filter-count");
+    countEl.textContent = "From this link — review it, then press Apply to run it.";
+    countEl.classList.add("error");
+  } else if (state.filterExpr) {
+    evaluateFilterPreview(state.filterExpr);
+  }
 }
 
 // ── Filter help modal ──
@@ -3077,22 +3516,22 @@ function populateDropdown() {
     currentVal && state.filteredArticles.some((a) => a.article_id === currentVal);
   if (currentStillVisible) {
     select.value = currentVal;
-  } else if (state.filteredArticles.length > 0) {
-    // Currently loaded article was filtered out (or none was loaded yet
-    // when a URL filter applied). Auto-select the first match so the
-    // detail panel always reflects the filtered queue.
+  } else if (state.filteredArticles.length > 0 && state.currentId) {
+    // The open article was filtered out. Move to the first match rather than
+    // leaving a document on screen that the queue no longer contains.
     const firstId = state.filteredArticles[0].article_id;
     select.value = firstId;
-    if (currentVal !== firstId) {
-      select.dispatchEvent(new Event("change"));
-    }
+    if (currentVal !== firstId) routeToDoc(firstId);
   } else if (state.currentId || currentVal) {
     // Filter has zero matches and an article was previously loaded —
     // return to the welcome screen rather than leaving stale content up.
     select.value = "";
     state.currentId = null;
-    $("#panels").style.display = "none";
-    $("#welcome").style.display = "flex";
+    state.currentRunId = null;
+    // Route to the overview rather than only swapping panels, so the URL and
+    // what is on screen agree — a reload here reopened the old document.
+    window.location.hash = "#/";
+    showOverview();
   }
 
   updateNavState();
@@ -3103,9 +3542,7 @@ function navigateArticle(direction) {
   const currentIdx = state.filteredArticles.findIndex(a => a.article_id === state.currentId);
   const nextIdx = currentIdx + direction;
   if (nextIdx < 0 || nextIdx >= state.filteredArticles.length) return;
-  const nextId = state.filteredArticles[nextIdx].article_id;
-  $("#article-select").value = nextId;
-  $("#article-select").dispatchEvent(new Event("change"));
+  routeToDoc(state.filteredArticles[nextIdx].article_id);
 }
 
 function updateNavState() {
@@ -3117,17 +3554,24 @@ function updateNavState() {
 }
 
 // ── Article selection ──
-$("#article-select").addEventListener("change", async (e) => {
-  const id = e.target.value;
-  if (!id) return;
+// The dropdown drives the route; applyRoute drives loadArticle. A dropdown
+// pick, a deep link, and the back button therefore all take one path.
+$("#article-select").addEventListener("change", (e) => {
+  if (e.target.value) routeToDoc(e.target.value);
+});
+
+async function loadArticle(id) {
   state.currentId = id;
+  state.currentRunId = null;
+  state.schemaError = null;
   state.selectedPath = null;
   state.editingPath = null;
   updateSelectedFieldBar(null);
 
-  // Show panels, hide welcome
-  $("#welcome").style.display = "none";
+  // Show the document route
+  $("#overview-route").style.display = "none";
   $("#panels").style.display = "flex";
+  setToolbarScope(true);
 
   // Clear search state
   clearSearchFull();
@@ -3140,16 +3584,46 @@ $("#article-select").addEventListener("change", async (e) => {
   // Assembled-but-unextracted articles have no extraction JSON yet —
   // /api/article would 404, so skip the extraction-side fetches and let
   // renderExtractionPanel() show the no-extraction placeholder.
+  // Re-read this article's summary rather than trusting the listing captured
+  // at page load: the run, its schema identity, and its counts can all have
+  // moved since — by a re-extraction, or by the schema being edited or fixed
+  // while this tab stayed open.
+  const listing = await fetchJson("/api/articles").catch(() => null);
+  if (listing && Array.isArray(listing.articles)) {
+    mergeArticleSummaries(listing.articles);
+    if (id !== state.currentId) return;
+    // Editor metadata is derived from the schema, so a schema that has moved
+    // since page load leaves cached controls typed against the old one.
+    const fields = await fetchJson("/api/schema/fields").catch(() => null);
+    if (id !== state.currentId) return;
+    if (fields && fields.fields) state.schemaFields = fields.fields;
+  }
   const summary = state.articles.find(a => a.article_id === id);
-  const hasExtraction = !summary || summary.has_extraction !== false;
+  // Default to NOT requesting an extraction we cannot confirm exists. Assuming
+  // one when the summary is missing turned an ordinary "not extracted yet"
+  // article into a 404 in the console on every visit.
+  const hasExtraction = !!summary && summary.has_extraction !== false;
+
+  // Pin the run for this document, once, and read AND write through it. The
+  // reads used to resolve the active run server-side on each request while the
+  // writes used this cached id, so re-extracting in another terminal while the
+  // page was open showed the new run and filed the reviews against the old one.
+  state.currentRunId = summary ? summary.active_run_id || null : null;
+  // Either one blocks editing, matching what the write path enforces: an
+  // unresolvable schema switches typing off, a drifted one could type an edit
+  // against a slot the run never used. Verification is unaffected by both.
+  state.schemaError = summary ? summary.schema_error || summary.schema_drift || null : null;
+  const runQuery = state.currentRunId ? `?run_id=${encodeURIComponent(state.currentRunId)}` : "";
 
   const [mdData, extraction, reasoningData, annData, bibData] = await Promise.all([
     fetchJson(`/api/markdown/${id}`).catch(() => null),
-    hasExtraction ? fetchJson(`/api/article/${id}`) : Promise.resolve(null),
-    hasExtraction ? fetchJson(`/api/reasoning/${id}`).catch(() => null) : Promise.resolve(null),
+    hasExtraction ? fetchJson(`/api/article/${id}${runQuery}`) : Promise.resolve(null),
     hasExtraction
-      ? fetchJson(`/api/annotations/${id}`).catch(() => ({ annotations: [] }))
-      : Promise.resolve({ annotations: [] }),
+      ? fetchJson(`/api/reasoning/${id}${runQuery}`).catch(() => null)
+      : Promise.resolve(null),
+    hasExtraction
+      ? fetchAnnotations(id).catch(() => ({ annotations: [], review_error: null }))
+      : Promise.resolve({ annotations: [], review_error: null }),
     fetchJson(`/api/bibliography/${id}`).catch(() => null),
   ]);
   // Staleness guard: the user may have navigated on while these fetches ran.
@@ -3171,15 +3645,7 @@ $("#article-select").addEventListener("change", async (e) => {
     }
   }
 
-  state.annotations = {};
-  for (const ann of (annData.annotations || [])) {
-    let p = ann.path;
-    if (p.startsWith(".")) p = p.slice(1);
-    p = p.replace(/\.(\d+)(?=\.|$)/g, "[$1]");
-    state.annotations[p] = ann;
-  }
-  state.baseStale = !!annData.base_stale;
-  renderBaseStaleBanner();
+  applyAnnotationPayload(annData);
 
   const meta = bibData || state.articles.find(a => a.article_id === id);
   if (meta) renderBibHeader(meta);
@@ -3192,7 +3658,9 @@ $("#article-select").addEventListener("change", async (e) => {
   renderExtractionPanel();
   updateStats();
   updateConfidenceChip();
-});
+  renderRunChip();
+  renderSchemaErrorBanner();
+}
 
 // ── Bibliographic header ──
 // Only registry-verified provenance earns a pill; human-entered metadata
@@ -3224,10 +3692,10 @@ function renderBibHeader(meta) {
   // Fallback payloads (e.g. the dropdown entry when /api/bibliography fails)
   // carry no `editable`; derive it from the lock model.
   const editable = meta
-    ? (meta.editable !== undefined ? meta.editable : meta.metadata_source !== "doi")
+    ? (meta.editable !== undefined ? meta.editable : meta.bib_source !== "doi")
     : false;
   const hasAny = meta && (
-    meta.title || meta.year || meta.journal || meta.doi || meta.metadata_source
+    meta.title || meta.year || meta.journal || meta.doi || meta.bib_source
   );
   if (!hasAny) {
     bar.style.display = "none";
@@ -3259,7 +3727,7 @@ function renderBibHeader(meta) {
   }
 
   const badge = $("#bib-badge");
-  const info = PROVENANCE_BADGES[meta.metadata_source];
+  const info = PROVENANCE_BADGES[meta.bib_source];
   badge.hidden = !info;
   if (info) {
     badge.textContent = info.label;
@@ -3287,7 +3755,7 @@ function applyBibBlock(articleId, block) {
   if (entry) {
     for (const key of ["title", "year", "journal", "doi", "corporate_author"]) entry[key] = block[key] ?? null;
     entry.authors = block.authors || [];
-    entry.metadata_source = block.metadata_source;
+    entry.bib_source = block.bib_source;
     populateDropdown();
   }
   if (articleId === state.currentId) renderBibHeader(block);
@@ -3330,7 +3798,7 @@ $("#bib-edit-form").addEventListener("submit", async (ev) => {
 $("#bib-sync-btn").addEventListener("click", async () => {
   const id = bibArticleId;  // captured now; the user may navigate mid-flight
   if (!id) return;
-  if (lastBibMeta && lastBibMeta.metadata_source === "manual" &&
+  if (lastBibMeta && lastBibMeta.bib_source === "manual" &&
       !confirm("Replace your manual edits with registry data for this DOI?")) return;
   const btn = $("#bib-sync-btn");
   btn.disabled = true;
@@ -3752,16 +4220,16 @@ function collectSourceLines(obj, basePath) {
 
 function getRowAnnotationState(basePath) {
   // Check all annotations under this basePath
-  let total = 0, verified = 0, flagged = 0;
+  let total = 0, verified = 0, overridden = 0;
   for (const [path, ann] of Object.entries(state.annotations)) {
     if (path === basePath || path.startsWith(basePath + ".") || path.startsWith(basePath + "[")) {
       total++;
-      if (ann.status === "verified") verified++;
-      else if (ann.status === "flagged") flagged++;
+      if (isVerified(ann)) verified++;
+      else if (isOverridden(ann)) overridden++;
     }
   }
   // Count total leaf fields under basePath to know if "all" are annotated
-  return { total, verified, flagged };
+  return { total, verified, overridden };
 }
 
 function buildHorizontalTable(arr, basePath, key) {
@@ -3849,9 +4317,9 @@ function buildHorizontalTable(arr, basePath, key) {
           // Status column with rowspan
           const rowAnn = getRowAnnotationState(itemPath);
           let annStatus = "";
-          if (rowAnn.verified > 0 && rowAnn.flagged === 0) {
+          if (rowAnn.verified > 0 && rowAnn.overridden === 0) {
             annStatus = "verified";
-          } else if (rowAnn.flagged > 0) {
+          } else if (rowAnn.overridden > 0) {
             annStatus = "flagged";
           }
           html += `<td class="status-cell"${rowspanAttr}>${buildStatusActions(itemPath, annStatus)}</td>`;
@@ -3882,9 +4350,9 @@ function buildHorizontalTable(arr, basePath, key) {
       // Status column
       const rowAnn = getRowAnnotationState(itemPath);
       let annStatus = "";
-      if (rowAnn.verified > 0 && rowAnn.flagged === 0) {
+      if (rowAnn.verified > 0 && rowAnn.overridden === 0) {
         annStatus = "verified";
-      } else if (rowAnn.flagged > 0) {
+      } else if (rowAnn.overridden > 0) {
         annStatus = "flagged";
       }
       html += `<td class="status-cell">${buildStatusActions(itemPath, annStatus)}</td>`;
@@ -4048,12 +4516,12 @@ function buildTableRowNoField(value, path) {
 }
 
 function buildValueCells(value, path) {
-  const entry = state.reasoningByPath[path];
-  const ann = state.annotations[path];
+  const entry = reasoningFor(path);
+  const ann = controllingAnnotation(path);
 
   const sourceHtml = buildEvidenceBadge(path);
 
-  const annStatus = ann ? ann.status : "";
+  const annStatus = statusToken(ann);
   const isEditing = state.editingPath === path;
   const display = isEditing ? null : displayFieldValueForPath(path, value);
   const valueClass = [
@@ -4071,9 +4539,8 @@ function buildValueCells(value, path) {
 
 function buildInlineEditForm(path, value = getValueAtPath(state.extraction, path)) {
   const ann = state.annotations[path];
-  const current = ann?.status === "flagged" && ann.correct_value !== undefined
-    ? ann.correct_value
-    : value;
+  const supplied = overrideValue(ann);
+  const current = supplied !== undefined ? supplied : value;
   const schemaField = schemaFieldForPath(path);
   const controlHtml = buildTypedEditControl(path, current, schemaField);
   return `<span class="inline-edit-form" data-path="${path}">` +
@@ -4128,11 +4595,12 @@ function buildEnumEditSelect(path, current, schemaField) {
 
 function displayFieldValueForPath(path, value = getValueAtPath(state.extraction, path)) {
   const ann = state.annotations[path];
-  if (ann && ann.status === "flagged" && ann.correct_value === REMOVE_VALUE) {
+  if (isRemoved(ann)) {
     return { html: '<span style="color:var(--text-dim)">(removed)</span>', style: "" };
   }
-  if (ann && ann.status === "flagged" && ann.correct_value) {
-    return { html: escapeHtml(ann.correct_value), style: "" };
+  const supplied = overrideValue(ann);
+  if (supplied !== undefined) {
+    return { html: escapeHtml(String(supplied)), style: "" };
   }
   if (typeof value === "number") {
     return { html: String(value), style: ' style="color:var(--val-number)"' };
@@ -4149,10 +4617,9 @@ function displayFieldValueForPath(path, value = getValueAtPath(state.extraction,
 function selectedFieldValueHtml(path) {
   const ann = state.annotations[path];
   const display = displayFieldValueForPath(path);
-  const editedClass = ann?.status === "flagged" ? " edited" : "";
-  const rawValue = ann?.status === "flagged" && ann.correct_value !== undefined
-    ? ann.correct_value
-    : getValueAtPath(state.extraction, path);
+  const editedClass = isOverridden(ann) ? " edited" : "";
+  const supplied = overrideValue(ann);
+  const rawValue = supplied !== undefined ? supplied : getValueAtPath(state.extraction, path);
   return {
     html: `<span class="source-evidence-value-text${editedClass}"${display.style}>${display.html}</span>`,
     title: displayFieldValue(rawValue),
@@ -4175,6 +4642,13 @@ function buildFieldStatus(path, status) {
 }
 
 function buildRowEditAction(path, status) {
+  // Reverting removes an override and needs no schema, so it stays available;
+  // only opening a typed editor is gated.
+  if (state.schemaError && status !== "flagged") {
+    return `<button type="button" class="row-edit-action" data-path="${path}" disabled` +
+      ` aria-label="Editing unavailable" title="This run was extracted with a different` +
+      ` schema, so values cannot be typed against it">&#9998;</button>`;
+  }
   if (status === "flagged") {
     return `<button type="button" class="row-clear-edit-action" data-path="${path}" aria-label="Revert edited value" title="Revert edited value">&#8634;</button>`;
   }
@@ -4182,7 +4656,12 @@ function buildRowEditAction(path, status) {
 }
 
 function buildStatusActions(path, status) {
-  return `<span class="status-actions">${buildFieldStatus(path, status)}${buildRowEditAction(path, status)}</span>`;
+  // An override inherited from a container is not this field's to change: the
+  // override replaced the whole container, so editing or reverting here is
+  // rejected. Show the state, offer no action that cannot work.
+  const inheritedOverride = !state.annotations[path] && isOverridden(controllingAnnotation(path));
+  const action = inheritedOverride ? "" : buildRowEditAction(path, status);
+  return `<span class="status-actions">${buildFieldStatus(path, status)}${action}</span>`;
 }
 
 function sourceSummaryForPath(path, explicitRanges = null) {
@@ -4207,7 +4686,7 @@ function buildTableRow(key, value, path) {
   </tr>`;
 }
 
-function renderOverviewView(data = effectiveExtraction()) {
+function renderDataView(data = effectiveExtraction()) {
   const panel = $("#panel-right");
   if (!data) {
     panel.innerHTML = '<div class="loading">No extraction data</div>';
@@ -4233,7 +4712,7 @@ function renderOverviewView(data = effectiveExtraction()) {
   }
 
   for (const key of complexKeys) {
-    html += renderOverviewValue(key, data[key], key, 0);
+    html += renderDataValue(key, data[key], key, 0);
   }
 
   html += '</div>';
@@ -4241,11 +4720,11 @@ function renderOverviewView(data = effectiveExtraction()) {
   wireOverviewEvents(panel);
 }
 
-function renderOverviewValue(key, val, basePath, depth) {
+function renderDataValue(key, val, basePath, depth) {
   if (isLeaf(val)) return "";
   if (isPrimitiveArray(val)) return buildOverviewMergedTable([], [{ key, val, path: basePath }]);
   if (Array.isArray(val) && val.length > 0 && isUniformArray(val)) {
-    return buildOverviewHorizontalTable(val, basePath, key);
+    return buildDataHorizontalTable(val, basePath, key);
   }
   if (Array.isArray(val)) {
     let html = "";
@@ -4289,7 +4768,7 @@ function buildOverviewSection(label, obj, basePath, depth) {
     html += buildOverviewMergedTable(leafRows, primitiveArrayEntries);
   }
   for (const entry of complexEntries) {
-    html += renderOverviewValue(entry.key, entry.val, entry.path, depth + 1);
+    html += renderDataValue(entry.key, entry.val, entry.path, depth + 1);
   }
 
   if (indent) html += '</div>';
@@ -4298,8 +4777,8 @@ function buildOverviewSection(label, obj, basePath, depth) {
 }
 
 function buildOverviewMergedTable(scalarRows, primitiveArrayEntries) {
-  let html = '<table class="ext-table overview-table">';
-  html += '<colgroup><col class="overview-col-field"><col class="overview-col-value"></colgroup>';
+  let html = '<table class="ext-table data-table">';
+  html += '<colgroup><col class="data-col-field"><col class="data-col-value"></colgroup>';
   html += '<thead><tr><th>Field</th><th>Value</th></tr></thead><tbody>';
   for (const row of scalarRows) {
     html += buildOverviewTableRow(row.key, row.val, row.path);
@@ -4315,7 +4794,7 @@ function buildOverviewMergedTable(scalarRows, primitiveArrayEntries) {
           ? `<td class="field-cell" rowspan="${arr.length}" style="vertical-align:top">${humanize(entry.key)}</td>`
           : "";
         const selectedCls = state.selectedPath === itemPath ? " selected" : "";
-        html += `<tr class="clickable${selectedCls}" data-path="${itemPath}">${fieldCell}${buildOverviewValueCell(arr[i], itemPath)}</tr>`;
+        html += `<tr class="clickable${selectedCls}" data-path="${itemPath}">${fieldCell}${buildDataValueCell(arr[i], itemPath)}</tr>`;
       }
     }
   }
@@ -4326,11 +4805,11 @@ function buildOverviewMergedTable(scalarRows, primitiveArrayEntries) {
 function buildOverviewTableRow(key, value, path) {
   const selectedCls = state.selectedPath === path ? " selected" : "";
   return `<tr class="clickable${selectedCls}" data-path="${path}">` +
-    `<td class="field-cell">${humanize(key)}</td>${buildOverviewValueCell(value, path)}</tr>`;
+    `<td class="field-cell">${humanize(key)}</td>${buildDataValueCell(value, path)}</tr>`;
 }
 
-function buildOverviewValueCell(value, path) {
-  return `<td class="cell-value overview-value-cell" data-path="${path}">${overviewDisplayValue(value)}</td>`;
+function buildDataValueCell(value, path) {
+  return `<td class="cell-value data-value-cell" data-path="${path}">${overviewDisplayValue(value)}</td>`;
 }
 
 function overviewDisplayValue(value) {
@@ -4342,12 +4821,12 @@ function overviewDisplayValue(value) {
   return escapeHtml(String(value));
 }
 
-function buildOverviewHorizontalTable(arr, basePath, key) {
+function buildDataHorizontalTable(arr, basePath, key) {
   const columns = getUniformColumns(arr);
   const label = humanize(key);
   const hasExpandedCols = columns.some(c => c.isExpanded);
   let html = `<div class="tv-heading" data-depth="0"><span class="tv-heading-label">${escapeHtml(label)}</span></div>`;
-  html += '<div class="tv-body"><table class="ext-table horizontal-table overview-table"><colgroup>';
+  html += '<div class="tv-body"><table class="ext-table horizontal-table data-table"><colgroup>';
   for (let c = 0; c < columns.length; c++) html += '<col style="width:auto">';
   html += '</colgroup><thead><tr>';
   for (const col of columns) html += `<th>${escapeHtml(col.header)}</th>`;
@@ -4367,11 +4846,11 @@ function buildOverviewHorizontalTable(arr, basePath, key) {
         for (const col of columns) {
           if (col.isExpanded) {
             const { value, path } = col.getter(item, itemPath, subIndex);
-            html += `<td${value != null && value !== "" ? ` class="cell-value overview-value-cell" data-path="${path}"` : ""}>${overviewDisplayValue(value)}</td>`;
+            html += `<td${value != null && value !== "" ? ` class="cell-value data-value-cell" data-path="${path}"` : ""}>${overviewDisplayValue(value)}</td>`;
           } else if (subIndex === 0) {
             const { value, path } = col.getter(item, itemPath);
             const rowspanAttr = expandCount > 1 ? ` rowspan="${expandCount}"` : "";
-            html += `<td class="cell-value overview-value-cell" data-path="${path}"${rowspanAttr}>${overviewDisplayValue(value)}</td>`;
+            html += `<td class="cell-value data-value-cell" data-path="${path}"${rowspanAttr}>${overviewDisplayValue(value)}</td>`;
           }
         }
         html += '</tr>';
@@ -4380,7 +4859,7 @@ function buildOverviewHorizontalTable(arr, basePath, key) {
       html += `<tr class="clickable horizontal-row" data-path="${itemPath}">`;
       for (const col of columns) {
         const { value, path } = col.getter(item, itemPath);
-        html += `<td${value != null && value !== "" ? ` class="cell-value overview-value-cell" data-path="${path}"` : ""}>${overviewDisplayValue(value)}</td>`;
+        html += `<td${value != null && value !== "" ? ` class="cell-value data-value-cell" data-path="${path}"` : ""}>${overviewDisplayValue(value)}</td>`;
       }
       html += '</tr>';
     }
@@ -4402,13 +4881,40 @@ function wireJsonEvents(panel) {
   });
 }
 
+// Evidence inherits down, the way review coverage does. An agent that cites a
+// whole table row once — the same two lines back every cell in it — has given
+// real evidence for each of those cells; requiring it to repeat the citation
+// per cell would bloat the file without adding information. Exact entries win;
+// otherwise the nearest ancestor's evidence applies, marked as inherited so a
+// reviewer can tell row-level evidence from cell-level.
+function reasoningFor(path) {
+  if (!path) return null;
+  const exact = state.reasoningByPath[path];
+  if (exact) return exact;
+  let cursor = path;
+  while (true) {
+    const cut = Math.max(cursor.lastIndexOf("."), cursor.lastIndexOf("["));
+    if (cut <= 0) return null;
+    cursor = cursor.slice(0, cut);
+    const entry = state.reasoningByPath[cursor];
+    if (entry) return { ...entry, inheritedFrom: cursor };
+  }
+}
+
+// Mirrors `effective_extraction` in reviews.py. The two must agree exactly:
+// this is what the reviewer approves, and that is what gets exported.
 function effectiveExtraction() {
   if (!state.extraction) return null;
   const data = JSON.parse(JSON.stringify(state.extraction));
-  for (const [path, ann] of Object.entries(state.annotations)) {
-    if (ann.status !== "flagged" || ann.correct_value === undefined) continue;
-    if (ann.correct_value === REMOVE_VALUE) removeValueAtPath(data, path);
-    else applyCorrectedValue(data, path, ann.correct_value);
+  // Shallowest path first, as the backend does. Applying a container override
+  // after a leaf override inside it would otherwise discard the leaf, and
+  // Object.entries order depends on the order writes happened to arrive.
+  const overrides = Object.entries(state.annotations)
+    .filter(([, ann]) => isOverridden(ann))
+    .sort((a, b) => pathToParts(a[0]).length - pathToParts(b[0]).length);
+  for (const [path, ann] of overrides) {
+    if (isRemoved(ann)) removeValueAtPath(data, path);
+    else applyCorrectedValue(data, path, overrideValue(ann));
   }
   return data;
 }
@@ -4433,7 +4939,11 @@ function removeValueAtPath(obj, path) {
     if (current === null || current === undefined) return;
   }
   const last = parts[parts.length - 1];
-  if (Array.isArray(current)) current.splice(Number(last), 1);
+  // A removed array element becomes a null tombstone, never a splice. Splicing
+  // renumbers every later element, so the reviewer's next click lands on a
+  // different element than the one they are looking at — and the export, which
+  // tombstones, disagrees with what they approved.
+  if (Array.isArray(current)) current[Number(last)] = null;
   else delete current[last];
 }
 
@@ -4652,26 +5162,25 @@ function selectedFieldValueLabel(path) {
 }
 
 function selectedSourceRanges(path) {
-  const entry = state.reasoningByPath[path];
+  const entry = reasoningFor(path);
   if (!entry || !entry.source_lines) return [];
   return entry.source_lines.split(",").map(s => s.trim()).filter(Boolean);
 }
 
-function selectedFieldHasCitation(path) {
-  return selectedSourceRanges(path).length > 0;
-}
-
 function selectedVerifyExtra(path) {
-  return selectedFieldHasCitation(path) ? {} : { source: "accepted_no_citation" };
+  // Verification is an empty entry in version 2. Accepting an uncited value is
+  // still just verification — there is no separate key for it, and the note
+  // field is the reviewer's, not ours to fill.
+  return {};
 }
 
 function selectedReasoning(path) {
-  const entry = state.reasoningByPath[path];
+  const entry = reasoningFor(path);
   return entry && entry.reasoning ? entry.reasoning : "";
 }
 
 function selectedConfidence(path) {
-  const entry = state.reasoningByPath[path];
+  const entry = reasoningFor(path);
   return entry && typeof entry.confidence === "number" ? entry.confidence : null;
 }
 
@@ -4707,17 +5216,13 @@ function cancelInlineEdit() {
 async function saveInlineEdit(path) {
   if (!path) return;
   const control = document.querySelector(`.inline-edit-input[data-path=${CSS.escape(path)}], .inline-edit-select[data-path=${CSS.escape(path)}]`);
-  const reviewer = $("#reviewer-id").value.trim();
-  if (!reviewer) { alert("Please connect ORCID before editing."); return; }
   const correctValue = control ? control.value.trim() : "";
   if (correctValue === "" && control && control.classList.contains("inline-edit-number")) {
     cancelInlineEdit();
     return;
   }
   state.editingPath = null;
-  const ok = await saveAnnotation(path, "flagged", {
-    correct_value: correctValue,
-  });
+  const ok = await saveAnnotation(path, { override: { op: "replace", value: correctValue } });
   if (!ok) {
     state.editingPath = path;
     renderExtractionPanel();
@@ -4726,10 +5231,8 @@ async function saveInlineEdit(path) {
 
 async function removeInlineEdit(path) {
   if (!path) return;
-  const reviewer = $("#reviewer-id").value.trim();
-  if (!reviewer) { alert("Please connect ORCID before editing."); return; }
   state.editingPath = null;
-  const ok = await saveAnnotation(path, "flagged", { correct_value: REMOVE_VALUE });
+  const ok = await saveAnnotation(path, { override: { op: "remove" } });
   if (!ok) {
     state.editingPath = path;
     renderExtractionPanel();
@@ -5105,7 +5608,7 @@ function wireTableEvents(panel) {
         // No multi-source nav (single source link or no source) — look up reasoning directly
         resetAllSourceNavs();
         activeCell.classList.add("cell-selected");
-        const entry = state.reasoningByPath[cellPath];
+        const entry = reasoningFor(cellPath);
         if (entry && entry.source_lines) {
           renderMarkdown();
           const lineRanges = parseSourceLines(entry.source_lines);
@@ -5152,7 +5655,7 @@ function selectTableRow(path, rangeIndex) {
   state.sections = [];
   state.sectionIndex = 0;
 
-  const entry = state.reasoningByPath[path];
+  const entry = reasoningFor(path);
   if (!entry || !entry.source_lines) {
     $("#stat-citations").textContent = `${path}: no citation`;
     return;
@@ -5245,9 +5748,9 @@ function buildTreeHtml(obj, path) {
 function buildLeafHtml(key, value, path) {
   const showIndicator = value !== null && typeof value !== "boolean";
 
-  const entry = state.reasoningByPath[path];
-  const ann = state.annotations[path];
-  const annStatus = ann ? ann.status : "";
+  const entry = reasoningFor(path);
+  const ann = controllingAnnotation(path);
+  const annStatus = statusToken(ann);
 
   // Source lines (clickable)
   let sourceHtml = "";
@@ -5266,7 +5769,8 @@ function buildLeafHtml(key, value, path) {
   // Edit details
   let editDetails = "";
   if (annStatus === "flagged" && ann) {
-    if (ann.correct_value) editDetails += `<div class="flag-correction" style="margin-left:24px">${escapeHtml(ann.correct_value)}</div>`;
+    const shown = overrideValue(ann);
+    if (shown !== undefined) editDetails += `<div class="flag-correction" style="margin-left:24px">${escapeHtml(String(shown))}</div>`;
     if (ann.note) editDetails += `<div class="flag-note-display" style="margin-left:24px">${escapeHtml(ann.note)}</div>`;
   }
 
@@ -5326,7 +5830,7 @@ function selectLeaf(el) {
   state.sections = [];
   state.sectionIndex = 0;
 
-  const entry = state.reasoningByPath[path];
+  const entry = reasoningFor(path);
   if (!entry || !entry.source_lines) {
     $("#stat-citations").textContent = `${path}: no citation`;
     return;
@@ -5396,7 +5900,7 @@ function scrollToSection() {
   if (counter) counter.textContent = `${state.sectionIndex + 1}/${state.sections.length}`;
 
   const path = state.selectedPath;
-  const entry = state.reasoningByPath[path];
+  const entry = reasoningFor(path);
   let msg = `${path}: ${state.sectionIndex + 1}/${state.sections.length} (${section.label})`;
   if (entry && entry.reasoning) msg += ` \u2014 ${entry.reasoning}`;
   $("#stat-citations").textContent = msg;
@@ -5616,15 +6120,33 @@ function updateStats() {
   const reasoned = Object.keys(state.reasoningByPath).length;
   const uncited = document.querySelectorAll(".indicator.uncited").length;
   const total = reasoned + uncited;
-  const nVerified = Object.values(state.annotations).filter(a => a.status === "verified").length;
-  const nFlagged = Object.values(state.annotations).filter(a => a.status === "flagged").length;
+  const nVerified = Object.values(state.annotations).filter(isVerified).length;
+  const nOverridden = Object.values(state.annotations).filter(isOverridden).length;
   let msg = `${reasoned}/${total} cited`;
-  if (nVerified > 0 || nFlagged > 0) {
+  if (nVerified > 0 || nOverridden > 0) {
     msg += ` \u00b7 ${nVerified} verified`;
-    if (nFlagged > 0) msg += `, ${nFlagged} edited`;
+    if (nOverridden > 0) msg += `, ${nOverridden} edited`;
   }
   $("#stat-citations").textContent = msg;
   syncCurrentArticleProgress();
+}
+
+function renderReasoningNote() {
+  // The extractor's own account of the run — why it rated its confidence as it
+  // did, and, when it extracted nothing, why there was nothing to extract.
+  // Shown behind an explicit affordance because a tooltip nobody knows about
+  // is the same as no explanation at all.
+  const wrap = $("#reasoning-note");
+  const body = $("#reasoning-note-body");
+  if (!wrap || !body) return;
+  const note = state.reasoning && state.reasoning.confidence_reasoning;
+  if (!note) {
+    wrap.style.display = "none";
+    body.textContent = "";
+    return;
+  }
+  body.textContent = note;
+  wrap.style.display = "inline-flex";
 }
 
 function updateConfidenceChip() {
@@ -5637,10 +6159,12 @@ function updateConfidenceChip() {
     chip.textContent = "";
     chip.className = "confidence-chip";
     chip.removeAttribute("title");
+    renderReasoningNote();  // an explanation can exist without a score
     return;
   }
   chip.textContent = `model confidence ${conf.toFixed(2)}`;
   chip.className = `confidence-chip ${confidenceBand(conf)}`;
+  renderReasoningNote();
   if (reasoning.confidence_reasoning) {
     chip.title = reasoning.confidence_reasoning;
   } else {
@@ -5651,18 +6175,18 @@ function updateConfidenceChip() {
 
 function reviewStateCounts() {
   if (!state.extraction) {
-    return { total: 0, reviewed: 0, verified: 0, flagged: 0, remaining: 0 };
+    return { total: 0, reviewed: 0, verified: 0, overridden: 0, remaining: 0 };
   }
   const leafPaths = collectLeafPaths(state.extraction);
-  const reviewedAnnotations = leafPaths.map(path => state.annotations[path]).filter(Boolean);
-  const verified = reviewedAnnotations.filter(a => a.status === "verified").length;
-  const flagged = reviewedAnnotations.filter(a => a.status === "flagged").length;
+  const controlling = leafPaths.map(controllingAnnotation).filter(Boolean);
+  const verified = controlling.filter(isVerified).length;
+  const overridden = controlling.filter(isOverridden).length;
   return {
     total: leafPaths.length,
-    reviewed: verified + flagged,
+    reviewed: verified + overridden,
     verified,
-    flagged,
-    remaining: leafPaths.filter(path => !state.annotations[path]).length,
+    overridden,
+    remaining: leafPaths.filter(path => !controllingAnnotation(path)).length,
   };
 }
 
@@ -5680,22 +6204,66 @@ function updateReviewWorkspace() {
   updateSelectedFieldBar();
 }
 
-function syncCurrentArticleProgress() {
+async function syncCurrentArticleProgress() {
+  // Re-read the server's summary rather than recomputing it here. The local
+  // count walks the raw extraction, so it misses the leaves an `add` override
+  // contributes and counts nested identifier slots the server excludes —
+  // overwriting the authoritative record with it made the overview disagree
+  // with the document and call articles complete that were not.
   if (!state.currentId || !state.extraction) return;
-  const article = state.articles.find(a => a.article_id === state.currentId);
-  if (!article) return;
-  const counts = reviewStateCounts();
-  article.n_fields = counts.total;
-  article.n_verified = counts.verified;
-  article.n_flagged = counts.flagged;
-  article.n_reviewed = counts.reviewed;
-  article.n_annotated = article.n_reviewed;
-  article.is_complete = article.n_fields > 0 && article.n_reviewed >= article.n_fields;
-  article.has_flags = article.n_flagged > 0;
+  const id = state.currentId;
+  // Serialize refreshes: two annotation actions in quick succession otherwise
+  // race, and the older snapshot can land last and overwrite newer counts.
+  const token = ++progressRefreshToken;
+  const listing = await fetchJson("/api/articles").catch(() => null);
+  if (!listing || !Array.isArray(listing.articles)) return;
+  if (token !== progressRefreshToken || id !== state.currentId) return;
 
-  const option = $(`#article-select option[value="${CSS.escape(state.currentId)}"]`);
+  mergeArticleSummaries(listing.articles);
+  const article = state.articles.find(a => a.article_id === id);
+  if (!article) return;
+
+  const option = $(`#article-select option[value="${CSS.escape(id)}"]`);
   if (option) option.textContent = articleOptionLabel(article);
+  if ($("#overview-route")?.style.display === "block") renderOverview();
   updateReviewWorkspace();
+}
+
+let progressRefreshToken = 0;
+
+function mergeArticleSummaries(fresh) {
+  // Server counts win, but deep extraction fields loaded for the filter do
+  // not come back in a summary listing. Replacing the array outright emptied
+  // them while `state.deepLoaded` still claimed they were there, so deep-field
+  // filters silently stopped matching and could not reload.
+  const previous = new Map(state.articles.map((a) => [a.article_id, a]));
+  let stale = false;
+  state.articles = fresh.map((summary) => {
+    const old = previous.get(summary.article_id);
+    if (!old) {
+      stale = true;
+      return summary;
+    }
+    // Deep fields belong to a specific run. If the article moved to another
+    // one, carrying them forward would filter on the previous extraction.
+    if (old.active_run_id !== summary.active_run_id) {
+      stale = true;
+      return summary;
+    }
+    return { ...old, ...summary };
+  });
+  if (stale) {
+    // Deep fields belong to a run. Invalidate the cache, and bump the
+    // generation so a load already in flight cannot mark stale data as loaded.
+    state.deepLoaded = false;
+    state.deepGeneration = (state.deepGeneration || 0) + 1;
+    if (state.filterFn) {
+      // An applied filter is still holding the previous run's matches, and the
+      // dropdown and navigation read from that list.
+      populateDropdown();
+      updateFilterBadge();
+    }
+  }
 }
 
 // ── Annotations ──
@@ -5704,6 +6272,15 @@ let saveStatusTimer = null;
 function setSaveStatus(message, status = "") {
   const el = $("#save-status");
   if (!el) return;
+  if (status !== "error") {
+    // Saving/Saved are deliberately silent: the field control itself moves
+    // between unreviewed, verified, and edited, and narrating that in the
+    // header is chatter. Only a failure needs words.
+    if (saveStatusTimer) clearTimeout(saveStatusTimer);
+    el.textContent = "";
+    el.dataset.status = "";
+    return;
+  }
   if (saveStatusTimer) clearTimeout(saveStatusTimer);
   el.textContent = message;
   el.dataset.status = status;
@@ -5715,31 +6292,43 @@ function setSaveStatus(message, status = "") {
   }
 }
 
-function setBulkStatus(message, batchId = null) {
-  const el = $("#bulk-status");
-  if (!el) return;
-  el.dataset.status = "saved";
-  el.textContent = message;
-}
-
-function annotationEntry(path, status, extra = {}) {
-  const reviewer = $("#reviewer-id").value.trim();
-  const entry = { path: "." + path, status, reviewer };
+function annotationEntry(path, extra = {}) {
+  // The wire shape is the stored shape: {} means verified, `override` carries
+  // replace/remove/add, `note` and `reviewer` are optional. Paths are canonical.
+  const entry = { path };
+  // Attribution rides along when the reviewer has connected an ORCID, and is
+  // simply absent when they have not — auditing never requires identifying
+  // yourself, which would be pure friction for someone reviewing their own work.
+  const reviewer = $("#reviewer-id")?.value.trim();
+  if (reviewer) entry.reviewer = reviewer;
   for (const [key, value] of Object.entries(extra)) {
-    if (value !== undefined && value !== null && value !== "") {
-      entry[key] = value;
-    }
+    if (value !== undefined && value !== null && value !== "") entry[key] = value;
   }
   return entry;
 }
 
-async function saveAnnotation(path, status, extra = {}, options = {}) {
+// Reviews bind to one immutable run, so every read and write names it. For the
+// open document that is the run pinned when it was loaded — not whatever is
+// active now — so annotations always land on the payload actually on screen.
+function activeRunId(articleId = state.currentId) {
+  if (articleId === state.currentId && state.currentRunId) return state.currentRunId;
+  const meta = state.articles.find(a => a.article_id === articleId);
+  return meta ? meta.active_run_id : null;
+}
+
+function annotationsUrl(articleId, suffix = "") {
+  const runId = activeRunId(articleId);
+  if (!runId) return null;
+  return `/api/annotations/${encodeURIComponent(articleId)}/${encodeURIComponent(runId)}${suffix}`;
+}
+
+async function saveAnnotation(path, extra = {}, options = {}) {
   const id = state.currentId;  // captured now; the user may navigate mid-flight
   const previous = Object.prototype.hasOwnProperty.call(options, "previous")
     ? options.previous
     : state.annotations[path];
   const render = options.render !== false;
-  const entry = annotationEntry(path, status, extra);
+  const entry = annotationEntry(path, extra);
   setSaveStatus("Saving...", "saving");
   if (render) {
     state.annotations[path] = entry;
@@ -5747,23 +6336,29 @@ async function saveAnnotation(path, status, extra = {}, options = {}) {
   }
 
   try {
-    const response = await fetch(`/api/annotations/${id}`, {
+    const url = annotationsUrl(id);
+    if (!url) throw new Error("this article has no active run to review");
+    const response = await fetch(url, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(entry),
     });
-    if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+    if (!response.ok) {
+      // The server states the contract violation; show it rather than a code.
+      const detail = await response.json().catch(() => null);
+      throw new Error(detail?.detail || `${response.status} ${response.statusText}`);
+    }
     const saved = await response.json();
     if (id !== state.currentId) return true;  // saved, but this view moved on
-    state.annotations[path] = { ...entry, ...saved };
+    if (saved.annotation) state.annotations[path] = saved.annotation;
+    else delete state.annotations[path];
     setSaveStatus("Saved", "saved");
-    refreshBaseStale(id);
     return true;
   } catch (err) {
     if (id !== state.currentId) return false;
     if (previous) state.annotations[path] = previous;
     else delete state.annotations[path];
-    setSaveStatus("Failed to save annotation", "error");
+    setSaveStatus(err.message || "Failed to save annotation", "error");
     return false;
   } finally {
     if (render && id === state.currentId) {
@@ -5774,26 +6369,34 @@ async function saveAnnotation(path, status, extra = {}, options = {}) {
 
 async function clearAnnotation(path, options = {}) {
   const id = state.currentId;  // captured now; the user may navigate mid-flight
+  // Guard on the controlling entry, not the exact one: a path covered by an
+  // ancestor has no entry of its own, and bailing here would make its control
+  // look clickable and do nothing. DELETE is a subtree unreview, which is
+  // exactly the right request for inherited state.
+  if (!controllingAnnotation(path)) return;
   const previous = state.annotations[path];
-  if (!previous) return;
   const render = options.render !== false;
   setSaveStatus("Clearing...", "saving");
 
   try {
-    const response = await fetch(`/api/annotations/${id}/${path}`, {
-      method: "DELETE",
-    });
-    if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+    const url = annotationsUrl(id, `/${path}`);
+    if (!url) throw new Error("this article has no active run to review");
+    const response = await fetch(url, { method: "DELETE" });
+    if (!response.ok) {
+      const detail = await response.json().catch(() => null);
+      throw new Error(detail?.detail || `${response.status} ${response.statusText}`);
+    }
     if (id !== state.currentId) return true;  // cleared, but this view moved on
-    delete state.annotations[path];
+    // Unreview clears the whole subtree and may re-verify siblings, so the
+    // server's resulting frontier is authoritative — reload rather than guess.
     state.suppressClearHoverPaths.delete(path);
+    await loadAnnotations(id);
     setSaveStatus("Cleared", "saved");
-    refreshBaseStale(id);
     return true;
   } catch (err) {
     if (id !== state.currentId) return false;
     state.annotations[path] = previous;
-    setSaveStatus("Failed to save annotation", "error");
+    setSaveStatus(err.message || "Failed to clear annotation", "error");
     return false;
   } finally {
     if (render && id === state.currentId) {
@@ -5804,40 +6407,132 @@ async function clearAnnotation(path, options = {}) {
   }
 }
 
-function renderBaseStaleBanner() {
-  const el = $("#base-stale-warning");
-  if (!el) return;
-  el.style.display = state.baseStale ? "block" : "none";
+function shortDate(iso) {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (isNaN(d)) return null;
+  return d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
 }
 
-function refreshBaseStale(id) {
-  // Staleness can clear when the last stale entry is re-saved or removed;
-  // re-ask the server rather than guessing. Responses apply by captured id.
-  fetchJson(`/api/annotations/${id}`).then(d => {
-    if (id !== state.currentId) return;
-    state.baseStale = !!(d && d.base_stale);
-    renderBaseStaleBanner();
-  }).catch(() => {});
+function renderRunChip() {
+  const chip = $("#run-chip");
+  if (!chip) return;
+  const meta = state.articles.find(a => a.article_id === state.currentId);
+  const run = meta && meta.active_run;
+  if (!run) {
+    chip.style.display = "none";
+    return;
+  }
+  // What produced this extraction, not which opaque id it was filed under: a
+  // reviewer judging a value wants the model and when it ran. The id is kept
+  // in the tooltip because run-level CLI commands take it.
+  chip.textContent = run.model || "unknown model";
+  chip.title = [
+    run.model ? `Model: ${run.model}` : "Model not recorded",
+    run.provider ? `Provider: ${run.provider}` : null,
+    run.effort ? `Effort: ${run.effort}` : null,
+    run.harness ? `Harness: ${run.harness}` : null,
+    run.created_at ? `Extracted: ${run.created_at}` : null,
+    `Run: ${run.run_id}`,
+  ].filter(Boolean).join("\n");
+  chip.style.display = "inline";
+}
+
+function renderSchemaErrorBanner() {
+  // Without this the document looked entirely normal — typed editors and all —
+  // for a run the schema no longer describes, and the reviewer found out only
+  // when an edit failed. Say it before they start, not after.
+  const el = $("#schema-error-warning");
+  if (!el) return;
+  const problem = state.schemaError;
+  if (!problem) {
+    el.style.display = "none";
+    return;
+  }
+  el.textContent =
+    "\u26a0 This extraction was made with a different schema than the project " +
+    "now has, so values here cannot be typed against it. You can still verify " +
+    "what the extractor produced; editing is disabled until the schema matches " +
+    "or the document is re-extracted. " + problem;
+  el.style.display = "block";
+}
+
+function renderReviewErrorBanner() {
+  const el = $("#review-error-warning");
+  if (!el) return;
+  if (!state.reviewError) {
+    el.style.display = "none";
+    return;
+  }
+  el.textContent =
+    "\u26a0 This run's review file could not be read, so no review state is " +
+    "shown or editable. Fix or remove it by hand: " + state.reviewError;
+  el.style.display = "block";
+}
+
+function fetchAnnotations(id) {
+  const url = annotationsUrl(id);
+  if (!url) return Promise.resolve({ annotations: [], review_error: null });
+  return fetchJson(url);
+}
+
+function applyAnnotationPayload(payload) {
+  // A corrupt review file is reported explicitly, never as "no reviews" —
+  // the two mean very different things to someone auditing a document.
+  state.reviewError = payload?.review_error || null;
+  state.annotations = {};
+  for (const ann of (payload?.annotations || [])) {
+    state.annotations[ann.path] = ann;
+  }
+  renderReviewErrorBanner();
+}
+
+async function loadAnnotations(id) {
+  const payload = await fetchAnnotations(id).catch(() => null);
+  if (id !== state.currentId || !payload) return;
+  applyAnnotationPayload(payload);
 }
 
 async function toggleFieldVerification(path) {
   if (!path) return;
-  const ann = state.annotations[path];
+  // Act on the entry that actually governs this path. Reading only the exact
+  // one made a parent-covered field look verified and then, on click, add a
+  // second verification underneath instead of clearing what the user saw.
+  const ann = controllingAnnotation(path);
   if (!ann) {
     state.selectedPath = path;
     state.selectedSourceIndex = 0;
+    // Disarm click-to-clear on the control the pointer is on right now, so the
+    // click that verified it cannot immediately undo it. Scoped to this one
+    // path: a bulk action leaves the pointer on the section header, so
+    // suppressing the fields it verified would make each of them swallow its
+    // next genuine click.
     state.suppressClearHoverPaths.add(path);
-    await saveAnnotation(path, "verified", selectedVerifyExtra(path));
+    await saveAnnotation(path, selectedVerifyExtra(path));
     return;
   }
-  if (ann.status === "verified") {
+  if (isVerified(ann)) {
     if (state.suppressClearHoverPaths.has(path)) return;
     state.selectedPath = path;
     state.selectedSourceIndex = 0;
     await clearAnnotation(path);
     return;
   }
-  if (ann.status === "flagged") {
+  if (isOverridden(ann) && !state.annotations[path]) {
+    setSaveStatus(
+      "A correction on the enclosing section covers this field; edit or clear it there.",
+      "error",
+    );
+    return;
+  }
+  if (isOverridden(ann)) {
+    if (state.schemaError) {
+      setSaveStatus(
+        "This run was extracted with a different schema, so values cannot be edited.",
+        "error",
+      );
+      return;
+    }
     openInlineEdit(path);
     return;
   }
@@ -5875,48 +6570,30 @@ function collectLeafPaths(obj, basePath = "") {
   return paths;
 }
 
-function reviewableAnnotationPaths(path) {
-  const value = getValueAtPath(state.extraction, path);
-  if (isPrimitiveArray(value)) {
-    return value.map((_, idx) => `${path}[${idx}]`);
-  }
-  return [path];
-}
-
 function collectReviewablePaths(basePath = null) {
-  const leafPaths = new Set(collectLeafPaths(state.extraction));
-  return Object.entries(state.reasoningByPath)
-    .filter(([path, entry]) => {
-      if (!pathInScope(path, basePath)) return false;
-      if (!entry || !entry.source_lines) return false;
-      return reviewableAnnotationPaths(path).some(annPath =>
-        leafPaths.has(annPath) &&
-        !state.annotations[annPath] &&
-        getValueAtPath(state.extraction, annPath) !== undefined
-      );
-    })
-    .flatMap(([path]) => reviewableAnnotationPaths(path))
-    .filter(path =>
-      leafPaths.has(path) &&
-      !state.annotations[path] &&
-      getValueAtPath(state.extraction, path) !== undefined
-    );
+  // Every unreviewed leaf in scope that has evidence behind it. Evidence is
+  // resolved through ancestors: an agent that cites a table row once has cited
+  // its cells, and requiring an exact per-leaf entry made bulk verification
+  // silently unavailable for exactly the nested sections it is most useful for.
+  return collectLeafPaths(state.extraction).filter(path =>
+    pathInScope(path, basePath) &&
+    !controllingAnnotation(path) &&
+    getValueAtPath(state.extraction, path) !== undefined &&
+    !!reasoningFor(path)?.source_lines
+  );
 }
 
 function verifiedPathsInScope(basePath = null) {
-  return collectLeafPaths(state.extraction).filter(path =>
-    pathInScope(path, basePath) &&
-    state.annotations[path] &&
-    state.annotations[path].status === "verified"
-  );
+  return collectLeafPaths(state.extraction).filter(path => {
+    if (!pathInScope(path, basePath)) return false;
+    const ann = controllingAnnotation(path);
+    return !!ann && isVerified(ann);
+  });
 }
 
 function sectionReviewState(basePath = null) {
   const leafPaths = collectLeafPaths(state.extraction).filter(path => pathInScope(path, basePath));
-  const reviewedPaths = leafPaths.filter(path => {
-    const ann = state.annotations[path];
-    return ann && (ann.status === "verified" || ann.status === "flagged");
-  });
+  const reviewedPaths = leafPaths.filter(path => !!controllingAnnotation(path));
   return {
     total: leafPaths.length,
     reviewed: reviewedPaths.length,
@@ -5925,39 +6602,27 @@ function sectionReviewState(basePath = null) {
   };
 }
 
-function skippedBulkCount(basePath, reviewableCount) {
-  const allLeafPaths = collectLeafPaths(state.extraction).filter(path => pathInScope(path, basePath));
-  return Math.max(0, allLeafPaths.length - reviewableCount);
-}
-
 async function bulkVerifyScope(basePath, source) {
   const paths = collectReviewablePaths(basePath);
-  const skipped = skippedBulkCount(basePath, paths.length);
   if (basePath && paths.length > 0) state.suppressClearHoverSections.add(basePath);
-  await bulkVerifyPaths(paths, source, skipped);
+  await bulkVerifyPaths(paths, source);
 }
 
-async function bulkVerifyPaths(paths, source, skipped = 0) {
-  if (paths.length === 0) {
-    setBulkStatus(`${skipped} fields skipped`);
-    return;
-  }
+async function bulkVerifyPaths(paths, source) {
+  if (paths.length === 0) return;
 
-  const batchId = `bulk_${Date.now()}_${Math.random().toString(16).slice(2)}`;
   const verifiedPaths = [];
   for (const path of paths) {
-    const ok = await saveAnnotation(path, "verified", {
-      source,
-      batch_id: batchId,
-    }, { render: false });
+    const ok = await saveAnnotation(path, {}, { render: false });
     if (ok) verifiedPaths.push(path);
   }
 
   renderExtractionPanel();
   updateStats();
+  // Only failure gets words. What succeeded is visible in every control that
+  // changed, and a field left alone shows "No citation" in its own row.
   const failed = paths.length - verifiedPaths.length;
-  const skippedText = skipped + failed;
-  setBulkStatus(`${verifiedPaths.length} fields verified · ${skippedText} skipped`, verifiedPaths.length > 0 ? batchId : null);
+  if (failed) setSaveStatus(`${failed} of ${paths.length} fields failed to save`, "error");
 }
 
 async function clearVerifiedScope(basePath = null) {
@@ -5969,7 +6634,11 @@ async function clearVerifiedScope(basePath = null) {
   }
   renderExtractionPanel();
   updateStats();
-  setBulkStatus(`${cleared} verified fields cleared`);
+  // Same contract as bulkVerifyPaths: success is visible in the controls that
+  // changed, failure has to be said. A later successful clear resets
+  // save-status, so a partial failure otherwise finishes looking clean.
+  const failed = paths.length - cleared;
+  if (failed) setSaveStatus(`${failed} of ${paths.length} fields failed to clear`, "error");
 }
 
 function rowCellPaths(rowPath) {
@@ -6000,8 +6669,10 @@ function orderedReviewPaths() {
 
 function selectNextReviewPath(kind) {
   const paths = orderedReviewPaths().filter(path => {
-    const ann = state.annotations[path];
-    if (kind === "flagged") return ann && ann.status === "flagged";
+    const ann = controllingAnnotation(path);
+    // Only paths whose override is their own: one inherited from a container
+    // cannot be edited or cleared here, so landing on it is a dead end.
+    if (kind === "flagged") return isOverridden(state.annotations[path]);
     return !ann;
   });
   if (paths.length === 0) return;
@@ -6015,7 +6686,7 @@ function selectNextReviewPath(kind) {
 }
 
 function selectAdjacentReviewPath(direction) {
-  const paths = orderedReviewPaths().filter(path => !state.annotations[path]);
+  const paths = orderedReviewPaths().filter(path => !controllingAnnotation(path));
   if (paths.length === 0) return;
   const currentIndex = state.selectedPath ? paths.indexOf(state.selectedPath) : -1;
   let nextIndex;
@@ -6034,13 +6705,15 @@ function selectAdjacentReviewPath(direction) {
 async function verifyRowAnnotations(rowPath) {
   const paths = rowCellPaths(rowPath);
   for (const path of paths) {
-    await saveAnnotation(path, "verified", {}, { render: false });
+    await saveAnnotation(path, {}, { render: false });
   }
   renderExtractionPanel();
   updateStats();
 }
 
 async function clearRowAnnotations(rowPath) {
+  // Exact entries only: a cell covered by a container override has nothing of
+  // its own to clear, and asking to clear it returns 409.
   const paths = rowCellPaths(rowPath).filter(path => state.annotations[path]);
   for (const path of paths) {
     await clearAnnotation(path, { render: false });
@@ -6060,7 +6733,7 @@ function wireAnnotationActions(panel) {
 
       if (action === "verify") {
         if (isRow) await verifyRowAnnotations(path);
-        else await saveAnnotation(path, "verified");
+        else await saveAnnotation(path, {});
       } else if (action === "flag") {
         openInlineEdit(path);
       } else if (action === "clear") {
@@ -6109,35 +6782,41 @@ function normalizeOrcidInput(value) {
 
 function setReviewerIdentity(profile) {
   const reviewerId = $("#reviewer-id");
-  const connect = $("#btn-orcid-connect");
-  const profileBtn = $("#btn-orcid-profile");
+  const entry = $("#identity-entry");
+  const connected = $("#identity-connected");
   const name = $("#orcid-profile-name");
+  const result = $("#orcid-result");
   if (!profile) {
     reviewerId.value = "";
-    connect.style.display = "inline-flex";
-    profileBtn.style.display = "none";
-    localStorage.removeItem("erw-reviewer-profile");
-    localStorage.removeItem("erw-reviewer-id");
+    entry.style.display = "flex";
+    connected.style.display = "none";
+    if (result) result.textContent = "";
+    localStorage.removeItem("litschema-reviewer-profile");
+    localStorage.removeItem("litschema-reviewer-id");
+    if (typeof renderBackfillRow === "function") renderBackfillRow();
     return;
   }
   reviewerId.value = profile.orcid;
-  connect.style.display = "none";
-  profileBtn.style.display = "inline-flex";
-  name.textContent = profile.name;
-  localStorage.setItem("erw-reviewer-profile", JSON.stringify(profile));
-  localStorage.setItem("erw-reviewer-id", profile.orcid);
+  entry.style.display = "none";
+  connected.style.display = "flex";
+  // The identifier is what gets stored; the name is what makes it checkable at
+  // a glance, so show both rather than an opaque number.
+  name.textContent = profile.name && profile.name !== profile.orcid
+    ? `${profile.name} \u00b7 ${profile.orcid}`
+    : profile.orcid;
+  if (result) result.textContent = "";
+  localStorage.setItem("litschema-reviewer-profile", JSON.stringify(profile));
+  localStorage.setItem("litschema-reviewer-id", profile.orcid);
+  if (typeof renderBackfillRow === "function") renderBackfillRow();
 }
 
-function openOrcidModal() {
+function editReviewerIdentity() {
+  // Back to the input, pre-filled, without discarding the identity until a new
+  // one is confirmed — changing your mind mid-edit should cost nothing.
   $("#orcid-input").value = $("#reviewer-id").value || "";
-  $("#orcid-result").textContent = "Enter an ORCID iD to connect your reviewer identity.";
-  $("#btn-orcid-save").disabled = false;
-  $("#orcid-modal").classList.add("active");
+  $("#identity-entry").style.display = "flex";
+  $("#identity-connected").style.display = "none";
   $("#orcid-input").focus();
-}
-
-function closeOrcidModal() {
-  $("#orcid-modal").classList.remove("active");
 }
 
 async function saveOrcidProfile() {
@@ -6145,48 +6824,56 @@ async function saveOrcidProfile() {
   const result = $("#orcid-result");
   const save = $("#btn-orcid-save");
   if (!/^\d{4}-\d{4}-\d{4}-\d{3}[0-9X]$/.test(value)) {
-    result.textContent = "Enter a valid ORCID iD.";
+    result.textContent = "Enter a valid ORCID iD, e.g. 0000-0002-1825-0097.";
     return;
   }
-  result.textContent = "Checking ORCID profile...";
+  result.textContent = "Checking ORCID\u2026";
   save.disabled = true;
   try {
     const response = await fetch(`/api/orcid/${encodeURIComponent(value)}`);
-    if (!response.ok) throw new Error("not found");
-    const profile = await response.json();
-    setReviewerIdentity(profile);
-    closeOrcidModal();
-  } catch (err) {
-    result.textContent = "User not found.";
+    if (response.ok) {
+      setReviewerIdentity(await response.json());
+      return;
+    }
+    // A 404 is the registry answering, not failing to: this iD does not exist.
+    // Accepting it anyway let a nonexistent identity satisfy a project policy
+    // that exists precisely to make reviews attributable.
+    if (response.status === 404) {
+      result.textContent = "No ORCID record for that iD — check the digits.";
+      return;
+    }
+    throw new Error(`registry error ${response.status}`);
+  } catch {
+    // Unreachable or erroring registry: the lookup is a convenience, not a
+    // gate, so record the iD — but say the name is unverified, and say it
+    // after setReviewerIdentity, which clears this line.
+    setReviewerIdentity({ orcid: value, name: value });
+    result.textContent = "Could not reach ORCID; saved the iD unverified.";
+  } finally {
     save.disabled = false;
   }
 }
 
 function initReviewerIdentity() {
-  const savedProfile = localStorage.getItem("erw-reviewer-profile");
-  if (savedProfile) {
+  const saved = localStorage.getItem("litschema-reviewer-profile");
+  if (saved) {
     try {
-      setReviewerIdentity(JSON.parse(savedProfile));
+      setReviewerIdentity(JSON.parse(saved));
       return;
-    } catch (err) {
-      localStorage.removeItem("erw-reviewer-profile");
+    } catch {
+      localStorage.removeItem("litschema-reviewer-profile");
     }
   }
-  const savedReviewer = localStorage.getItem("erw-reviewer-id");
-  if (savedReviewer) {
-    setReviewerIdentity({ orcid: savedReviewer, name: savedReviewer });
-  } else {
-    setReviewerIdentity(null);
-  }
+  const savedId = localStorage.getItem("litschema-reviewer-id");
+  setReviewerIdentity(savedId ? { orcid: savedId, name: savedId } : null);
 }
 
-$("#btn-orcid-connect").addEventListener("click", openOrcidModal);
 $("#btn-orcid-profile").addEventListener("click", () => setReviewerIdentity(null));
+$("#btn-orcid-edit").addEventListener("click", editReviewerIdentity);
 $("#orcid-input").addEventListener("keydown", (e) => {
   if (e.key === "Enter") saveOrcidProfile();
 });
 $("#btn-orcid-save").addEventListener("click", saveOrcidProfile);
-$("#btn-orcid-cancel").addEventListener("click", closeOrcidModal);
 initReviewerIdentity();
 
 // ── Extraction rendering ──
@@ -6207,14 +6894,120 @@ function renderExtractionPanel() {
     return;
   }
   syncViewControls();
-  if (state.viewMode === "overview" && state.overviewMode === "json") {
+  if (state.viewMode === "data" && state.dataMode === "json") {
     renderJsonView(effectiveExtraction());
-  } else if (state.viewMode === "overview") {
-    renderOverviewView(effectiveExtraction());
+  } else if (state.viewMode === "data") {
+    renderDataView(effectiveExtraction());
   } else {
     renderReviewTable();
     updateReviewWorkspace();
   }
+}
+
+// ── Settings ──
+
+function setSettingsStatus(message, status = "") {
+  const el = $("#settings-status");
+  if (!el) return;
+  el.textContent = message;
+  el.dataset.status = status;
+}
+
+async function loadSettings() {
+  try {
+    settingsState = await fetchJson("/api/settings");
+  } catch {
+    return;
+  }
+  $("#toggle-require-reviewer").checked = !!settingsState.require_reviewer;
+  renderBackfillRow();
+}
+
+function renderBackfillRow() {
+  const row = $("#backfill-row");
+  const hint = $("#backfill-hint");
+  if (!row || !hint) return;
+  const n = settingsState.unattributed_reviews || 0;
+  const connected = !!$("#reviewer-id").value.trim();
+  if (!connected || n === 0) {
+    row.style.display = "none";
+    return;
+  }
+  row.style.display = "block";
+  // Outside a repository the project is presumed local, so the anonymous
+  // reviews are the person's own. Inside one they may be a collaborator's,
+  // and claiming their work is not recoverable from the file afterwards.
+  hint.textContent = settingsState.in_git_repo
+    ? `${n} reviews have no reviewer. This project is in Git, so some may be a ` +
+      `collaborator's — attributing them to you cannot be undone from the file.`
+    : `${n} reviews have no reviewer.`;
+}
+
+async function applyRequireReviewer(value) {
+  setSettingsStatus("Saving…");
+  try {
+    const res = await fetch("/api/settings", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ require_reviewer: value }),
+    });
+    if (!res.ok) {
+      const detail = await res.json().catch(() => null);
+      throw new Error(detail?.detail || `${res.status} ${res.statusText}`);
+    }
+    settingsState = await res.json();
+    $("#toggle-require-reviewer").checked = !!settingsState.require_reviewer;
+    setSettingsStatus(value ? "Saved to litschema.yaml." : "Requirement removed.");
+  } catch (err) {
+    $("#toggle-require-reviewer").checked = !value;  // the file is the truth
+    setSettingsStatus(err.message || "Could not save", "error");
+  }
+}
+
+async function runBackfill() {
+  const reviewer = $("#reviewer-id").value.trim();
+  if (!reviewer) return;
+  const n = settingsState.unattributed_reviews || 0;
+  const warning = settingsState.in_git_repo
+    ? `\n\nThis project is in Git, so some of these may be a collaborator's work.`
+    : "";
+  if (!confirm(`Attribute ${n} previously anonymous reviews to ${reviewer}?${warning}`)) return;
+  setSettingsStatus("Attributing…");
+  try {
+    const res = await fetch("/api/reviews/backfill-reviewer", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reviewer }),
+    });
+    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+    const out = await res.json();
+    setSettingsStatus(
+      `${out.updated} reviews attributed to ${out.reviewer}` +
+      (out.skipped_corrupt ? ` · ${out.skipped_corrupt} unreadable file(s) skipped` : "")
+    );
+    await loadSettings();
+    if (state.currentId) await loadAnnotations(state.currentId);
+  } catch (err) {
+    setSettingsStatus(err.message || "Could not attribute reviews", "error");
+  }
+}
+
+function wireSettings() {
+  $("#btn-settings").addEventListener("click", async () => {
+    setSettingsStatus("");
+    await loadSettings();
+    $("#settings-modal").classList.add("active");
+  });
+  $("#btn-settings-close").addEventListener("click", () => {
+    $("#settings-modal").classList.remove("active");
+  });
+  $("#settings-modal").addEventListener("click", (e) => {
+    if (e.target.id === "settings-modal") $("#settings-modal").classList.remove("active");
+  });
+  $("#toggle-require-reviewer").addEventListener("change", (e) => {
+    applyRequireReviewer(e.target.checked);
+  });
+  $("#btn-backfill").addEventListener("click", runBackfill);
 }
 
 // ── Boot ──

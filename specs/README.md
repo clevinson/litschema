@@ -32,19 +32,18 @@ specs/
 
 ## Normative ownership
 
-- `article-store`: article identity, run layout, active selection, trash, and
-  run CLI safety;
+- `article-store`: article identity, run layout, and active selection;
 - `project-config`: the current schema, schema identity, discovery, and shared
   CLI rules;
 - `extraction`: extraction/reasoning contents, validation, and publication
   inputs;
-- `reviews`: stored and effective review state, hierarchy, and reconciliation;
+- `reviews`: stored and effective review state and hierarchy;
 - `onboarding`: first-run flow;
-- `refinement`: its durable workflow ledger, same-schema reruns, schema
-  upgrades, and `/litschema-refine`;
+- `refinement`: deferred; a conceptual stub here, specified on
+  `feat/multirun`;
 - `explore`: export views, audit sidecars, DuckDB, and MCP;
 - `verifier`: web routes, read surfaces, and frontend constraints;
-- `source-metadata`: bibliographic data and provenance.
+- `bib-metadata`: bibliographic data and provenance.
 
 Other specs cross-link these rules instead of redefining them.
 
@@ -74,9 +73,9 @@ responsible for noticing it is missing.
   Deciding which papers belong in a review — title/abstract screening,
   full-text eligibility, PRISMA counts — happens in whatever tool the user
   already uses. There is consequently no corpus-level exclusion state: an
-  assembled article is in the corpus. Refinement-scope exclusion in
-  `specs/refinement/spec.md` is a different thing, scoped to one refinement
-  pass.
+  assembled article is in the corpus. Refinement-scope exclusion is a
+  different thing, scoped to one refinement pass; it belongs to the deferred
+  multirun work and is not specified in this release.
 - **Dual independent review is out of scope for v1.** The stored review model
   holds at most one entry per path and delegates authorship to Git history, so
   two reviewers work in separate clones and reconcile by merge. Blind

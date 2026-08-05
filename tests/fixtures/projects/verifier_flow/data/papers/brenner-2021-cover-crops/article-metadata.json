@@ -1,0 +1,18 @@
+{
+  "id": "brenner-2021-cover-crops",
+  "filename": "brenner-2021-cover-crops.pdf",
+  "original_filename": "brenner-2021-cover-crops.pdf",
+  "file_sha256": "sha256:6b15e806ce0367d4a0a241a525847c1c511f54eafe658734e6f526587785ab04",
+  "added_at": "2026-03-04T09:00:00+00:00",
+  "bib_metadata": {
+    "title": "Cover crops and soil carbon in a temperate rotation",
+    "authors": [
+      "A. Brenner",
+      "K. Vogel"
+    ],
+    "year": 2021,
+    "journal": "Journal of Synthetic Agronomy",
+    "doi": "10.5555/synthetic.2021.0088",
+    "bib_source": "doi"
+  }
+}

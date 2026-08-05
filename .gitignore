@@ -26,5 +26,28 @@ papers/
 data/
 *.pdf
 
+# ...but test fixture projects are source, not user data. Without this the
+# `data/` rule silently drops fixture files, and tests that pass locally on
+# untracked files fail in CI with nothing to point at.
+#
+# Negate only the three rules above that wrongly catch fixture content, rather
+# than the whole subtree: `!tests/fixtures/**` would also un-ignore every
+# generated and private file that happens to land there.
+!tests/fixtures/**/data/
+!tests/fixtures/**/data/**
+!tests/fixtures/**/papers/
+!tests/fixtures/**/papers/**
+!tests/fixtures/**/*.pdf
+
+# Generated or private files stay ignored wherever they land, including inside
+# a fixture — they are rebuilt or personal, not authored.
+tests/fixtures/**/.litschema/
+tests/fixtures/**/__pycache__/
+tests/fixtures/**/.venv/
+tests/fixtures/**/.env
+tests/fixtures/**/.claude/
+tests/fixtures/**/.codex/
+tests/fixtures/**/.DS_Store
+
 # AI tooling
 .roborev.toml

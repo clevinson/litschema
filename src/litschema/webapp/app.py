@@ -11,7 +11,6 @@ import re
 import urllib.error
 import urllib.request
 import webbrowser
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated
 
@@ -28,22 +27,25 @@ from ..articles import (
     iter_metadata_paths,
     read_article_metadata,
 )
+from ..bib_metadata import (
+    BIB_FIELDS,
+    read_bib_metadata,
+    update_bib_metadata,
+)
 from ..config import LitSchemaConfig
 from ..ingest.openalex_harvest import RegistryUnavailableError, sync_article
+from ..review_paths import InvalidReviewPathError, canonical_review_path
 from ..reviews import (
-    ReviewFileUnreadableError,
-    base_extraction_stale,
-    canonical_review_path,
-    delete_reviews_at,
+    ReviewContractError,
+    ReviewCorruptError,
+    effective_extraction,
+    effective_state,
     read_reviews,
+    review_progress,
+    unreview_subtree,
     upsert_review,
 )
 from ..schema_resolution import resolve_extraction_schema
-from ..source_metadata import (
-    SOURCE_FIELDS,
-    read_source_metadata,
-    update_source_metadata,
-)
 from .search import strip_references
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -88,8 +90,8 @@ def _article_meta(cfg: LitSchemaConfig, article_id: str) -> dict:
     manifest = read_article_metadata(article_files(cfg, article_id))
     if not manifest:
         return {}
-    meta = read_source_metadata(manifest) or {"metadata_source": "auto"}
-    meta["editable"] = meta.get("metadata_source") != "doi"
+    meta = read_bib_metadata(manifest) or {"bib_source": "auto"}
+    meta["editable"] = meta.get("bib_source") != "doi"
     return meta
 
 
@@ -121,40 +123,71 @@ def _article_pdf_path(cfg: LitSchemaConfig, article_id: str) -> Path | None:
     return article_pdf
 
 
-def _annotation_from_entry(path: str, entry: dict) -> dict:
-    """Map a review.json entry to the webapp's historical annotation shape."""
-    ann = {
-        "path": path,
-        "status": entry.get("signal"),
-        "reviewer": entry.get("author", ""),
-        "timestamp": entry.get("timestamp"),
-    }
-    if entry.get("override_value") is not None:
-        ann["correct_value"] = entry["override_value"]
-    for key in ("note", "source", "batch_id"):
-        if entry.get(key) is not None:
-            ann[key] = entry[key]
-    return ann
+def _annotation(path: str, entry: dict) -> dict:
+    """One stored review entry, in the vocabulary the spec defines.
 
-
-def _current_annotations(cfg: LitSchemaConfig, article_id: str) -> list[dict]:
-    """Return the current annotation state: one annotation per field path.
-
-    review.json holds at most one entry per field; ``author`` on the entry is
-    git-diff attribution, and multi-reviewer coordination happens in PR diffs
-    of review.json (specs/reviews/decisions.md, 2026-06-11).
+    The wire shape IS the stored shape — there is no translation layer, so a
+    reader of `specs/reviews/spec.md` sees the same names here.
     """
+    annotation: dict = {"path": path, "state": "overridden" if entry.get("override") else "verified"}
+    if entry.get("override") is not None:
+        annotation["override"] = entry["override"]
+    if entry.get("note") is not None:
+        annotation["note"] = entry["note"]
+    if entry.get("reviewer") is not None:
+        annotation["reviewer"] = entry["reviewer"]
+    return annotation
+
+
+def _require_run(cfg: LitSchemaConfig, article_id: str, run_id: str):
+    """Resolve an explicit run, 404ing rather than escaping the store."""
+    from ..runs import BrokenActiveRunError, run_files
+
     files = article_files(cfg, article_id)
-    fields = read_reviews(files)
-    return [_annotation_from_entry(path, entry) for path, entry in fields.items()]
+    try:
+        run = run_files(files, run_id)
+    except BrokenActiveRunError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    if not run.run_json.is_file() or not run.extraction.is_file():
+        raise HTTPException(404, f"no published run {run_id} for {article_id}")
+    return run
 
 
-def _extraction_confidence(files: ArticleFiles) -> float | None:
+def _active_artifact(files: ArticleFiles, name: str, run_id: str | None = None):
+    """Path of an artifact inside a run, or None.
+
+    ``run_id`` names the run explicitly; without it the active run is resolved.
+    A document must be read through the same run its reviews are written to —
+    resolving the pointer independently on each read let the page render one
+    run's extraction while writing reviews against another.
+
+    A broken pointer yields None rather than raising, so list and read
+    endpoints surface the article as unextracted instead of 500ing the listing.
+    """
+    from ..runs import BrokenActiveRunError, active_run, run_files
+
+    if run_id is not None:
+        try:
+            run = run_files(files, run_id)
+        except BrokenActiveRunError:
+            return None
+        return getattr(run, name) if run.run_json.is_file() else None
+    try:
+        run = active_run(files)
+    except BrokenActiveRunError:
+        return None
+    if run is None:
+        return None
+    return getattr(run, name)
+
+
+def _extraction_confidence(files: ArticleFiles, run=None) -> float | None:
     """The extractor's overall self-rated confidence from agent-reasoning.json."""
-    if not files.reasoning.exists():
+    reasoning_path = run.reasoning if run is not None else _active_artifact(files, "reasoning")
+    if reasoning_path is None or not reasoning_path.exists():
         return None
     try:
-        reasoning = json.loads(files.reasoning.read_bytes())
+        reasoning = json.loads(reasoning_path.read_bytes())
     except ValueError:
         return None
     value = reasoning.get("confidence") if isinstance(reasoning, dict) else None
@@ -180,30 +213,239 @@ def _leaf_paths(obj, base_path: str = "") -> list[str]:
     return paths
 
 
-def _review_progress(extraction: dict, annotations: list[dict]) -> dict:
-    """Summarize field-level review progress for article queue filters."""
-    leaf_paths = set(_leaf_paths(extraction))
-    current: dict[str, dict] = {}
-    for annotation in annotations:
-        path = annotation.get("path")
-        if not path:
-            continue
-        path = path.lstrip(".")
-        if path in leaf_paths:
-            current[path] = annotation
+def _run_summary_for(run) -> dict | None:
+    """What produced this run, for display.
 
-    n_verified = sum(1 for ann in current.values() if ann.get("status") == "verified")
-    n_flagged = sum(1 for ann in current.values() if ann.get("status") == "flagged")
-    n_fields = len(leaf_paths)
-    n_reviewed = n_verified + n_flagged
+    Takes an already-resolved run rather than resolving the pointer itself, so
+    every field a listing entry reports describes the same run. The run id is
+    opaque by contract, so it identifies but does not inform — a reviewer
+    judging an extraction wants to know what produced it and when; the id is
+    carried along only because run-level CLI commands take it.
+    """
+    if run is None:
+        return None
+    try:
+        record = run.read_run_json()
+    except (OSError, ValueError):
+        return {"run_id": run.run_id}
+    if not isinstance(record, dict):
+        return {"run_id": run.run_id}
+    agent = record.get("agent")
+    if not isinstance(agent, dict):
+        agent = {}
     return {
-        "n_fields": n_fields,
-        "n_reviewed": n_reviewed,
-        "n_verified": n_verified,
-        "n_flagged": n_flagged,
-        "is_complete": n_fields > 0 and n_reviewed >= n_fields,
-        "has_flags": n_flagged > 0,
+        "run_id": run.run_id,
+        "created_at": record.get("created_at"),
+        "provider": agent.get("provider"),
+        "model": agent.get("model"),
+        "effort": agent.get("effort"),
+        "harness": agent.get("harness"),
     }
+
+
+def _count_unattributed(cfg: LitSchemaConfig) -> int:
+    """Review entries carrying no reviewer, across every published run."""
+    from ..articles import iter_metadata_paths
+    from ..reviews import ReviewCorruptError, read_reviews
+    from ..runs import iter_run_ids, run_files
+
+    total = 0
+    for metadata_path in iter_metadata_paths(cfg):
+        files = article_files(cfg, metadata_path.parent.name)
+        for run_id in iter_run_ids(files):
+            try:
+                fields = read_reviews(run_files(files, run_id))
+            except ReviewCorruptError:
+                continue
+            total += sum(1 for entry in fields.values() if not entry.get("reviewer"))
+    return total
+
+
+REQUIRE_REVIEWER_KEY = "require_reviewer"
+
+
+def _require_reviewer(cfg: LitSchemaConfig) -> bool:
+    """Whether this project demands attribution on every review.
+
+    Read from config on each request rather than cached: the file is the
+    authority, and it may be edited by hand or arrive through a pull while the
+    server is running.
+    """
+    import yaml
+
+    try:
+        raw = yaml.safe_load(cfg.config_path.read_text()) or {}
+    except (OSError, yaml.YAMLError):
+        return False
+    return bool(raw.get(REQUIRE_REVIEWER_KEY, False))
+
+
+def _set_require_reviewer(cfg: LitSchemaConfig, value: bool) -> None:
+    """Write the policy into the project config, preserving everything else.
+
+    Rewritten key-by-key rather than dumped wholesale so unknown keys, which
+    the config contract preserves for domain repositories, survive untouched.
+    """
+    import yaml
+
+    raw = yaml.safe_load(cfg.config_path.read_text()) or {}
+    if value:
+        raw[REQUIRE_REVIEWER_KEY] = True
+    else:
+        raw.pop(REQUIRE_REVIEWER_KEY, None)
+    tmp = cfg.config_path.with_suffix(".yaml.tmp")
+    tmp.write_text(yaml.safe_dump(raw, sort_keys=False, default_flow_style=False))
+    tmp.replace(cfg.config_path)
+
+
+def _resolved_schema(cfg: LitSchemaConfig):
+    """The project schema, or None when it cannot be resolved."""
+    from ..schema_resolution import resolve_extraction_schema
+
+    try:
+        return resolve_extraction_schema(cfg)
+    except Exception:
+        return None
+
+
+def _schema_status(files: ArticleFiles, run) -> tuple[str | None, str | None]:
+    """How this run stands against the current schema: (unreadable, drifted).
+
+    Two very different situations, which this used to collapse into one string:
+
+    `unreadable` — the schema will not resolve, or the run does not say which
+    schema it was extracted against. Nothing about this run can be computed, so
+    counts are reported as unknown rather than zero.
+
+    `drifted` — the schema resolves and the run names a hash, they simply
+    differ. Everything is still readable: the extraction, the reasoning, and
+    the review file all parse, and every count is exactly as true as it was
+    before the schema moved. Treating this as a failure blanked an entire
+    326-paper project over one added comment line, since the hash is over bytes.
+
+    Only overrides genuinely depend on the schema matching — a changed slot
+    range could retype an edit — so that is where drift is enforced (see
+    `put_annotation`). Verification needs no schema at all, and the listing
+    needs none either. `specs/verifier/spec.md` owns the distinction.
+    """
+    from ..schema_resolution import schema_hash
+
+    resolved = _resolved_schema(files.cfg)
+    if resolved is None:
+        return "the project's extraction schema cannot be resolved", None
+    try:
+        current = schema_hash(files.cfg)
+    except OSError:
+        return "the project's extraction schema cannot be read", None
+    try:
+        record = run.read_run_json()
+    except (OSError, ValueError):
+        return f"run {run.run_id} has an unreadable run.json", None
+    if not isinstance(record, dict):
+        return f"run {run.run_id} has a run.json that is not an object", None
+    recorded = record.get("schema_hash")
+    # A run that does not say which schema it was extracted against cannot be
+    # judged against one. Treating a missing or malformed hash as "compatible"
+    # is the same silent assumption this check exists to remove.
+    if not isinstance(recorded, str) or not recorded.strip():
+        return f"run {run.run_id} records no usable schema hash", None
+    if current != recorded:
+        return None, (
+            f"run {run.run_id} was extracted against a different schema "
+            f"({recorded[:14]}…, now {current[:14]}…)"
+        )
+    return None, None
+
+
+def _schema_blocker(files: ArticleFiles, run) -> str | None:
+    """Why an override cannot be typed against this run, or None.
+
+    Both halves block an edit: an unresolvable schema switches typing off, and
+    a drifted one could type the edit against a slot the run never used.
+    """
+    unreadable, drifted = _schema_status(files, run)
+    return unreadable or drifted
+
+
+def _identifier_paths(files: ArticleFiles, run) -> set[str]:
+    """`identifier: true` leaves, which are identity rather than review work.
+
+    Falls back to excluding nothing when the schema cannot be resolved — an
+    inflated denominator is a better failure than a crash on every listing.
+    """
+    from ..schema_resolution import identifier_leaf_paths, resolve_extraction_schema
+
+    try:
+        resolved = resolve_extraction_schema(files.cfg)
+        data = json.loads(run.extraction.read_text())
+    except Exception:
+        return set()
+    try:
+        excluded = identifier_leaf_paths(resolved.view, resolved.root_class, data)
+    except Exception:
+        return set()
+    # Added objects contribute their own leaves to the denominator, so their
+    # identifier slots have to be excluded too — derived from the raw
+    # extraction alone, an added measurement's id counted as review work and
+    # then as overridden, which the verifier contract excludes.
+    try:
+        from ..reviews import read_reviews
+
+        effective = effective_extraction(run, read_reviews(run))
+        excluded |= identifier_leaf_paths(resolved.view, resolved.root_class, effective)
+    except Exception:
+        pass
+    return excluded
+
+
+def _article_progress(files: ArticleFiles, run) -> dict:
+    """Review progress for one already-resolved run.
+
+    `specs/reviews/spec.md` owns effective state; this only aggregates. A
+    corrupt review file nulls the counts rather than reporting them as zero —
+    zero would read as "nothing reviewed yet", which is a different and much
+    more comfortable claim than "we cannot tell".
+    """
+    empty = {
+        "n_fields": 0,
+        "n_reviewed": 0,
+        "n_verified": 0,
+        "n_overridden": 0,
+        "n_unreviewed": 0,
+        "review_progress": 0.0,
+        "is_complete": False,
+        "review_error": None,
+        "schema_error": None,
+        "schema_drift": None,
+    }
+    reported = ("review_error", "schema_error", "schema_drift")
+    if run is None:
+        return empty
+
+    def unknown(key: str, message: str, **extra) -> dict:
+        """Counts we cannot stand behind are null, never zero.
+
+        Zero reads as "nothing reviewed yet" — a confident claim about the
+        work. Null says we cannot tell, which is what is actually true.
+        """
+        return {
+            **{k: None for k in empty if k not in reported},
+            **{k: None for k in reported},
+            key: message,
+            **extra,
+        }
+
+    schema_error, schema_drift = _schema_status(files, run)
+    if schema_error is not None:
+        return unknown("schema_error", schema_error)
+    # Drift is reported alongside real counts, not instead of them. The run is
+    # fully readable; only editing it is gated, and that gate lives on the
+    # write path where the risk actually is.
+    try:
+        progress = review_progress(run, exclude=_identifier_paths(files, run))
+    except ReviewCorruptError as exc:
+        return unknown("review_error", str(exc), schema_drift=schema_drift)
+    return {**progress, "review_error": None, "schema_error": None, "schema_drift": schema_drift}
 
 
 #: LinkML scalar range -> editor "kind" reported by /api/schema/fields.
@@ -301,15 +543,21 @@ async def index():
     return (STATIC_DIR / "index.html").read_text()
 
 
-def _read_valid_extraction(files: ArticleFiles) -> dict | None:
+def _read_valid_extraction(files: ArticleFiles, run=None) -> dict | None:
     """Return the parsed extraction JSON, or None if absent, invalid, or errored."""
-    if not files.extraction.exists():
+    extraction_path = run.extraction if run is not None else _active_artifact(files, "extraction")
+    if extraction_path is None or not extraction_path.exists():
         return None
     try:
-        data = json.loads(files.extraction.read_text())
+        data = json.loads(extraction_path.read_text())
     except json.JSONDecodeError:
         return None
-    if not isinstance(data, dict) or data.get("error"):
+    # Share the publisher's predicate. Testing `data.get("error")` for
+    # truthiness hid any extraction whose schema defines an `error` slot — a
+    # measurement error of 0.42 made the whole document read as unextracted.
+    from ..runs import is_error_marker
+
+    if not isinstance(data, dict) or is_error_marker(data):
         return None
     return data
 
@@ -336,39 +584,52 @@ async def list_articles(cfg: CfgDep):
             "journal": bib.get("journal"),
             "authors": bib.get("authors", []),
             "corporate_author": bib.get("corporate_author"),
-            "metadata_source": bib.get("metadata_source"),
+            "bib_source": bib.get("bib_source"),
         }
 
-        data = _read_valid_extraction(files)
+        # One snapshot of the active run per article. Resolving the pointer
+        # separately for the extraction, the progress, the confidence, and the
+        # provenance let a listing entry combine data from one run with
+        # metadata from another if activation moved mid-request.
+        from ..runs import BrokenActiveRunError as _Broken
+        from ..runs import active_run as _active_run
+
+        try:
+            run = _active_run(files)
+            run_error = None
+        except _Broken as exc:
+            run, run_error = None, str(exc)
+
+        data = None if run is None else _read_valid_extraction(files, run)
         if data is None:
             entry.update(
                 {
                     "has_extraction": False,
                     "confidence": None,
                     "n_setups": 0,
-                    "n_annotated": 0,
-                    "n_fields": 0,
-                    "n_reviewed": 0,
-                    "n_verified": 0,
-                    "n_flagged": 0,
-                    "is_complete": False,
-                    "has_flags": False,
+                    "active_run_id": None,
+                    "active_run": None,
+                    **(
+                        {**_article_progress(files, None), "review_error": run_error}
+                        if run_error
+                        else _article_progress(files, run)
+                    ),
                 }
             )
         else:
             setups = data.get("experimental_setups") or []
-            # Annotation progress
-            annotations = _current_annotations(cfg, article_id)
-            progress = _review_progress(data, annotations)
+            progress = _article_progress(files, run)
+            run_summary = _run_summary_for(run)
             entry.update(
                 {
                     "has_extraction": True,
-                    "confidence": _extraction_confidence(files),
+                    "confidence": _extraction_confidence(files, run),
                     "study_types": data.get("study_types", []),
                     "focus_areas": data.get("focus_areas", []),
                     "document_type": data.get("document_type"),
                     "n_setups": len(setups),
-                    "n_annotated": progress["n_reviewed"],
+                    "active_run_id": (run_summary or {}).get("run_id"),
+                    "active_run": run_summary,
                     **progress,
                 }
             )
@@ -414,10 +675,18 @@ async def get_orcid_profile(orcid_id: str):
 
 
 @app.get("/api/article/{article_id}")
-async def get_article(article_id: str, cfg: CfgDep):
-    """Return full extraction JSON for an article."""
-    path = article_files(cfg, article_id).extraction
-    if not path.exists():
+async def get_article(article_id: str, cfg: CfgDep, run_id: str | None = None):
+    """Return a run's raw extraction JSON for an article.
+
+    Raw, not effective: the document view renders the review overlay itself so
+    it can show what the agent said alongside what a human changed it to.
+
+    ``run_id`` pins the read to one run, so the payload on screen is the one
+    the reviewer's annotations will be written against; omitted, the active
+    run is used.
+    """
+    path = _active_artifact(article_files(cfg, article_id), "extraction", run_id)
+    if path is None or not path.exists():
         raise HTTPException(404, f"No extraction for {article_id}")
     return json.loads(path.read_text())
 
@@ -435,14 +704,14 @@ async def get_bibliography(article_id: str, cfg: CfgDep):
 async def put_bibliography(article_id: str, request: Request, cfg: CfgDep):
     """Apply a human edit to the verify header; provenance becomes 'manual'.
 
-    Accepts a partial record of SOURCE_FIELDS. ``null`` clears a field.
+    Accepts a partial record of BIB_FIELDS. ``null`` clears a field.
     Header metadata lives in the article manifest — review.json is never
-    touched by header edits (distinct layers; see specs/source-metadata/spec.md).
+    touched by header edits (distinct layers; see specs/bib-metadata/spec.md).
     """
     body = await request.json()
     if not isinstance(body, dict):
         raise HTTPException(400, "body must be a JSON object")
-    unknown = set(body) - set(SOURCE_FIELDS)
+    unknown = set(body) - set(BIB_FIELDS)
     if unknown:
         raise HTTPException(400, f"unknown fields: {', '.join(sorted(unknown))}")
     if not body:
@@ -468,7 +737,7 @@ async def put_bibliography(article_id: str, request: Request, cfg: CfgDep):
     files = article_files(cfg, article_id)
     if not files.metadata.exists():
         raise HTTPException(404, f"Unknown article {article_id}")
-    block = update_source_metadata(files, fields, source="manual")
+    block = update_bib_metadata(files, fields, source="manual")
     block["editable"] = True
     return block
 
@@ -518,98 +787,283 @@ async def get_pdf(article_id: str, cfg: CfgDep):
 
 
 @app.get("/api/reasoning/{article_id}")
-async def get_reasoning(article_id: str, cfg: CfgDep):
-    """Return per-field extraction reasoning if it exists."""
-    path = article_files(cfg, article_id).reasoning
-    if not path.exists():
+async def get_reasoning(article_id: str, cfg: CfgDep, run_id: str | None = None):
+    """Return per-field extraction reasoning if it exists.
+
+    ``run_id`` pins the read to one run, matching `/api/article`: evidence must
+    describe the same extraction the reviewer is looking at.
+    """
+    path = _active_artifact(article_files(cfg, article_id), "reasoning", run_id)
+    if path is None or not path.exists():
         raise HTTPException(404, f"No reasoning for {article_id}")
     return json.loads(path.read_text())
 
 
-@app.get("/api/annotations/{article_id}")
-async def get_annotations(article_id: str, cfg: CfgDep):
-    """Return annotations for an article: one per reviewed field path.
+@app.get("/api/settings")
+async def get_settings(cfg: CfgDep):
+    """Project-level review settings and the context needed to explain them."""
+    from ..cli import _in_git_repo
 
-    ``base_stale`` is true when any stored review was written against a
-    different agent-extraction.json than the current one
-    (specs/reviews/spec.md § Staleness).
-    """
+    shared = _in_git_repo(cfg.project_root)
     return {
-        "article_id": article_id,
-        "annotations": _current_annotations(cfg, article_id),
-        "base_stale": base_extraction_stale(article_files(cfg, article_id)),
+        "require_reviewer": _require_reviewer(cfg),
+        # A repository is the available signal that the work may be shared,
+        # which is what makes attribution matter and backfill risky.
+        "in_git_repo": shared,
+        "unattributed_reviews": _count_unattributed(cfg),
     }
 
 
-@app.put("/api/annotations/{article_id}")
-async def put_annotation(article_id: str, request: Request, cfg: CfgDep):
-    """Add or update a field annotation."""
+@app.put("/api/settings")
+async def put_settings(request: Request, cfg: CfgDep):
+    """Update project review policy. Writes litschema.yaml."""
     body = await request.json()
     if not isinstance(body, dict):
         raise HTTPException(400, "body must be a JSON object")
-    field_path = body.get("path")
-    status = body.get("status")  # verified | flagged
-    reviewer = body.get("reviewer", "")
-    note = body.get("note")
-    correct_value = body.get("correct_value")  # proposed correction or "__remove__" to delete field
-    source = body.get("source")
-    batch_id = body.get("batch_id")
-
-    if not field_path or not status:
-        raise HTTPException(400, "path and status are required")
-    if not isinstance(field_path, str):
-        raise HTTPException(400, "path must be a string")
-    if status not in ("verified", "flagged"):
-        raise HTTPException(400, "status must be verified or flagged")
-    if status == "flagged" and not reviewer:
-        raise HTTPException(400, "reviewer ORCID is required for flags")
-    if reviewer:
-        # Author is an ORCID or empty (specs/reviews/spec.md); normalize URLs.
-        reviewer = _normalize_orcid_id(str(reviewer))
-
-    entry = {
-        "author": reviewer,
-        "signal": status,
-        "timestamp": datetime.now(UTC).isoformat(),
-    }
-    if note:
-        entry["note"] = note
-    if correct_value is not None:
-        entry["override_value"] = correct_value
-    if source:
-        entry["source"] = source
-    if batch_id:
-        entry["batch_id"] = batch_id
-
-    files = article_files(cfg, article_id)
-    try:
-        entry = upsert_review(files, field_path, entry)
-    except ReviewFileUnreadableError as exc:
-        raise HTTPException(409, str(exc)) from exc
-    return _annotation_from_entry(canonical_review_path(field_path), entry)
+    if REQUIRE_REVIEWER_KEY in body:
+        value = body[REQUIRE_REVIEWER_KEY]
+        if not isinstance(value, bool):
+            raise HTTPException(400, f"{REQUIRE_REVIEWER_KEY} must be true or false")
+        try:
+            _set_require_reviewer(cfg, value)
+        except OSError as exc:
+            raise HTTPException(500, f"could not write {cfg.config_path}: {exc}") from exc
+    return await get_settings(cfg)
 
 
-@app.delete("/api/annotations/{article_id}/{field_path:path}")
-async def delete_annotation(article_id: str, field_path: str, cfg: CfgDep):
-    """Remove THE annotation for a specific field, whoever wrote it.
+@app.post("/api/reviews/backfill-reviewer")
+async def backfill_reviewer(request: Request, cfg: CfgDep):
+    """Attribute previously anonymous reviews to a reviewer.
 
-    Drops the entry from review.json rather than recording a 'cleared'
-    marker — clearing is not an attributable action.
+    Only entries with no reviewer are touched; an entry already attributed to
+    someone is never reassigned. Corrupt review files are skipped rather than
+    rewritten.
     """
+    from ..articles import iter_metadata_paths
+    from ..reviews import ReviewCorruptError, read_reviews, write_reviews
+    from ..runs import iter_run_ids, run_files
+
+    body = await request.json()
+    reviewer = str((body or {}).get("reviewer") or "").strip()
+    if not reviewer:
+        raise HTTPException(400, "reviewer is required")
+    reviewer = _normalize_orcid_id(reviewer)
+
+    updated = 0
+    skipped_corrupt = 0
+    for metadata_path in iter_metadata_paths(cfg):
+        files = article_files(cfg, metadata_path.parent.name)
+        for run_id in iter_run_ids(files):
+            run = run_files(files, run_id)
+            try:
+                fields = read_reviews(run)
+            except ReviewCorruptError:
+                skipped_corrupt += 1
+                continue
+            changed = False
+            for entry in fields.values():
+                if not entry.get("reviewer"):
+                    entry["reviewer"] = reviewer
+                    changed = True
+                    updated += 1
+            if changed:
+                write_reviews(run, fields)
+    return {"updated": updated, "skipped_corrupt": skipped_corrupt, "reviewer": reviewer}
+
+
+@app.get("/api/annotations/{article_id}/{run_id}")
+async def get_annotations(article_id: str, run_id: str, cfg: CfgDep):
+    """Stored review entries and effective state for one explicit run.
+
+    Every review read and write names its run, so switching the active run can
+    never silently retarget an edit begun against a different extraction.
+    """
+    run = _require_run(cfg, article_id, run_id)
+    try:
+        fields = read_reviews(run)
+    except ReviewCorruptError as exc:
+        # Explicit, never a silent empty: the caller must be able to tell
+        # "no reviews" apart from "reviews unreadable".
+        return {
+            "article_id": article_id,
+            "run_id": run_id,
+            "annotations": None,
+            "review_error": str(exc),
+        }
+    return {
+        "article_id": article_id,
+        "run_id": run_id,
+        "annotations": [_annotation(path, entry) for path, entry in sorted(fields.items())],
+        "review_error": None,
+    }
+
+
+@app.put("/api/annotations/{article_id}/{run_id}")
+async def put_annotation(article_id: str, run_id: str, request: Request, cfg: CfgDep):
+    """Upsert one path. No override means verify; an override replaces/removes/adds."""
+    run = _require_run(cfg, article_id, run_id)
+    body = await request.json()
+    if not isinstance(body, dict):
+        raise HTTPException(400, "body must be a JSON object")
+    # Reject unknown keys rather than ignoring them. A typo or a version-1 name
+    # like `override_value` otherwise fell through to an entry with no override
+    # at all — recording "the extractor got this right" for a value the caller
+    # was trying to correct. Silence is the worst possible answer here.
+    unknown = sorted(set(body) - {"path", "override", "note", "reviewer"})
+    if unknown:
+        raise HTTPException(400, f"unknown fields: {', '.join(unknown)}")
+
+    field_path = body.get("path")
+    if not isinstance(field_path, str) or not field_path.strip():
+        raise HTTPException(400, "path is required")
+
+    entry: dict = {}
+    override = body.get("override")
+    if override is not None:
+        if not isinstance(override, dict) or override.get("op") not in ("replace", "remove", "add"):
+            raise HTTPException(400, "override.op must be replace, remove, or add")
+        unknown_override = sorted(set(override) - {"op", "value"})
+        if unknown_override:
+            raise HTTPException(400, f"unknown override fields: {', '.join(unknown_override)}")
+        entry["override"] = override
+    note = body.get("note")
+    if note:
+        entry["note"] = str(note)
+    # Attribution is optional: a lone reviewer gains nothing from asserting who
+    # they are. When supplied it is normalized so the stored form is canonical.
+    reviewer = body.get("reviewer")
+    if reviewer and str(reviewer).strip():
+        entry["reviewer"] = _normalize_orcid_id(str(reviewer).strip())
+    # A policy only the browser respects is not a policy: enforce it here so it
+    # binds every caller, including scripts and agents.
+    if _require_reviewer(cfg) and "reviewer" not in entry:
+        raise HTTPException(
+            400,
+            "this project requires a reviewer on every review "
+            f"(set {REQUIRE_REVIEWER_KEY}: false in litschema.yaml to change that)",
+        )
+
+    # Any override is judged against the schema: a value by its slot type, a
+    # removal by whether that slot is an identifier. Neither is safe once the
+    # run's schema identity cannot be established — a changed schema could
+    # permit removing what used to be an identifier, or refuse a removal that
+    # was legitimate when the run was extracted.
+    #
+    # Plain verification needs no schema at all: it asserts the agent was right
+    # about what is already there. Refusing it too would strand a reviewer
+    # mid-audit over a schema edit that never touched the field in front of them.
+    schema = _resolved_schema(cfg)
+    if entry.get("override") is not None:
+        blocker = _schema_blocker(article_files(cfg, article_id), run)
+        if blocker is not None:
+            raise HTTPException(
+                409,
+                f"cannot judge this override against the run's schema: {blocker}. "
+                f"Verification still works; restore the schema or re-extract to edit again.",
+            )
+
+    try:
+        fields = upsert_review(run, field_path, entry, schema=schema)
+        key = canonical_review_path(field_path)
+    except InvalidReviewPathError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except ReviewContractError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except ReviewCorruptError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    return {
+        "annotation": _annotation(key, fields[key]) if key in fields else None,
+        "state": effective_state(key, fields),
+    }
+
+
+@app.delete("/api/annotations/{article_id}/{run_id}/{field_path:path}")
+async def delete_annotation(
+    article_id: str,
+    run_id: str,
+    field_path: str,
+    cfg: CfgDep,
+    discard_note: bool = False,
+):
+    """Unreview the whole subtree at ``field_path``.
+
+    Pass ``?discard_note=true`` to confirm discarding a note carried by a
+    covering ancestor — the one case where unreviewing destroys prose a human
+    wrote, so it is never implicit.
+    """
+    run = _require_run(cfg, article_id, run_id)
     if not field_path.strip("."):
         raise HTTPException(400, "field path is required")
     try:
-        delete_reviews_at(article_files(cfg, article_id), field_path)
-    except ReviewFileUnreadableError as exc:
+        unreview_subtree(run, field_path, discard_note=discard_note)
+    except InvalidReviewPathError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except ReviewContractError as exc:
         raise HTTPException(409, str(exc)) from exc
-    return {"deleted": field_path}
+    except ReviewCorruptError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    return {"unreviewed": canonical_review_path(field_path)}
 
 
-def run_app(cfg: LitSchemaConfig, *, port: int = 8000) -> None:
+def run_app(cfg: LitSchemaConfig, *, port: int = 8000, open_browser: bool = True) -> None:
+    """Serve the verifier, announcing the URL only once the port is ours.
+
+    Announcing first meant that when the port was already taken — a verifier
+    left running for another project, most likely — uvicorn logged a bind error
+    and exited while the user had already been sent to http://localhost:<port>,
+    where somebody else's project was serving. That is indistinguishable from
+    your own project being empty. Even without a collision, the browser could
+    beat startup and land on a connection refused.
+    """
+    import socket
+
     import uvicorn
 
     app.state.litschema_config = cfg
+
+    # Claim the port before saying anything, and report the conflict in terms
+    # of the fix rather than as a traceback.
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    try:
+        sock.bind(("127.0.0.1", port))
+    except OSError as exc:
+        sock.close()
+        raise SystemExit(
+            f"port {port} is already in use, so litschema verify cannot start "
+            f"({exc.strerror}).\nSomething else is serving there — quite possibly "
+            f"another `litschema verify`. Stop it, or pick another port with "
+            f"`--port {port + 1}`."
+        ) from exc
+    sock.listen()
+
+    # Warm the schema so the first page load does not pay for it and an
+    # unresolvable schema is reported now rather than one article at a time.
+    try:
+        from ..schema_resolution import resolve_extraction_schema, schema_hash
+
+        resolve_extraction_schema(cfg)
+        schema_hash(cfg)
+    except Exception as exc:  # noqa: BLE001 - degraded serving is the contract
+        # Deliberately not fatal: the verifier still shows headers, PDFs and
+        # prepared text for every article, and says per-article why counts are
+        # unavailable. Refusing to start would take that away too.
+        print(f"warning: the extraction schema could not be resolved ({exc})")
+        print("         the verifier will start, but review progress is unavailable")
+
     print(f"Article store: {cfg.article_store_dir}")
     print(f"Paper inbox: {cfg.paper_inbox_dir}")
-    webbrowser.open(f"http://localhost:{port}")
-    uvicorn.run(app, host="127.0.0.1", port=port)
+    url = f"http://localhost:{port}"
+    if open_browser:
+        webbrowser.open(url)
+    else:
+        print(f"Open {url}")
+
+    # Without a bound on graceful shutdown, uvicorn waits forever for open
+    # connections to drain, and an idle browser tab holding a keep-alive socket
+    # never does — so Ctrl+C appeared to do nothing at all.
+    config = uvicorn.Config(app, timeout_graceful_shutdown=5)
+    try:
+        uvicorn.Server(config).run(sockets=[sock])
+    finally:
+        sock.close()

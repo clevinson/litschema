@@ -49,7 +49,7 @@ profile mismatch (keeps a special case alive to serve output text).
 `document_profile: journal_article | generic`. Its entire surface was one
 hint line in init/status output and one conditional harvest step in the
 onboard skill. It never touched schema scaffolding or pipeline behavior, and
-after the source-metadata lock model landed, registry enrichment became a
+after the bib-metadata lock model landed, registry enrichment became a
 per-article, data-driven decision (`meta set --doi` at extraction, then
 `meta sync`).
 
@@ -101,7 +101,7 @@ records the DOI and attempts the registry lock; title-page transcription is
 an explicit fallback (no DOI, or the sync half failed). The placement
 decision above is unchanged: the post-batch `meta sync --all` sweep remains
 the transient-failure net. Full rationale and rejected alternatives:
-`specs/source-metadata/decisions.md` (2026-07-07 entry).
+`specs/bib-metadata/decisions.md` (2026-07-07 entry).
 
 
 ## 2026-07-14 — Onboarding creates initial runs; refinement stays separate
@@ -117,3 +117,58 @@ import mechanism is not part of the MVP.
 
 **Rejected:** folding refinement into onboarding; overwriting extraction
 outputs on rerun; reviving imported framework base schemas.
+
+
+## 2026-07-26 — Dev-override approval is recorded state, not a relayed claim
+
+**Context:** running the first real batch, every dispatched subagent stopped to
+ask for approval of the `.litschema/dev-cli` override, and correctly refused
+the conductor's assertion that the user had already approved it — naming it as
+permission laundering. The batch could not proceed. Relaying the user's genuine
+approval afterward still cost a round trip per agent, because consent arriving
+as prose cannot be distinguished from consent invented as prose.
+
+**Decision:** approval is the SHA-256 of the approved `dev-cli` content, stored
+in `.litschema/dev-cli-approved`. Agents compare hashes themselves instead of
+trusting a claim, so a conductor approves once and its subagents proceed
+silently. Editing the override changes the hash and revokes approval
+automatically. The file lives under the gitignored runtime directory, so
+approval is machine-local and never travels to another user with the repo.
+
+**Rejected:** passing approval down in the dispatch prompt, which cannot be
+made correct because an agent that accepts asserted consent also accepts
+fabricated consent; a project-config key, which would be committed and would
+approve the override for everyone who clones; and emitting a pyproject.toml so
+the override is unnecessary, which was tried and reverted (see kata qr3c — it
+only helps post-publication and made `doctor` report false success).
+
+## 2026-07-27 — Dev-override approval moves out of the checkout (supersedes the storage location above)
+
+**Context:** the entry above stored approval in `.litschema/dev-cli-approved`
+and argued it was safe because the runtime directory is gitignored, so approval
+"never travels to another user with the repo." That reasoning does not hold.
+`.gitignore` governs what *this* repository tracks; it has no say over what an
+incoming repository already contains. Nothing stops a project from committing
+both `.litschema/dev-cli` and a matching `.litschema/dev-cli-approved`, and on
+a fresh clone the hashes agree — so the skills' own instruction ("use it
+silently — they have approved this exact command before") hands a hostile
+checkout silent arbitrary command execution on first run.
+
+**Decision:** approval lives in the user's configuration, at
+`${XDG_CONFIG_HOME:-$HOME/.config}/litschema/dev-cli-approved/<sha256 of the
+real project path>`, holding the content hash. An in-project marker grants
+nothing and is explicitly ignored; `doctor` reports one as ignored and offers
+to have it deleted.
+
+**What the original decision got right, and keeps:** approval must be
+verifiable state rather than a relayed claim, because an agent that accepts
+asserted consent also accepts fabricated consent. That was the correct response
+to the threat it was built for — a peer agent laundering permission through a
+dispatch prompt. It simply did not address a second threat: consent forged by
+the repository itself. Keying by project path and content hash preserves the
+batch property that motivated the original design, since every subagent can
+still confirm approval on its own.
+
+**Rejected:** keying by project name rather than resolved path, which would let
+one approval cover any checkout sharing a directory name; and prompting per
+agent, which is what the recorded-state design existed to eliminate.

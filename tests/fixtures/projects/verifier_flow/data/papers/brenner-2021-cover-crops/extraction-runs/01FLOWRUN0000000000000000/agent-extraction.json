@@ -1,0 +1,31 @@
+{
+  "article_id": "brenner-2021-cover-crops",
+  "site_name": "Wendelsheim Long-Term Site",
+  "site_country": "Germany",
+  "mean_annual_temperature_c": 9.4,
+  "replicates": 4,
+  "tillage": "reduced_till",
+  "crops": [
+    "winter wheat",
+    "spring barley",
+    "sugar beet"
+  ],
+  "measurements": [
+    {
+      "outcome": "soil organic carbon",
+      "value": 14.2,
+      "unit": "g/kg",
+      "depth_min_cm": 0.0,
+      "depth_max_cm": 15.0,
+      "standard_error": 0.6
+    },
+    {
+      "outcome": "soil organic carbon",
+      "value": 9.8,
+      "unit": "g/kg",
+      "depth_min_cm": 15.0,
+      "depth_max_cm": 30.0,
+      "standard_error": 0.4
+    }
+  ]
+}

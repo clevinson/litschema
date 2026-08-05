@@ -1,0 +1,95 @@
+name: publish
+
+# Publishes to PyPI when a version tag is pushed. Uses trusted publishing
+# (OIDC), so no API token is stored in the repository.
+#
+# One-time setup by a human, before the first tag:
+#   1. Reserve the name at https://pypi.org/manage/projects/ (or let the first
+#      publish create it via a pending publisher).
+#   2. Add a pending trusted publisher at
+#      https://pypi.org/manage/account/publishing/ with:
+#        owner: clevinson   repository: litschema
+#        workflow: publish.yml   environment: pypi
+#   3. Create the `pypi` environment in the repository settings.
+#
+# Tagging is deliberate and manual: `git tag v0.1.0 && git push origin v0.1.0`.
+
+# Manual only, deliberately. 0.1.0 tags on GitHub and does not publish; a tag
+# trigger would fire this on v0.1.0 and fail at the trusted-publishing step,
+# because neither PyPI human gate above has been done — the release tag would
+# carry a red X for a job nobody asked to run. The workflow is complete and one
+# click away. Restore the tag trigger when PyPI is set up (kata 0f2h).
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      # Publishing an untested build is how a broken release reaches users who
+      # cannot un-install it: PyPI does not allow re-uploading a version.
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Lint
+        run: uv run ruff check .
+
+      - name: Tests
+        run: uv run pytest -q
+
+      - name: Build
+        run: uv build
+
+      - name: The tag must match the version in pyproject.toml
+        run: |
+          # Dispatched from a branch, GITHUB_REF_NAME is the branch name, and
+          # the comparison below fails with a message about a version mismatch
+          # that never happened. Say what actually went wrong instead.
+          if [ "$GITHUB_REF_TYPE" != "tag" ]; then
+            echo "run this workflow against a tag, not the $GITHUB_REF_TYPE '$GITHUB_REF_NAME'" >&2
+            echo "re-run it and pick the release tag (for example v0.1.0) in the ref dropdown" >&2
+            exit 1
+          fi
+          TAG="${GITHUB_REF_NAME#v}"
+          PKG=$(uv run python -c "import tomllib;print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          if [ "$TAG" != "$PKG" ]; then
+            echo "tag $GITHUB_REF_NAME does not match project version $PKG" >&2
+            exit 1
+          fi
+          echo "tag and version agree: $PKG"
+
+      - name: Import the public surface from the built wheel
+        run: |
+          WHEEL=$(ls dist/*.whl)
+          uv run --isolated --no-project --with "$WHEEL" python -c "
+          import litschema.cli, litschema.runs, litschema.reviews, litschema.analysis
+          import litschema.explore.loader, litschema.webapp.app
+          from litschema.cli import app
+          print('ok')
+          "
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write # trusted publishing; no token secret needed
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - uses: pypa/gh-action-pypi-publish@release/v1

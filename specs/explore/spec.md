@@ -13,9 +13,10 @@ article-root extractions with review overrides applied, plus the frozen DuckDB
 store and the `litschema mcp` server and its three tools.
 
 Pending: the view split. `--view all|audited` and `--audit-output` do not exist,
-so there is no audited-data projection and no compact audit sidecar. Record
-resolution below is written against per-article active runs, which do not exist
-yet either. Tracked by `bmwn`, blocked on `tdv3` and `2gd1`.
+so there is no audited-data projection and no compact audit sidecar — and
+therefore no export-side carry-through of the human-origin distinction that
+`specs/reviews/spec.md` records on an `add`. Per-article active runs, which the
+record resolution below assumes, now exist. Tracked by `bmwn`.
 
 ## Record resolution
 

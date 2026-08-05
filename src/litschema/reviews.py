@@ -1,158 +1,638 @@
-"""Per-article human-review storage: ``data/papers/<id>/review.json``.
+"""Run-bound human review: ``extraction-runs/<run-id>/review.json`` (version 2).
 
-The current verification state IS the file (specs/reviews/spec.md): a map of
-canonical field path -> a single review entry, at most ONE review per field.
-Any save replaces whatever entry is at the path, regardless of author; the
-``author`` key is recorded on the entry so git diffs show "A replacing B's
-review" — multi-reviewer coordination happens in PR diffs of review.json
-(specs/reviews/decisions.md, 2026-06-11). Entries use ``{author, signal:
-verified|flagged, timestamp, base_extraction_sha256?}`` (+ optional
-``override_value``/``note``/``source``/``batch_id``).
-The webapp API keeps its historical field names (status/reviewer/
-correct_value) and maps at the endpoint boundary — see ``webapp/app.py``.
+A review is a compact overlay on one immutable run (`specs/reviews/spec.md`).
+At most one entry per exact path; an entry carries an optional ``override``
+(``replace``/``remove``/``add``), an optional ``note``, and an optional
+``reviewer``. An empty object means verified.
+
+``reviewer`` is optional by design: a lone researcher auditing their own
+documents gains nothing from asserting who they are, while a shared project
+does. Where the project is a Git repository, history carries stronger
+attribution than a self-typed identifier — author, time, and a diff — so the
+stored field complements it rather than replacing it.
+
+The file is the state: there is no staleness mode, because a review binds to a
+run whose payload can never change.
 """
 
 from __future__ import annotations
 
 import contextlib
-import hashlib
 import json
 import logging
 
-from .articles import ArticleFiles
+from .review_paths import (
+    InvalidReviewPathError,
+    canonical_review_path,
+    format_path,
+    is_ancestor,
+    leaf_paths,
+    nearest_stored_ancestor,
+    parse_path,
+    path_resolves,
+    resolve,
+)
+from .runs import RunFiles
 
 logger = logging.getLogger(__name__)
 
-REVIEW_VERSION = 1
+REVIEW_VERSION = 2
+OVERRIDE_OPS = ("replace", "remove", "add")
+
+VERIFIED = "verified"
+OVERRIDDEN = "overridden"
+UNREVIEWED = "unreviewed"
+
+LEGACY_KEYS = frozenset(
+    {"signal", "author", "base_extraction_sha256", "override_value", "__remove__"}
+)
 
 
-class ReviewFileUnreadableError(Exception):
-    """review.json exists but cannot be parsed.
+class ReviewCorruptError(Exception):
+    """review.json is unreadable, malformed, or names paths that cannot exist.
 
-    Read paths treat the file as empty and leave it in place; write paths
-    raise this instead of destroying what a human needs to inspect.
+    Corrupt is never treated as empty: reads surface it, writes refuse rather
+    than overwriting a file a human still needs to inspect.
     """
 
 
-def canonical_review_path(path: str) -> str:
-    """Normalize a review path: strip the leading dot the frontend prefixes.
+class ReviewContractError(Exception):
+    """A proposed review entry violates the review contract."""
 
-    Canonical form is ``experiments[0].ph`` — bracket indices, no leading
-    dot — exactly what the extraction leaf-path walkers on both sides
-    produce. Nothing else is rewritten.
+
+def read_reviews(run: RunFiles, *, check_semantics: bool = True) -> dict[str, dict]:
+    """Return the stored ``fields`` map for this run, or ``{}`` when absent.
+
+    Raises :class:`ReviewCorruptError` for an unreadable file, a bad shape, a
+    malformed path, a legacy version-1 entry, or an entry that cannot apply to
+    this run. Callers that need to render an error rather than fail should
+    catch it.
+
+    Semantic validation is on by default because this project's answer to two
+    reviewers is "work in separate clones and reconcile by merge"
+    (`specs/reviews/spec.md`). A merge can produce a file where every entry is
+    individually well-formed and the set is nonsense — a replace at a path the
+    run does not have, an add that no longer appends, an entry beneath someone
+    else's container override. `effective_extraction` skips those silently
+    while progress keeps counting them, so the failure is invisible in exactly
+    the situation where two people are relying on it.
+
+    Pass ``check_semantics=False`` for a pure syntax read.
     """
-    return path.lstrip(".")
 
-
-def base_extraction_sha256(files: ArticleFiles) -> str | None:
-    """SHA-256 of the article's agent-extraction.json bytes, or None if absent."""
-    path = files.extraction
-    if not path.exists():
-        return None
-    return hashlib.sha256(path.read_bytes()).hexdigest()
-
-
-def base_extraction_stale(files: ArticleFiles) -> bool:
-    """True when ANY entry was written against a different agent-extraction.json.
-
-    Each entry stamps the extraction it reviewed (specs/reviews/spec.md
-    § Staleness); if that base has changed since, field paths may silently
-    misattach. Per-entry stamps mean a fresh save after re-extraction never
-    disarms the warning for older entries — it clears only when every stale
-    entry has been re-reviewed or removed. No stamp, no review file, or no
-    extraction file all mean "not stale" — nothing to misattach against.
-    """
-    current = base_extraction_sha256(files)
-    if current is None:
-        return False
-    try:
-        fields = read_reviews(files)
-    except ReviewFileUnreadableError:  # pragma: no cover - lenient read never raises
-        return False
-    return any(
-        entry.get("base_extraction_sha256") not in (None, current) for entry in fields.values()
-    )
-
-
-def read_reviews(files: ArticleFiles, *, strict: bool = False) -> dict[str, dict]:
-    """Return the ``fields`` map (canonical path -> entry).
-
-    Keys are canonicalized on the way out, so hand-edited files with dotted
-    paths still round-trip through upsert/delete. An unreadable file reads as
-    empty and is left in place — unless ``strict``, which raises
-    :class:`ReviewFileUnreadableError` so write paths never build on (and
-    then destroy) a corrupt file.
-
-    Non-dict entry values (e.g. the pre-2026-06-11 list-of-entries shape) are
-    ignored — old-shape files are throwaway alpha data, not migrated.
-    """
-    path = files.reviews
-    if not path.exists():
+    path = run.review
+    if not path.is_file():
         return {}
     try:
         data = json.loads(path.read_bytes())
-    except ValueError as exc:  # JSONDecodeError and UnicodeDecodeError
-        if strict:
-            raise ReviewFileUnreadableError(
-                f"review.json for {files.article_id} is unreadable — "
-                "fix or remove it by hand"
-            ) from exc
-        logger.warning("Unreadable review.json (leaving in place): %s", path)
-        return {}
-    fields = data.get("fields") if isinstance(data, dict) else None
-    if not isinstance(fields, dict):
-        if strict:
-            raise ReviewFileUnreadableError(
-                f"review.json for {files.article_id} has no usable fields map — "
-                "fix or remove it by hand"
+    except ValueError as exc:
+        raise ReviewCorruptError(f"{path} is unreadable — fix or remove it by hand") from exc
+    if not isinstance(data, dict) or not isinstance(data.get("fields"), dict):
+        raise ReviewCorruptError(f"{path} has no usable fields map")
+    if data.get("version") != REVIEW_VERSION:
+        raise ReviewCorruptError(
+            f"{path} is version {data.get('version')!r}, not {REVIEW_VERSION}"
+        )
+
+    fields: dict[str, dict] = {}
+    for raw_path, entry in data["fields"].items():
+        if not isinstance(entry, dict):
+            raise ReviewCorruptError(f"{path}: entry at {raw_path!r} is not an object")
+        if LEGACY_KEYS & set(entry):
+            raise ReviewCorruptError(
+                f"{path}: entry at {raw_path!r} uses version-1 keys, invalid in version 2"
             )
-        return {}
-    return {
-        canonical_review_path(p): entry for p, entry in fields.items() if isinstance(entry, dict)
-    }
+        try:
+            key = canonical_review_path(raw_path)
+        except InvalidReviewPathError as exc:
+            raise ReviewCorruptError(f"{path}: {exc}") from exc
+        if key in fields:
+            raise ReviewCorruptError(f"{path}: duplicate entry for {key!r}")
+        _validate_entry_shape(key, entry, source=str(path))
+        fields[key] = entry
+    if check_semantics:
+        _validate_semantics(run, fields, source=str(path))
+    return fields
 
 
-def write_reviews(files: ArticleFiles, fields: dict[str, dict]) -> None:
-    """Atomically replace review.json; remove it entirely when empty."""
-    path = files.reviews
-    fields = {p: entry for p, entry in fields.items() if entry}
+def _validate_semantics(run: RunFiles, fields: dict[str, dict], *, source: str) -> None:
+    """Every entry must be one this run could actually have accepted."""
+    if not fields:
+        return
+    try:
+        extraction = json.loads(run.extraction.read_text())
+    except (OSError, ValueError):
+        return  # the run itself is unreadable; its own consumers report that
+
+    for key in sorted(fields, key=lambda p: len(parse_path(p))):
+        entry = fields[key]
+        blocked = terminal_override_ancestor(key, fields)
+        if blocked is not None:
+            raise ReviewCorruptError(
+                f"{source}: {blocked} carries a container override, so the entry at "
+                f"{key!r} beneath it cannot apply"
+            )
+        override = entry.get("override")
+        op = override.get("op") if override else None
+        if op == "add":
+            if path_resolves(extraction, key):
+                raise ReviewCorruptError(
+                    f"{source}: {key!r} is recorded as an add but already exists in this run"
+                )
+            try:
+                _validate_add_target(extraction, key, fields, updating=key)
+            except ReviewContractError as exc:
+                raise ReviewCorruptError(f"{source}: {exc}") from None
+        elif not path_resolves(extraction, key):
+            raise ReviewCorruptError(
+                f"{source}: the entry at {key!r} names a path this run does not have"
+            )
+
+
+def _validate_entry_shape(key: str, entry: dict, *, source: str) -> None:
+    unknown = set(entry) - {"override", "note", "reviewer"}
+    if unknown:
+        raise ReviewCorruptError(f"{source}: entry at {key!r} has unknown keys {sorted(unknown)}")
+    reviewer = entry.get("reviewer")
+    if reviewer is not None and (not isinstance(reviewer, str) or not reviewer.strip()):
+        raise ReviewCorruptError(f"{source}: entry at {key!r} has an empty reviewer")
+    override = entry.get("override")
+    if override is None:
+        return
+    if not isinstance(override, dict) or override.get("op") not in OVERRIDE_OPS:
+        raise ReviewCorruptError(f"{source}: entry at {key!r} has an invalid override")
+    if override["op"] == "remove":
+        if "value" in override:
+            raise ReviewCorruptError(f"{source}: remove override at {key!r} carries a value")
+    elif "value" not in override or override["value"] is None:
+        raise ReviewCorruptError(
+            f"{source}: {override['op']} override at {key!r} needs a non-null value"
+        )
+
+
+def write_reviews(run: RunFiles, fields: dict[str, dict]) -> None:
+    """Atomically replace review.json, removing it when no entries remain."""
+    path = run.review
     if not fields:
         with contextlib.suppress(FileNotFoundError):
             path.unlink()
         return
     path.parent.mkdir(parents=True, exist_ok=True)
-    payload: dict = {"version": REVIEW_VERSION}
-    payload["fields"] = {p: fields[p] for p in sorted(fields)}
+    payload = {"version": REVIEW_VERSION, "fields": {k: fields[k] for k in sorted(fields)}}
     tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n")
+    tmp.write_text(json.dumps(payload, indent=2, ensure_ascii=False, sort_keys=False) + "\n")
     tmp.replace(path)
 
 
-def upsert_review(files: ArticleFiles, path: str, entry: dict) -> dict:
-    """Set THE entry at ``path``, replacing any existing one regardless of author.
+# ── effective state ──────────────────────────────────────────────────────────
 
-    The entry is stamped with the hash of the agent-extraction.json it was
-    written against (omitted when no extraction exists); older entries keep
-    their own stamps, so a save never disarms staleness for the rest of the
-    file. Raises :class:`ReviewFileUnreadableError` on a corrupt review.json.
+
+def controlling_entry(path: str, fields: dict[str, dict]) -> tuple[str | None, dict | None]:
+    """The entry governing ``path``: the exact one, else the nearest ancestor."""
+    if path in fields:
+        return path, fields[path]
+    ancestor = nearest_stored_ancestor(path, fields)
+    if ancestor is None:
+        return None, None
+    return ancestor, fields[ancestor]
+
+
+def effective_state(path: str, fields: dict[str, dict]) -> str:
+    """verified / overridden / unreviewed for ``path``."""
+    _, entry = controlling_entry(path, fields)
+    if entry is None:
+        return UNREVIEWED
+    return OVERRIDDEN if entry.get("override") else VERIFIED
+
+
+def terminal_override_ancestor(path: str, fields: dict[str, dict]) -> str | None:
+    """An ancestor whose override makes entries beneath ``path`` invalid."""
+    for candidate, entry in fields.items():
+        if is_ancestor(candidate, path) and entry.get("override"):
+            return candidate
+    return None
+
+
+# ── canonicalization ─────────────────────────────────────────────────────────
+
+
+def _is_redundant(path: str, fields: dict[str, dict]) -> bool:
+    """Bare verification under bare verification, by the same reviewer.
+
+    A descendant attributed to someone else is never redundant: dropping it
+    would silently reassign their work to whoever verified the parent.
+    """
+    entry = fields[path]
+    if entry.get("override") or entry.get("note"):
+        return False
+    ancestor = nearest_stored_ancestor(path, fields)
+    if ancestor is None:
+        return False
+    covering = fields[ancestor]
+    if covering.get("override"):
+        return False
+    return entry.get("reviewer") == covering.get("reviewer")
+
+
+def canonicalize(fields: dict[str, dict]) -> dict[str, dict]:
+    """Drop redundant empty verifications; never synthesize a parent."""
+    kept = dict(fields)
+    for path in sorted(fields, key=lambda p: len(parse_path(p))):
+        if path in kept and _is_redundant(path, kept):
+            del kept[path]
+    return kept
+
+
+# ── writes ───────────────────────────────────────────────────────────────────
+
+
+def _typed_entry(entry: dict, key: str, schema) -> dict:
+    """Coerce a replace/add value to its slot's type, then validate it.
+
+    Coercion handles the browser, which submits every edit as a string.
+    Validation handles everyone else: a value that arrives already typed was
+    previously written through untouched, so a list or a boolean could land in
+    a float slot and export as reviewed truth.
+    """
+    override = entry.get("override")
+    if schema is None or not override or override.get("op") == "remove":
+        return entry
+    if "value" not in override:
+        return entry
+    from .schema_resolution import check_value_against_slot, coerce_to_slot, slot_for_path
+
+    parts = parse_path(key)
+    slot = slot_for_path(schema.view, schema.root_class, parts)
+    try:
+        coerced = coerce_to_slot(schema.view, slot, override["value"])
+        check_value_against_slot(schema.view, schema.root_class, parts, coerced)
+    except ValueError as exc:
+        raise ReviewContractError(f"{key}: {exc}") from None
+    if coerced is override["value"]:
+        return entry
+    return {**entry, "override": {**override, "value": coerced}}
+
+
+def _validate_against_run(
+    run: RunFiles,
+    path: str,
+    entry: dict,
+    extraction: dict,
+    fields: dict[str, dict],
+    schema=None,
+) -> None:
+    override = entry.get("override")
+    op = override.get("op") if override else None
+    resolves = path_resolves(extraction, path)
+
+    if op == "add":
+        if resolves:
+            raise ReviewContractError(
+                f"{path} already exists in this run — use replace, not add"
+            )
+        _validate_add_target(extraction, path, fields)
+    elif not resolves:
+        raise ReviewContractError(f"{path} does not resolve against this run's extraction")
+
+    if op == "remove":
+        parts = parse_path(path)
+        if not parts:
+            raise ReviewContractError("the extraction root cannot be removed")
+        # An identifier is the thing every other path is stated relative to.
+        # Removing it does not correct the record, it detaches it.
+        if schema is not None:
+            from .schema_resolution import slot_for_path
+
+            slot = slot_for_path(schema.view, schema.root_class, parts)
+            if slot is not None and getattr(slot, "identifier", False):
+                raise ReviewContractError(
+                    f"{path} is an identifier and cannot be removed — it is what the "
+                    f"rest of this extraction is addressed by"
+                )
+
+
+def _validate_add_target(
+    extraction: dict, path: str, fields: dict[str, dict], *, updating: str | None = None
+) -> None:
+    """An add appends one past an array's length, or fills an absent property.
+
+    "The end of the array" counts the adds already recorded in this review, not
+    just the run's raw length. Measuring against the raw extraction made the
+    second append in a row impossible: after adding `items[n]`, `items[n+1]`
+    was rejected for not being index `n`.
+    """
+    parts = parse_path(path)
+    if not parts:
+        raise ReviewContractError("cannot add at the extraction root")
+    parent_parts, last = parts[:-1], parts[-1]
+    parent_path = format_path(parent_parts) if parent_parts else None
+    try:
+        parent = extraction if parent_path is None else resolve(extraction, parent_path)
+    except KeyError:
+        raise ReviewContractError(f"the parent of {path} does not resolve") from None
+
+    if isinstance(last, int):
+        if not isinstance(parent, list):
+            raise ReviewContractError(f"{path} indexes something that is not an array")
+        frontier = len(parent)
+        while _added_index(fields, parent_path, frontier, skip=updating):
+            frontier += 1
+        # Re-adding at an index this review already appended is an edit of that
+        # element, not a new append: counting it toward the frontier demanded
+        # the next index, while `replace` was refused because the path does not
+        # exist in the raw extraction. There was no way to correct it.
+        # On a write, `fields` is the stored set and does not yet contain the
+        # proposed entry, so a hit here means a previously stored add — an
+        # edit. When re-validating a whole file the entry IS in `fields`, so
+        # `skip` keeps it from vacuously approving itself.
+        if _added_index(fields, parent_path, last, skip=updating):
+            return
+        if last != frontier:
+            raise ReviewContractError(
+                f"{path} must append one past the end of the array (index {frontier})"
+            )
+    else:
+        if not isinstance(parent, dict):
+            raise ReviewContractError(f"the parent of {path} is not an object")
+
+
+def _added_index(
+    fields: dict[str, dict], parent_path: str | None, index: int, *, skip: str | None = None
+) -> bool:
+    """True when this review already records an ``add`` at ``parent[index]``."""
+    candidate = format_path((*parse_path(parent_path), index) if parent_path else (index,))
+    if skip is not None and candidate == skip:
+        return False
+    entry = fields.get(candidate)
+    return bool(entry and (entry.get("override") or {}).get("op") == "add")
+
+
+def upsert_review(
+    run: RunFiles,
+    path: str,
+    entry: dict,
+    *,
+    schema: object | None = None,
+) -> dict[str, dict]:
+    """Set the entry at ``path``, then canonicalize. Returns the stored fields.
+
+    ``schema`` is a resolved extraction schema; when given, a replace/add value
+    is coerced to the target slot's declared type and rejected if it cannot be.
+    Without it the value is stored as supplied — callers that can resolve the
+    schema should pass it, since a browser submits every edit as a string.
     """
     key = canonical_review_path(path)
-    fields = read_reviews(files, strict=True)
-    digest = base_extraction_sha256(files)
-    if digest is not None:
-        entry = {**entry, "base_extraction_sha256": digest}
+    fields = read_reviews(run)
+    entry = _typed_entry(entry, key, schema)
+    _validate_entry_shape(key, entry, source=str(run.review))
+
+    blocked = terminal_override_ancestor(key, fields)
+    if blocked is not None:
+        raise ReviewContractError(
+            f"{blocked} carries a container override, so {key} cannot be reviewed separately"
+        )
+
+    extraction = json.loads(run.extraction.read_text())
+    _validate_against_run(run, key, entry, extraction, fields, schema)
+
     fields[key] = entry
-    write_reviews(files, fields)
-    return entry
+    if entry.get("override"):
+        # A container override is terminal: anything beneath it is invalid.
+        for existing in [p for p in fields if is_ancestor(key, p)]:
+            del fields[existing]
+    else:
+        # Saving parent verification absorbs only redundant descendants.
+        for existing in [p for p in fields if is_ancestor(key, p)]:
+            covered = fields[existing]
+            if covered.get("override") or covered.get("note"):
+                continue
+            if covered.get("reviewer") != entry.get("reviewer"):
+                continue  # someone else's verification is not ours to absorb
+            del fields[existing]
+
+    fields = canonicalize(fields)
+    write_reviews(run, fields)
+    return fields
 
 
-def delete_reviews_at(files: ArticleFiles, path: str) -> None:
-    """Remove THE review at ``path``, whoever wrote it.
+def unreview_subtree(run: RunFiles, path: str, *, discard_note: bool = False) -> dict[str, dict]:
+    """Make the whole ``path`` subtree unreviewed, preserving sibling coverage.
 
-    Raises :class:`ReviewFileUnreadableError` on a corrupt review.json rather
-    than deleting a file a human still needs to inspect.
+    When a verifying ancestor covers ``path``, that ancestor is replaced by
+    verification at the highest siblings that do not contain ``path``, so the
+    rest of its subtree keeps exactly the coverage it had.
     """
     key = canonical_review_path(path)
-    fields = read_reviews(files, strict=True)
-    fields.pop(key, None)
-    write_reviews(files, fields)
+    fields = read_reviews(run)
+
+    covering = nearest_stored_ancestor(key, fields)
+    if covering is not None:
+        entry = fields[covering]
+        if entry.get("override"):
+            raise ReviewContractError(
+                f"{covering} carries a container override; edit or clear it before "
+                f"unreviewing {key}"
+            )
+        if entry.get("note") and not discard_note:
+            raise ReviewContractError(
+                f"{covering} carries a note that would be discarded — confirm explicitly"
+            )
+        # The frontier walk descends from the ancestor toward the target, so a
+        # target that does not resolve sends it into a node that is not there.
+        # That surfaced as an uncaught KeyError, i.e. a 500.
+        #
+        # An appended path is the legitimate exception: it does not exist in the
+        # raw extraction *by construction*, so requiring it to resolve made a
+        # reviewer unable to take back an append they had just made under a
+        # verified ancestor.
+        extraction = json.loads(run.extraction.read_text())
+        appended = (fields.get(key, {}).get("override") or {}).get("op") == "add"
+        if not appended and not path_resolves(extraction, key):
+            raise ReviewContractError(
+                f"{key} does not resolve against this run's extraction"
+            )
+
+    # Appended elements are a stack: `items[n+1]` only has an index because
+    # `items[n]` is there. Removing an earlier add on its own left the later
+    # ones stored but unplaceable — `effective_extraction` silently skipped
+    # them while `review_progress` went on counting them as reviewed.
+    doomed = {key, *_dependent_appends(fields, key)}
+    for existing in [p for p in fields if p in doomed or any(is_ancestor(d, p) for d in doomed)]:
+        del fields[existing]
+
+    if covering is not None:
+        # Sibling coverage inherits the covering entry's reviewer. Writing bare
+        # `{}` here silently reassigned someone's attested work to nobody.
+        reviewer = fields[covering].get("reviewer")
+        del fields[covering]
+        for sibling in _sibling_frontier(extraction, covering, key):
+            if sibling not in fields and not any(
+                is_ancestor(existing, sibling) or existing == sibling for existing in fields
+            ):
+                fields[sibling] = {"reviewer": reviewer} if reviewer else {}
+
+    fields = canonicalize(fields)
+    write_reviews(run, fields)
+    return fields
+
+
+def _dependent_appends(fields: dict[str, dict], key: str) -> set[str]:
+    """Adds that only have an index because ``key`` is there.
+
+    Empty unless ``key`` is itself an ``add`` at an array index; then it is the
+    contiguous run of adds after it on the same array.
+    """
+    entry = fields.get(key)
+    if not entry or (entry.get("override") or {}).get("op") != "add":
+        return set()
+    parts = parse_path(key)
+    if not isinstance(parts[-1], int):
+        return set()
+
+    parent_parts, index = parts[:-1], parts[-1]
+    dependents: set[str] = set()
+    while True:
+        index += 1
+        candidate = format_path((*parent_parts, index))
+        following = fields.get(candidate)
+        if not following or (following.get("override") or {}).get("op") != "add":
+            return dependents
+        dependents.add(candidate)
+
+
+def _sibling_frontier(extraction: dict, ancestor: str, target: str) -> list[str]:
+    """Highest nodes under ``ancestor`` that do not contain ``target``.
+
+    Walking down from the covering ancestor toward the target, every sibling
+    branching off the way keeps its verification at the highest point that
+    still excludes the target. That is the unique minimal frontier.
+    """
+    from .review_paths import child_paths
+
+    frontier: list[str] = []
+    current = ancestor
+    target_parts = parse_path(target)
+    while current != target:
+        for child in child_paths(extraction, current):
+            child_parts = parse_path(child)
+            contains_target = target_parts[: len(child_parts)] == child_parts
+            if not contains_target:
+                frontier.append(child)
+        # Descend one segment toward the target.
+        depth = len(parse_path(current)) + 1
+        current = format_path(target_parts[:depth])
+    return frontier
+
+
+# ── read helpers for consumers ───────────────────────────────────────────────
+
+
+def effective_extraction(run: RunFiles, fields: dict[str, dict] | None = None) -> dict:
+    """The run's extraction with review overrides applied.
+
+    Removal of an array element writes a structural ``null`` tombstone rather
+    than splicing, so every index a review refers to keeps meaning.
+    """
+    data = json.loads(run.extraction.read_text())
+    fields = read_reviews(run) if fields is None else fields
+
+    for path in sorted(fields, key=lambda p: len(parse_path(p))):
+        override = fields[path].get("override")
+        if not override:
+            continue
+        parts = parse_path(path)
+        parent = data if len(parts) == 1 else _resolve_parts(data, parts[:-1])
+        if parent is None:
+            continue
+        last = parts[-1]
+        if override["op"] == "remove":
+            if isinstance(last, int) and isinstance(parent, list) and last < len(parent):
+                parent[last] = None
+            elif isinstance(parent, dict):
+                parent.pop(last, None)
+        else:  # replace or add
+            if isinstance(last, int) and isinstance(parent, list):
+                if last < len(parent):
+                    parent[last] = override["value"]
+                elif last == len(parent):
+                    parent.append(override["value"])
+            elif isinstance(parent, dict):
+                parent[last] = override["value"]
+    return data
+
+
+def _added_leaf_paths(path: str, value) -> list[str]:
+    """The leaf paths an ``add`` contributes beneath its target path.
+
+    A scalar contributes the target itself; a container contributes its leaves,
+    with the same empty-container rule `leaf_paths` uses.
+    """
+    if not isinstance(value, dict | list):
+        return [path]
+    parts = parse_path(path)
+    if isinstance(value, list):
+        # `leaf_paths` walks from an object root, so a bare list has no valid
+        # path syntax to start from — `[0]` is not a parseable review path.
+        # Enumerate the indices here and recurse per element instead.
+        out: list[str] = []
+        for index, item in enumerate(value):
+            out.extend(_added_leaf_paths(format_path((*parts, index)), item))
+        return out
+    nested = leaf_paths(value)
+    return [format_path((*parts, *parse_path(leaf))) for leaf in nested]
+
+
+def _resolve_parts(data, parts: tuple[str | int, ...]):
+    try:
+        return resolve(data, format_path(parts))
+    except KeyError:
+        return None
+
+
+def review_progress(
+    run: RunFiles,
+    fields: dict[str, dict] | None = None,
+    *,
+    exclude: set[str] | None = None,
+) -> dict:
+    """Counts over the run's leaves plus any leaves an ``add`` contributed.
+
+    ``exclude`` drops paths from the denominator entirely — the verifier passes
+    `identifier: true` slots, which are structural identity rather than
+    extracted findings and so are not review work.
+    """
+    fields = read_reviews(run) if fields is None else fields
+    extraction = json.loads(run.extraction.read_text())
+
+    skip = exclude or set()
+    paths = [p for p in leaf_paths(extraction) if p not in skip]
+    for path, entry in fields.items():
+        override = entry.get("override")
+        if not override or override["op"] != "add":
+            continue
+        # An added object contributes its leaves, not one container path.
+        # Counting the container as a single field made a reviewer who supplied
+        # a whole missing measurement look one field further along than they
+        # were, and made completion possible with fields still unreviewed.
+        for added in _added_leaf_paths(path, override.get("value")):
+            if added not in paths and added not in skip:
+                paths.append(added)
+
+    verified = overridden = 0
+    for path in paths:
+        state = effective_state(path, fields)
+        if state == VERIFIED:
+            verified += 1
+        elif state == OVERRIDDEN:
+            overridden += 1
+    reviewed = verified + overridden
+    total = len(paths)
+    return {
+        "n_fields": total,
+        "n_verified": verified,
+        "n_overridden": overridden,
+        "n_reviewed": reviewed,
+        "n_unreviewed": total - reviewed,
+        "review_progress": (reviewed / total) if total else 1.0,
+        "is_complete": total == reviewed,
+    }

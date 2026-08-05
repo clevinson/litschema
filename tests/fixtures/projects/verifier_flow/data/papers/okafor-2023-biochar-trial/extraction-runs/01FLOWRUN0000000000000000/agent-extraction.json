@@ -1,0 +1,22 @@
+{
+  "article_id": "okafor-2023-biochar-trial",
+  "site_name": "Nsukka Research Farm",
+  "site_country": "Nigeria",
+  "mean_annual_temperature_c": 26.1,
+  "replicates": 3,
+  "tillage": "no_till",
+  "crops": [
+    "maize",
+    "cowpea"
+  ],
+  "measurements": [
+    {
+      "outcome": "soil organic carbon",
+      "value": 11.5,
+      "unit": "g/kg",
+      "depth_min_cm": 0.0,
+      "depth_max_cm": 20.0,
+      "standard_error": 0.9
+    }
+  ]
+}

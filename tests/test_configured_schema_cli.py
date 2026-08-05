@@ -37,9 +37,10 @@ def test_json_schema_generation_uses_configured_schema_and_tree_root(monkeypatch
 
 def test_validate_file_uses_linkml_schema_directly(tmp_path) -> None:
     from litschema.ingest.validate_extraction import validate_file
+    from litschema.runs import active_run
 
     cfg = load_config("tests/fixtures/projects/custom_clinical/litschema.yaml", reload=True)
-    valid = article_files(cfg, "garcia-2024").extraction
+    valid = active_run(article_files(cfg, "garcia-2024")).extraction
     invalid = tmp_path / "invalid-missing-required.json"
     invalid.write_text('{"article_id": "invalid"}')
     extra = tmp_path / "invalid-extra-property.json"

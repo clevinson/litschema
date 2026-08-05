@@ -1,0 +1,16 @@
+{
+  "id": "unextracted-2024-pending",
+  "filename": "unextracted-2024-pending.pdf",
+  "original_filename": "unextracted-2024-pending.pdf",
+  "file_sha256": "sha256:438bed44d01fe66a1bc288121f9b38f609cbe9b82346a9f2bd8d2f636cdf6102",
+  "added_at": "2026-03-04T09:00:00+00:00",
+  "bib_metadata": {
+    "title": "A paper assembled but not yet extracted",
+    "authors": [
+      "R. Pending"
+    ],
+    "year": 2024,
+    "journal": "Journal of Synthetic Agronomy",
+    "bib_source": "auto"
+  }
+}

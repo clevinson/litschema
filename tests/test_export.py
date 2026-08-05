@@ -37,9 +37,12 @@ def _project(tmp_path: Path) -> Path:
 
 
 def _write_article(project: Path, article_id: str, extraction: dict) -> Path:
+    from .helpers import publish_test_run
+
     paper_dir = project / "data" / "papers" / article_id
     paper_dir.mkdir(parents=True, exist_ok=True)
-    (paper_dir / "agent-extraction.json").write_text(json.dumps(extraction))
+    (paper_dir / "article-metadata.json").write_text(json.dumps({"id": article_id}))
+    publish_test_run(paper_dir, extraction)
     return paper_dir
 
 
@@ -50,13 +53,14 @@ def test_export_jsonl_is_the_reviewed_truth(tmp_path: Path) -> None:
         "smith-2024",
         {"article_id": "smith-2024", "study_type": "field_trial", "sample_size": 12},
     )
-    (project / "data" / "papers" / "smith-2024" / "review.json").write_text(
+    from .helpers import TEST_RUN_ID
+
+    run_dir = project / "data" / "papers" / "smith-2024" / "extraction-runs" / TEST_RUN_ID
+    (run_dir / "review.json").write_text(
         json.dumps(
             {
-                "version": 1,
-                "fields": {
-                    "sample_size": {"author": "", "signal": "flagged", "override_value": 18}
-                },
+                "version": 2,
+                "fields": {"sample_size": {"override": {"op": "replace", "value": 18}}},
             }
         )
     )

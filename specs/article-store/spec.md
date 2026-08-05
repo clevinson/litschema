@@ -4,21 +4,27 @@ Status: partially current.
 
 The on-disk source of truth is one directory per document under
 `data/papers/<article-id>/`. This spec owns article identity, immutable
-extraction runs, active-run selection, and the run CLI lifecycle. Extraction
-contents are defined by `specs/extraction/spec.md`; review entries and
-reconciliation are defined by `specs/reviews/spec.md`.
+extraction runs, and active-run selection. Extraction contents are defined by
+`specs/extraction/spec.md`; review entries are defined by
+`specs/reviews/spec.md`. The run lifecycle beyond `list` and `activate` —
+trash, restore, purge — belongs to the deferred multirun work and is not
+specified here.
 
 ## Implementation status
 
 Live today: the article directory and its `article-metadata.json` manifest, the
-`ArticleFiles` path chokepoint and ID guards, `assemble`, and `prepare-text`.
+`ArticleFiles` path chokepoint and ID guards, `assemble`, `prepare-text`, the
+run layout (`extraction-runs/<run-id>/`, `run.json`, `active-run.json`), and
+the publish-activates write path — `agent record-extraction` validates the
+staged artifacts, computes the reproduction hashes, publishes atomically, and
+activates complete non-error runs. Every consumer (verifier, export, validate,
+status) resolves articles through the active run.
 
-Pending — everything run-shaped. Extraction, reasoning, and review files
-currently sit at the article root and are overwritten in place; there is no
-`extraction-runs/`, no `run.json`, and no `active-run.json`. The Layout, Run
-boundary, and Active selection sections below are 0.1.0 target, tracked by
-`tdv3`, whose write path is publish-activates. The Run CLI section is multirun
-(0.2.0), tracked by `e7jh` on the `feat/multirun` branch.
+Live today also: `runs list` and `runs activate`.
+
+Pending: `review.json` placement. The layout below shows it inside the run
+directory, but the version-1 review model still lives at the article root; it
+moves into the run with reviews v2 (`2gd1`).
 
 ## Layout
 
@@ -34,9 +40,6 @@ data/papers/<article-id>/
       agent-reasoning.json
       run.json
       review.json
-    .trash/
-      <run-id>/
-        ...same four run artifacts...
 ```
 
 `ArticleFiles` is the sole article-id-to-path chokepoint. Article IDs and run
@@ -127,58 +130,41 @@ source and candidate runs, and a parent reference may be added here then.
 ```
 
 The file is written atomically. Absence means that the article has no active
-extraction. Its target must be a complete, non-error, non-trashed run under the
-same article. A broken pointer is an integrity error; consumers must not guess
-another run. Activation changes only this pointer and never mutates either run.
-In 0.1.0 the only activation is the publisher's: publishing a complete
-non-error run atomically activates it. Choosing among runs is multirun
-behavior.
+extraction. Its target must be a complete, non-error run under the same
+article. A broken pointer is an integrity error; consumers must not guess
+another run. Activation changes only this pointer, never a run.
 
-Verifier and export consumers resolve each article independently. A corpus may
-therefore be temporarily mixed during a resumable refinement, but the
-refinement workflow is not complete until every eligible article selects a run
-using the current schema hash.
+Publishing a complete non-error run activates it, so the newest successful
+extraction is active by default. `runs activate` reselects an earlier run when
+that default is wrong — a re-extraction that turned out worse than what it
+replaced is otherwise unrecoverable, because a superseded run stays on disk
+but nothing can point at it again.
 
-## Run CLI (multirun, 0.2.0)
+Verifier and export consumers resolve each article independently.
 
-The command group is `litschema runs`:
+## Run CLI
 
 | command | contract |
 |---|---|
-| `runs list [<article-id>] [--trash]` | List run ID, active/reviewed/trashed state, schema hash, timestamp, and model. |
-| `runs activate <article-id> <run-id>` | Atomically select a complete live run. |
-| `runs trash <article-id> <run-id> [--confirm-reviewed]` | Move an inactive run to `.trash/`. |
-| `runs restore <article-id> <run-id>` | Move a trashed run back to the live run namespace. |
-| `runs purge [<article-id> [<run-id>]] --dry-run [--confirm-reviewed]` | List the exact deletion candidate set under the supplied scope and confirmation flags, plus excluded protected runs. |
-| `runs purge [<article-id> [<run-id>]] --purge [--confirm-reviewed]` | Permanently delete the candidate set produced by the same predicate. |
+| `runs list [<article-id>]` | List each run's ID, timestamp, model, schema hash, and active/error/reviewed state. Without an article, list every article's runs. |
+| `runs activate <article-id> <run-id>` | Atomically select a published, complete, non-error run. |
 
-`--dry-run` and `--purge` are mutually exclusive and one is required. Purge
-operates only on `.trash/`; live runs are never purge candidates. An active run
-cannot be trashed or purged. A reviewed run is one whose valid `review.json` has at least one field entry.
-A corrupt or unreadable review file has protected `corrupt` review state and is
-treated as reviewed for lifecycle commands. Trashing or purging either state
-requires `--confirm-reviewed`; this confirmation does not bypass active-run
-protection.
+Activation refuses a run that is not published under this article, an
+error-marker run, and a traversal-shaped ID. Every refusal leaves the active
+pointer unchanged. Reselecting the already-active run succeeds unchanged.
+Neither command mutates a run.
 
-Dry-run and deletion use the same scope, trash-only rule, review-state parser,
-and `--confirm-reviewed` filter. Without confirmation, reviewed and corrupt
-runs appear as excluded and are absent from the candidate set. With
-confirmation, both enter the candidate set. Dry-run is a side-effect-free evaluation, not an authorization receipt, and
-purge does not require a prior preview. Given the same filesystem snapshot and
-arguments, both modes produce the same candidate and exclusion sets. Purge
-re-evaluates that predicate immediately before deletion.
-Restore fails rather than replacing an existing live run ID.
+Listing is tolerant where selection is strict: an unreadable `run.json` still
+lists, with its unknown fields blank, so a damaged run remains visible to the
+person who has to deal with it.
 
-### 0.1.0: no runs CLI
+## Toward multiple runs
 
-The entire command group is multirun behavior and ships with 0.2.0. In 0.1.0
-the publisher activates each complete non-error run it publishes, so no
-selection command is load-bearing: consumers resolve `active-run.json`, which
-always names the newest successful run. Re-extracting an article publishes and
-activates a new run; the prior run and its run-bound review stay inert on disk
-until multirun lifecycle commands exist. The contract above is unconditional
-once implemented; nothing here permits a partial purge grammar, a simplified
-confirmation rule, or a best-effort dry-run/purge parity.
+Deleting runs — trash, restore, and purge — is deliberately absent. A
+superseded run stays on disk, inert but selectable, and nothing in this
+release removes one. That lifecycle, along with reprocessing a corpus after a
+schema change, is developed on the `feat/multirun` branch and is not specified
+here.
 
 ## Manifest and intake
 
@@ -222,9 +208,6 @@ the inbox. Batch mode also discovers inbox PDFs without manifests. Stats are
 - WHEN a review changes, THEN the run payload and active pointer do not.
 - WHEN activation succeeds, THEN `active-run.json` names one complete live run
   from the same article.
-- WHEN an active run is targeted by trash or purge, THEN the command fails.
-- WHEN a reviewed run is targeted by trash or purge without explicit
-  confirmation, THEN the command fails.
 - WHEN the same PDF bytes are assembled twice, THEN no duplicate article is
   created.
 - WHEN an input hash cannot be computed, THEN publication fails.
@@ -235,8 +218,7 @@ the inbox. Batch mode also discovers inbox PDFs without manifests. Stats are
 
 Implementation coverage must pin:
 
-- the complete live and trashed layouts and rejection of article-root run
-  artifacts;
+- the complete run layout and rejection of article-root run artifacts;
 - guarded article and run IDs;
 - atomic run publication, review writes, and active-pointer replacement;
 - immutable extraction, reasoning, and metadata after publication;
@@ -246,12 +228,13 @@ Implementation coverage must pin:
   agent attribution is unavailable; absent rather than empty `settings`; RFC
   8785 canonicalization when `settings` is present; and `agent: null` for a run
   that invoked no model;
-- activation of valid runs and rejection of missing, partial, error, foreign,
-  or trashed runs;
-- list output for active, inactive, reviewed, and trashed runs;
-- active-run protection; valid-reviewed and corrupt-review confirmation;
-  restore collisions; dry-run/deletion candidate parity with and without
-  confirmation; state-change refusal; and permanent purge only from trash;
+- publish-activates: a successful publish replaces the active pointer, an
+  error-marker publish does not, and a re-extraction leaves the prior run
+  directory intact and unmodified;
+- `runs activate` reselection, refusal of unknown/error/traversal run IDs with
+  an unchanged pointer, and mutation of neither run;
+- `runs list` active/error/reviewed marking, model and schema reporting, and
+  tolerance of an unreadable `run.json`;
 - missing active selection as a normal unextracted state and broken selection
   as an integrity failure;
 - assemble idempotence, collision handling, offline operation, and atomic

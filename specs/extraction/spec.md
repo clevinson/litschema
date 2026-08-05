@@ -9,14 +9,16 @@ The framework supplies deterministic tools around the LLM step; the bundled
 
 ## Implementation status
 
-Live today: `agent prepare-schema-context`, `agent validate-reasoning`, `agent
-record-extraction`, `litschema validate`, the extraction and reasoning content
-contracts, and the bundled `extract-article` skill that conducts the LLM step.
+Live today: `agent prepare-schema-context`, `agent validate-reasoning`,
+`litschema validate`, the extraction and reasoning content contracts, the
+bundled `extract-article` skill, and run publication — `agent
+record-extraction` is the deterministic publisher (validate, hash, publish
+atomically, activate).
 
-Pending: run publication. `record-extraction` records provenance into
-`article-metadata.json`; there is no staged-then-published run directory and no
-`run.json`, so the Run outputs framing below describes the target. Tracked by
-`tdv3`.
+Pending: the canonical path dialect. Reasoning files still use jq-style paths
+with a leading dot (`.experiments[0].ph`); the Reasoning section below states
+the target no-leading-dot form, unified with review paths when reviews v2
+lands (`2gd1`).
 
 `litschema extract` remains a deliberate stub that directs users to the bundled
 skill — extraction requires an agent CLI, not a provider API key. Making it a
@@ -64,10 +66,19 @@ indices and no leading dot, for example `experiments[0].ph`. Source lines use
 Confidence belongs only in reasoning. The project extraction schema does not
 gain framework confidence fields.
 
+Evidence inherits down the extraction tree. An entry at a container path is
+evidence for every leaf beneath it that has no entry of its own, so an agent
+citing a table row once has cited each of its cells. A leaf's own entry always
+wins. This is deliberate: requiring one entry per leaf would multiply a
+row-shaped citation across every column without adding information, and makes
+reasoning files grow with the data rather than with the evidence. Consumers
+resolve a leaf by taking its exact entry, else the nearest ancestor's, and
+show which of the two they used.
+
 ## Validation
 
 - `litschema validate [target]` validates extraction files. With no target it
-  discovers every live run in the configured store; trash is excluded. A file
+  discovers every published run in the configured store. A file
   or directory narrows the scope. It exits 0 only when every selected artifact
   is valid and exits 1 with per-file errors otherwise.
 - `litschema agent validate-reasoning <file>` validates one reasoning artifact
@@ -93,10 +104,10 @@ its model still publishes.
 
 `litschema agent record-extraction <article-id> --run-id <run-id>` finalizes a
 staged attempt and publishes the directory atomically. It does not write
-extraction provenance into `article-metadata.json`. In 0.1.0 publishing a
-complete non-error run also activates it; there is no other activation path.
-Selective activation — reruns that stay inactive until chosen — is multirun
-behavior owned by `specs/refinement/spec.md`.
+extraction provenance into `article-metadata.json`. Publishing a complete
+non-error run also activates it; there is no other activation path. Selective
+activation — reruns that stay inactive until chosen — arrives with multirun
+support in a future release.
 
 ## Agent contract
 
@@ -106,13 +117,26 @@ setup gate and CLI resolution (a `.litschema/dev-cli` override is shown to the
 user and requires confirmation) → schema-context generation → prepared-text
 check → extraction from that article's markdown only → write both staged
 artifacts → validate both, with bounded repair attempts → record provenance and
-publish → source-metadata enrichment through its own CLI.
+publish → bib-metadata enrichment through its own CLI.
 
-The skill declares the model it ran under when the harness makes that
-knowable — a conductor dispatching one subagent per article knows the model it
-requested for each. It never overwrites a run, changes `active-run.json`
-implicitly for a rerun, edits source metadata files directly, or imports facts
-from another article.
+### Who publishes, and who may name the model
+
+An extracting agent must never describe its own model. A model's belief about
+its own identity is not observable from the execution environment and is not
+reliably correct, so a self-reported value is a false record that nothing
+downstream can detect. The skill passes `--provider`/`--model` only to relay a
+value its instructions supplied verbatim, and omits them otherwise; an absent
+model is correct.
+
+Where a conductor dispatches per-article subagents, the conductor publishes.
+It chose the model for each dispatch, so it is the only party that knows it.
+The subagent stages and validates, then reports; the conductor calls
+`record-extraction` naming the model it dispatched. A standalone extraction
+with no conductor publishes itself and omits the model.
+
+The skill never overwrites a run, changes `active-run.json` implicitly for a
+rerun, edits source metadata files directly, or imports facts from another
+article.
 
 ## Invariants
 
@@ -134,15 +158,17 @@ Implementation coverage must pin:
 - in-process atomic runtime schema generation and unique-root selection;
 - closed-world extraction validation, omitted missing values, and error-marker
   handling;
-- no-argument live-run discovery, trash exclusion, and missing explicit-target
+- no-argument published-run discovery and missing explicit-target
   failure;
 - reasoning schema validation, confidence bounds, canonical paths, and
-  extracted-leaf coverage;
+  resolution of a leaf to its own entry or the nearest ancestor's;
 - staged validation before publication and absence of partial runs;
 - immutable published artifacts;
 - publisher-computed schema and input hashes, refusal of caller-supplied
   hashes, and publication failure when one cannot be computed;
 - publication success with partial or absent agent attribution;
+- skill text forbidding self-described provider/model and assigning
+  publication to a dispatching conductor;
 - no manifest provenance write and no implicit rerun activation;
 - bounded skill repair, article-only evidence, deterministic CLI calls, and
   registry-first metadata backfill.

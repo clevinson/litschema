@@ -14,7 +14,7 @@ import json
 import sys
 from pathlib import Path
 
-from ..articles import iter_extraction_paths
+from ..articles import iter_live_run_extraction_paths
 from ..config import LitSchemaConfig, require_config_or_exit
 from ..schema_resolution import resolve_extraction_schema
 from ..schema_validation import LinkMLDataValidator, create_linkml_validator
@@ -27,10 +27,23 @@ def validate_file(
     validator: LinkMLDataValidator | None = None,
 ) -> tuple[bool, list[str]]:
     """Validate a single extraction JSON file. Returns (valid, errors)."""
-    data = json.loads(filepath.read_text())
+    try:
+        data = json.loads(filepath.read_text())
+    except ValueError as exc:
+        return False, [f"{filepath} is not valid JSON: {exc}"]
+    if not isinstance(data, dict):
+        return False, [
+            f"{filepath} must be a JSON object, not {type(data).__name__}",
+        ]
 
-    # Skip error markers
-    if data.get("error"):
+    # An error marker records that extraction could not produce data, so there
+    # is nothing to validate against the schema. Match on its structure via the
+    # shared predicate: testing `data.get("error")` for truthiness waved through
+    # any extraction whose schema happens to define an `error` slot — a
+    # measurement error of 0.42 disabled validation for the whole document.
+    from ..runs import is_error_marker
+
+    if is_error_marker(data):
         return True, []
 
     validator = validator or create_linkml_validator(schema_path, root_class)
@@ -40,13 +53,13 @@ def validate_file(
 
 def _files_for_args(args: list[str], cfg: LitSchemaConfig) -> list[Path]:
     if not args:
-        return list(iter_extraction_paths(cfg))
+        return list(iter_live_run_extraction_paths(cfg))
 
     target = Path(args[0])
     if not target.exists():
         raise FileNotFoundError(f"Missing extraction target: {target}")
     if target.is_dir():
-        files = sorted(target.glob("*/agent-extraction.json"))
+        files = sorted(target.glob("**/agent-extraction.json"))
         if not files:
             raise FileNotFoundError(f"No agent-extraction.json files found under: {target}")
         return files

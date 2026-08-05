@@ -15,17 +15,35 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-import pandas as pd
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    import pandas as pd
 
-from ..articles import iter_extraction_paths
+from ..articles import iter_active_extraction_paths
 from ..config import load_config
 
 
 def _default_extraction_paths() -> list[Path]:
     """Lazy lookup so tests / tooling can override LITSCHEMA_CONFIG."""
-    return list(iter_extraction_paths(load_config()))
+    return list(iter_active_extraction_paths(load_config()))
+
+
+def _pandas():
+    """Import pandas on use, not on import.
+
+    These helpers are for notebook analysis; pandas is a development
+    dependency, not a runtime one. Importing it at module scope would make
+    `import litschema.analysis` fail in a plain install and break any
+    public-surface import check.
+    """
+    try:
+        import pandas as pd
+    except ModuleNotFoundError as exc:  # pragma: no cover - depends on env
+        raise ModuleNotFoundError(
+            "litschema.analysis needs pandas: pip install pandas"
+        ) from exc
+    return pd
 
 
 def load_extractions(
@@ -79,7 +97,7 @@ def _build_articles(records: list[dict]) -> pd.DataFrame:
                 "n_setups": len(r.get("experimental_setups") or []),
             }
         )
-    return pd.DataFrame(rows)
+    return _pandas().DataFrame(rows)
 
 
 def _build_setups(records: list[dict]) -> pd.DataFrame:
@@ -110,7 +128,7 @@ def _build_setups(records: list[dict]) -> pd.DataFrame:
                     "irrigated": irr.get("irrigated"),
                 }
             )
-    return pd.DataFrame(rows)
+    return _pandas().DataFrame(rows)
 
 
 def _build_interventions(records: list[dict]) -> pd.DataFrame:
@@ -144,7 +162,7 @@ def _build_interventions(records: list[dict]) -> pd.DataFrame:
                         or None,
                     }
                 )
-    return pd.DataFrame(rows)
+    return _pandas().DataFrame(rows)
 
 
 def _build_quantification(records: list[dict]) -> pd.DataFrame:
@@ -173,7 +191,7 @@ def _build_quantification(records: list[dict]) -> pd.DataFrame:
                             "measurement": meas,
                         }
                     )
-    return pd.DataFrame(rows)
+    return _pandas().DataFrame(rows)
 
 
 def _build_modeling(records: list[dict]) -> pd.DataFrame:
@@ -191,4 +209,4 @@ def _build_modeling(records: list[dict]) -> pd.DataFrame:
                 "parameters": md.get("parameters"),
             }
         )
-    return pd.DataFrame(rows)
+    return _pandas().DataFrame(rows)

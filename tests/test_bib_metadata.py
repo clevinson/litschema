@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from litschema import source_metadata as sm
+from litschema import bib_metadata as sm
 from litschema.articles import article_files
 from litschema.config import LitSchemaConfig
 
@@ -45,26 +45,26 @@ def test_title_from_filename_preserves_existing_capitalization() -> None:
     assert sm.title_from_filename("IPCC AR6 WG3 summary") == "IPCC AR6 WG3 Summary"
 
 
-# ── read_source_metadata ─────────────────────────────────────────────────────
+# ── read_bib_metadata ─────────────────────────────────────────────────────
 
 
-def test_read_source_metadata_returns_block_when_present() -> None:
+def test_read_bib_metadata_returns_block_when_present() -> None:
     manifest = {
         "id": "a",
-        "source_metadata": {"title": "T", "year": 2024, "metadata_source": "doi"},
+        "bib_metadata": {"title": "T", "year": 2024, "bib_source": "doi"},
     }
-    meta = sm.read_source_metadata(manifest)
-    assert meta == {"title": "T", "year": 2024, "metadata_source": "doi"}
+    meta = sm.read_bib_metadata(manifest)
+    assert meta == {"title": "T", "year": 2024, "bib_source": "doi"}
 
 
-def test_read_source_metadata_drops_null_values_and_defaults_source() -> None:
-    manifest = {"source_metadata": {"title": "T", "doi": None}}
-    meta = sm.read_source_metadata(manifest)
-    assert meta == {"title": "T", "metadata_source": "manual"}
+def test_read_bib_metadata_drops_null_values_and_defaults_source() -> None:
+    manifest = {"bib_metadata": {"title": "T", "doi": None}}
+    meta = sm.read_bib_metadata(manifest)
+    assert meta == {"title": "T", "bib_source": "manual"}
 
 
-def test_read_source_metadata_ignores_legacy_top_level_keys() -> None:
-    # No back-compat: bibliographic fields live only in the source_metadata block.
+def test_read_bib_metadata_ignores_legacy_top_level_keys() -> None:
+    # No back-compat: bibliographic fields live only in the bib_metadata block.
     manifest = {
         "id": "a",
         "filename": "a.pdf",
@@ -75,12 +75,12 @@ def test_read_source_metadata_ignores_legacy_top_level_keys() -> None:
         "publisher": "P",
         "author_ids": ["x"],
     }
-    assert sm.read_source_metadata(manifest) == {}
+    assert sm.read_bib_metadata(manifest) == {}
 
 
-def test_read_source_metadata_empty_for_identity_only_manifest() -> None:
-    assert sm.read_source_metadata({"id": "a", "filename": "a.pdf"}) == {}
-    assert sm.read_source_metadata({}) == {}
+def test_read_bib_metadata_empty_for_identity_only_manifest() -> None:
+    assert sm.read_bib_metadata({"id": "a", "filename": "a.pdf"}) == {}
+    assert sm.read_bib_metadata({}) == {}
 
 
 def test_provenance_is_the_three_state_lock_model() -> None:
@@ -92,60 +92,60 @@ def test_provenance_is_the_three_state_lock_model() -> None:
 
 
 def test_source_fields_include_corporate_author_after_authors() -> None:
-    fields = list(sm.SOURCE_FIELDS)
+    fields = list(sm.BIB_FIELDS)
     assert "corporate_author" in fields
     assert fields.index("corporate_author") == fields.index("authors") + 1
 
 
-# ── update_source_metadata ───────────────────────────────────────────────────
+# ── update_bib_metadata ───────────────────────────────────────────────────
 
 
-def test_update_source_metadata_writes_block_and_provenance(tmp_path: Path) -> None:
+def test_update_bib_metadata_writes_block_and_provenance(tmp_path: Path) -> None:
     files = article_files(_cfg(tmp_path), "a")
-    block = sm.update_source_metadata(files, {"title": "T", "year": 2024}, source="auto")
-    assert block == {"title": "T", "year": 2024, "metadata_source": "auto"}
+    block = sm.update_bib_metadata(files, {"title": "T", "year": 2024}, source="auto")
+    assert block == {"title": "T", "year": 2024, "bib_source": "auto"}
     on_disk = files.read_metadata()
-    assert on_disk["source_metadata"] == block
+    assert on_disk["bib_metadata"] == block
     assert on_disk["id"] == "a"
 
 
-def test_update_source_metadata_merges_and_retags(tmp_path: Path) -> None:
+def test_update_bib_metadata_merges_and_retags(tmp_path: Path) -> None:
     files = article_files(_cfg(tmp_path), "a")
-    sm.update_source_metadata(files, {"title": "T", "year": 2024}, source="auto")
-    block = sm.update_source_metadata(files, {"title": "Better"}, source="manual")
+    sm.update_bib_metadata(files, {"title": "T", "year": 2024}, source="auto")
+    block = sm.update_bib_metadata(files, {"title": "Better"}, source="manual")
     assert block["title"] == "Better"
     assert block["year"] == 2024              # untouched fields preserved
-    assert block["metadata_source"] == "manual"
+    assert block["bib_source"] == "manual"
 
 
-def test_update_source_metadata_accepts_corporate_author(tmp_path: Path) -> None:
+def test_update_bib_metadata_accepts_corporate_author(tmp_path: Path) -> None:
     files = article_files(_cfg(tmp_path), "a")
-    block = sm.update_source_metadata(
+    block = sm.update_bib_metadata(
         files, {"corporate_author": "Carbon Direct"}, source="manual"
     )
     assert block["corporate_author"] == "Carbon Direct"
-    assert files.read_metadata()["source_metadata"]["corporate_author"] == "Carbon Direct"
+    assert files.read_metadata()["bib_metadata"]["corporate_author"] == "Carbon Direct"
 
 
-def test_update_source_metadata_null_deletes_a_field(tmp_path: Path) -> None:
+def test_update_bib_metadata_null_deletes_a_field(tmp_path: Path) -> None:
     files = article_files(_cfg(tmp_path), "a")
-    sm.update_source_metadata(files, {"title": "T", "doi": "10.1/x"}, source="manual")
-    block = sm.update_source_metadata(files, {"doi": None}, source="manual")
+    sm.update_bib_metadata(files, {"title": "T", "doi": "10.1/x"}, source="manual")
+    block = sm.update_bib_metadata(files, {"doi": None}, source="manual")
     assert "doi" not in block
 
 
-def test_update_source_metadata_does_not_promote_legacy_top_level_keys(tmp_path: Path) -> None:
+def test_update_bib_metadata_does_not_promote_legacy_top_level_keys(tmp_path: Path) -> None:
     files = article_files(_cfg(tmp_path), "a")
     files.article_dir.mkdir(parents=True)
     files.metadata.write_text('{"id": "a", "title": "Old", "year": 2020}\n')
-    block = sm.update_source_metadata(files, {"journal": "J"}, source="manual")
-    assert block == {"journal": "J", "metadata_source": "manual"}
+    block = sm.update_bib_metadata(files, {"journal": "J"}, source="manual")
+    assert block == {"journal": "J", "bib_source": "manual"}
     assert "title" not in block               # legacy top-level keys are not carried over
 
 
-def test_update_source_metadata_ignores_unknown_fields_and_bad_source(tmp_path: Path) -> None:
+def test_update_bib_metadata_ignores_unknown_fields_and_bad_source(tmp_path: Path) -> None:
     files = article_files(_cfg(tmp_path), "a")
-    block = sm.update_source_metadata(files, {"title": "T", "hacker": "x"}, source="manual")
+    block = sm.update_bib_metadata(files, {"title": "T", "hacker": "x"}, source="manual")
     assert "hacker" not in block
     with pytest.raises(ValueError):
-        sm.update_source_metadata(files, {"title": "T"}, source="carrier-pigeon")
+        sm.update_bib_metadata(files, {"title": "T"}, source="carrier-pigeon")

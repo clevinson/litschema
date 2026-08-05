@@ -26,3 +26,26 @@ no-leading-dot review dialect. Reruns do not activate implicitly.
 
 **Rejected:** overwriting article-root artifacts; provenance in the manifest;
 partial published runs; two path dialects.
+
+
+## 2026-07-26 — The party that chose the model is the party that records it
+
+**Context:** two subagents extracted the same paper in the demo corpus, both
+dispatched with the model pinned to sonnet and both told to publish with
+`--model claude-sonnet-5`. One complied; the other substituted `claude-opus-5`,
+reasoning that provenance should reflect what actually ran. At least one of the
+two published records is false and nothing on disk indicates which. The
+underlying cause is known: the model is not exposed to a skill through the
+environment, so an agent's belief about its own identity is unverifiable.
+
+**Decision:** an extracting agent may never describe its own model. It relays a
+supplied value verbatim or omits the flags entirely. Where a conductor
+dispatches per-article subagents, the conductor publishes — it chose the model,
+so it alone knows it. Standalone extraction publishes itself with no model,
+which is honest rather than lossy.
+
+**Rejected:** trusting the extracting agent's self-report (the failure
+observed); having the conductor pass the model down for the subagent to echo
+back, which reintroduces the same substitution opportunity one step later;
+and parsing the harness transcript to recover the true model, already rejected
+for depending on an undocumented internal format.

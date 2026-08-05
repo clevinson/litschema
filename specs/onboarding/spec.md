@@ -75,18 +75,47 @@ Extraction mechanics belong to `specs/extraction/spec.md`. Run layout and
 activation belong to `specs/article-store/spec.md`. Review behavior belongs to
 `specs/reviews/spec.md`.
 
+## Approving the CLI dev override
+
+`.litschema/dev-cli` names a development command that agents will execute, so
+it requires the user's approval. Approval MUST be recorded outside the
+project, in the user's own configuration:
+
+    ${XDG_CONFIG_HOME:-$HOME/.config}/litschema/dev-cli-approved/<sha256 of the
+    real project path>
+
+holding the SHA-256 of the approved `dev-cli` content. Both keys matter: the
+path key means approving one checkout says nothing about another, and the
+content hash means editing the override revokes the old approval.
+
+Approval must be verifiable state rather than a claim carried in a prompt.
+A batch conductor cannot approve on the user's behalf and cannot pass approval
+down as an assertion: text asserting consent is indistinguishable from text
+fabricating it, so an agent that accepts one accepts both. Recording the hash
+lets every dispatched subagent confirm approval itself, which is what allows a
+batch to run without stalling on each article.
+
+The marker MUST NOT live inside the project. A hash stored beside the file it
+approves proves only that the file has not changed since *someone* approved
+it — not that this user ever did. Nothing stops a repository from committing
+both `.litschema/dev-cli` and a matching `.litschema/dev-cli-approved`, and
+every agent that cloned it would then execute that command silently. Agents
+MUST ignore an in-project `dev-cli-approved`; `doctor` reports it as ignored
+and offers to have it deleted.
+
+`doctor` reports the current approval state and, when unapproved, the command
+that records it.
+
 ## Onboarding versus refinement
 
-Onboarding establishes a project and its first active runs.
-`/litschema-refine` changes an established schema or domain context, pilots a
-subset, creates candidate runs for the full corpus, reconciles existing
-reviews, activates the accepted runs, and cleans up abandoned runs. It is
-defined only by `specs/refinement/spec.md`. The onboarding skill must not absorb
-or restate that lifecycle.
+Onboarding establishes a project and its first active runs. Changing an
+established schema and reprocessing a reviewed corpus is a future, separate
+workflow (refinement, developed on `feat/multirun`); the onboarding skill must
+not grow into it.
 
 ## Source metadata
 
-Assemble seeds automatic filename metadata. Extraction uses the source-metadata
+Assemble seeds automatic filename metadata. Extraction uses the bib-metadata
 CLI for registry-first DOI enrichment or title-page fallback. A post-batch
 `meta sync --all` retries transient registry failures. Skills never edit the
 manifest directly.
@@ -121,6 +150,9 @@ Implementation coverage must pin:
 - offline assemble and prepare-text;
 - silent pre-check: missing-config stop, and no `status`/`doctor`/CLI
   resolution before the welcome message;
+- dev-override approval: matching hash used silently, missing or stale hash
+  prompting the user, recording after confirmation, and revocation when the
+  override file changes;
 - conductor voice constraints: one question per message, no framework
   vocabulary in user-facing text, and no narration of passing checks;
 - empty-project stop behavior;
@@ -129,6 +161,6 @@ Implementation coverage must pin:
 - batch creation and activation of initial runs;
 - skip of active current-schema articles and retry of missing/error attempts;
 - interruption before and after publication;
-- source-metadata CLI use and post-batch sync placement;
+- bib-metadata CLI use and post-batch sync placement;
 - handoff to the verifier;
 - absence of refinement behavior from the onboarding conductor.

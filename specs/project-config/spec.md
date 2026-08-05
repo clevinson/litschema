@@ -1,6 +1,6 @@
 # Capability: project config and CLI shell
 
-Status: partially current.
+Status: current.
 
 This spec owns project discovery, the one current LinkML extraction schema,
 schema identity, and conventions shared by CLI verbs. Run storage is owned by
@@ -8,15 +8,10 @@ schema identity, and conventions shared by CLI verbs. Run storage is owned by
 
 ## Implementation status
 
-Live today: config discovery and its precedence, config-relative path
-resolution, the core key set, single-schema resolution requiring exactly one
-local `tree_root: true` class, closed-world validation, the CLI exit-code and
-`--config` conventions, `status`, and `doctor`.
-
-Pending: schema identity. Nothing hashes the configured schema file or
-classifies same-schema versus schema-upgrade reruns — that machinery exists to
-stamp `run.json`, so it lands with `tdv3`. The One current schema section's
-identity paragraph is target; its resolution rules are live.
+Everything below is live: config discovery and precedence, config-relative
+path resolution, the core key set, single-schema resolution requiring exactly
+one local `tree_root: true` class, closed-world validation, the CLI exit-code
+and `--config` conventions, schema identity hashing, `status`, and `doctor`.
 
 ## Config discovery and paths
 
@@ -38,18 +33,27 @@ Core keys and defaults:
 | `paper_inbox_dir` | `papers-inbox` | PDF intake |
 
 Unknown keys are preserved for domain repositories. `references_dir`,
-`tracking_xlsx`, `static_site_dir`, and `schema_root` still parse but have no
-consumer and must not be used. No config key may select a schema version or
-maintain schema history.
+`tracking_xlsx`, and `static_site_dir` still parse but have no consumer and
+must not be used; `init` no longer writes any of them. No config key may
+select a schema version or maintain schema history.
 
 ## One current schema
 
 `schema_dir/<extraction_schema_file>` is the project's only current LinkML
 extraction schema. Resolution loads it with the LinkML Python API and requires
-exactly one locally defined class with `tree_root: true`. Validation is
-closed-world. The extraction schema imports no project or framework schema
-files; the configured file is the complete schema identity. Templates may be
-copied into that file as starting material.
+exactly one locally defined class with `tree_root: true`. That class MUST
+declare `article_id` as an `identifier: true` slot, whether directly or by
+inheritance, so every consumer knows how to address a document without
+consulting the project. Validation is closed-world. Templates may be copied
+into the schema file as starting material.
+
+The schema MAY span multiple files, since LinkML supports imports; schema
+identity is then the transitive closure of project schema files rather than
+the configured file alone, and `schema_hash` digests that closure. LinkML's own
+libraries (`linkml:...`) version with the dependency, not the project, and are
+excluded. Multi-file schemas are permitted, not promoted: there is no template
+composition mechanism, no cross-project schema sharing, and no tooling that
+assumes more than one file.
 
 Git is the schema and domain-context history. Runs record, but do not copy, the
 current schema. Parallel versioned schema files, run-local schema files, and an
@@ -83,13 +87,22 @@ an uncommitted schema may become unreconstructable once edited. `doctor` and
 | `init`, `skills install` | `specs/onboarding` |
 | `assemble`, `prepare-text`, `runs *` | `specs/article-store` |
 | `validate`, `agent *` | `specs/extraction` |
-| `meta *` | `specs/source-metadata` |
+| `meta *` | `specs/bib-metadata` |
 | `verify` | `specs/verifier` |
 | `export`, `mcp` | `specs/explore` |
 
+`doctor` also inspects the schema for slots that silently discard authored
+detail: a multivalued class-range slot whose range class declares an
+`identifier` serializes as bare ID strings, so every other attribute on that
+class has nowhere to land while extractions still validate. Where the range
+class defines attributes beyond its identifier, the author expected inlining,
+and `doctor` names the slot, the attributes at risk, and the
+`inlined_as_list: true` remedy. A range class that defines only an identifier
+loses nothing and is not reported.
+
 `status` reports schema presence plus inbox, article, prepared-text,
-live-run, active-run, trashed-run, current-schema-active, and reviewed-active
-counts and exits 0. `doctor` checks Python and `uv`, schema resolution,
+published-run, active-run, and current-schema-active counts, flags broken
+active pointers, and exits 0. `doctor` checks Python and `uv`, schema resolution,
 project-local then global litschema skills, and an agent CLI. It exits 1 with
 remedies when a check fails. Neither command changes run selection.
 
@@ -113,10 +126,15 @@ Implementation coverage must pin:
 - deterministic byte hashing independent of the working directory, and
   identity resolution inside a repository, outside one, and after the schema
   file is renamed;
-- rejection of schema imports, parallel schema-history configuration, and
-  run-local schemas;
+- rejection of parallel schema-history configuration and run-local schemas;
+- schema identity spanning imported project files, and excluding `linkml:`
+  library imports;
+- the `article_id` identifier requirement on the root class;
 - hash-based same-schema versus upgrade classification;
 - common exit codes and project-scoped config flags;
-- status counts across missing, active, reviewed, trashed, and
-  current-schema-active runs;
-- doctor failures for schema and skill resolution.
+- status counts across missing, active, and current-schema-active runs, and
+  broken-pointer flagging;
+- doctor failures for schema and skill resolution;
+- doctor's identifier-reference warning: reported when the range class has
+  attributes beyond its identifier, silent for an identifier-only range class
+  and for an explicitly inlined slot.

@@ -1,0 +1,19 @@
+{
+  "agent": {
+    "effort": "fixture",
+    "harness": "fixture",
+    "harness_version": "fixture",
+    "model": "fixture",
+    "provider": "fixture"
+  },
+  "article_id": "brenner-2021-cover-crops",
+  "created_at": "2026-03-04T10:15:00+00:00",
+  "inputs": {
+    "domain_context": "sha256:fixture",
+    "prepared_text": "sha256:fixture",
+    "skill": "sha256:fixture"
+  },
+  "run_id": "01FLOWRUN0000000000000000",
+  "schema_hash": "sha256:8201fd8225eb578b4f45cda1e9aeb958357d25444bf5ea1768ee991048234078",
+  "version": 1
+}

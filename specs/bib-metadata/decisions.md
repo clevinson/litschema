@@ -6,8 +6,8 @@ Append-only. Newer entries supersede older ones; nothing is rewritten.
 
 **Context:** grey literature (no DOIs) joins journal articles as a target
 corpus; a title can now come from several origins with different trust levels.
-**Decision:** one `source_metadata` block inside the manifest, tagged with
-`metadata_source`; a small fixed convention, deliberately outside the LinkML
+**Decision:** one `bib_metadata` block inside the manifest, tagged with
+`bib_source`; a small fixed convention, deliberately outside the LinkML
 schema machinery. Top-level manifest keys are identity, never bibliography.
 **Rejected:** modelling bibliography in the extraction schema (conflates what
 a document IS with what it SAYS); keeping loose top-level bib keys (no

@@ -25,7 +25,7 @@ def test_verifier_defaults_to_review_table_with_mode_switcher() -> None:
     html = STATIC_HTML.read_text()
 
     assert 'viewMode: "review"' in html
-    assert 'overviewMode: "table"' in html
+    assert 'dataMode: "table"' in html
     assert 'id="btn-review-table"' not in html
     assert 'id="btn-pivot-view"' not in html
     assert ">Pivot<" not in html
@@ -35,19 +35,19 @@ def test_verifier_defaults_to_review_table_with_mode_switcher() -> None:
     assert 'id="panel-right-meta"' not in html
     assert 'id="view-mode-review"' in html
     assert ">Audit</button>" in html
-    assert 'id="view-mode-overview"' in html
+    assert 'id="view-mode-data"' in html
     assert 'data-view-mode="review"' in html
-    assert 'data-view-mode="overview"' in html
+    assert 'data-view-mode="data"' in html
     assert 'data-view-mode="json"' not in html
     assert 'id="view-mode-json"' not in html
-    assert 'id="overview-mode-table"' in html
-    assert 'id="overview-mode-json"' in html
-    assert 'data-overview-mode="table"' in html
-    assert 'data-overview-mode="json"' in html
+    assert 'id="data-mode-table"' in html
+    assert 'id="data-mode-json"' in html
+    assert 'data-data-mode="table"' in html
+    assert 'data-data-mode="json"' in html
     assert "setViewMode" in html
-    assert "setOverviewMode" in html
+    assert "setDataMode" in html
     assert "initialViewMode" in html
-    assert "initialOverviewMode" in html
+    assert "initialDataMode" in html
     assert "syncViewControls" in html
 
 
@@ -55,13 +55,13 @@ def test_verifier_restores_read_only_overview_and_json_modes() -> None:
     html = STATIC_HTML.read_text()
 
     assert "renderReviewTable" in html
-    assert "renderOverviewView" in html
+    assert "renderDataView" in html
     assert "renderJsonView" in html
     assert "renderExtractionPanel" in html
-    assert "state.viewMode === \"overview\"" in html
-    assert "state.overviewMode === \"json\"" in html
-    assert "buildOverviewHorizontalTable" in html
-    assert "buildOverviewValueCell" in html
+    assert 'state.viewMode === "data"' in html
+    assert 'state.dataMode === "json"' in html
+    assert "buildDataHorizontalTable" in html
+    assert "buildDataValueCell" in html
     assert "json-tree" in html
     assert "json-toggle" in html
     assert "Overview" in html
@@ -73,20 +73,25 @@ def test_verifier_overview_and_json_use_effective_post_edit_values() -> None:
 
     assert "effectiveExtraction" in html
     assert "applyCorrectedValue" in html
-    assert 'ann.status !== "flagged" || ann.correct_value === undefined' in html
     assert "removeValueAtPath" in html
-    assert "renderOverviewView(effectiveExtraction())" in html
+    assert "renderDataView(effectiveExtraction())" in html
     assert "renderJsonView(effectiveExtraction())" in html
 
 
-def test_verifier_moves_identity_and_queue_controls_into_review_header() -> None:
+def test_review_header_holds_queue_controls_but_not_identity() -> None:
+    """Identity belongs to the person, not to the document on screen.
+
+    The review header is per-document; who you are is not, so it moved to
+    settings. The queue controls stay, because they act on the open document.
+    """
     html = STATIC_HTML.read_text()
 
     toolbar = html[html.index('<div class="toolbar">'):html.index('<div class="orcid-modal-backdrop"')]
     assert 'id="review-identity-controls"' not in toolbar
     assert 'id="view-mode-json"' not in toolbar
-    assert 'id="review-identity-controls"' in html
-    assert html.index('id="extraction-panel-title"') < html.index('id="review-identity-controls"')
+    # Identity now lives in the settings dialog, after the review header.
+    assert 'id="settings-modal"' in html
+    assert html.index('id="review-identity-controls"') > html.index('id="settings-modal-title"')
     assert 'id="review-progress"' in html
     assert 'id="btn-prev-unreviewed"' in html
     assert 'id="btn-next-unreviewed"' in html
@@ -102,8 +107,8 @@ def test_verifier_moves_identity_and_queue_controls_into_review_header() -> None
 def test_verifier_json_is_overview_submode_with_code_styling() -> None:
     html = STATIC_HTML.read_text()
 
-    assert "overview-mode-toggle" in html
-    assert "syncOverviewModeControls" in html
+    assert "data-mode-toggle" in html
+    assert "syncDataModeControls" in html
     assert "json-code-view" in html
     assert "json-token-key" in html
     assert "json-token-string" in html
@@ -200,34 +205,48 @@ def test_verifier_table_uses_compact_evidence_badges() -> None:
     assert "reasoning-tooltip-row" not in html
 
 
-def test_verifier_keeps_transient_feedback_out_of_review_header() -> None:
+def test_review_header_shows_failures_but_not_success_chatter() -> None:
+    """Success is shown by the control; only failure needs words.
+
+    Narrating "Saving…/Saved" in the header is noise when the field control
+    already moves between unreviewed, verified, and edited. A failure has no
+    other signal at all, so it must be visible — writing errors nowhere is how
+    a silently-swallowed edit stayed invisible.
+    """
     html = STATIC_HTML.read_text()
 
-    assert 'id="save-status"' not in html
-    assert 'id="bulk-status"' not in html
     assert "btn-undo-bulk" not in html
     assert "setSaveStatus" in html
     assert "saveAnnotation" in html
     assert "clearAnnotation" in html
-    assert "Failed to save annotation" in html
+    # Only the error branch renders.
+    assert 'if (status !== "error")' in html
+    assert 'id="save-status"' in html
 
 
-def test_verifier_uses_orcid_connect_flow() -> None:
+def test_identity_is_entered_inline_not_in_a_nested_dialog() -> None:
+    """Settings collects the iD directly; a dialog over a dialog is a stack."""
     html = STATIC_HTML.read_text()
 
     assert 'id="reviewer-id"' in html
     assert 'type="hidden"' in html
-    assert 'id="btn-orcid-connect"' in html
-    assert ">ORCID</button>" in html
-    assert 'id="orcid-modal"' in html
+    assert 'id="identity-entry"' in html
+    assert 'id="btn-orcid-edit"' in html
+    assert 'id="orcid-modal"' not in html  # the nested dialog is gone
+    assert "function editReviewerIdentity(" in html
+    # A registry that cannot be reached must not block recording who you are —
+    # but an iD it says does not exist is a different answer, and is refused.
+    assert "saved the iD unverified" in html
+    assert "No ORCID record for that iD" in html
+    assert "response.status === 404" in html
     assert 'id="orcid-input"' in html
-    assert 'id="btn-orcid-lookup"' not in html
     assert 'id="btn-orcid-save"' in html
     assert "saveOrcidProfile" in html
     assert "lookupOrcidProfile" not in html
     assert "/api/orcid/" in html
     assert "Disconnect" in html
-    assert html.index('id="btn-orcid-cancel"') < html.index('id="btn-orcid-save"')
+    # Cancel belonged to the dialog; inline entry needs no dismissal.
+    assert 'id="btn-orcid-cancel"' not in html
 
 
 def test_verifier_exposes_bulk_review_actions() -> None:
@@ -255,9 +274,9 @@ def test_verifier_bulk_review_is_reversible_and_field_level() -> None:
     assert "bulkVerifyPaths" in html
     assert "clearVerifiedScope" in html
     assert "undoBulkBatch" not in html
-    assert "bulk_section" in html
-    assert "bulk_article" not in html
-    assert "batch_id" in html
+    # `batch_id` was a version-1 entry key; version 2 stores override, note and
+    # reviewer only. With the bulk status gone, batch grouping has no consumer.
+    assert "batch_id" not in html
 
 
 def test_verifier_action_column_uses_compact_status() -> None:
@@ -290,12 +309,20 @@ def test_verifier_action_column_uses_compact_status() -> None:
     assert "toggleFieldVerification" in html
 
 
-def test_verifier_bulk_review_normalizes_primitive_array_reasoning() -> None:
+def test_bulk_review_covers_leaves_whose_evidence_is_cited_on_an_ancestor() -> None:
+    """Section verification must work for row-cited nested data.
+
+    Bulk selection used to require an exact per-leaf reasoning entry, so a
+    section whose evidence was cited once at row level — the normal shape for a
+    results table — offered nothing to verify and rendered its control
+    disabled. Selection now walks leaves and resolves evidence through
+    ancestors, which also subsumes the old primitive-array normalization.
+    """
     html = STATIC_HTML.read_text()
 
-    assert "reviewableAnnotationPaths" in html
-    assert "value.map((_, idx) => `${path}[${idx}]`)" in html
-    assert ".flatMap(([path]) => reviewableAnnotationPaths(path))" in html
+    assert "collectReviewablePaths" in html
+    assert "reasoningFor(path)?.source_lines" in html
+    assert "reviewableAnnotationPaths" not in html
 
 
 def test_verifier_section_headers_keep_status_and_bulk_action_together() -> None:
@@ -346,12 +373,20 @@ def test_verifier_shows_explicit_no_citation_state() -> None:
     assert "source-missing" in html
 
 
-def test_verifier_uses_explicit_no_citation_acceptance() -> None:
+def test_accepting_an_uncited_value_is_plain_verification() -> None:
+    """Version 2 has no tag for it, and none is needed.
+
+    Version 1 stamped `source: accepted_no_citation` when a reviewer accepted a
+    value the agent had not cited. Version 2's entry holds only `override` and
+    `note`, so that tag is unrepresentable — and unnecessary: whether a field
+    carried evidence is already answerable from the reasoning artifact, which
+    is immutable, rather than from a flag copied into the review at click time.
+    """
     html = STATIC_HTML.read_text()
 
-    assert "selectedFieldHasCitation" in html
-    assert "accepted_no_citation" in html
     assert "selectedVerifyExtra" in html
+    assert "accepted_no_citation" not in html
+    assert "selectedFieldHasCitation" not in html
 
 
 def test_verifier_edits_values_in_review_table_without_docked_modal() -> None:
@@ -410,14 +445,25 @@ def test_bib_header_title_first_layout_with_corporate_author() -> None:
     assert "flex-basis: 100%" in html
 
 
-def test_verifier_surfaces_base_stale_warning() -> None:
+def test_verifier_surfaces_a_corrupt_review_file() -> None:
+    """Corrupt review state must be visible, never rendered as "no reviews"."""
     html = STATIC_HTML.read_text()
 
-    # The staleness API field must have a visible consequence.
-    assert 'id="base-stale-warning"' in html
-    assert "state.baseStale = !!annData.base_stale" in html
-    assert "renderBaseStaleBanner" in html
-    assert "refreshBaseStale" in html
+    assert 'id="review-error-warning"' in html
+    assert "state.reviewError = payload?.review_error || null" in html
+    assert "renderReviewErrorBanner" in html
+    # Staleness is superseded by run binding and must be gone entirely.
+    assert "baseStale" not in html
+    assert "base_stale" not in html
+
+
+def test_verifier_reads_and_writes_reviews_against_an_explicit_run() -> None:
+    html = STATIC_HTML.read_text()
+
+    assert "function activeRunId(" in html
+    assert "function annotationsUrl(" in html
+    # Every annotation URL is built through the run-aware helper.
+    assert "/api/annotations/${id}`" not in html
 
 
 def test_annotation_mutations_capture_the_article_id() -> None:
@@ -512,7 +558,225 @@ def test_inline_edit_has_typed_inputs_and_remove_affordance() -> None:
     assert "inline-edit-number" in html
     assert "inline-edit-boolean" in html
     assert "inline-edit-remove" in html
-    assert '"__remove__"' in html
+    assert 'op: "remove"' in html
     assert "schemaField.kind" in html or "schemaField?.kind" in html
     assert "(removed)" in html
     assert "removeInlineEdit" in html
+
+
+# ── routes (ka84) ────────────────────────────────────────────────────────────
+
+
+def test_verifier_exposes_overview_and_document_routes() -> None:
+    html = STATIC_HTML.read_text()
+
+    assert 'id="overview-route"' in html
+    assert "function parseRoute(" in html
+    assert "function applyRoute(" in html
+    assert '"#/doc/"' in html or "#/doc/${encodeURIComponent(articleId)}" in html
+    # Deep links must survive reload and the back button.
+    assert 'window.addEventListener("hashchange"' in html
+    assert "await applyRoute();" in html
+
+
+def test_navigation_goes_through_the_route_not_around_it() -> None:
+    """One path through the app: dropdown, deep link, and back all route."""
+    html = STATIC_HTML.read_text()
+
+    assert "if (e.target.value) routeToDoc(e.target.value);" in html
+    assert "routeToDoc(state.filteredArticles[nextIdx].article_id);" in html
+    # The old direct-dispatch path must be gone.
+    assert 'dispatchEvent(new Event("change"))' not in html
+
+
+def test_overview_lists_unextracted_articles_and_flags_unreadable_reviews() -> None:
+    """The overview is the work queue, so it must show what still has no run."""
+    html = STATIC_HTML.read_text()
+
+    assert "not extracted" in html
+    assert "review unreadable" in html
+    assert "const noRun = !a.active_run_id;" in html
+    # An unknown deep link is recoverable, never a dead end.
+    assert "No document" in html
+
+
+def test_reasoning_resolves_through_ancestors() -> None:
+    """A row-level citation is evidence for the cells in that row."""
+    html = STATIC_HTML.read_text()
+
+    assert "function reasoningFor(" in html
+    assert "inheritedFrom" in html
+    # Every read goes through the resolver, not the raw index.
+    body = html[html.index("function reasoningFor("):]
+    assert "state.reasoningByPath[path]" in body  # the exact-match lookup inside it
+    # Three raw accesses, all inside the index build and the resolver itself:
+    # every other read site goes through reasoningFor().
+    assert html.count("state.reasoningByPath[") == 3
+
+
+def test_render_tokens_derive_from_v2_state_not_a_status_key() -> None:
+    """`status` was a version-1 entry key; reading it renders everything unreviewed."""
+    html = STATIC_HTML.read_text()
+
+    assert "const statusToken = (ann)" in html
+    assert "statusToken(ann)" in html
+    # The version-1 key must not be read back anywhere.
+    assert "ann.status" not in html
+    assert "ann?.status" not in html
+    # Verification is an empty entry: no version-1 `source` tag rides along.
+    assert "accepted_no_citation" not in html
+
+
+# ── navigation and orientation (UX audit) ────────────────────────────────────
+
+
+def test_document_route_has_a_marked_exit_to_the_overview() -> None:
+    """NN/g emergency exit: leaving a document must not require the back button."""
+    html = STATIC_HTML.read_text()
+
+    assert 'id="btn-all-documents"' in html
+    assert "All documents" in html
+    assert 'href="#/"' in html  # breadcrumb link
+    assert "doc-breadcrumb" in html
+
+
+def test_overview_is_not_also_the_name_of_a_document_view_mode() -> None:
+    """One word, one meaning.
+
+    "Overview" named the dataset route AND the per-document render mode AND its
+    sub-modes, so the only control labelled Overview on a document did not go
+    to the overview. The render mode is about one document's data and now says
+    so, in the label and in the code that backs it.
+    """
+    html = STATIC_HTML.read_text()
+
+    assert 'data-view-mode="data"' in html
+    assert ">Data</button>" in html
+    assert 'data-view-mode="overview"' not in html
+    assert "overviewMode" not in html
+    assert "renderOverviewView" not in html
+    # `overview` survives only as the route name.
+    assert 'return { name: "overview" };' in html
+
+
+def test_document_scoped_toolbar_controls_are_hidden_on_the_overview() -> None:
+    html = STATIC_HTML.read_text()
+
+    assert "function setToolbarScope(" in html
+    assert "setToolbarScope(false)" in html
+    assert "setToolbarScope(true)" in html
+
+
+def test_document_states_what_produced_the_extraction() -> None:
+    """Reviews bind to one immutable run, so its provenance is system state.
+
+    The run id is opaque by contract and so identifies without informing. A
+    reviewer judging a value wants the model, the effort it ran at, and when —
+    the id stays in the tooltip because run-level CLI commands take it.
+    """
+    html = STATIC_HTML.read_text()
+
+    # What the chip actually renders — model in the text, run id and effort in
+    # the tooltip — is asserted against a live page in browser_verify_flow.py.
+    assert 'id="run-chip"' in html
+    assert "function renderRunChip(" in html
+    # Effort and timing are comparative, so they belong on the overview where
+    # documents sit side by side — not in a single document's header.
+    assert "function runCellHtml(" in html
+    assert "Extracted by" in html
+
+
+def test_overview_and_data_tables_do_not_share_a_class() -> None:
+    """The naming collision reached CSS and misaligned a column.
+
+    The per-document data view's table was also called `overview-table`, so the
+    dataset overview inherited `td:nth-child(3) { text-align: left }` — written
+    for a different table — and its Reviewed column left-aligned while its
+    neighbours went right. One class, one table.
+    """
+    html = STATIC_HTML.read_text()
+
+    assert ".data-table td:nth-child(3)" in html
+    assert ".overview-table td:nth-child(3)" not in html
+    assert 'class="ext-table data-table"' in html
+
+
+def test_overview_distinguishes_nothing_extracted_from_complete() -> None:
+    """Zero reviewable fields is complete by arithmetic, not by review."""
+    html = STATIC_HTML.read_text()
+
+    assert "nothing extracted" in html
+    assert "nFields === 0" in html
+    assert "a.is_complete && nFields > 0" in html  # excluded from the tally too
+
+
+def test_settings_dialog_holds_identity_and_project_policy() -> None:
+    html = STATIC_HTML.read_text()
+
+    assert 'id="btn-settings"' in html
+    assert 'id="settings-modal"' in html
+    assert 'id="toggle-require-reviewer"' in html
+    assert 'id="btn-backfill"' in html
+    # It reuses .orcid-modal, which styles every label uppercase and defines no
+    # header layout, so the dialog must reset both for itself.
+    assert ".settings-modal header {" in html
+    assert "label.settings-toggle" in html
+
+
+def test_backfill_warns_when_the_project_may_be_shared() -> None:
+    """Anonymous entries in a repo may be a collaborator's, not yours."""
+    html = STATIC_HTML.read_text()
+
+    assert "settingsState.in_git_repo" in html
+    assert "collaborator's" in html
+    assert "cannot be undone" in html
+
+
+def test_extractor_note_is_behind_a_visible_affordance() -> None:
+    """A tooltip nobody knows about is the same as no explanation."""
+    html = STATIC_HTML.read_text()
+
+    assert 'id="reasoning-note"' in html
+    assert "function renderReasoningNote(" in html
+    assert "confidence_reasoning" in html
+    assert ".reasoning-note:hover .reasoning-note-body" in html
+
+
+def test_policy_label_names_what_is_required_and_who_it_binds() -> None:
+    html = STATIC_HTML.read_text()
+
+    assert "Reviews and audits require an ORCID iD" in html
+    assert "everyone auditing extractions in this project" in html
+    assert "not just this browser" not in html
+
+
+def test_module_state_is_declared_before_parse_time_initialisation() -> None:
+    """Identity init runs at parse time and reads settings state.
+
+    Declared beside its handlers, the `let` binding sat in the temporal dead
+    zone when identity initialisation reached it, throwing before any listener
+    was wired — the settings button silently did nothing.
+    """
+    html = STATIC_HTML.read_text()
+
+    assert html.index("let settingsState") < html.index("initReviewerIdentity();")
+    assert html.index("let settingsState") < html.index("function renderBackfillRow(")
+
+
+def test_no_separate_bulk_status_surface_remains() -> None:
+    """One status slot, not two.
+
+    Whether a bulk action reports the right thing is behaviour, and
+    `tests/browser_verify_flow.py` drives it: silence on success, a stated
+    failure with `data-status="error"` when a write fails. What is checked here
+    is only that the old parallel surface is gone, so a future change cannot
+    quietly reintroduce a second place for status to live.
+    """
+    html = STATIC_HTML.read_text()
+
+    assert "setBulkStatus" not in html
+    assert 'id="bulk-status"' not in html
+    assert "skippedBulkCount" not in html
+    assert "fields cleared" not in html
+
+

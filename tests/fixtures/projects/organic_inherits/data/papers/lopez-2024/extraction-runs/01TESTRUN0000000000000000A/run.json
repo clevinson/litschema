@@ -1,0 +1,13 @@
+{
+  "agent": {},
+  "article_id": "lopez-2024",
+  "created_at": "2026-01-01T00:00:00+00:00",
+  "inputs": {
+    "domain_context": "sha256:test",
+    "prepared_text": "sha256:test",
+    "skill": "sha256:test"
+  },
+  "run_id": "01TESTRUN0000000000000000A",
+  "schema_hash": "sha256:420947050c244f80d050260d398ffc72b9c39e9387af4c45097b06462d2b028d",
+  "version": 1
+}

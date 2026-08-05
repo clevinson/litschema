@@ -200,3 +200,56 @@ overloading `replace` to reach absent paths, which would make human-supplied
 values indistinguishable from agent corrections without diffing the run;
 hand-authoring nested structure through inline tree editing rather than a
 form over the item class; and positional matching of added elements across runs.
+
+
+## 2026-07-26 — Version 2 lands; the wire shape is the stored shape
+
+**Context:** version 1 keyed entries by author with `signal: verified|flagged`
+and carried an extraction-hash staleness stamp. The API spoke a third
+vocabulary again (`status`/`reviewer`/`correct_value`) with a translation layer
+bridging it to storage for a single consumer, our own frontend.
+
+**Decision:** version 2 ships as specified. Verification is an empty object;
+`override` carries replace/remove/add; a note never changes state. Run binding
+replaces staleness entirely, because a review now binds to a payload that
+cannot change. The HTTP surface uses the spec's own names, so the translation
+layer is deleted rather than ported — a reader of this spec sees the same
+words on the wire. Reads and writes name their run explicitly, so switching the
+active run can never silently retarget an edit in progress.
+
+Corrupt review state is explicit everywhere: the API returns
+`annotations: null` with a `review_error` rather than an empty list, because an
+empty list reads as "nothing reviewed yet" — a materially different and more
+reassuring claim than "we cannot tell what was reviewed".
+
+**Rejected:** migrating version-1 files, which the alpha policy forbids and
+which would require guessing whether a `flagged` entry meant an override or a
+note; keeping the API's historical field names behind a mapping layer; and
+reporting corrupt reviews as zero counts.
+
+
+## 2026-07-26 — Attribution is optional, and Git is not assumed
+
+**Context:** the earlier entry gave attribution entirely to Git diffs. That
+answer stops working once Git is optional, which it now is — the framework
+shells out to `git` nowhere, and a whole eight-document corpus was built,
+extracted, exported, and audited outside any repository. Attribution then had
+no home at all for that user. The alternative first considered was requiring an
+ORCID before any review could be saved, prompting for it automatically.
+
+**Decision:** `reviewer` is an optional entry key. A review saves without it;
+when a reviewer has identified themselves, it is recorded. No gate: someone
+auditing their own documents gains nothing from asserting who they are, and a
+login in front of the first action contradicts an onboarding flow built to be
+frictionless. Canonicalization will not absorb a descendant whose reviewer
+differs from its covering ancestor, since that would silently reassign one
+person's work to another. `doctor` reports unattributed entries only inside a
+Git repository, taking the repository as the available signal that work may be
+shared; outside one, a project is presumed local and anonymous review is
+unremarkable.
+
+**Rejected:** requiring an ORCID before auditing, which taxes the common
+solo case to serve the uncommon shared one; removing ORCID support entirely,
+which would have to be rebuilt for dual review and abandons the non-Git user;
+and treating a self-typed identifier as equivalent to Git history, which it is
+not — it carries no timestamp and nothing verifies it.

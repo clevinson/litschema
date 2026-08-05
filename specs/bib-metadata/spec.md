@@ -4,7 +4,7 @@ Status: current.
 
 Provenance-locked bibliographic metadata — **what a document IS** (title,
 authors, venue, DOI), as distinct from what it SAYS (the schema-driven
-extraction). Introduced by PR #15 (`feat/source-metadata`).
+extraction). Introduced by PR #15 (`feat/bib-metadata`).
 
 ## Data model
 
@@ -15,13 +15,13 @@ layers. Extraction, reasoning, and review belong to the selected immutable run
 | data layer | location or keys | writer |
 |---|---|---|
 | identity | `id`, `filename`, `original_filename`, `file_sha256`, `added_at`, `open_access` | assemble, registry sync (`open_access` only) |
-| source metadata | the `source_metadata` block (below) | see "Writers" |
+| source metadata | the `bib_metadata` block (below) | see "Writers" |
 | domain extraction | active run's `agent-extraction.json` | the extraction agent |
 | review overlay | active run's `review.json` | the verifier or review CLI |
 
-The `source_metadata` block holds only the fields in `SOURCE_FIELDS`
+The `bib_metadata` block holds only the fields in `BIB_FIELDS`
 (`title, authors, corporate_author, year, journal, doi, publisher, url,
-abstract`) plus the `metadata_source` provenance tag. Bibliography lives ONLY
+abstract`) plus the `bib_source` provenance tag. Bibliography lives ONLY
 in the block — top-level manifest keys are identity, never bibliography. The
 block is a fixed manifest convention, deliberately not a LinkML schema.
 
@@ -32,8 +32,8 @@ framework.)
 
 ## The lock model
 
-`metadata_source` has exactly three values (`PROVENANCE_VALUES` in
-`src/litschema/source_metadata.py`):
+`bib_source` has exactly three values (`PROVENANCE_VALUES` in
+`src/litschema/bib_metadata.py`):
 
 | value | meaning | header rendering | machine rights |
 |---|---|---|---|
@@ -41,7 +41,7 @@ framework.)
 | `auto` | machine-seeded: filename prettify, agent title-page read | editable (✎ pencil), no badge | batch enrichment may overwrite |
 | `manual` | a human touched it | editable (✎ pencil), no badge | machines may NOT overwrite without explicit consent |
 
-- Editable is **derived**: `metadata_source != "doi"`. There is no separate
+- Editable is **derived**: `bib_source != "doi"`. There is no separate
   editable flag in storage.
 - `auto` and `manual` render identically. The distinction exists solely so
   machines know what is sacred; it is surfaced only on demand (`meta show`).
@@ -87,7 +87,7 @@ framework.)
 **HTTP API** (verify webapp; in-process library calls, never the CLI):
 
 - `GET /api/bibliography/{id}` — the block + derived `editable`.
-- `PUT /api/bibliography/{id}` — partial update of `SOURCE_FIELDS`; `null`
+- `PUT /api/bibliography/{id}` — partial update of `BIB_FIELDS`; `null`
   or an empty string clears a field; DOIs validated and normalized; stamps
   `manual`. 400 unknown fields / bad year / bad DOI; 404 unknown article.
 - `POST /api/bibliography/{id}/sync` — explicit sync; 404 unknown article,
@@ -113,7 +113,7 @@ The guard covers everything: on a refusal the agent writes nothing and never
 syncs — per-article sync's overwrite-anything consent belongs to humans. The
 bundled extract-article skill implements this contract.
 
-A hand-edited block missing `metadata_source` reads as `manual` — the
+A hand-edited block missing `bib_source` reads as `manual` — the
 protective default: machines will not touch it.
 
 ## Invariants
@@ -121,7 +121,7 @@ protective default: machines will not touch it.
 - **Never-clobber.** WHEN a write carries `--source auto` AND the block is
   `manual` or `doi`, THEN the write is refused (CLI exit 1) unless `--force`.
   WHEN a write carries `--source manual`, THEN it always succeeds — a human
-  outranks every machine. (`can_overwrite` in `source_metadata.py`.)
+  outranks every machine. (`can_overwrite` in `bib_metadata.py`.)
 - **Consent by scope.** WHEN batch enrichment (`meta sync --all`)
   encounters a `manual` block, THEN it skips the article. WHEN per-article
   sync is invoked, THEN it may overwrite any state — invoking it IS the
@@ -157,18 +157,18 @@ domain repo may prune at leisure.
 
 ## Test obligations
 
-Implementation coverage must pin that manifest source-metadata writes do not
+Implementation coverage must pin that manifest bib-metadata writes do not
 create extraction provenance, modify run artifacts, or change active selection;
 source metadata remains unchanged when active runs switch; and verifier headers
 read the same manifest block on every route.
 
 ## Code map
 
-`src/litschema/source_metadata.py` (model + guard) ·
+`src/litschema/bib_metadata.py` (model + guard) ·
 `src/litschema/ingest/openalex_harvest.py` (batch sweep, `sync_article`) ·
 `src/litschema/ingest/article_assembly.py` (seeding) ·
 `src/litschema/webapp/app.py` (endpoints) ·
 the verifier's static native ES modules (header) ·
-`src/litschema/cli.py` (`meta` sub-app). Tests: `test_source_metadata.py`,
+`src/litschema/cli.py` (`meta` sub-app). Tests: `test_bib_metadata.py`,
 `test_harvest_sources.py`, `test_meta_cli.py`, `test_webapp_app.py`,
 `test_verifier_static.py`, `test_assemble.py`.
