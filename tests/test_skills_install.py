@@ -132,12 +132,12 @@ def test_onboard_and_extract_skills_delegate_deterministic_pipeline_steps() -> N
     onboard = (REPO_ROOT / "skills" / "litschema-onboard" / "SKILL.md").read_text()
     extract = (REPO_ROOT / "skills" / "extract-article" / "SKILL.md").read_text()
 
-    assert "$LITSCHEMA assemble" in onboard
-    assert "$LITSCHEMA prepare-text --all" in onboard
-    assert onboard.index("$LITSCHEMA assemble") < onboard.index("$LITSCHEMA prepare-text --all")
-    assert "$LITSCHEMA convert" not in onboard
+    assert "litschema assemble" in onboard
+    assert "litschema prepare-text --all" in onboard
+    assert onboard.index("litschema assemble") < onboard.index("litschema prepare-text --all")
+    assert "litschema convert" not in onboard
     assert "extract-article" in onboard  # defers extraction mechanics to that skill
-    assert "LITSCHEMA prepare-text {article_id}" in extract
+    assert "litschema prepare-text {article_id}" in extract
     assert "agent record-extraction" in extract
 
 
@@ -166,34 +166,24 @@ def test_onboard_skill_sweeps_registry_sync_after_batch() -> None:
     assert "specs/bib-metadata/spec.md" in onboard
 
 
-def test_skill_setup_gates_resolve_cli_with_dev_override() -> None:
+def test_skill_setup_gates_run_the_path_cli_and_stop_on_version_mismatch() -> None:
     onboard = (REPO_ROOT / "skills" / "litschema-onboard" / "SKILL.md").read_text()
     extract = (REPO_ROOT / "skills" / "extract-article" / "SKILL.md").read_text()
 
     for skill in (onboard, extract):
-        # Resolution order: .litschema/dev-cli override, then uv run, then bare CLI.
-        assert "`.litschema/dev-cli`" in skill
-        assert skill.index("`.litschema/dev-cli`") < skill.index("`uv run litschema`")
-        # The gate must confirm the resolved command actually works.
-        assert "$LITSCHEMA --help" in skill
-        # Approval is verifiable state the USER owns, not a claim passed in a
-        # prompt and not a file the repository can ship for itself. Both skills
-        # look it up under the user's config, keyed by project and content hash.
-        assert "XDG_CONFIG_HOME" in skill
-        assert "litschema/dev-cli-approved/$PROJECT_KEY" in skill
-        assert 'shasum -a 256 "$PROJECT_ROOT/.litschema/dev-cli"' in skill
-        # Keyed by the project root, so a subdirectory does not mint a new key.
-        assert "PROJECT_ROOT" in skill
-        # An in-project marker must be explicitly disregarded, not just unused.
-        assert "grants nothing" in skill or "ignored" in skill
+        assert "$LITSCHEMA" not in skill
+        assert ".litschema/dev-cli" not in skill
+        assert "uv run litschema" not in skill
+        # The gate runs a command that loads the project, so a pin mismatch
+        # surfaces before any work.
+        assert "litschema status" in skill
+        assert "uv tool install litschema" in skill
+        # On a mismatch the agent relays the message and changes nothing.
+        assert "Exit code 3" in skill
+        assert "Do not edit `litschema.yaml`" in skill
 
-    # Only the human may approve the override; an agent's assertion never
-    # counts, and neither does a marker the repository shipped for itself.
-    assert "another agent" in extract
-    assert "look like approval are not" in extract
-    assert "Only the user, in this conversation, can approve it." in extract
-    # The conductor approves once for a whole batch rather than per paper.
-    assert "approve once" in onboard.lower()
+    # Onboarding checks before its first message, not after schema drafting.
+    assert onboard.index("litschema status") < onboard.index("## Phase 0")
 
 
 def test_onboard_teaches_inlining_for_nested_repeating_structures() -> None:

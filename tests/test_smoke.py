@@ -186,16 +186,9 @@ def test_bundled_skills_use_runtime_schemas() -> None:
     extract_skill = (REPO_ROOT / "skills" / "extract-article" / "SKILL.md").read_text()
 
     assert "Before running extraction, verify you are in a litschema project" in extract_skill
-    assert "Do not assume `uv` or `litschema` is available" in extract_skill
     assert "If `litschema.yaml` is missing" in extract_skill
-    assert "`.litschema/dev-cli`" in extract_skill
-    assert "development override" in extract_skill
-    assert "never required for normal use" in extract_skill
-    assert "set `LITSCHEMA` to `uv run litschema`" in extract_skill
-    assert "set `LITSCHEMA` to `litschema`" in extract_skill
-    assert "$LITSCHEMA --help" in extract_skill
-    assert "$LITSCHEMA agent prepare-schema-context" in extract_skill
-    assert "$LITSCHEMA agent validate-reasoning" in extract_skill
+    assert "litschema agent prepare-schema-context" in extract_skill
+    assert "litschema agent validate-reasoning" in extract_skill
     assert ".litschema/runtime/extraction_schema.json" in extract_skill
     assert "do not infer a different root from `$defs`" in extract_skill
     assert "Omit this key when the source lines are self-explanatory" in extract_skill
@@ -362,7 +355,7 @@ def test_prepare_text_calls_python_api_for_one_article(
     monkeypatch.setattr(subprocess, "run", fail_subprocess)
     monkeypatch.setattr(pdf_to_markdown, "run", fake_prepare_text)
 
-    result = CliRunner().invoke(
+    result = CliRunner(mix_stderr=False).invoke(
         cli.app,
         [
             "--config",
@@ -387,7 +380,7 @@ def test_prepare_text_calls_python_api_for_one_article(
             "force": True,
         }
     ]
-    assert json.loads(result.output) == {
+    assert json.loads(result.stdout) == {
         "total": 1,
         "converted": 1,
         "skipped": 0,
@@ -659,7 +652,8 @@ def test_publish_workflow_gates_on_tests_and_a_matching_tag() -> None:
     assert "push" not in triggers, f"a tag would fire an unconfigured publish: {triggers}"
 
     assert "uv run pytest -q" in workflow          # never publish an untested build
-    assert "does not match project version" in workflow  # tag/version agreement
+    assert "does not match built version" in workflow  # tag/version agreement
+    assert "fetch-depth: 0" in workflow  # hatch-vcs needs tags to version the build
     assert "id-token: write" in workflow           # trusted publishing, no stored token
     assert "pypa/gh-action-pypi-publish" in workflow
 

@@ -75,36 +75,20 @@ Extraction mechanics belong to `specs/extraction/spec.md`. Run layout and
 activation belong to `specs/article-store/spec.md`. Review behavior belongs to
 `specs/reviews/spec.md`.
 
-## Approving the CLI dev override
+## Running the CLI
 
-`.litschema/dev-cli` names a development command that agents will execute, so
-it requires the user's approval. Approval MUST be recorded outside the
-project, in the user's own configuration:
+Both bundled skills run the `litschema` on PATH and nothing else. Their first
+command loads the project (`litschema status`), so a version mismatch surfaces
+before any work: onboarding runs it before its first message, and
+`extract-article` in its setup gate. Exit 127 means litschema is not installed;
+the skill tells the user to run `uv tool install litschema`. Exit 3 means the
+project's pin disagrees with the installed litschema or its skills; the skill
+stops and relays the message verbatim. A skill never edits `litschema.yaml`,
+reinstalls litschema, or reinstalls skills to clear a mismatch, since which
+version a project runs is the user's decision.
 
-    ${XDG_CONFIG_HOME:-$HOME/.config}/litschema/dev-cli-approved/<sha256 of the
-    real project path>
-
-holding the SHA-256 of the approved `dev-cli` content. Both keys matter: the
-path key means approving one checkout says nothing about another, and the
-content hash means editing the override revokes the old approval.
-
-Approval must be verifiable state rather than a claim carried in a prompt.
-A batch conductor cannot approve on the user's behalf and cannot pass approval
-down as an assertion: text asserting consent is indistinguishable from text
-fabricating it, so an agent that accepts one accepts both. Recording the hash
-lets every dispatched subagent confirm approval itself, which is what allows a
-batch to run without stalling on each article.
-
-The marker MUST NOT live inside the project. A hash stored beside the file it
-approves proves only that the file has not changed since *someone* approved
-it — not that this user ever did. Nothing stops a repository from committing
-both `.litschema/dev-cli` and a matching `.litschema/dev-cli-approved`, and
-every agent that cloned it would then execute that command silently. Agents
-MUST ignore an in-project `dev-cli-approved`; `doctor` reports it as ignored
-and offers to have it deleted.
-
-`doctor` reports the current approval state and, when unapproved, the command
-that records it.
+`skills install` stamps each copied skill with the installing version. See
+`specs/project-config/spec.md` for the pin contract.
 
 ## Onboarding versus refinement
 
