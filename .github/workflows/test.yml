@@ -84,6 +84,9 @@ jobs:
           print("bundled skills:", ", ".join(names))
           EOF
 
+      - name: Install the wheel and run a new project's first commands
+        run: .github/smoke-install.sh
+
       - uses: actions/upload-artifact@v4
         with:
           name: dist

@@ -1,26 +1,19 @@
 name: publish
 
-# Publishes a tagged build to TestPyPI or PyPI with trusted publishing (OIDC),
-# so no API token is stored in the repository.
+# Publishes a tagged build to PyPI with trusted publishing (OIDC), so no API
+# token is stored in the repository.
 #
-# One-time setup by a human, for each index:
+# One-time setup by a human, before the first release:
 #   1. Add a pending trusted publisher at
-#      https://pypi.org/manage/account/publishing/ (and the same page on
-#      test.pypi.org) with:
-#        owner: clevinson   repository: litschema   workflow: publish.yml
-#        environment: pypi (on pypi.org) / testpypi (on test.pypi.org)
-#   2. Create the `pypi` and `testpypi` environments in the repository settings.
+#      https://pypi.org/manage/account/publishing/ with:
+#        owner: clevinson   repository: litschema
+#        workflow: publish.yml   environment: pypi
+#   2. Create the `pypi` environment in the repository settings.
 #
-# Dispatch it from the release tag, TestPyPI first. Restore a tag trigger once
-# both indexes are set up (kata 0f2h).
+# Dispatch it from the release tag. Restore a tag trigger once PyPI is set up
+# (kata 0f2h).
 on:
   workflow_dispatch:
-    inputs:
-      index:
-        description: Package index to publish to
-        type: choice
-        options: [testpypi, pypi]
-        default: testpypi
 
 jobs:
   build:
@@ -78,6 +71,9 @@ jobs:
           print('ok')
           "
 
+      - name: Install the wheel and run a new project's first commands
+        run: .github/smoke-install.sh
+
       - uses: actions/upload-artifact@v4
         with:
           name: dist
@@ -86,7 +82,7 @@ jobs:
   publish:
     needs: build
     runs-on: ubuntu-latest
-    environment: ${{ inputs.index }}
+    environment: pypi
     permissions:
       id-token: write # trusted publishing; no token secret needed
     steps:
@@ -96,5 +92,3 @@ jobs:
           path: dist/
 
       - uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          repository-url: ${{ inputs.index == 'testpypi' && 'https://test.pypi.org/legacy/' || 'https://upload.pypi.org/legacy/' }}

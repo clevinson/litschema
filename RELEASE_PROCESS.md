@@ -93,20 +93,16 @@ git push origin main v0.2.0
 Tag the release commit itself, so the tree at the tag contains the changelog
 describing it.
 
-**4. Publish, TestPyPI first.**
+**4. Publish.**
 
-Run `.github/workflows/publish.yml` from the Actions tab. Pick the tag (not
-`main`) in the ref dropdown and `testpypi` as the index. Then install from
-TestPyPI and run through `init`, `doctor`, and `status`:
+Run `.github/workflows/publish.yml` from the Actions tab, picking the tag (not
+`main`) in the ref dropdown. Before uploading, it runs the tests, builds, checks
+that the built version is the tag, and installs the wheel as a uv tool to run
+`init`, `status`, and `doctor` in a fresh project. Pull requests run the same
+install check.
 
-```bash
-uv tool install litschema==0.2.0 --force \
-  --index https://test.pypi.org/simple/ --index-strategy unsafe-best-match
-```
-
-If that works, run the workflow again with `pypi`. PyPI never accepts a
-version twice, so a mistake found after this step ships as the next patch
-release.
+PyPI never accepts a version twice. If a release turns out broken, yank it on
+PyPI and ship the fix as the next patch release.
 
 The workflow refuses to run from a branch: hatch-vcs would build a dev version
 and the tag check would fail for a reason unrelated to the release.

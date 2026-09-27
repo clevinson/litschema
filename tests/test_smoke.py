@@ -654,6 +654,7 @@ def test_publish_workflow_gates_on_tests_and_a_matching_tag() -> None:
     assert "uv run pytest -q" in workflow          # never publish an untested build
     assert "does not match built version" in workflow  # tag/version agreement
     assert "fetch-depth: 0" in workflow  # hatch-vcs needs tags to version the build
+    assert ".github/smoke-install.sh" in workflow  # the wheel installs and runs as a tool
     assert "id-token: write" in workflow           # trusted publishing, no stored token
     assert "pypa/gh-action-pypi-publish" in workflow
 
