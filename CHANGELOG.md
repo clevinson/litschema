@@ -51,6 +51,43 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+First release on PyPI.
+
+### Breaking changes
+
+- Agent skills call `litschema` from PATH. The `.litschema/dev-cli` override
+  and its approval markers are gone; to run against a checkout, install it with
+  `uv tool install --editable <path>`.
+- Projects pin the litschema version they run with (`litschema_version` in
+  `litschema.yaml`). Commands refuse to run under a different version, exiting
+  3. Projects created before 0.1.1 have no pin and get a warning until you add
+  one.
+
+No data formats changed. Existing extractions, runs, and reviews load as before.
+
+### Added
+
+- `pip install litschema` / `uv tool install litschema`
+- `litschema --version`, naming the install source for local builds
+- `run.json` records the litschema version and install source that produced
+  each run
+- Installed skills carry the litschema version they came from; a mismatch
+  with the project pin stops the CLI with a prompt to run `skills install`
+- `CITATION.cff`
+
+### Fixed
+
+- `doctor` no longer reports a working global install as broken; it names the
+  `litschema` on PATH with its version
+
+### Internal
+
+Build and packaging changes with no effect on what the tool does.
+
+- Version comes from git tags via hatch-vcs
+- Dropped the redundant license classifier (PEP 639)
+- README links point at GitHub so they resolve on PyPI
+
 ## [0.1.0] — 2026-08-01
 
 First tagged release. Not published to PyPI — install from a checkout (see the

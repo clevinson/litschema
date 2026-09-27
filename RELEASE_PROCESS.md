@@ -71,14 +71,17 @@ it under `Known limits` rather than `Removed` — nothing a user relied on went
 away, and the honest statement is "this does not exist," not "this was taken
 out."
 
-**2. Land the changelog, then bump the version.**
+**2. Land the changelog.**
 
-The changelog entry and the `version` in `pyproject.toml` go in one commit on
-`main`:
+Commit the changelog entry on `main`, with `version` in `CITATION.cff` set to
+the new version and `date-released` set to the release date:
 
 ```bash
 git commit -am "chore(release): 0.2.0"
 ```
+
+There is no version to bump in `pyproject.toml`. hatch-vcs takes the version
+from the tag, so the tag in the next step is the version bump.
 
 **3. Tag that commit.**
 
@@ -88,13 +91,22 @@ git push origin main v0.2.0
 ```
 
 Tag the release commit itself, so the tree at the tag contains the changelog
-describing it. `.github/workflows/publish.yml` checks that the tag matches the
-version in `pyproject.toml`, so keep them in step even while publishing is off.
+describing it.
 
-That check reads `GITHUB_REF_NAME`, which is whatever ref the workflow ran
-against. While the workflow is `workflow_dispatch`-only, **dispatch it from the
-tag**, not from `main` — pick `v0.2.0` in the ref dropdown. Run from a branch,
-`GITHUB_REF_NAME` is the branch name, the comparison fails, and the build goes
-red for a reason that has nothing to do with the release. Whoever restores the
-tag trigger (kata `0f2h`) makes this moot, since a tag push sets that ref
-correctly on its own.
+**4. Publish, TestPyPI first.**
+
+Run `.github/workflows/publish.yml` from the Actions tab. Pick the tag (not
+`main`) in the ref dropdown and `testpypi` as the index. Then install from
+TestPyPI and run through `init`, `doctor`, and `status`:
+
+```bash
+uv tool install litschema==0.2.0 --force \
+  --index https://test.pypi.org/simple/ --index-strategy unsafe-best-match
+```
+
+If that works, run the workflow again with `pypi`. PyPI never accepts a
+version twice, so a mistake found after this step ships as the next patch
+release.
+
+The workflow refuses to run from a branch: hatch-vcs would build a dev version
+and the tag check would fail for a reason unrelated to the release.
