@@ -2791,6 +2791,7 @@ const state = {
   reasoning: null,
   reasoningByPath: {},
   schemaFields: {},
+  leftPane: "raw",
   annotations: {},  // path -> {path, state, override?, note?}
   selectedPath: null,
   editingPath: null,
@@ -4868,6 +4869,18 @@ function wireJsonEvents(panel) {
 // per cell would bloat the file without adding information. Exact entries win;
 // otherwise the nearest ancestor's evidence applies, marked as inherited so a
 // reviewer can tell row-level evidence from cell-level.
+// The text to look for inside a highlight: what the reasoning says it cited,
+// or the field's value. Enums and booleans are never marked.
+function valueForPath(path) {
+  if (!path) return null;
+  const field = schemaFieldForPath(path);
+  if (field && (field.kind === "boolean" || field.permissible_values)) return null;
+  const entry = reasoningFor(path);
+  const raw = entry && entry.value != null ? entry.value : getValueAtPath(effectiveExtraction(), path);
+  if (raw == null || typeof raw === "object" || typeof raw === "boolean") return null;
+  return String(raw);
+}
+
 function reasoningFor(path) {
   if (!path) return null;
   const exact = state.reasoningByPath[path];
@@ -5051,8 +5064,7 @@ function renderSourceState(nav) {
   const counter = nav.querySelector(".source-counter");
 
   // Clear all highlights
-  document.querySelectorAll(".reasoned-highlight").forEach(el => el.classList.remove("reasoned-highlight"));
-  document.querySelectorAll(".md-line.active").forEach(el => el.classList.remove("active"));
+  clearDocHighlights();
   const table = nav.closest("table");
   if (table) table.querySelectorAll(".cell-selected").forEach(el => el.classList.remove("cell-selected"));
 
@@ -5066,11 +5078,7 @@ function renderSourceState(nav) {
 
   // 1. Highlight range in document
   const [start, end] = entry.range;
-  for (let ln = start; ln <= end; ln++) {
-    const lineEl = document.querySelector(`.md-line[data-line="${ln}"]`);
-    if (lineEl) lineEl.classList.add("reasoned-highlight");
-  }
-  const firstLine = document.querySelector(`.md-line[data-line="${start}"]`);
+  const firstLine = highlightDocRange(start, end, valueForPath(entry.path));
   if (firstLine) {
     firstLine.classList.add("active");
     firstLine.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -5106,8 +5114,7 @@ function resetAllSourceNavs() {
     const total = nav._sourceMap ? nav._sourceMap.length : (nav.dataset.ranges ? nav.dataset.ranges.split(",").length : 0);
     if (counter && total > 0) counter.textContent = `1/${total}`;
   });
-  document.querySelectorAll(".reasoned-highlight").forEach(el => el.classList.remove("reasoned-highlight"));
-  document.querySelectorAll(".md-line.active").forEach(el => el.classList.remove("active"));
+  clearDocHighlights();
   document.querySelectorAll(".cell-selected").forEach(el => el.classList.remove("cell-selected"));
 }
 
@@ -5306,19 +5313,11 @@ function focusSelectedSource(index = state.selectedSourceIndex) {
   state.selectedSourceIndex = (index + ranges.length) % ranges.length;
   updateSourceEvidenceOverlay();
   renderMarkdown();
-  document.querySelectorAll(".reasoned-highlight").forEach(el => el.classList.remove("reasoned-highlight"));
-  document.querySelectorAll(".md-line.active").forEach(el => el.classList.remove("active"));
+  clearDocHighlights();
   const selectedRange = parseSourceLines(ranges[state.selectedSourceIndex])[0];
   if (!selectedRange) return;
   const [start, end] = selectedRange;
-  let firstLine = null;
-  for (let ln = start; ln <= end; ln++) {
-    const lineEl = document.querySelector(`.md-line[data-line="${ln}"]`);
-    if (lineEl) {
-      lineEl.classList.add("reasoned-highlight");
-      if (!firstLine) firstLine = lineEl;
-    }
-  }
+  const firstLine = highlightDocRange(start, end, valueForPath(state.selectedPath));
   if (firstLine) {
     firstLine.classList.add("active");
     firstLine.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -5444,14 +5443,10 @@ function wireTableEvents(panel) {
           renderMarkdown();
           const allRangesStr = rowSources.join(", ");
           const lineRanges = parseSourceLines(allRangesStr);
-          for (const [s, e2] of lineRanges) {
-            for (let ln = s; ln <= e2; ln++) {
-              const lineEl = document.querySelector(`.md-line[data-line="${ln}"]`);
-              if (lineEl) lineEl.classList.add("reasoned-highlight");
-            }
-          }
+          const cited = valueForPath(rowPath);
+          const firsts = lineRanges.map(([s, e2]) => highlightDocRange(s, e2, cited));
           if (lineRanges.length > 0) {
-            const fl = document.querySelector(`.md-line[data-line="${lineRanges[0][0]}"]`);
+            const fl = firsts[0];
             if (fl) { fl.classList.add("active"); fl.scrollIntoView({ behavior: "smooth", block: "center" }); }
           }
           $("#stat-citations").textContent = `${rowPath}: ${allRangesStr}`;
@@ -5472,14 +5467,10 @@ function wireTableEvents(panel) {
           resetAllSourceNavs();
           const lineRanges = parseSourceLines(sourceLine);
           renderMarkdown();
-          for (const [s, e2] of lineRanges) {
-            for (let ln = s; ln <= e2; ln++) {
-              const lineEl = document.querySelector(`.md-line[data-line="${ln}"]`);
-              if (lineEl) lineEl.classList.add("reasoned-highlight");
-            }
-          }
+          const cited = valueForPath(link.dataset.path);
+          const firsts = lineRanges.map(([s, e2]) => highlightDocRange(s, e2, cited));
           if (lineRanges.length > 0) {
-            const fl = document.querySelector(`.md-line[data-line="${lineRanges[0][0]}"]`);
+            const fl = firsts[0];
             if (fl) { fl.classList.add("active"); fl.scrollIntoView({ behavior: "smooth", block: "center" }); }
           }
           $("#stat-citations").textContent = `${link.dataset.path}: ${sourceLine}`;
@@ -5593,14 +5584,10 @@ function wireTableEvents(panel) {
         if (entry && entry.source_lines) {
           renderMarkdown();
           const lineRanges = parseSourceLines(entry.source_lines);
-          for (const [s, e2] of lineRanges) {
-            for (let ln = s; ln <= e2; ln++) {
-              const lineEl = document.querySelector(`.md-line[data-line="${ln}"]`);
-              if (lineEl) lineEl.classList.add("reasoned-highlight");
-            }
-          }
+          const cited = valueForPath(cellPath);
+          const firsts = lineRanges.map(([s, e2]) => highlightDocRange(s, e2, cited));
           if (lineRanges.length > 0) {
-            const fl = document.querySelector(`.md-line[data-line="${lineRanges[0][0]}"]`);
+            const fl = firsts[0];
             if (fl) { fl.classList.add("active"); fl.scrollIntoView({ behavior: "smooth", block: "center" }); }
           }
           $("#stat-citations").textContent = `${cellPath}: ${entry.source_lines}`;
@@ -5648,14 +5635,7 @@ function selectTableRow(path, rangeIndex) {
   const rangesToHighlight = (typeof rangeIndex === "number") ? [lineRanges[rangeIndex]] : lineRanges;
 
   for (const [start, end] of rangesToHighlight) {
-    let sectionFirstLine = null;
-    for (let ln = start; ln <= end; ln++) {
-      const lineEl = document.querySelector(`.md-line[data-line="${ln}"]`);
-      if (lineEl) {
-        lineEl.classList.add("reasoned-highlight");
-        if (!sectionFirstLine) sectionFirstLine = lineEl;
-      }
-    }
+    const sectionFirstLine = highlightDocRange(start, end, valueForPath(path));
     if (sectionFirstLine) {
       state.sections.push({
         firstLine: sectionFirstLine,
@@ -5825,14 +5805,7 @@ function selectLeaf(el) {
   const lineRanges = parseSourceLines(entry.source_lines);
 
   for (const [start, end] of lineRanges) {
-    let sectionFirstLine = null;
-    for (let ln = start; ln <= end; ln++) {
-      const lineEl = document.querySelector(`.md-line[data-line="${ln}"]`);
-      if (lineEl) {
-        lineEl.classList.add("reasoned-highlight");
-        if (!sectionFirstLine) sectionFirstLine = lineEl;
-      }
-    }
+    const sectionFirstLine = highlightDocRange(start, end, valueForPath(path));
     if (sectionFirstLine) {
       state.sections.push({
         firstLine: sectionFirstLine,
@@ -5890,6 +5863,34 @@ function scrollToSection() {
   let msg = `${path}: ${state.sectionIndex + 1}/${state.sections.length} (${section.label})`;
   if (entry && entry.reasoning) msg += ` \u2014 ${entry.reasoning}`;
   $("#stat-citations").textContent = msg;
+}
+
+// Every citation highlight goes through these two, so each pane mode
+// (raw lines, rendered) implements highlighting once.
+function clearDocHighlights() {
+  document.querySelectorAll(".reasoned-highlight").forEach(el => el.classList.remove("reasoned-highlight"));
+  document.querySelectorAll("#panel-left .active").forEach(el => el.classList.remove("active"));
+  document.querySelectorAll("#panel-left .val-mark").forEach(unwrapValueMark);
+  document.querySelectorAll("#panel-left td.val-cell").forEach(el => el.classList.remove("val-cell"));
+  $("#cite-notice")?.remove();
+}
+
+// Highlights the lines start..end in the current pane; returns the first
+// highlighted element (or null). `value` is marked inside the highlight when given.
+function highlightDocRange(start, end, value = null) {
+  if (state.leftPane === "rendered") return highlightRenderedRange(start, end, value);
+  let first = null;
+  for (let ln = start; ln <= end; ln++) {
+    const el = document.querySelector(`.md-line[data-line="${ln}"]`);
+    if (el) { el.classList.add("reasoned-highlight"); first = first || el; }
+  }
+  return first;
+}
+
+function highlightRenderedRange(start, end, value) { return null; }
+
+function unwrapValueMark(span) {
+  span.replaceWith(document.createTextNode(span.textContent));
 }
 
 function parseSourceLines(str) {
