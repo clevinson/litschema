@@ -105,3 +105,48 @@ def publish_test_run(
     if activate:
         (article_dir / "active-run.json").write_text(json.dumps({"run_id": run_id}) + "\n")
     return run_dir
+
+
+def _png(width: int, height: int, color: tuple[int, int, int]) -> bytes:
+    import pymupdf
+
+    pix = pymupdf.Pixmap(pymupdf.csRGB, pymupdf.IRect(0, 0, width, height), False)
+    pix.set_rect(pix.irect, color)
+    for x in range(0, width, 7):
+        pix.set_pixel(x, x % height, (0, 0, 0))
+    return pix.tobytes("png")
+
+
+def make_pdf(path: Path, *, title: str = "Soil carbon study") -> Path:
+    """A three-page PDF: body text, a ruled table, a shaded (highlight-flagged)
+    value, a logo on every page, one small icon, and one large figure."""
+    import pymupdf
+
+    logo = _png(300, 200, (200, 30, 30))
+    icon = _png(40, 40, (30, 200, 30))
+    figure = _png(600, 400, (30, 30, 200))
+    body = "Soil samples were collected and analysed for inorganic carbon. " * 6
+    doc = pymupdf.open()
+    for number in range(1, 4):
+        page = doc.new_page()
+        page.insert_text((72, 72), f"{title}, page {number}", fontsize=11)
+        page.insert_textbox(pymupdf.Rect(72, 100, 540, 250), body, fontsize=10)
+        page.insert_image(pymupdf.Rect(400, 700, 550, 800), stream=logo)
+        page.insert_text((280, 825), f"Running footer {number}", fontsize=8)
+        if number == 1:
+            page.insert_image(pymupdf.Rect(72, 300, 92, 320), stream=icon)
+            page.insert_image(pymupdf.Rect(72, 400, 372, 600), stream=figure)
+        if number == 2:
+            rows = [("Site", "pH", "SIC"), ("A", "7.1", "0.4"), ("B", "6.8", "0.2")]
+            for r, row in enumerate(rows):
+                for c, cell in enumerate(row):
+                    rect = pymupdf.Rect(72 + c * 100, 320 + r * 20, 172 + c * 100, 340 + r * 20)
+                    page.draw_rect(rect, color=(0, 0, 0), width=0.5)
+                    page.insert_text((rect.x0 + 4, rect.y0 + 14), cell, fontsize=10)
+            page.insert_text((72, 273), "Shaded field value 42", fontsize=10)
+            page.draw_rect(
+                pymupdf.Rect(70, 262, 200, 276), color=None, fill=(1, 1, 0), fill_opacity=0.4
+            )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    doc.save(path)
+    return path
