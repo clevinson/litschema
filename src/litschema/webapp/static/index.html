@@ -2995,7 +2995,9 @@ function setToolbarScope(inDocument) {
   // Document-scoped controls are hidden on the overview rather than disabled:
   // there is no document for them to act on, so showing them implies a context
   // the user is not in.
-  for (const sel of ["#article-select", ".article-nav", ".view-mode-toggle"]) {
+  // The overview has its own "Advanced filter" button, so the toolbar one is
+  // hidden there too.
+  for (const sel of ["#article-select", ".article-nav", ".view-mode-toggle", "#btn-filter-toggle"]) {
     const el = document.querySelector(sel);
     if (el) el.style.display = inDocument ? "" : "none";
   }

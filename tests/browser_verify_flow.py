@@ -307,7 +307,7 @@ def run_flow(harness: Harness) -> None:
 
         print("\n[document-scoped controls belong to the document]")
         hidden_on_overview = [
-            sel for sel in ("#article-select", "#stat-citations")
+            sel for sel in ("#article-select", "#stat-citations", "#btn-filter-toggle")
             if page.locator(sel).count() and page.locator(sel).first.is_visible()
         ]
         check("document controls are hidden on the overview", not hidden_on_overview,
