@@ -2473,6 +2473,28 @@
       width: 28px;
     }
   }
+  /* ── Document pane tabs and rendered view ── */
+  .pane-tabs { display:flex; gap:4px; padding:6px 12px; border-bottom:1px solid var(--border-subtle); }
+  .pane-tabs button { border:0; background:none; padding:4px 10px; border-radius:6px; color:var(--text-secondary); font:inherit; cursor:pointer; }
+  .pane-tabs button[aria-selected="true"] { background:var(--bg-overlay); color:var(--text); font-weight:550; }
+  .rendered { font-family: Charter, "Iowan Old Style", Georgia, serif; font-size:15px; line-height:1.6; padding:18px 26px; }
+  .rendered .col { max-width:64ch; }
+  .rendered p { margin:0 0 12px; }
+  .rendered h1, .rendered h2 { font-size:20px; line-height:1.3; margin:8px 0 10px; }
+  .rendered h3, .rendered h4, .rendered h5, .rendered h6 { font-family:var(--font-sans); font-size:12px; letter-spacing:.07em; text-transform:uppercase; color:var(--text-secondary); margin:18px 0 8px; }
+  .rendered table { border-collapse:collapse; font-variant-numeric:tabular-nums; font-size:13px; margin:6px 0 14px; display:block; overflow-x:auto; }
+  .rendered th, .rendered td { border-bottom:1px solid var(--border-subtle); padding:5px 8px; }
+  .rendered thead th { border-bottom:1.5px solid var(--grey); font-family:var(--font-sans); font-size:12px; font-weight:600; }
+  .rendered figure { margin:6px 0 12px; }
+  .rendered figure img { max-width:100%; border:1px solid var(--border-subtle); border-radius:3px; background:#fff; }
+  .rendered figcaption { font-size:13.5px; color:var(--text-secondary); margin-bottom:6px; }
+  .rendered .blk.reasoned-highlight { background:var(--cited-muted); border-left:3px solid var(--cited); border-radius:4px 6px 6px 4px; margin-left:-17px; margin-right:-14px; padding:8px 14px; }
+  .rendered tr.reasoned-highlight td { background:var(--cited-muted); }
+  .rendered tr.reasoned-highlight td:first-child { box-shadow:inset 3px 0 0 var(--cited); }
+  .rendered td.val-cell { background:var(--cited-strong) !important; font-weight:700; color:var(--cited); }
+  .rendered .val-mark { background:var(--cited-strong); font-weight:700; color:var(--cited); border-radius:3px; padding:0 3px; }
+  .cite-notice { font-family:var(--font-sans); font-size:12.5px; color:var(--text-secondary); background:var(--bg-overlay); border-radius:6px; padding:8px 12px; margin:10px 26px; }
+  .pdf-frame { width:100%; height:100%; border:0; }
 </style>
 </head>
 <body>
@@ -2654,6 +2676,11 @@ e.g. year >= 2024 && study_types.includes("review")'
           </div>
         </form>
       </div>
+      <div class="pane-tabs" id="pane-tabs" role="tablist" aria-label="Document view">
+        <button type="button" role="tab" data-pane="rendered">Rendered</button>
+        <button type="button" role="tab" data-pane="raw">Raw lines</button>
+        <button type="button" role="tab" data-pane="pdf">PDF</button>
+      </div>
       <div class="panel-header-row search-row" id="search-row" style="display:none">
         <div class="search-container">
           <input type="text" class="search-input" id="search-box" placeholder="Search in document...">
@@ -2664,10 +2691,6 @@ e.g. year >= 2024 && study_types.includes("review")'
             <button class="search-arrow" id="search-next" aria-label="Next match"><svg class="icon" aria-hidden="true"><use href="/static/icons.svg#chevron-down"/></svg></button>
           </div>
         </div>
-        <button class="toolbar-btn" id="btn-pdf" style="display:none">
-          PDF
-          <svg class="icon" aria-hidden="true"><use href="/static/icons.svg#external-link"/></svg>
-        </button>
       </div>
     </div>
     <div class="panel-body" id="panel-left"></div>
@@ -2791,7 +2814,9 @@ const state = {
   reasoning: null,
   reasoningByPath: {},
   schemaFields: {},
-  leftPane: "raw",
+  leftPane: "rendered",
+  rendered: null,
+  renderError: null,
   annotations: {},  // path -> {path, state, override?, note?}
   selectedPath: null,
   editingPath: null,
@@ -2941,8 +2966,13 @@ function parseRoute(hash = window.location.hash) {
   return { name: "overview" };
 }
 
+function docHash(articleId) {
+  const pane = state.leftPane !== "rendered" ? `?pane=${state.leftPane}` : "";
+  return `#/doc/${encodeURIComponent(articleId)}${pane}`;
+}
+
 function routeToDoc(articleId, { replace = false } = {}) {
-  const target = `#/doc/${encodeURIComponent(articleId)}`;
+  const target = docHash(articleId);
   if (window.location.hash === target) return;
   if (replace) window.location.replace(target);
   else window.location.hash = target;
@@ -3107,6 +3137,10 @@ async function init() {
   state.schemaFields = schemaData.fields || {};
   state.viewMode = initialViewMode();
   state.dataMode = initialDataMode();
+  state.leftPane = initialLeftPane();
+  syncPaneTabs();
+  document.querySelectorAll("#pane-tabs [data-pane]").forEach(b =>
+    b.addEventListener("click", () => setLeftPane(b.dataset.pane)));
   syncViewControls();
   // If a URL filter is present, load deep fields up front so the first
   // dropdown render reflects accurate matches (the filter expression may
@@ -3597,8 +3631,10 @@ async function loadArticle(id) {
   state.schemaError = summary ? summary.schema_error || summary.schema_drift || null : null;
   const runQuery = state.currentRunId ? `?run_id=${encodeURIComponent(state.currentRunId)}` : "";
 
-  const [mdData, extraction, reasoningData, annData, bibData] = await Promise.all([
+  const [mdData, renderedData, extraction, reasoningData, annData, bibData] = await Promise.all([
     fetchJson(`/api/markdown/${id}`).catch(() => null),
+    fetchJson(`/api/rendered/${encodeURIComponent(id)}`)
+      .then(rendered => ({ rendered }), err => ({ error: String(err && err.message || err) })),
     hasExtraction ? fetchJson(`/api/article/${id}${runQuery}`) : Promise.resolve(null),
     hasExtraction
       ? fetchJson(`/api/reasoning/${id}${runQuery}`).catch(() => null)
@@ -3614,6 +3650,8 @@ async function loadArticle(id) {
   if (id !== state.currentId) return;
 
   state.markdown = mdData ? mdData.markdown : null;
+  state.rendered = renderedData.rendered || null;
+  state.renderError = renderedData.error || null;
   state.extraction = extraction;
   state.reasoning = reasoningData;
 
@@ -3632,8 +3670,7 @@ async function loadArticle(id) {
   const meta = bibData || state.articles.find(a => a.article_id === id);
   if (meta) renderBibHeader(meta);
 
-  $("#btn-pdf").style.display = "flex";
-  $("#search-row").style.display = "flex";
+  $("#search-row").style.display = state.leftPane === "pdf" ? "none" : "flex";
   updateNavState();
 
   renderMarkdown();
@@ -3795,8 +3832,84 @@ $("#bib-sync-btn").addEventListener("click", async () => {
   }
 });
 
-// ── Markdown rendering ──
+// ── Document pane ──
+const PANES = ["rendered", "raw", "pdf"];
+
+function initialLeftPane() {
+  const fromUrl = new URLSearchParams(location.hash.split("?")[1] || "").get("pane");
+  if (PANES.includes(fromUrl)) return fromUrl;
+  try {
+    const saved = localStorage.getItem("litschema.leftPane");
+    if (PANES.includes(saved)) return saved;
+  } catch (_) { /* storage unavailable: use the default */ }
+  return "rendered";
+}
+
+function syncPaneTabs() {
+  document.querySelectorAll("#pane-tabs [data-pane]").forEach(b =>
+    b.setAttribute("aria-selected", String(b.dataset.pane === state.leftPane)));
+}
+
+// The pane actually showing: Rendered falls back to raw lines when the server
+// could not render the document.
+function docPane() {
+  if (state.leftPane === "rendered" && !state.rendered && state.renderError) return "raw";
+  return state.leftPane;
+}
+
+function setLeftPane(pane) {
+  state.leftPane = PANES.includes(pane) ? pane : "rendered";
+  try { localStorage.setItem("litschema.leftPane", state.leftPane); } catch (_) {}
+  syncPaneTabs();
+  if (state.currentId) {
+    $("#search-row").style.display = state.leftPane === "pdf" ? "none" : "flex";
+    history.replaceState(null, "", location.pathname + location.search + docHash(state.currentId));
+  }
+  renderMarkdown();
+  if (state.selectedPath) focusSelectedSource();
+}
+
 function renderMarkdown() {
+  const panel = $("#panel-left");
+  if (state.leftPane === "pdf") {
+    const src = `/api/pdf/${encodeURIComponent(state.currentId)}`;
+    // Re-rendering on every field click would reload the PDF.
+    if (panel.querySelector(".pdf-frame")?.getAttribute("src") !== src) {
+      panel.innerHTML = `<iframe class="pdf-frame" title="PDF" src="${src}"></iframe>`;
+    }
+    return;
+  }
+  if (state.leftPane === "rendered") {
+    if (state.rendered) return renderRenderedDoc();
+    if (state.renderError) {
+      renderRawLines();
+      panel.insertAdjacentHTML("afterbegin",
+        `<div class="cite-notice">The formatted view isn't available for this document (${escapeHtml(state.renderError)}). Showing raw lines.</div>`);
+      return;
+    }
+  }
+  renderRawLines();
+}
+
+function renderRenderedDoc() {
+  const panel = $("#panel-left");
+  let html = '<div class="rendered"><div class="col">';
+  for (const b of state.rendered.blocks) {
+    const [s, e] = b.lines;
+    if (b.kind === "figure") {
+      const cap = b.caption_html
+        ? `<figcaption class="blk" data-start="${b.caption_lines[0]}" data-end="${b.caption_lines[1]}">${b.caption_html}</figcaption>`
+        : "";
+      const src = `/api/figure/${encodeURIComponent(state.currentId)}/${encodeURIComponent(b.src)}`;
+      html += `<figure class="blk" data-start="${s}" data-end="${e}">${cap}<img loading="lazy" alt="" src="${src}"></figure>`;
+    } else {
+      html += `<div class="blk" data-start="${s}" data-end="${e}">${b.html}</div>`;
+    }
+  }
+  panel.innerHTML = html + "</div></div>";
+}
+
+function renderRawLines() {
   const panel = $("#panel-left");
   if (!state.markdown) {
     panel.innerHTML = '<div class="loading">No markdown available</div>';
@@ -5878,7 +5991,7 @@ function clearDocHighlights() {
 // Highlights the lines start..end in the current pane; returns the first
 // highlighted element (or null). `value` is marked inside the highlight when given.
 function highlightDocRange(start, end, value = null) {
-  if (state.leftPane === "rendered") return highlightRenderedRange(start, end, value);
+  if (docPane() === "rendered") return highlightRenderedRange(start, end, value);
   let first = null;
   for (let ln = start; ln <= end; ln++) {
     const el = document.querySelector(`.md-line[data-line="${ln}"]`);
@@ -6085,20 +6198,6 @@ $("#search-box").addEventListener("keydown", (e) => {
     e.preventDefault(); navigateSearch(1);
   } else if (e.key === "ArrowUp" && state.searchMatches.length > 0) {
     e.preventDefault(); navigateSearch(-1);
-  }
-});
-
-// ── PDF button ──
-$("#btn-pdf").addEventListener("click", () => {
-  if (!state.currentId) return;
-  const meta = state.articles.find(a => a.article_id === state.currentId);
-  // Static deploy (no server) uses DOI; local uses PDF API
-  const isLocalHost = location.hostname === "localhost" || location.hostname === "127.0.0.1";
-  const isStatic = location.protocol === "file:" || !isLocalHost;
-  if (isStatic && meta && meta.doi) {
-    window.open(`https://doi.org/${meta.doi}`, "_blank");
-  } else {
-    window.open(`/api/pdf/${state.currentId}`, "_blank");
   }
 });
 
