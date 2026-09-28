@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import re
+from pathlib import Path
+
 import pytest
 
 from litschema.webapp.render import render_blocks
@@ -113,3 +116,40 @@ def test_figure_src_drops_any_directory_part() -> None:
     blocks = render_blocks("![](../../etc/passwd.png)\n")["blocks"]
 
     assert blocks[0]["src"] == "passwd.png"
+
+
+FIXTURES = Path(__file__).parent / "fixtures" / "render"
+_SEPARATOR = re.compile(r"^\|[\s:|-]*\|$")
+
+
+@pytest.mark.parametrize("name", ["current", "p4l128", "docling", "markitdown"])
+def test_converter_tables_render_row_per_line(name) -> None:
+    text = (FIXTURES / f"malecka-{name}.md").read_text()
+    lines = text.split("\n")
+    blocks = render_blocks(text)["blocks"]
+    html = "".join(b.get("html", "") for b in blocks)
+
+    row_lines = [
+        i + 1 for i, line in enumerate(lines)
+        if line.strip().startswith("|") and not _SEPARATOR.match(line.strip())
+    ]
+    assert row_lines, "fixture has no table rows"
+    for n in row_lines:
+        assert f'<tr data-line="{n}">' in html, f"line {n} has no table row"
+    for b in blocks:
+        if b["kind"] == "paragraph":
+            assert not b["html"].removeprefix("<p>").lstrip().startswith("|")
+
+
+@pytest.mark.parametrize("name", ["current", "p4l128", "docling", "markitdown"])
+def test_every_non_blank_line_lands_in_a_block(name) -> None:
+    text = (FIXTURES / f"malecka-{name}.md").read_text()
+    covered = set()
+    for b in render_blocks(text)["blocks"]:
+        covered.update(range(b["lines"][0], b["lines"][1] + 1))
+        if "caption_lines" in b:
+            covered.update(range(b["caption_lines"][0], b["caption_lines"][1] + 1))
+
+    for i, line in enumerate(text.split("\n")):
+        if line.strip() and not line.strip().startswith("<!--"):
+            assert i + 1 in covered, f"line {i + 1} not rendered: {line[:60]!r}"
