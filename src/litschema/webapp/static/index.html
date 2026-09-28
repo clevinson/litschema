@@ -2287,23 +2287,26 @@
     line-height: 1.45;
   }
 
-  .source-evidence-grade {
-    margin-top: 6px;
-    padding-top: 6px;
-    border-top: 1px solid var(--border-subtle);
-    color: var(--text-secondary);
-    font-size: 12px;
-    line-height: 1.45;
-  }
-  .source-evidence-grade[hidden] { display: none; }
-  .source-evidence-grade-head {
-    display: flex;
-    gap: 8px;
-    align-items: baseline;
+  .evidence-verdict {
     font-size: 11px;
     color: var(--text-dim);
   }
-  .source-evidence-grade-head b { font-weight: 600; }
+  .evidence-verdict b { font-weight: 600; }
+  .evidence-extraction {
+    margin-top: 4px;
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+  .evidence-extraction summary {
+    cursor: pointer;
+    width: fit-content;
+  }
+  .evidence-extraction summary:hover { color: var(--text-secondary); }
+  .evidence-extraction-note {
+    margin-top: 2px;
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
 
   /* Grader verdicts: nothing for supported, amber partial, red unsupported,
      grey can't verify. */
@@ -2680,7 +2683,6 @@
       </div>
       <div class="source-evidence-confidence" id="source-evidence-confidence" style="display:none"></div>
       <div class="source-evidence-reasoning" id="source-evidence-reasoning"></div>
-      <div class="source-evidence-grade" id="source-evidence-grade" hidden></div>
     </div>
   </div>
   <div class="panel panel-right">
@@ -5309,13 +5311,24 @@ const VERDICT_LABELS = {
   cannot_verify: "can't verify",
 };
 
+// Longer wording for the evidence box and marker tooltips.
+const VERDICT_PHRASES = {
+  partial: "Partially supported",
+  unsupported: "Not supported",
+  cannot_verify: "Can't verify",
+};
+
+// A grade that should replace the extractor's note: anything but supported.
+function flaggedGradeFor(path) {
+  const grade = gradeFor(path);
+  return grade && VERDICT_PHRASES[grade.verdict] ? grade : null;
+}
+
 // Supported shows nothing; the other verdicts get a small colored label.
 function gradeMarkHtml(path) {
-  const grade = gradeFor(path);
-  if (!grade || grade.verdict === "supported" || !VERDICT_LABELS[grade.verdict]) return "";
-  const title = `Grader: ${VERDICT_LABELS[grade.verdict]}` +
-    (typeof grade.confidence === "number" ? ` (${grade.confidence.toFixed(2)})` : "") +
-    (grade.reasoning ? ` \u2014 ${grade.reasoning}` : "");
+  const grade = flaggedGradeFor(path);
+  if (!grade) return "";
+  const title = VERDICT_PHRASES[grade.verdict] + (grade.reasoning ? `: ${grade.reasoning}` : "");
   return `<span class="grade-mark grade-verdict grade-${grade.verdict}" data-verdict="${grade.verdict}" title="${escapeHtml(title)}">${VERDICT_LABELS[grade.verdict]}</span>`;
 }
 
@@ -5670,7 +5683,6 @@ function updateSourceEvidenceOverlay() {
     overlay.classList.remove("active");
     if (label) label.textContent = "No field selected";
     if (reasoning) reasoning.textContent = "";
-    renderGradeEvidence(null);
     if (confidenceEl) {
       confidenceEl.style.display = "none";
       confidenceEl.textContent = "";
@@ -5700,10 +5712,14 @@ function updateSourceEvidenceOverlay() {
     valueBox.style.display = "inline-flex";
   }
   const reasoningText = selectedReasoning(state.selectedPath);
-  if (reasoning) reasoning.textContent = reasoningText || "No reasoning note for this field.";
-  renderGradeEvidence(state.selectedPath);
+  const grade = flaggedGradeFor(state.selectedPath);
+  if (reasoning) {
+    if (grade) reasoning.innerHTML = flaggedEvidenceHtml(grade, reasoningText);
+    else reasoning.textContent = reasoningText || "No reasoning note for this field.";
+  }
   if (confidenceEl) {
-    const conf = selectedConfidence(state.selectedPath);
+    // A graded field shows its verdict instead of a score.
+    const conf = gradeFor(state.selectedPath) ? null : selectedConfidence(state.selectedPath);
     if (conf === null) {
       confidenceEl.style.display = "none";
       confidenceEl.textContent = "";
@@ -5734,27 +5750,16 @@ function updateSourceEvidenceOverlay() {
   if (next) next.disabled = ranges.length < 2;
 }
 
-function renderGradeEvidence(path) {
-  const box = $("#source-evidence-grade");
-  if (!box) return;
-  const grade = gradeFor(path);
-  if (!grade || !VERDICT_LABELS[grade.verdict]) {
-    box.hidden = true;
-    box.innerHTML = "";
-    return;
-  }
-  const grader = state.grade.grader || {};
-  const model = grader.model || grader.requested_model;
-  const details = [
-    typeof grade.confidence === "number" ? `confidence ${grade.confidence.toFixed(2)}` : "",
-    grade.inheritedFrom ? `for ${pathLabelParts(grade.inheritedFrom).join(" / ")}` : "",
-  ].filter(Boolean).join(" · ");
-  box.innerHTML = `<div class="source-evidence-grade-head">` +
-    `<span>Grader${model ? ` (${escapeHtml(model)})` : ""}</span>` +
-    `<b class="grade-verdict grade-${grade.verdict}">${VERDICT_LABELS[grade.verdict]}</b>` +
-    `<span>${escapeHtml(details)}</span></div>` +
-    `<div class="source-evidence-grade-reasoning">${escapeHtml(grade.reasoning || "")}</div>`;
-  box.hidden = false;
+// The check's reason leads; the extractor's note sits behind a disclosure.
+function flaggedEvidenceHtml(grade, extractorNote) {
+  const scope = grade.inheritedFrom ? ` \u00b7 for ${pathLabelParts(grade.inheritedFrom).join(" / ")}` : "";
+  const note = extractorNote
+    ? `<details class="evidence-extraction"><summary>How it was extracted</summary>` +
+      `<div class="evidence-extraction-note">${escapeHtml(extractorNote)}</div></details>`
+    : "";
+  return `<div class="evidence-verdict"><b class="grade-verdict grade-${grade.verdict}" data-verdict="${grade.verdict}">` +
+    `${VERDICT_PHRASES[grade.verdict]}</b>${escapeHtml(scope)}</div>` +
+    `<div class="evidence-grade-reason">${escapeHtml(grade.reasoning || "")}</div>` + note;
 }
 
 function focusSelectedSource(index = state.selectedSourceIndex) {
@@ -6928,7 +6933,10 @@ function renderRunChip() {
   // reviewer judging a value wants the model and when it ran. The id is kept
   // in the tooltip because run-level CLI commands take it.
   chip.textContent = run.model || "unknown model";
+  const grader = state.grade && state.grade.grader;
+  const graderModel = grader && (grader.model || grader.requested_model);
   chip.title = [
+    graderModel ? `Extracted by ${run.model || "unknown model"} \u00b7 checked by ${graderModel}` : null,
     run.model ? `Model: ${run.model}` : "Model not recorded",
     run.provider ? `Provider: ${run.provider}` : null,
     run.effort ? `Effort: ${run.effort}` : null,

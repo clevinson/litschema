@@ -188,6 +188,15 @@ class Harness:
         article_id = "okafor-2023-biochar-trial"
         cfg = load_config(self.project / "litschema.yaml", reload=True)
         run = active_run(article_files(cfg, article_id))
+        notes = {
+            ".site_name": "Site named in the methods section.",
+            ".measurements[0]": "Depth and unit read from Table 2.",
+        }
+        reasoning = json.loads(run.reasoning.read_text())
+        for entry in reasoning["fields"]:
+            if entry["path"] in notes:
+                entry["reasoning"] = notes[entry["path"]]
+        run.reasoning.write_text(json.dumps(reasoning, indent=2))
         verdicts = {
             "site_name": ("supported", "L5 names the Nsukka Research Farm."),
             "replicates": ("unsupported", "L9 gives four replicates, not three."),
@@ -889,13 +898,41 @@ def grade_flow(page, base: str, article: str) -> None:
     check("a row's grade covers its cells",
           page.locator(f'#panel-right tr[data-path="{partial_cell}"] .grade-mark').count() == 1)
 
+    chip_title = page.locator("#run-chip").get_attribute("title") or ""
+    check("the run chip names the grader model", "checked by claude-flow-1" in chip_title,
+          chip_title.replace("\n", " | ")[:90])
+
+    box = page.locator("#source-evidence-reasoning")
+    evidence = page.locator("#source-evidence-overlay")
+
+    page.locator('#panel-right tr[data-path="site_name"] td.value-cell').first.click()
+    page.wait_for_timeout(600)
+    text = box.inner_text()
+    check("a supported field shows the extractor's note",
+          "Site named in the methods section." in text, text[:90])
+    check("and no verdict text",
+          box.locator(".evidence-verdict").count() == 0 and "Nsukka Research Farm" not in text, text[:90])
+    check("and no confidence score",
+          not page.locator("#source-evidence-confidence").is_visible())
+
     page.locator(f'#panel-right tr[data-path="{partial_cell}"] td.value-cell').first.click()
     page.wait_for_timeout(600)
-    box = page.locator("#source-evidence-grade")
-    text = box.inner_text() if box.is_visible() else ""
-    check("the evidence box shows the grader's verdict and reasoning",
-          "partial" in text and "inferred from the table caption" in text, text[:90])
-    check("with its confidence", "confidence 0.80" in text, text[:90])
+    text = box.inner_text()
+    check("a partial field leads with the verdict and the check's reason",
+          "Partially supported" in text and "inferred from the table caption" in text, text[:90])
+    details = box.locator("details.evidence-extraction")
+    check("the extractor's note sits in a closed disclosure",
+          details.count() == 1 and details.get_attribute("open") is None
+          and "How it was extracted" in details.locator("summary").inner_text()
+          and "Depth and unit read from Table 2." not in text,
+          str(details.count()))
+    details.locator("summary").click()
+    check("and opens to show it", "Depth and unit read from Table 2." in box.inner_text())
+    check("no confidence score for a graded field",
+          not page.locator("#source-evidence-confidence").is_visible())
+    all_text = evidence.inner_text()
+    check("the evidence box never names the grader model",
+          "claude-flow-1" not in all_text and "Grader" not in all_text, all_text[:90])
 
     toggle.click()
     page.wait_for_timeout(600)

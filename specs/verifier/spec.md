@@ -343,8 +343,17 @@ else the nearest ancestor's, the same resolution evidence uses.
   nothing; partial is amber (`--accent`), unsupported red (`--red`), can't
   verify grey (`--text-dim`). A table row graded as a whole shows the label
   once, in its own Source cell.
-- Evidence box: under the extractor's note, the grader's model, verdict,
-  confidence, and reasoning, naming the ancestor when the grade is inherited.
+- Evidence box: one reason and one signal per field. A supported or ungraded
+  field shows the extractor's note, as before grading. A partial, unsupported,
+  or can't-verify field shows the verdict ("Partially supported", "Not
+  supported", "Can't verify") and the check's reasoning, naming the ancestor
+  when the grade is inherited; the extractor's note sits in a collapsed "How it
+  was extracted" disclosure. A graded field shows no confidence score from
+  either model; an ungraded field keeps the extractor's confidence. The grade
+  record keeps the grader's confidence, but the verifier does not render it.
+- The field-level UI never names the grader model. When a current grade
+  exists, the run chip's tooltip reads "Extracted by <model> · checked by
+  <grader model>".
 - Review order: a "Flagged first" toggle in the review pane's header, next to
   Audit/Data, shown only when a grade exists and on by default then. It lists
   every leaf in groups (unsupported, partial, can't verify, the extractor's
@@ -437,7 +446,10 @@ Implementation coverage must replace brittle source-substring assertions with:
 - the extractor explanation surfacing behind its own affordance, including for
   a run that extracted nothing;
 - grader verdict markers (none for supported, inherited by a row's cells), the
-  grader's reasoning and confidence in the evidence box, the flagged-first
+  evidence box showing the extractor's note for supported fields and the
+  verdict and check reasoning for flagged ones with the note behind a closed
+  disclosure, no grader model in the evidence box, the run chip tooltip naming
+  the grader model, the flagged-first
   toggle defaulting on and reordering rows both ways, and the Flags column
   count, sort, and chip;
 - silence from a bulk action that succeeds, and a stated failure when one does
