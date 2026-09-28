@@ -35,6 +35,7 @@ there.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import re
 import shutil
@@ -48,6 +49,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
+from playwright.sync_api import TimeoutError as PlaywrightTimeout
 from playwright.sync_api import sync_playwright
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -95,6 +97,9 @@ class Harness:
         self.tmp = Path(tempfile.mkdtemp(prefix="litschema-flow-"))
         self.project = self.tmp / source.name
         shutil.copytree(source, self.project)
+        self.render_article = (
+            self._add_render_article() if source.resolve() == DEFAULT_PROJECT.resolve() else None
+        )
         self.port = free_port()
         self.base = f"http://127.0.0.1:{self.port}"
         self.server: subprocess.Popen | None = None
@@ -134,6 +139,43 @@ class Harness:
                 "Use relative paths in litschema.yaml, or run against a copy you made."
             )
         return cfg
+
+    def _add_render_article(self) -> str:
+        """An article whose prepared text is a converter table, cited by row.
+
+        Built from the okafor fixture's run so it matches the fixture schema.
+        A `<br>` line is appended after the table for the escaping check.
+        """
+        papers = self.project / "data" / "papers"
+        src = papers / "okafor-2023-biochar-trial"
+        article_id = "malecka-2014-tillage-ph"
+        dest = papers / article_id
+        shutil.copytree(src, dest)
+        text = (REPO_ROOT / "tests" / "fixtures" / "render" / "malecka-p4l128.md").read_text()
+        (dest / "article.md").write_text(text.rstrip("\n") + "\n\nMeans of four<br>replicates.\n")
+        run = dest / "extraction-runs" / "01FLOWRUN0000000000000000"
+        meta = json.loads((dest / "article-metadata.json").read_text())
+        meta["id"] = article_id
+        meta["bib_metadata"]["title"] = "Tillage effects on soil pH"
+        (dest / "article-metadata.json").write_text(json.dumps(meta, indent=2))
+        extraction = json.loads((run / "agent-extraction.json").read_text())
+        extraction.update(article_id=article_id, site_name="Nonexistent Farm Station",
+                          mean_annual_temperature_c=7.56)
+        (run / "agent-extraction.json").write_text(json.dumps(extraction, indent=2))
+        mp_line = next(i for i, line in enumerate(text.splitlines(), 1) if line.startswith("|MP|"))
+        reasoning = {
+            "confidence": 0.5,
+            "confidence_reasoning": "flow fixture",
+            "fields": [
+                {"path": ".mean_annual_temperature_c", "source_lines": f"L{mp_line}", "value": "7.56"},
+                {"path": ".site_name", "source_lines": "L9", "value": "Nonexistent Farm Station"},
+            ],
+        }
+        (run / "agent-reasoning.json").write_text(json.dumps(reasoning, indent=2))
+        run_meta = json.loads((run / "run.json").read_text())
+        run_meta["article_id"] = article_id
+        (run / "run.json").write_text(json.dumps(run_meta, indent=2))
+        return article_id
 
     def start(self) -> None:
         self.server = subprocess.Popen(
@@ -297,7 +339,10 @@ def run_flow(harness: Harness) -> None:
         page.wait_for_timeout(1500)
         check("not evaluated on load", page.evaluate("() => !window.__FLOW_RAN__"))
         check("but shown to the user", page.locator("#filter-input").input_value() == payload)
-        check("with the filter row open", page.locator("#filter-row").is_visible())
+        check("in Expression mode", page.locator("#filter-input").is_visible()
+              and page.locator("#ov-filterbar").get_attribute("data-mode") == "expression")
+        check("with a prompt to apply it", "Apply" in page.locator("#filter-msg").inner_text(),
+              page.locator("#filter-msg").inner_text())
         page.locator("#btn-filter-apply").click()
         page.wait_for_timeout(1000)
         check("and runs once confirmed", page.evaluate("() => !!window.__FLOW_RAN__"))
@@ -305,9 +350,60 @@ def run_flow(harness: Harness) -> None:
         page.wait_for_selector("#overview-route", state="visible", timeout=20000)
         page.wait_for_timeout(700)
 
+        print("\n[one filter bar: search and expression]")
+        before = rows.count()
+        page.locator("#ov-mode-search").click()
+        check("Search mode shows the text input", page.locator("#ov-search").is_visible()
+              and not page.locator("#filter-input").is_visible())
+        page.locator("#ov-mode-expression").click()
+        check("Expression mode shows the expression input", page.locator("#filter-input").is_visible()
+              and not page.locator("#ov-search").is_visible())
+        page.locator("#filter-input").fill(f"article_id === {json.dumps(article)}")
+        page.wait_for_timeout(500)
+        count_text = page.locator("#filter-count").inner_text()
+        check("typing previews the match count", count_text == f"1/{len(articles)}", count_text)
+        check("preview alone does not filter the rows", rows.count() == before, str(rows.count()))
+        page.locator("#filter-input").press("Enter")
+        page.wait_for_timeout(500)
+        check("Enter narrows the rows immediately", rows.count() == 1, f"{before} -> {rows.count()}")
+        check("and the applied expression shows as a chip", page.locator("#ov-filter-active").is_visible())
+        page.locator("#ov-mode-search").click()
+        check("the chip stays in Search mode", page.locator("#ov-filter-active").is_visible())
+        page.locator("#ov-search").fill("zzzz-no-such-document")
+        page.wait_for_timeout(300)
+        check("text search and expression combine", rows.count() == 0, str(rows.count()))
+        page.locator("#ov-search").fill("")
+        page.wait_for_timeout(300)
+        check("clearing the text leaves the expression", rows.count() == 1, str(rows.count()))
+        page.locator("#ov-filter-clear").click()
+        page.wait_for_timeout(300)
+        check("x clears and restores every row", rows.count() == before, str(rows.count()))
+        check("and removes the chip", not page.locator("#ov-filter-active").is_visible())
+        page.locator("#ov-mode-expression").click()
+        page.locator("#filter-input").fill("year >= (")
+        page.wait_for_timeout(400)
+        check("an invalid expression shows its error under the bar",
+              page.locator("#filter-msg").is_visible() and page.locator("#filter-msg").inner_text() != "",
+              page.locator("#filter-msg").inner_text())
+        page.locator("#filter-input").fill("")
+        page.reload(wait_until="networkidle")
+        page.wait_for_selector("#overview-route", state="visible", timeout=20000)
+        check("the mode survives a reload",
+              page.locator("#ov-filterbar").get_attribute("data-mode") == "expression")
+        page.locator("#btn-filter-help").click()
+        page.wait_for_timeout(300)
+        on_top = page.evaluate("""() => {
+          const box = document.querySelector('#filter-help-modal .filter-help-modal');
+          const r = box.getBoundingClientRect();
+          return box.contains(document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2));
+        }""")
+        check("filter help opens on top of everything", on_top)
+        page.keyboard.press("Escape")
+        page.locator("#ov-mode-search").click()
+
         print("\n[document-scoped controls belong to the document]")
         hidden_on_overview = [
-            sel for sel in ("#article-select", "#stat-citations")
+            sel for sel in ("#app-nav", "#btn-overview", "#switcher-btn", "#view-mode-review", "#stat-citations")
             if page.locator(sel).count() and page.locator(sel).first.is_visible()
         ]
         check("document controls are hidden on the overview", not hidden_on_overview,
@@ -321,7 +417,7 @@ def run_flow(harness: Harness) -> None:
               bool(page.evaluate("() => state.currentRunId")),
               str(page.evaluate("() => state.currentRunId")))
         check("document controls appear with the document",
-              page.locator("#article-select").first.is_visible())
+              page.locator("#switcher-btn").is_visible() and page.locator("#btn-overview").is_visible())
 
         print("\n[the document says what produced it]")
         run_meta = next(a for a in articles if a["article_id"] == article).get("active_run") or {}
@@ -344,15 +440,108 @@ def run_flow(harness: Harness) -> None:
             check("provenance chip present", False, "no run chip rendered")
 
         print("\n[there is a way back]")
-        exit_control = page.locator("#back-to-overview, .back-to-overview, [data-route='overview']")
-        check("document offers a marked exit", exit_control.count() > 0)
-        if exit_control.count():
-            exit_control.first.click()
-            page.wait_for_timeout(900)
-            check("exit returns to the overview", page.url.rstrip("/").endswith("#/")
-                  or page.locator("#overview-route").is_visible(), page.url)
-            page.goto(f"{base}/#/doc/{article}", wait_until="networkidle")
-            await_document(page)
+        # The overview's own view (sort, text, status) lives in its hash; leaving
+        # a document through the app bar or Esc returns to that view.
+        overview_hash = "#/?sort=fields&dir=desc"
+        page.goto(f"{base}/{overview_hash}", wait_until="networkidle")
+        page.wait_for_selector("#overview-route", state="visible", timeout=20000)
+        page.locator(f'#overview-rows tr[data-article="{article}"]').click()
+        await_document(page)
+        page.locator("#btn-overview").click()
+        page.wait_for_timeout(700)
+        check("Overview returns to the overview", page.locator("#overview-route").is_visible())
+        check("and keeps the overview's hash query", page.url.endswith(overview_hash), page.url)
+        page.go_back()
+        await_document(page)
+        check("browser back reopens the document", f"#/doc/{article}" in page.url, page.url)
+        page.locator("body").click(position={"x": 5, "y": 300})
+        page.keyboard.press("Escape")
+        page.wait_for_timeout(700)
+        check("Esc on a document returns to the overview",
+              page.locator("#overview-route").is_visible() and page.url.endswith(overview_hash), page.url)
+        page.goto(f"{base}/#/doc/{article}", wait_until="networkidle")
+        await_document(page)
+        page.locator("#search-box").click()
+        page.keyboard.press("Escape")
+        page.wait_for_timeout(500)
+        check("Esc inside an input stays on the document", f"#/doc/{article}" in page.url, page.url)
+
+        print("\n[document switcher]")
+        other = next(a["article_id"] for a in articles if a["article_id"] != article)
+        switcher = page.locator("#switcher-btn")
+        check("switcher names the open document",
+              switcher.get_attribute("title", timeout=2000) not in (None, "", "Jump to a document"),
+              str(switcher.get_attribute("title")))
+        switcher.click()
+        check("click opens the list", page.locator("#switcher-pop").is_visible()
+              and switcher.get_attribute("aria-expanded") == "true")
+        check("focus moves to the search input",
+              page.evaluate("() => document.activeElement.id") == "switcher-input")
+        options = page.locator("#switcher-list li[role=option]")
+        check("lists the queue", options.count() == len(articles), f"{options.count()} of {len(articles)}")
+        check("marks the open document", page.locator("#switcher-list li.current").get_attribute("data-article") == article)
+        page.keyboard.type(other)
+        page.wait_for_timeout(200)
+        check("typing filters the list", 0 < options.count() < len(articles), str(options.count()))
+        check("the hint counts matches", page.locator("#switcher-hint").inner_text().startswith(f"{options.count()} of {len(articles)}"),
+              page.locator("#switcher-hint").inner_text())
+        page.keyboard.press("Enter")
+        page.wait_for_function(f"() => location.hash.startsWith('#/doc/{other}')", timeout=10000)
+        check("Enter opens the match", f"#/doc/{other}" in page.url, page.url)
+        check("and closes the list", page.locator("#switcher-pop").is_hidden())
+        switcher.click()
+        page.keyboard.press("Escape")
+        page.wait_for_timeout(200)
+        check("Esc closes the list", page.locator("#switcher-pop").is_hidden())
+        check("focus returns to the switcher", page.evaluate("() => document.activeElement.id") == "switcher-btn")
+        check("and the document stays open", f"#/doc/{other}" in page.url, page.url)
+        switcher.click()
+        page.locator("#panel-right").click(position={"x": 20, "y": 20})
+        check("a click outside closes the list", page.locator("#switcher-pop").is_hidden())
+
+        print("\n[previous/next follow the filtered queue]")
+        pair = [a["article_id"] for a in articles][:2]
+        page.locator("#btn-overview").click()
+        page.wait_for_selector("#overview-route", state="visible", timeout=20000)
+        page.locator("#ov-mode-expression").click()
+        page.locator("#filter-input").fill(f"{json.dumps(pair)}.includes(article_id)")
+        page.locator("#filter-input").press("Enter")
+        page.wait_for_timeout(500)
+        page.locator(f'#overview-rows tr[data-article="{pair[0]}"]').click()
+        page.wait_for_function(f"() => location.hash.startsWith('#/doc/{pair[0]}')", timeout=10000)
+        page.wait_for_timeout(500)
+        check("counter counts the filtered queue", page.locator("#nav-counter").inner_text() == "1/2",
+              page.locator("#nav-counter").inner_text())
+        page.locator("#btn-next").click()
+        page.wait_for_function(f"() => location.hash.startsWith('#/doc/{pair[1]}')", timeout=10000)
+        page.wait_for_timeout(300)
+        check("next steps to the second match", page.locator("#nav-counter").inner_text() == "2/2",
+              page.locator("#nav-counter").inner_text())
+        check("and stops at the end", page.locator("#btn-next").is_disabled())
+        page.locator("#btn-prev").click()
+        page.wait_for_function(f"() => location.hash.startsWith('#/doc/{pair[0]}')", timeout=10000)
+        check("previous steps back", f"#/doc/{pair[0]}" in page.url, page.url)
+        switcher.click()
+        check("the switcher lists the same queue", options.count() == 2, str(options.count()))
+        page.keyboard.press("Escape")
+        page.locator("#btn-overview").click()
+        page.wait_for_selector("#overview-route", state="visible", timeout=20000)
+        check("Overview keeps ?filter=", "filter=" in page.url, page.url)
+        page.locator("#ov-filter-clear").click()
+        page.locator("#ov-mode-search").click()
+
+        print("\n[Audit/Data lives in the review pane]")
+        page.goto(f"{base}/#/doc/{article}", wait_until="networkidle")
+        await_document(page)
+        toggle = page.locator("#extraction-panel-header #view-mode-data")
+        check("the toggle sits in the review header", toggle.is_visible())
+        toggle.click()
+        page.wait_for_timeout(300)
+        check("Data switches the pane", page.evaluate("() => state.viewMode") == "data"
+              and page.locator("#extraction-panel-title").inner_text() == "Extraction Data")
+        page.locator("#view-mode-review").click()
+        page.wait_for_timeout(300)
+        check("Audit switches back", page.evaluate("() => state.viewMode") == "review")
 
         print("\n[deep links honour the view they name]")
         for view, expected in (("review", "review"), ("data", "data")):
@@ -566,11 +755,76 @@ def run_flow(harness: Harness) -> None:
         check("control back to unreviewed", "status-empty" in status_class(page, target),
               status_class(page, target))
 
+        if harness.render_article:
+            rendered_flow(page, base, harness.render_article)
+
         print("\n[console]")
         real = [e for e in page_errors if "favicon" not in e.lower()]
         check("no page errors", not real, "; ".join(real[:3])[:200])
 
         browser.close()
+
+
+def rendered_flow(page, base: str, article: str) -> None:
+    table_field = "mean_annual_temperature_c"
+    paraphrase_field = "site_name"
+
+    print("\n[rendered document]")
+    page.goto(f"{base}/#/doc/{article}", wait_until="networkidle")
+    await_document(page)
+    check("Rendered is the default pane",
+          page.locator('#pane-tabs [data-pane="rendered"]').get_attribute("aria-selected") == "true")
+    left = page.locator("#panel-left")
+    with contextlib.suppress(PlaywrightTimeout):
+        page.wait_for_selector("#panel-left .rendered .blk", timeout=10000)
+    check("prepared text renders as blocks", left.locator(".rendered .blk").count() > 0)
+    check("HTML in prepared text is not shown as text", "<br>" not in left.inner_text())
+
+    page.locator(f'tr.clickable[data-path="{table_field}"]').first.click()
+    page.wait_for_timeout(600)
+    row = left.locator(".rendered tr.reasoned-highlight")
+    check("a cited table row is highlighted alone", row.count() == 1, f"{row.count()} rows")
+    if row.count() == 1:
+        check("its value cell is filled", row.locator("td.val-cell").count() == 1
+              and row.locator("td.val-cell").inner_text().strip() == "7.56",
+              row.inner_text().replace("\n", " ")[:60])
+
+    page.locator(f'tr.clickable[data-path="{paraphrase_field}"]').first.click()
+    page.wait_for_timeout(600)
+    check("a paraphrased value tints its paragraph",
+          left.locator(".rendered .blk.reasoned-highlight").count() == 1)
+    marks = left.locator(".val-mark, td.val-cell").count()
+    check("and marks nothing", marks == 0, f"{marks} marks")
+
+    page.locator('#pane-tabs [data-pane="raw"]').click()
+    page.wait_for_timeout(600)
+    check("Raw lines shows HTML escaped", "<br>" in left.inner_text())
+    check("Raw lines shows line numbers", left.locator(".md-line[data-line]").count() > 0)
+    page.locator('#pane-tabs [data-pane="rendered"]').click()
+    page.wait_for_timeout(400)
+
+    print("\n[overview table]")
+    page.goto(f"{base}/#/", wait_until="networkidle")
+    page.wait_for_selector("#overview-route", state="visible", timeout=20000)
+    page.locator("#overview-rows tr[data-article]").first.hover()
+    page.mouse.wheel(0, 2000)
+    page.wait_for_timeout(300)
+    box = page.locator("#overview-table thead").bounding_box()
+    check("header stays visible after scrolling", bool(box) and box["y"] >= 0, str(box))
+    total = page.locator("#overview-rows tr[data-article]").count()
+    page.locator('#ov-chips [data-status="not-started"]').click()
+    page.wait_for_timeout(300)
+    check("a status chip writes the URL", "status=not-started" in page.url, page.url)
+    shown = page.locator("#overview-rows tr[data-article]").count()
+    check("and narrows the rows", shown < total, f"{shown} of {total}")
+    page.reload(wait_until="networkidle")
+    page.wait_for_selector("#overview-route", state="visible", timeout=20000)
+    check("the chip survives a reload",
+          page.locator('#ov-chips [data-status="not-started"]').get_attribute("aria-pressed") == "true")
+
+    print("\n[icons]")
+    check("icons come from the bundled sprite",
+          page.locator('use[href="/static/icons.svg#settings"]').count() >= 1)
 
 
 def main() -> int:
