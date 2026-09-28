@@ -35,6 +35,7 @@ there.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import re
 import shutil
@@ -48,6 +49,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
+from playwright.sync_api import TimeoutError as PlaywrightTimeout
 from playwright.sync_api import sync_playwright
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -95,6 +97,9 @@ class Harness:
         self.tmp = Path(tempfile.mkdtemp(prefix="litschema-flow-"))
         self.project = self.tmp / source.name
         shutil.copytree(source, self.project)
+        self.render_article = (
+            self._add_render_article() if source.resolve() == DEFAULT_PROJECT.resolve() else None
+        )
         self.port = free_port()
         self.base = f"http://127.0.0.1:{self.port}"
         self.server: subprocess.Popen | None = None
@@ -134,6 +139,43 @@ class Harness:
                 "Use relative paths in litschema.yaml, or run against a copy you made."
             )
         return cfg
+
+    def _add_render_article(self) -> str:
+        """An article whose prepared text is a converter table, cited by row.
+
+        Built from the okafor fixture's run so it matches the fixture schema.
+        A `<br>` line is appended after the table for the escaping check.
+        """
+        papers = self.project / "data" / "papers"
+        src = papers / "okafor-2023-biochar-trial"
+        article_id = "malecka-2014-tillage-ph"
+        dest = papers / article_id
+        shutil.copytree(src, dest)
+        text = (REPO_ROOT / "tests" / "fixtures" / "render" / "malecka-p4l128.md").read_text()
+        (dest / "article.md").write_text(text.rstrip("\n") + "\n\nMeans of four<br>replicates.\n")
+        run = dest / "extraction-runs" / "01FLOWRUN0000000000000000"
+        meta = json.loads((dest / "article-metadata.json").read_text())
+        meta["id"] = article_id
+        meta["bib_metadata"]["title"] = "Tillage effects on soil pH"
+        (dest / "article-metadata.json").write_text(json.dumps(meta, indent=2))
+        extraction = json.loads((run / "agent-extraction.json").read_text())
+        extraction.update(article_id=article_id, site_name="Nonexistent Farm Station",
+                          mean_annual_temperature_c=7.56)
+        (run / "agent-extraction.json").write_text(json.dumps(extraction, indent=2))
+        mp_line = next(i for i, line in enumerate(text.splitlines(), 1) if line.startswith("|MP|"))
+        reasoning = {
+            "confidence": 0.5,
+            "confidence_reasoning": "flow fixture",
+            "fields": [
+                {"path": ".mean_annual_temperature_c", "source_lines": f"L{mp_line}", "value": "7.56"},
+                {"path": ".site_name", "source_lines": "L9", "value": "Nonexistent Farm Station"},
+            ],
+        }
+        (run / "agent-reasoning.json").write_text(json.dumps(reasoning, indent=2))
+        run_meta = json.loads((run / "run.json").read_text())
+        run_meta["article_id"] = article_id
+        (run / "run.json").write_text(json.dumps(run_meta, indent=2))
+        return article_id
 
     def start(self) -> None:
         self.server = subprocess.Popen(
@@ -566,11 +608,76 @@ def run_flow(harness: Harness) -> None:
         check("control back to unreviewed", "status-empty" in status_class(page, target),
               status_class(page, target))
 
+        if harness.render_article:
+            rendered_flow(page, base, harness.render_article)
+
         print("\n[console]")
         real = [e for e in page_errors if "favicon" not in e.lower()]
         check("no page errors", not real, "; ".join(real[:3])[:200])
 
         browser.close()
+
+
+def rendered_flow(page, base: str, article: str) -> None:
+    table_field = "mean_annual_temperature_c"
+    paraphrase_field = "site_name"
+
+    print("\n[rendered document]")
+    page.goto(f"{base}/#/doc/{article}", wait_until="networkidle")
+    await_document(page)
+    check("Rendered is the default pane",
+          page.locator('#pane-tabs [data-pane="rendered"]').get_attribute("aria-selected") == "true")
+    left = page.locator("#panel-left")
+    with contextlib.suppress(PlaywrightTimeout):
+        page.wait_for_selector("#panel-left .rendered .blk", timeout=10000)
+    check("prepared text renders as blocks", left.locator(".rendered .blk").count() > 0)
+    check("HTML in prepared text is not shown as text", "<br>" not in left.inner_text())
+
+    page.locator(f'tr.clickable[data-path="{table_field}"]').first.click()
+    page.wait_for_timeout(600)
+    row = left.locator(".rendered tr.reasoned-highlight")
+    check("a cited table row is highlighted alone", row.count() == 1, f"{row.count()} rows")
+    if row.count() == 1:
+        check("its value cell is filled", row.locator("td.val-cell").count() == 1
+              and row.locator("td.val-cell").inner_text().strip() == "7.56",
+              row.inner_text().replace("\n", " ")[:60])
+
+    page.locator(f'tr.clickable[data-path="{paraphrase_field}"]').first.click()
+    page.wait_for_timeout(600)
+    check("a paraphrased value tints its paragraph",
+          left.locator(".rendered .blk.reasoned-highlight").count() == 1)
+    marks = left.locator(".val-mark, td.val-cell").count()
+    check("and marks nothing", marks == 0, f"{marks} marks")
+
+    page.locator('#pane-tabs [data-pane="raw"]').click()
+    page.wait_for_timeout(600)
+    check("Raw lines shows HTML escaped", "<br>" in left.inner_text())
+    check("Raw lines shows line numbers", left.locator(".md-line[data-line]").count() > 0)
+    page.locator('#pane-tabs [data-pane="rendered"]').click()
+    page.wait_for_timeout(400)
+
+    print("\n[overview table]")
+    page.goto(f"{base}/#/", wait_until="networkidle")
+    page.wait_for_selector("#overview-route", state="visible", timeout=20000)
+    page.locator("#overview-rows tr[data-article]").first.hover()
+    page.mouse.wheel(0, 2000)
+    page.wait_for_timeout(300)
+    box = page.locator("#overview-table thead").bounding_box()
+    check("header stays visible after scrolling", bool(box) and box["y"] >= 0, str(box))
+    total = page.locator("#overview-rows tr[data-article]").count()
+    page.locator('#ov-chips [data-status="not-started"]').click()
+    page.wait_for_timeout(300)
+    check("a status chip writes the URL", "status=not-started" in page.url, page.url)
+    shown = page.locator("#overview-rows tr[data-article]").count()
+    check("and narrows the rows", shown < total, f"{shown} of {total}")
+    page.reload(wait_until="networkidle")
+    page.wait_for_selector("#overview-route", state="visible", timeout=20000)
+    check("the chip survives a reload",
+          page.locator('#ov-chips [data-status="not-started"]').get_attribute("aria-pressed") == "true")
+
+    print("\n[icons]")
+    check("icons come from the bundled sprite",
+          page.locator('use[href="/static/icons.svg#settings"]').count() >= 1)
 
 
 def main() -> int:
