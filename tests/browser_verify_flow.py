@@ -347,9 +347,22 @@ def run_flow(harness: Harness) -> None:
         page.wait_for_selector("#overview-route", state="visible", timeout=20000)
         page.wait_for_timeout(700)
 
+        print("\n[the advanced filter applies to the overview at once]")
+        # Apply used to change nothing until the text filter was touched.
+        before = rows.count()
+        page.locator("#ov-advanced").click()
+        page.locator("#filter-input").fill(f"article_id === {json.dumps(article)}")
+        page.locator("#btn-filter-apply").click()
+        page.wait_for_timeout(500)
+        check("Apply narrows the rows immediately", rows.count() == 1, f"{before} -> {rows.count()}")
+        check("and the active filter is shown", page.locator("#ov-filter-active").is_visible())
+        page.locator("#ov-filter-clear").click()
+        page.wait_for_timeout(300)
+        check("clearing restores every row", rows.count() == before, str(rows.count()))
+
         print("\n[document-scoped controls belong to the document]")
         hidden_on_overview = [
-            sel for sel in ("#article-select", "#stat-citations", "#btn-filter-toggle")
+            sel for sel in ("#article-select", "#stat-citations")
             if page.locator(sel).count() and page.locator(sel).first.is_visible()
         ]
         check("document controls are hidden on the overview", not hidden_on_overview,

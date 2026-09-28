@@ -663,6 +663,27 @@ def test_document_route_has_a_marked_exit_to_the_overview() -> None:
     assert 'href="#/"' in html  # breadcrumb link
 
 
+def _js_function(html: str, name: str) -> str:
+    start = html.index(f"function {name}(")
+    return html[start:html.index("\n}\n", start)]
+
+
+def test_advanced_filter_rerenders_the_overview() -> None:
+    """Apply and Clear must redraw the overview, not wait for the next keystroke."""
+    html = STATIC_HTML.read_text()
+
+    for name in ("applyFilter", "clearFilter"):
+        assert "renderOverview()" in _js_function(html, name), name
+
+
+def test_document_app_bar_does_not_repeat_the_document_name() -> None:
+    """The article dropdown already names the document; the breadcrumb only leads out."""
+    html = STATIC_HTML.read_text()
+
+    assert "app-crumb-doc" not in html
+    assert 'id="btn-filter-toggle"' not in html
+
+
 def test_overview_is_not_also_the_name_of_a_document_view_mode() -> None:
     """One word, one meaning.
 

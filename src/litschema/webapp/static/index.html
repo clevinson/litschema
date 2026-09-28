@@ -539,7 +539,6 @@
   .app-crumb { color:var(--text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex-shrink:0; max-width:36ch; }
   .app-crumb a { color:var(--text); text-decoration:none; }
   .app-crumb a:hover { text-decoration:underline; }
-  .app-crumb #app-crumb-doc:not(:empty)::before { content:" \203A  "; }
 
   /* ── Search (inside left panel header) ── */
   .panel-header-row {
@@ -895,7 +894,14 @@
   .ov-chips { display:flex; gap:6px; }
   .ov-chips button { border:1px solid var(--border); border-radius:12px; padding:2px 9px; background:var(--bg-raised); color:var(--text-secondary); font:inherit; font-size:12px; cursor:pointer; }
   .ov-chips button[aria-pressed="true"] { background:var(--text); color:var(--bg); border-color:var(--text); }
-  #ov-advanced { margin-left:auto; }
+  .ov-advanced-wrap { position:relative; margin-left:auto; display:flex; align-items:center; gap:8px; }
+  .ov-filter-active { display:inline-flex; align-items:center; gap:4px; max-width:32ch; padding:2px 4px 2px 8px; border:1px solid var(--accent); border-radius:var(--radius); font-size:12px; }
+  .ov-filter-active code { font-family:var(--font-mono); font-size:11px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .ov-filter-active button { display:inline-flex; padding:2px; border:none; background:none; color:var(--text-secondary); cursor:pointer; }
+  .ov-filter-active button:hover { color:var(--text); }
+  /* On the overview the filter row is a popover anchored under its button. */
+  .filter-row.as-popover { position:absolute; top:calc(100% + 6px); right:0; z-index:50; width:min(560px, calc(100vw - 32px));
+    background:var(--bg-raised); border:1px solid var(--border); border-radius:var(--radius); box-shadow:0 8px 24px rgba(0,0,0,0.18); }
   .overview-table { border-collapse: collapse; width: 100%; font-size: 13px; }
   .overview-table th {
     text-align: left; font-weight: 600; color: var(--text-dim);
@@ -2518,7 +2524,7 @@
   <span class="brand">litschema</span>
   <span class="app-project" id="app-project"></span>
   <!-- The way back to the document list without the browser back button. -->
-  <nav class="app-crumb" id="app-crumb"><a href="#/" data-route="overview">All documents</a><span id="app-crumb-doc"></span></nav>
+  <nav class="app-crumb" id="app-crumb"><a href="#/" data-route="overview">All documents</a></nav>
   <select id="article-select">
     <option value="">Select an article...</option>
   </select>
@@ -2528,9 +2534,6 @@
     <button id="btn-next" disabled aria-label="Next article"><svg class="icon" aria-hidden="true"><use href="/static/icons.svg#chevron-right"/></svg></button>
   </div>
   <div class="toolbar-spacer"></div>
-  <button class="toolbar-btn filter-toggle" id="btn-filter-toggle" type="button" title="Filter article queue">
-    Filter<span class="filter-badge" id="filter-badge" style="display:none"></span>
-  </button>
   <div class="view-mode-toggle" aria-label="Extraction view mode">
     <button class="view-mode-btn active" id="view-mode-review" data-view-mode="review" type="button">Audit</button>
     <button class="view-mode-btn" id="view-mode-data" data-view-mode="data" type="button">Data</button>
@@ -2643,7 +2646,10 @@ e.g. year >= 2024 && study_types.includes("review")'
     <div class="ov-strip" id="overview-totals"></div>
     <input class="ov-search" id="ov-search" type="search" placeholder="Filter by title, author, year, id…">
     <div class="ov-chips" id="ov-chips"></div>
-    <button class="toolbar-btn" id="ov-advanced" type="button">Advanced filter</button>
+    <div class="ov-advanced-wrap" id="ov-advanced-wrap">
+      <button class="toolbar-btn filter-toggle" id="ov-advanced" type="button">Advanced filter<span class="filter-badge" id="filter-badge" style="display:none"></span></button>
+      <span class="ov-filter-active" id="ov-filter-active" style="display:none"><code id="ov-filter-expr"></code><button type="button" id="ov-filter-clear" aria-label="Clear advanced filter" title="Clear advanced filter"></button></span>
+    </div>
   </header>
   <div class="overview-table-wrap">
     <table class="overview-table" id="overview-table">
@@ -2995,31 +3001,36 @@ function setToolbarScope(inDocument) {
   // Document-scoped controls are hidden on the overview rather than disabled:
   // there is no document for them to act on, so showing them implies a context
   // the user is not in.
-  // The overview has its own "Advanced filter" button, so the toolbar one is
-  // hidden there too.
-  for (const sel of ["#article-select", ".article-nav", ".view-mode-toggle", "#btn-filter-toggle"]) {
+  for (const sel of ["#article-select", ".article-nav", ".view-mode-toggle"]) {
     const el = document.querySelector(sel);
     if (el) el.style.display = inDocument ? "" : "none";
   }
+  placeFilterRow(!inDocument);
+}
+
+// The filter row is a popover under "Advanced filter" on the overview. On a
+// document it only shows for an unconfirmed URL filter, as a drawer under the app bar.
+let filterRowHome = null;
+function placeFilterRow(onOverview) {
+  const row = $("#filter-row");
+  if (!row) return;
+  if (!filterRowHome) filterRowHome = { parent: row.parentNode, next: row.nextSibling };
+  if (onOverview) $("#ov-advanced-wrap").appendChild(row);
+  else filterRowHome.parent.insertBefore(row, filterRowHome.next);
+  row.classList.toggle("as-popover", onOverview);
+  if (!onOverview && !state.filterUnconfirmed) setFilterRowOpen(false);
+}
+
+function setFilterRowOpen(open) {
+  $("#filter-row").style.display = open ? "flex" : "none";
 }
 
 function showOverview() {
   $("#panels").style.display = "none";
   $("#overview-route").style.display = "block";
   setToolbarScope(false);
-  $("#app-crumb-doc").textContent = "";
   $("#ov-search").value = overviewQuery().q;
   renderOverview();
-}
-
-// "Paessler 2024 · first six title words", for the breadcrumb.
-function shortCitation(meta) {
-  const first = meta.authors && meta.authors[0];
-  // Organization names are never surname-split.
-  const surname = (typeof first === "string" ? surnameOf(first) : first && (first.family || first.given))
-    || meta.corporate_author || meta.article_id;
-  const title = (meta.title || "").split(/\s+/).slice(0, 6).join(" ");
-  return `${surname} ${meta.year || ""} · ${title}`.trim();
 }
 
 async function applyRoute() {
@@ -3243,7 +3254,8 @@ async function init() {
     const q = overviewQuery();
     setOverviewQuery({ sort: k, dir: q.sort === k && q.dir === "asc" ? "desc" : "asc" });
   });
-  $("#ov-advanced").addEventListener("click", () => $("#btn-filter-toggle").click());
+  $("#ov-filter-clear").innerHTML = icon("x");
+  $("#ov-filter-clear").addEventListener("click", () => { clearFilter(); setFilterRowOpen(false); });
   // Deep links survive reload, and the back button moves between the overview
   // and a document rather than leaving the app.
   wireSettings();
@@ -3286,8 +3298,8 @@ function applyInitialFilterFromUrl() {
   $("#filter-input").value = expr;
   // Opened, not collapsed: an unconfirmed filter is a decision waiting on the
   // user, and the toolbar badge alone would not tell them one is pending.
-  $("#filter-row").style.display = "";
-  $("#btn-filter-toggle").classList.add("active");
+  setFilterRowOpen(true);
+  $("#ov-advanced").classList.add("active");
   const count = $("#filter-count");
   if (count) {
     count.textContent = "From this link — review it, then press Apply to run it.";
@@ -3298,14 +3310,19 @@ function applyInitialFilterFromUrl() {
 
 function updateFilterBadge() {
   const badge = $("#filter-badge");
-  const btn = $("#btn-filter-toggle");
+  const btn = $("#ov-advanced");
+  const active = $("#ov-filter-active");
   if (state.filterFn) {
     badge.textContent = `${state.filteredArticles.length}/${state.articles.length}`;
     badge.style.display = "inline";
     btn.classList.add("active");
+    $("#ov-filter-expr").textContent = state.filterExpr;
+    active.title = state.filterExpr;
+    active.style.display = "";
   } else {
     badge.style.display = "none";
     btn.classList.remove("active");
+    active.style.display = "none";
   }
 }
 
@@ -3356,6 +3373,7 @@ async function applyFilter(expr) {
   history.replaceState(null, "", url.toString());
   populateDropdown();
   updateFilterBadge();
+  if (onOverview()) renderOverview();
 }
 
 // ── Deep fields: bulk-fetch full extraction JSON into state.articles ──
@@ -3446,15 +3464,20 @@ function clearFilter() {
   history.replaceState(null, "", url.toString());
   populateDropdown();
   updateFilterBadge();
+  if (onOverview()) renderOverview();
+}
+
+function onOverview() {
+  return $("#overview-route")?.style.display === "block";
 }
 
 function wireFilterControls() {
-  const toggle = $("#btn-filter-toggle");
+  const toggle = $("#ov-advanced");
   const row = $("#filter-row");
   const input = $("#filter-input");
   toggle.addEventListener("click", () => {
     const open = row.style.display !== "none";
-    row.style.display = open ? "none" : "flex";
+    setFilterRowOpen(!open);
     if (!open) {
       input.focus();
       evaluateFilterPreview(input.value);
@@ -3471,17 +3494,23 @@ function wireFilterControls() {
     if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
       e.preventDefault();
       applyFilter(input.value);
-      row.style.display = "none";
+      setFilterRowOpen(false);
     }
-    if (e.key === "Escape") { clearFilter(); row.style.display = "none"; }
+    if (e.key === "Escape") { clearFilter(); setFilterRowOpen(false); }
   });
   $("#btn-filter-apply").addEventListener("click", () => {
     applyFilter(input.value);
-    row.style.display = "none";
+    setFilterRowOpen(false);
   });
   $("#btn-filter-close").addEventListener("click", () => {
     clearFilter();
-    row.style.display = "none";
+    setFilterRowOpen(false);
+  });
+  // A click elsewhere on the overview dismisses the popover without clearing it.
+  document.addEventListener("click", (e) => {
+    if (!row.classList.contains("as-popover") || row.style.display === "none") return;
+    if (e.target.closest("#ov-advanced-wrap, #filter-help-modal")) return;
+    setFilterRowOpen(false);
   });
   $("#btn-filter-help").addEventListener("click", openFilterHelp);
   $("#btn-filter-help-close").addEventListener("click", closeFilterHelp);
@@ -3747,7 +3776,6 @@ async function loadArticle(id) {
 
   const meta = bibData || state.articles.find(a => a.article_id === id);
   if (meta) renderBibHeader(meta);
-  $("#app-crumb-doc").textContent = shortCitation(meta || { article_id: id });
 
   $("#search-row").style.display = state.leftPane === "pdf" ? "none" : "flex";
   updateNavState();
