@@ -24,6 +24,7 @@ from pathlib import Path
 from .articles import ArticleFiles
 from .config import LitSchemaConfig
 from .schema_resolution import schema_hash
+from .version import install_source, installed_version
 
 logger = logging.getLogger(__name__)
 
@@ -407,6 +408,7 @@ def publish_run(
         "schema_hash": schema_hash(cfg),
         "inputs": inputs,
         "agent": _agent_attribution(provider, model),
+        "litschema": {"version": installed_version(), **install_source().as_record()},
     }
 
     run = RunFiles(article=files, run_id=record["run_id"])

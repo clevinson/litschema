@@ -113,8 +113,7 @@ support in a future release.
 
 The bundled `extract-article` skill performs:
 
-setup gate and CLI resolution (a `.litschema/dev-cli` override is shown to the
-user and requires confirmation) → schema-context generation → prepared-text
+setup gate (`litschema status`, stopping on a version mismatch) → schema-context generation → prepared-text
 check → extraction from that article's markdown only → write both staged
 artifacts → validate both, with bounded repair attempts → record provenance and
 publish → bib-metadata enrichment through its own CLI.

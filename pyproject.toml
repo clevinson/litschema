@@ -1,6 +1,6 @@
 [project]
 name = "litschema"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Schema-driven, agentic extraction of structured data from scientific literature. LinkML-native, local-first, with bundled agent skills."
 requires-python = ">=3.13"
 readme = "README.md"
@@ -11,7 +11,6 @@ keywords = ["linkml", "extraction", "systematic-review", "meta-analysis", "pdf",
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python :: 3.13",
     "Topic :: Scientific/Engineering :: Information Analysis",
     "Topic :: Text Processing :: Markup",
@@ -44,17 +43,23 @@ dependencies = [
 Homepage = "https://github.com/clevinson/litschema"
 Repository = "https://github.com/clevinson/litschema"
 Issues = "https://github.com/clevinson/litschema/issues"
+Changelog = "https://github.com/clevinson/litschema/blob/main/CHANGELOG.md"
+Documentation = "https://github.com/clevinson/litschema#readme"
 
 [project.scripts]
 litschema = "litschema.cli:app"
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
+
+[tool.hatch.version]
+source = "vcs"
 
 [tool.hatch.build.targets.sdist]
 include = [
     "/README.md",
+    "/CITATION.cff",
     "/pyproject.toml",
     "/src",
     "/skills",
@@ -153,3 +158,7 @@ scripts.fix = [
     "ruff check --fix .",
     "ruff format .",
 ]
+
+[tool.uv]
+# Rebuild the editable install when commits or tags move the hatch-vcs version.
+cache-keys = [{ file = "pyproject.toml" }, { git = { commit = true, tags = true } }]

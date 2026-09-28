@@ -493,7 +493,7 @@ def test_meta_sync_all_is_the_batch_harvest(tmp_path: Path, monkeypatch) -> None
     result = runner.invoke(cli.app, ["meta", "sync", "--all"])
 
     assert result.exit_code == 0, result.output
-    stats = json.loads(result.output)
+    stats = json.loads(result.stdout)
     assert stats["fetched"] == 1
     assert stats["manual"] == 1  # batch sweep never touches manual
     assert _block(cfg, "smith-2024")["bib_source"] == "doi"

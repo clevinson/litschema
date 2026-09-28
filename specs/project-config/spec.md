@@ -11,7 +11,8 @@ schema identity, and conventions shared by CLI verbs. Run storage is owned by
 Everything below is live: config discovery and precedence, config-relative
 path resolution, the core key set, single-schema resolution requiring exactly
 one local `tree_root: true` class, closed-world validation, the CLI exit-code
-and `--config` conventions, schema identity hashing, `status`, and `doctor`.
+and `--config` conventions, schema identity hashing, the version pin,
+`--version`, `status`, and `doctor`.
 
 ## Config discovery and paths
 
@@ -31,11 +32,34 @@ Core keys and defaults:
 | `extraction_schema_file` | `extraction.yaml` | the one current schema file |
 | `article_store_dir` | `data/papers` | article store |
 | `paper_inbox_dir` | `papers-inbox` | PDF intake |
+| `litschema_version` | none; `init` writes the running version | exact litschema version the project runs with |
 
 Unknown keys are preserved for domain repositories. `references_dir`,
 `tracking_xlsx`, and `static_site_dir` still parse but have no consumer and
 must not be used; `init` no longer writes any of them. No config key may
 select a schema version or maintain schema history.
+
+## Version pin
+
+`litschema_version` names the one litschema version a project runs with.
+Every verb that loads the project compares it with the installed version, by
+exact string, and exits 3 on a mismatch. The message names both versions, the
+install command for the pinned one, and the edit that moves the project up.
+Moving a project to a new release is a deliberate edit to `litschema.yaml`.
+
+The same check covers skills copied into `<project>/.claude/skills/`. Each
+copy carries the litschema version that installed it in its frontmatter
+(`litschema_version`), and a copy whose stamp differs from the pin also exits
+3, naming `litschema skills install --local --force`. Symlinked skills track
+the package and are not checked.
+
+A project with no pin runs and prints a warning to stderr. `doctor` reports a
+mismatch as a failed check instead of exiting 3, so it can still diagnose.
+
+Agents run the `litschema` on PATH. The install decides which build that is
+(a release, a git tag, or a local checkout via `uv tool install --editable`),
+not project configuration. `litschema --version` prints the version and, for a
+local build, the path it was installed from.
 
 ## One current schema
 
@@ -75,7 +99,9 @@ an uncommitted schema may become unreconstructable once edited. `doctor` and
 ## CLI conventions
 
 - Exit 0: success; 1: operation or validation failure; 2: usage or
-  configuration error; 130: interrupted and resumable.
+  configuration error; 3: the project's version pin doesn't match the running
+  litschema or its installed skills; 130: interrupted and resumable.
+- Warnings about the project go to stderr, so JSON on stdout stays parseable.
 - Project-scoped verbs honor `--config/-c` and `LITSCHEMA_CONFIG`.
 - Verbs call shared Python APIs in process rather than shelling out to sibling
   commands.
@@ -102,9 +128,10 @@ loses nothing and is not reported.
 
 `status` reports schema presence plus inbox, article, prepared-text,
 published-run, active-run, and current-schema-active counts, flags broken
-active pointers, and exits 0. `doctor` checks Python and `uv`, schema resolution,
-project-local then global litschema skills, and an agent CLI. It exits 1 with
-remedies when a check fails. Neither command changes run selection.
+active pointers, and exits 0. `doctor` checks Python and `uv`, the `litschema`
+on PATH with its version and install source, the version pin, schema
+resolution, project-local then global litschema skills, and an agent CLI. It
+exits 1 with remedies when a check fails. Neither command changes run selection.
 
 ## Invariants
 
@@ -132,6 +159,10 @@ Implementation coverage must pin:
 - the `article_id` identifier requirement on the root class;
 - hash-based same-schema versus upgrade classification;
 - common exit codes and project-scoped config flags;
+- the version pin: a match runs, a mismatch exits 3 across project verbs, a
+  missing pin warns, a stale copied skill exits 3 until reinstalled, and
+  `doctor` reports rather than exits;
+- install source parsing for index, git, and local installs;
 - status counts across missing, active, and current-schema-active runs, and
   broken-pointer flagging;
 - doctor failures for schema and skill resolution;

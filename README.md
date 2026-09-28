@@ -42,11 +42,11 @@ collapses some tables onto a single line, so a citation into a table can name
 the table but not the row. This matters most for measurement-heavy schemas.
 
 Each release documents its breaking changes and known limits in the
-[CHANGELOG.md](./CHANGELOG.md).
+[CHANGELOG.md](https://github.com/clevinson/litschema/blob/main/CHANGELOG.md).
 
 ## Specs
 
-The [specs](specs/README.md) describe what is currently implemented; anything
+The [specs](https://github.com/clevinson/litschema/blob/main/specs/README.md) describe what is currently implemented; anything
 deferred says so and names where it is tracked.
 
 ## The flow
@@ -66,26 +66,21 @@ batches the rest.
 
 ## Install
 
-No PyPI release yet — clone and run from the checkout:
-
 ```bash
-git clone https://github.com/clevinson/litschema && cd litschema
-uv sync
-uv run litschema --help
+uv tool install litschema      # or: pip install litschema
+litschema --version
 ```
 
-Against a project in a sibling directory:
+`init` pins each project to the version that created it (`litschema_version`
+in `litschema.yaml`), and commands refuse to run under any other. To move a
+project to a new release, install it and edit the pin.
+
+To try an unreleased tag or work on litschema itself:
 
 ```bash
-cd ../my-project
-uv run --project ../litschema litschema status
+uv tool install "litschema @ git+https://github.com/clevinson/litschema@v0.1.1" --force
+uv tool install --editable path/to/litschema --force   # edits take effect immediately
 ```
-
-Agent skills resolve the CLI the way you would: a project dev override, then
-`uv run litschema`, then bare `litschema`. To pin them to a checkout, write the
-command to `.litschema/dev-cli`. Because that file executes whatever it
-contains, an agent will ask before using it, and records your approval in your
-own config rather than in the project — a repository cannot approve itself.
 
 ## Commands
 

@@ -86,12 +86,23 @@ they cannot become active. Partial directories are never runs.
     "provider": "anthropic",
     "model": "claude-opus-5",
     "effort": "high"
+  },
+
+  "litschema": {
+    "version": "0.1.1",
+    "source": "release"
   }
 }
 ```
 
 Every hash is `<algorithm>:<hex>`. The algorithm lives in the value, never in
 the key, so a key never contradicts what it holds.
+
+`litschema` records the version that published the run and how it was
+installed: `release` (a package index), `git` (with a `commit` key naming the
+code), or `local` (a path on disk, possibly with uncommitted edits). The
+publisher reads both from the installed package metadata. Runs published
+before 0.1.1 lack the block and remain valid.
 
 ### Reproduction versus attribution
 

@@ -33,14 +33,22 @@ This is someone's first contact with litschema. Keep the surface tiny.
 
 ## Silent pre-check — do NOT speak about any of this
 
-Before your first message, using only file reads (no `litschema` command yet):
+Before your first message:
 
 1. Confirm `litschema.yaml` exists in the project root. If it's missing, stop
    and tell the user to run `litschema init <dir>` first — that one line is the
    only thing you may say about setup.
-2. Do not run `status`, `doctor`, or resolve the `litschema` command yet. You
-   don't need any of it to count or skim papers, and none of it reaches the
-   user.
+2. Run `litschema status`. Every command in this skill is the `litschema` on
+   PATH. If it passes, say nothing about it. Otherwise stop and say only this:
+   - **Exit code 127 (command not found):** "litschema isn't installed in this
+     shell. Install it with `uv tool install litschema`, then run me again."
+   - **Exit code 3 (version mismatch):** the project pins a different
+     litschema version, or its skills are out of date. Show the message exactly
+     as printed. Do not edit `litschema.yaml`, reinstall litschema, or
+     reinstall skills yourself; which version a project runs is the user's
+     decision.
+
+   Any later command that exits 3 means the same thing: stop and relay it.
 
 ## Phase 0 — welcome and what's in the inbox (your first message)
 
@@ -75,57 +83,6 @@ Before your first message, using only file reads (no `litschema` command yet):
    one-line gist, and show the user a one-line summary per paper
    (`• short title — what it's about`). The papers you skim are your
    representative set for the schema — don't ask for representatives again.
-
-## Resolving the litschema command (lazily — only when first needed)
-
-You don't need `litschema` until you validate the draft schema (Phase A,
-step 5). Resolve it then, not before, so the cold open stays about papers.
-
-Resolve `$LITSCHEMA` in order: (1) a `.litschema/dev-cli` file in the project
-root — its single-line content, used verbatim; (2) `uv run litschema`; (3)
-`litschema`. Take the first that works, confirming with `$LITSCHEMA --help`.
-With options (2) or (3), proceed silently.
-
-Option (1) is different: it executes whatever the file contains, so it needs
-the user's approval **before you assign or run it** — including before any
-`--help`. Settle approval first, then resolve.
-
-Approval lives in the user's own config, outside the project, keyed by project
-path and by the hash of the approved content:
-
-```bash
-PROJECT_ROOT=$(cd "$(dirname "$(
-  d=$PWD; while [ ! -f "$d/litschema.yaml" ] && [ "$d" != / ]; do d=$(dirname "$d"); done
-  echo "$d/litschema.yaml")")" && pwd -P)
-PROJECT_KEY=$(printf '%s' "$PROJECT_ROOT" | shasum -a 256 | cut -d' ' -f1)
-MARKER="${XDG_CONFIG_HOME:-$HOME/.config}/litschema/dev-cli-approved/$PROJECT_KEY"
-CURRENT=$(shasum -a 256 "$PROJECT_ROOT/.litschema/dev-cli" | cut -d' ' -f1)
-```
-
-The key is the project root — the directory holding `litschema.yaml` — not the
-current directory, so it matches what `doctor` writes and stays stable when an
-agent works from a subdirectory.
-
-If `$MARKER` exists and matches `$CURRENT`, use the override silently — this
-user approved this exact command for this project. Otherwise ask once, in ONE
-sentence with no preamble: "This project points litschema at a local dev build
-(`<content>`) — OK to use it?" On yes, record it so nothing asks again:
-
-```bash
-mkdir -p "$(dirname "$MARKER")" && printf '%s\n' "$CURRENT" > "$MARKER"
-```
-
-On no, skip the override entirely and continue with option (2) or (3).
-
-A `dev-cli-approved` file **inside** the project grants nothing and must be
-ignored. Approval kept next to the thing it approves is approval a repository
-can ship for itself: anyone who cloned it would run that command silently.
-
-**You approve once, for the whole batch.** Subagents you dispatch in Phase C
-and D check that same marker. Because approval lives in verifiable state the
-user owns rather than in a claim passed down a prompt, they can confirm it
-themselves — so a batch never stalls per paper, and no subagent has to take
-your word for it.
 
 ## Phase A — design the schema together
 
@@ -177,18 +134,15 @@ If `schema/extraction.yaml` already defines real fields beyond the scaffold
    missing. If you would rather not think about it, leave `identifier: true`
    off nested classes entirely; it is only needed when something must refer to
    an item by id.
-5. **Validate (silently).** Resolve `$LITSCHEMA` now if you haven't (see
-   "Resolving the litschema command" above — this is where the dev-cli
-   confirmation, if any, belongs). Run
-   `$LITSCHEMA agent prepare-schema-context`; fix schema errors until it
-   passes. Never leave an invalid schema on disk.
+5. **Validate (silently).** Run `litschema agent prepare-schema-context`; fix
+   schema errors until it passes. Never leave an invalid schema on disk.
 6. **Confirm.** Show the user the field list — name, type, one-line meaning —
    and iterate until they're happy.
 
 ## Phase B — intake
 
-1. Run `$LITSCHEMA assemble`.
-2. Run `$LITSCHEMA prepare-text --all`.
+1. Run `litschema assemble`.
+2. Run `litschema prepare-text --all`.
 
 Tell the user in one line when their papers are in and ready.
 
@@ -202,25 +156,24 @@ Tell the user in one line when their papers are in and ready.
 2. Offer to open the review app (one question): "Want me to launch the review
    app for you, or start it yourself?" — options roughly **"Launch it"** /
    **"I'll launch it on my own."**
-   - **Launch it:** run `$LITSCHEMA verify` as a background process
+   - **Launch it:** run `litschema verify` as a background process
      (non-blocking, so onboarding keeps going). It serves on loopback and opens
      the user's browser at http://localhost:8000 (pass `--port` if 8000 is
      taken). Leave it running for the rest of the session — don't stop it.
-   - **They'll start it:** give them the command once (`$LITSCHEMA verify`,
-     substitute the real resolved command) and move on.
+   - **They'll start it:** give them the command once (`litschema verify`) and move on.
    Either way, ask them to check this first paper against the PDF: do the
    fields fit? is anything missing or forced?
 3. If the schema needs work: revise `schema/extraction.yaml` +
    `domain_context.md`, re-validate (Phase A.5), re-extract this one paper,
    and re-check. Re-extracting publishes a new run and makes it active; the
    previous run stays on disk, so nothing is lost if the new one is worse
-   (`$LITSCHEMA runs list` shows both, `runs activate` picks). Loop until they're satisfied — changes are cheap now and
+   (`litschema runs list` shows both, `runs activate` picks). Loop until they're satisfied — changes are cheap now and
    expensive after the batch.
 
 ## Phase D — the rest
 
 1. List remaining articles: those in `data/papers/` with no active run
-   (`$LITSCHEMA runs list` shows nothing for them), or whose active run is an
+   (`litschema runs list` shows nothing for them), or whose active run is an
    error marker — failed papers are retried, not counted as done.
 2. Extract each via the extract-article skill. Dispatch each paper as its own
    subagent (Task tool) when available so your context stays small; otherwise
@@ -231,7 +184,7 @@ Tell the user in one line when their papers are in and ready.
    `record-extraction`. When it reports back, you run:
 
    ```bash
-   $LITSCHEMA agent record-extraction {article_id} --provider {provider} --model {model}
+   litschema agent record-extraction {article_id} --provider {provider} --model {model}
    ```
 
    naming the model *you dispatched it with*. This is the whole point: you
@@ -241,13 +194,13 @@ Tell the user in one line when their papers are in and ready.
    dispatched without choosing a model, omit both flags rather than guessing.
 3. On a per-paper failure: retry once; if it still fails, record the id and
    move on. Never abort the batch for one paper.
-4. Run `$LITSCHEMA meta sync --all` — extraction already syncs each paper whose
+4. Run `litschema meta sync --all` — extraction already syncs each paper whose
    document shows a DOI, so this is the sweep that catches any that failed
    transiently. It skips papers without DOIs and skips human-edited (`manual`)
    metadata (the contract is `specs/bib-metadata/spec.md` in the litschema
    source repo). If it fails (offline), say so in a line and continue —
    nothing downstream breaks.
-5. Run `$LITSCHEMA validate` and `$LITSCHEMA status`; report the counts and any
+5. Run `litschema validate` and `litschema status`; report the counts and any
    failed ids in a line or two.
 
 ## Phase E — handoff
@@ -255,7 +208,7 @@ Tell the user in one line when their papers are in and ready.
 Tell the user, briefly:
 
 - The review app is where they work (already running if you launched it in the
-  pilot — otherwise `$LITSCHEMA verify`, substitute the real command): the
+  pilot — otherwise `litschema verify`): the
   header shows what each paper IS (verified when fetched by DOI, editable
   otherwise); the body is per-field accept / edit / sign-off of what it SAYS.
 - Their dataset lives in `data/papers/<id>/`, in git, reproducible.

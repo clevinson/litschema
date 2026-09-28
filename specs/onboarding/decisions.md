@@ -172,3 +172,25 @@ still confirm approval on its own.
 **Rejected:** keying by project name rather than resolved path, which would let
 one approval cover any checkout sharing a directory name; and prompting per
 agent, which is what the recorded-state design existed to eliminate.
+
+## 2026-09-27 — Remove the dev override; pin the litschema version per project (supersedes both entries above)
+
+**Context:** the dev override existed so agents could run a working checkout
+instead of a release. It grew an approval system to stop a repository from
+shipping a command its agents would execute, and `doctor` needed a guard to
+tell a `uv run --project` process from a real install. That guard misread `uv
+tool install` symlinks and reported a working global install as broken (kata
+8a2z).
+
+**Decision:** skills run the `litschema` on PATH. The install picks the build:
+`uv tool install litschema` for a release, a git URL for a tag, and `uv tool
+install --editable <checkout>` for development. The override, its approval
+markers, and the resolution chain are gone, and with them the repository-
+shipped-command threat. Each project pins an exact `litschema_version`;
+commands and copied skills that don't match it exit 3, and skills stop and
+relay that message instead of fixing it. `run.json` records the version and
+install source that produced each run.
+
+**Rejected:** a compatible-range pin, which would let a patch release change a
+format unnoticed before 1.0; and keeping `uv run litschema` for projects with a
+`pyproject.toml`, a second resolution rule the pin makes unnecessary.

@@ -6,7 +6,6 @@ mcp / status / doctor / skills install / agent / init.
 
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import shutil
@@ -26,6 +25,15 @@ from .config import ConfigNotFoundError, LitSchemaConfig
 from .ingest import article_assembly, validate_extraction
 from .project import Project
 from .schema_resolution import extraction_schema_path
+from .version import (
+    PIN_KEY,
+    VERSION_MISMATCH_EXIT_CODE,
+    check_project,
+    installed_version,
+    project_pin,
+    stamp_skill,
+    version_line,
+)
 
 app = typer.Typer(
     name="litschema",
@@ -58,6 +66,12 @@ def _disable_color_if_needed():
 _disable_color_if_needed()
 
 
+def _print_version(value: bool) -> None:
+    if value:
+        typer.echo(version_line())
+        raise typer.Exit()
+
+
 @app.callback()
 def main(
     ctx: typer.Context,
@@ -67,6 +81,13 @@ def main(
         "-c",
         envvar="LITSCHEMA_CONFIG",
         help="Path to litschema.yaml.",
+    ),
+    version: bool = typer.Option(
+        False,
+        "--version",
+        callback=_print_version,
+        is_eager=True,
+        help="Print the litschema version and exit.",
     ),
 ) -> None:
     ctx.obj = config
@@ -92,31 +113,6 @@ def _unattributed_review_count(cfg: LitSchemaConfig) -> int:
                 continue
             total += sum(1 for entry in fields.values() if not entry.get("reviewer"))
     return total
-
-
-def dev_cli_approval_path(project_root: Path) -> Path:
-    """Where this machine's user records approval of a project's dev override.
-
-    Outside the checkout, deliberately. The marker used to live beside the
-    override it approves, so a repository could commit both `.litschema/dev-cli`
-    and a matching `.litschema/dev-cli-approved` — and every agent that cloned
-    it would run that command silently, believing the user had approved it. A
-    content hash proves the file has not changed since approval; it cannot
-    prove *this user* ever approved it. Only user-owned state can.
-
-    Keyed by the real project path so approving one checkout says nothing about
-    another, and by content hash so editing the override revokes it.
-    """
-    base = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config")
-    key = hashlib.sha256(str(project_root.resolve()).encode()).hexdigest()
-    return base / "litschema" / "dev-cli-approved" / key
-
-
-def dev_cli_is_approved(project_root: Path, dev_cli: Path) -> bool:
-    marker = dev_cli_approval_path(project_root)
-    if not marker.is_file():
-        return False
-    return marker.read_text().strip() == hashlib.sha256(dev_cli.read_bytes()).hexdigest()
 
 
 def _in_git_repo(start: Path) -> bool:
@@ -182,7 +178,7 @@ class _AssembleCliReporter:
             typer.echo(f"{WARN} PDF {result}: {path.name}")
 
 
-def _require_project(ctx: typer.Context | None = None) -> Project:
+def _require_project(ctx: typer.Context | None = None, *, check_version: bool = True) -> Project:
     """Load litschema.yaml or emit a colored message and exit 2.
 
     Thin CLI wrapper around :meth:`litschema.project.Project.open` that
@@ -193,10 +189,27 @@ def _require_project(ctx: typer.Context | None = None) -> Project:
     """
     config_path = ctx.obj if ctx is not None and isinstance(ctx.obj, Path) else None
     try:
-        return Project.open(config_path)
+        project = Project.open(config_path)
     except ConfigNotFoundError as exc:
         typer.secho(f"{CROSS} {exc}", fg=typer.colors.RED)
         raise typer.Exit(code=2) from exc
+    if check_version:
+        _enforce_version_pin(project.config)
+    return project
+
+
+def _enforce_version_pin(cfg: LitSchemaConfig) -> None:
+    """Stop when the running litschema or the project's skills don't match its pin.
+
+    Messages go to stderr so commands that print JSON keep a clean stdout.
+    """
+    check = check_project(cfg, [skill.name for skill in _skill_sources()])
+    for message in check.warnings:
+        typer.echo(f"{WARN} {message}", err=True)
+    if check.errors:
+        for message in check.errors:
+            typer.secho(f"{CROSS} {message}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=VERSION_MISMATCH_EXIT_CODE)
 
 
 def _valid_skill_dirs(skills_dir: Path) -> list[Path]:
@@ -265,6 +278,7 @@ def _install_skill_dirs(
                 shutil.rmtree(target)
         if copy:
             shutil.copytree(skill_dir, target)
+            stamp_skill(target / "SKILL.md", installed_version())
             messages.append(f"{CHECK} copied {skill_dir.name} → {target}")
         else:
             target.symlink_to(skill_dir.resolve(), target_is_directory=True)
@@ -1071,7 +1085,7 @@ def status(ctx: typer.Context):
 
 @app.command(help="Diagnose configuration and dependency issues.")
 def doctor(ctx: typer.Context):
-    project = _require_project(ctx)
+    project = _require_project(ctx, check_version=False)
     cfg = project.config
     issues: list[str] = []
 
@@ -1090,58 +1104,27 @@ def doctor(ctx: typer.Context):
         typer.echo(f"{CROSS} uv not on PATH")
         issues.append("uv not installed — see https://docs.astral.sh/uv/")
 
-    # CLI resolution — mirrors the agent skills' resolution order:
-    # .litschema/dev-cli override, then `uv run litschema`, then bare `litschema`.
-    dev_cli = cfg.project_root / ".litschema" / "dev-cli"
-    legacy_dev_cli = cfg.project_root / ".litschema" / "cli"
-    if dev_cli.is_file():
-        override = dev_cli.read_text().strip()
-        typer.echo(f"{CHECK} CLI dev override (.litschema/dev-cli): {override}")
-        # Agents run this file, so it needs the user's approval — recorded in
-        # this user's own config, not in the project, so a repository cannot
-        # ship its own approval.
-        marker = dev_cli_approval_path(cfg.project_root)
-        current = hashlib.sha256(dev_cli.read_bytes()).hexdigest()
-        if dev_cli_is_approved(cfg.project_root, dev_cli):
-            typer.echo(f"{CHECK} dev override approved for agent use")
-        else:
-            detail = "changed since approval" if marker.is_file() else "not yet approved"
-            typer.echo(f"{WARN} dev override {detail} — agents will stop and ask before using it")
-            # Quote the paths: XDG_CONFIG_HOME may contain spaces, and an
-            # unquoted suggestion is a command that fails when pasted.
-            import shlex
-
-            issues.append(
-                "if you trust this command, approve it for agent use: "
-                f"`mkdir -p {shlex.quote(str(marker.parent))} && "
-                f"echo {current} > {shlex.quote(str(marker))}`"
-            )
-        stale = cfg.project_root / ".litschema" / "dev-cli-approved"
-        if stale.exists():
-            typer.echo(
-                f"{WARN} {stale} is ignored — approval now lives in your own config, "
-                f"because a checkout could otherwise approve itself"
-            )
-            issues.append(f"delete {stale}; it no longer grants anything")
-    elif legacy_dev_cli.is_file():
-        typer.echo(f"{WARN} legacy .litschema/cli found — agent skills now read .litschema/dev-cli")
-        issues.append("rename .litschema/cli to .litschema/dev-cli")
-    elif (cfg.project_root / "pyproject.toml").is_file():
-        typer.echo(f"{CHECK} agent skills will resolve the CLI via `uv run litschema`")
-    elif _bare_cli_on_path():
-        typer.echo(f"{CHECK} litschema on PATH — agent skills will use the bare CLI")
+    # Agent skills run the bare `litschema` from PATH, so that is the one to
+    # report, not necessarily the process running doctor.
+    on_path = shutil.which("litschema")
+    if on_path:
+        typer.echo(f"{CHECK} {version_line()} on PATH ({on_path})")
     else:
-        checkout = _dev_checkout_root()
-        hint = (
-            f"uv run --project {checkout} litschema"
-            if checkout
-            else "uv run --project <path-to-litschema-checkout> litschema"
-        )
-        typer.echo(f"{WARN} agent skills cannot resolve the litschema CLI in this project")
-        issues.append(
-            "write the CLI command to .litschema/dev-cli, e.g. "
-            f"`mkdir -p .litschema && echo '{hint}' > .litschema/dev-cli`"
-        )
+        typer.echo(f"{WARN} litschema is not on PATH, so agent skills can't run it")
+        issues.append("install it: `uv tool install litschema`")
+
+    check = check_project(cfg, [skill.name for skill in _skill_sources()])
+    for message in check.warnings:
+        typer.echo(f"{WARN} {message}")
+    for message in check.errors:
+        first, *rest = message.split("\n")
+        typer.echo(f"{CROSS} {first}")
+        for line in rest:
+            typer.echo(line)
+    if check.errors:
+        issues.append("resolve the version mismatch above")
+    elif project_pin(cfg):
+        typer.echo(f"{CHECK} pinned to litschema {project_pin(cfg)}")
 
     typer.echo(f"{CHECK} litschema.yaml at {cfg.config_path}")
 
@@ -1252,42 +1235,6 @@ def doctor(ctx: typer.Context):
             typer.echo(f"  • {issue}")
         raise typer.Exit(code=1)
     typer.echo("\nEverything looks good.")
-
-
-def _bare_cli_on_path() -> bool:
-    """True when `litschema` on PATH would survive outside this process.
-
-    Under `uv run --project <checkout>`, the checkout venv's bin dir is
-    prepended to PATH, so which() finds a `litschema` that a fresh shell
-    (the shell an agent skill runs in) would not. Ignore hits inside this
-    process's own environment prefix.
-    """
-    found = shutil.which("litschema")
-    if not found:
-        return False
-    try:
-        return not Path(found).resolve().is_relative_to(Path(sys.prefix).resolve())
-    except OSError:
-        return True
-
-
-def _dev_checkout_root() -> Path | None:
-    """Best-effort root of the litschema source checkout this process runs from.
-
-    Walks up from the installed package looking for a pyproject.toml that
-    declares the litschema project. Returns None for site-packages installs,
-    where no checkout exists to point at.
-    """
-    package_dir = Path(__file__).resolve().parent
-    for candidate in package_dir.parents:
-        pyproject = candidate / "pyproject.toml"
-        if pyproject.is_file():
-            try:
-                if 'name = "litschema"' in pyproject.read_text():
-                    return candidate
-            except OSError:
-                pass
-    return None
 
 
 def _write_draft_schema(project: Path) -> None:
@@ -1416,6 +1363,7 @@ def init(
         'data_dir: "data"\n'
         'article_store_dir: "data/papers"\n'
         'paper_inbox_dir: "papers-inbox"\n'
+        f'{PIN_KEY}: "{installed_version()}"\n'
     )
     _write_draft_schema(project)
     _ensure_gitignore_entries(project)

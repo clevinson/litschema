@@ -11,6 +11,7 @@ from typer.testing import CliRunner
 from litschema import cli
 from litschema.config import LitSchemaConfig
 from litschema.ingest import article_assembly
+from litschema.version import installed_version
 
 
 def _cfg(project: Path) -> LitSchemaConfig:
@@ -361,6 +362,8 @@ def test_agent_record_extraction_publishes_and_activates(tmp_path: Path, monkeyp
     assert all(v.startswith("sha256:") for v in record["inputs"].values())
     assert record["agent"]["provider"] == "codex"
     assert record["agent"]["model"] == "gpt-5.5"
+    assert record["litschema"]["version"] == installed_version()
+    assert record["litschema"]["source"] in {"release", "git", "local"}
     # Publish-activates.
     pointer = json.loads((article_dir / "active-run.json").read_text())
     assert pointer == {"run_id": record["run_id"]}
