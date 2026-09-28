@@ -1,4 +1,4 @@
-"""Validate an agent reasoning file: LinkML shape, then citations that resolve.
+"""Validate an agent reasoning file: LinkML shape, field paths, and citations.
 
 Shape validation alone accepted `source_lines: L9999` on a two-hundred-line
 document, because nothing ever opened the prepared text. A citation that does
@@ -14,6 +14,8 @@ import re
 import sys
 from pathlib import Path
 
+from ..review_paths import InvalidReviewPathError, parse_path
+from ..schema_resolution import ResolvedExtractionSchema, resolve_slot
 from ..schema_validation import validate_linkml_data
 from .reasoning_schema import reasoning_schema_source_path
 
@@ -30,6 +32,31 @@ def prepared_text_for(reasoning_path: Path) -> Path:
     if reasoning_path.parent.parent.name == "extraction-runs":
         return reasoning_path.parent.parent.parent / "article.md"
     return reasoning_path.parent / "article.md"
+
+
+def check_paths(data: dict, extraction: ResolvedExtractionSchema) -> list[str]:
+    """Every entry must name a field the extraction schema defines.
+
+    A path the schema doesn't know (a renamed field, a malformed index) still
+    passes shape and citation checks, but the verifier finds evidence by path,
+    so the field it belongs to shows none.
+    """
+    problems: list[str] = []
+    for entry in data.get("fields") or []:
+        if not isinstance(entry, dict) or not entry.get("path"):
+            continue
+        path = str(entry["path"])
+        try:
+            parts = parse_path(path)
+        except InvalidReviewPathError:
+            problems.append(f"{path}: not a field path like .setups[0].depth_cm")
+            continue
+        resolution = resolve_slot(extraction.view, extraction.root_class, parts)
+        if resolution.kind == "unknown":
+            problems.append(
+                f"{path}: {resolution.segment!r} is not a field of {resolution.owner_class}"
+            )
+    return problems
 
 
 def check_citations(data: dict, prepared_text: Path) -> list[str]:
@@ -91,9 +118,12 @@ def validate_file(
     root_class: str = "ExtractionReasoning",
     *,
     check_source_lines: bool = True,
+    extraction: ResolvedExtractionSchema | None = None,
 ) -> tuple[bool, list[str]]:
     data = json.loads(filepath.read_text())
     errors = validate_linkml_data(data, schema_path, root_class)
+    if not errors and extraction is not None:
+        errors = check_paths(data, extraction)
     if not errors and check_source_lines:
         errors = check_citations(data, prepared_text_for(filepath))
     return len(errors) == 0, errors
@@ -107,7 +137,7 @@ def _reasoning_file_for_target(target: Path) -> Path:
     return target
 
 
-def run(args: list[str] | None) -> int:
+def run(args: list[str] | None, extraction: ResolvedExtractionSchema | None = None) -> int:
     args = list(args or [])
     if not args:
         print("Usage: litschema agent validate-reasoning <agent-reasoning.json>")
@@ -121,7 +151,7 @@ def run(args: list[str] | None) -> int:
 
     schema_path = reasoning_schema_source_path()
 
-    ok, errors = validate_file(filepath, schema_path)
+    ok, errors = validate_file(filepath, schema_path, extraction=extraction)
     if not ok:
         print(f"INVALID: {filepath}")
         for error in errors[:10]:

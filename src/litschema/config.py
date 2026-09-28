@@ -63,7 +63,7 @@ class LitSchemaConfig:
     raw: dict = field(default_factory=dict, repr=False)
 
 
-def _find_config(start: Path) -> Path | None:
+def find_config(start: Path) -> Path | None:
     """Walk upward from ``start`` looking for a litschema.yaml."""
     start = start.resolve()
     for candidate in [start, *start.parents]:
@@ -88,12 +88,12 @@ def _resolve_config_path(explicit: Path | str | None) -> Path:
         return p
 
     # Walk up from cwd first (typical invocation case).
-    found = _find_config(Path.cwd())
+    found = find_config(Path.cwd())
     if found is not None:
         return found
 
     # Fallback: walk up from this module (for unusual cwd).
-    found = _find_config(Path(__file__).parent)
+    found = find_config(Path(__file__).parent)
     if found is not None:
         return found
 
@@ -226,6 +226,7 @@ def require_config_or_exit(
 __all__ = [
     "LitSchemaConfig",
     "load_config",
+    "find_config",
     "require_config",
     "require_config_or_exit",
     "ConfigNotFoundError",

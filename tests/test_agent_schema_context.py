@@ -5,6 +5,7 @@ import subprocess
 import sys
 
 import pytest
+from typer.testing import CliRunner
 
 from litschema.config import load_config
 
@@ -402,3 +403,80 @@ def test_citations_resolve_against_a_run_bound_reasoning_file(tmp_path) -> None:
     assert prepared_text_for(run_dir / "agent-reasoning.json") == (
         tmp_path / "data" / "papers" / "a" / "article.md"
     )
+
+
+# ── reasoning paths must name fields the extraction schema defines ──────────
+
+_NESTED_SCHEMA = """\
+id: https://example.org/paths
+name: paths
+prefixes:
+  linkml: https://w3id.org/linkml/
+default_range: string
+imports:
+  - linkml:types
+classes:
+  Study:
+    tree_root: true
+    attributes:
+      article_id:
+        identifier: true
+        required: true
+      setups:
+        range: Setup
+        multivalued: true
+        inlined_as_list: true
+  Setup:
+    attributes:
+      experimental_scale: {}
+"""
+
+
+def _project_with_reasoning(tmp_path, path: str):
+    from litschema import cli
+
+    project = tmp_path / "review"
+    result = CliRunner().invoke(cli.app, ["init", str(project), "--no-skills"])
+    assert result.exit_code == 0, result.output
+    (project / "schema" / "extraction.yaml").write_text(_NESTED_SCHEMA)
+    article = project / "data" / "papers" / "a"
+    run_dir = article / "extraction-runs" / "01RUN"
+    run_dir.mkdir(parents=True)
+    (article / "article.md").write_text("intro\nbody\n")
+    reasoning = run_dir / "agent-reasoning.json"
+    reasoning.write_text(json.dumps({"fields": [{"path": path, "source_lines": "L2"}]}))
+    return reasoning
+
+
+@pytest.mark.parametrize(
+    ("path", "message"),
+    [
+        (".setups[0].trial_type", "'trial_type' is not a field of Setup"),
+        (".site", "'site' is not a field of Study"),
+        ("setups[].experimental_scale", "not a field path"),
+    ],
+)
+def test_reasoning_paths_the_schema_does_not_define_are_rejected(
+    tmp_path, monkeypatch, path, message
+) -> None:
+    from litschema import cli
+
+    monkeypatch.delenv("LITSCHEMA_CONFIG", raising=False)
+    reasoning = _project_with_reasoning(tmp_path, path)
+
+    result = CliRunner().invoke(cli.app, ["agent", "validate-reasoning", str(reasoning)])
+
+    assert result.exit_code == 1, result.output
+    assert message in result.output
+
+
+@pytest.mark.parametrize("path", [".setups[0].experimental_scale", "setups[1].experimental_scale"])
+def test_reasoning_paths_the_schema_defines_are_accepted(tmp_path, monkeypatch, path) -> None:
+    from litschema import cli
+
+    monkeypatch.delenv("LITSCHEMA_CONFIG", raising=False)
+    reasoning = _project_with_reasoning(tmp_path, path)
+
+    result = CliRunner().invoke(cli.app, ["agent", "validate-reasoning", str(reasoning)])
+
+    assert result.exit_code == 0, result.output

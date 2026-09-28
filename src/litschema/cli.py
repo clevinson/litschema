@@ -870,8 +870,22 @@ def agent_prepare_schema_context(ctx: typer.Context):
 )
 def agent_validate_reasoning(ctx: typer.Context):
     from .agent import validate_reasoning
+    from .config import find_config, load_config
+    from .schema_resolution import resolve_extraction_schema
 
-    raise typer.Exit(code=validate_reasoning.run(list(ctx.args)))
+    # Field paths can only be checked against a project's extraction schema.
+    # Outside a project the file still gets shape and citation checks.
+    args = list(ctx.args)
+    extraction = None
+    if args:
+        explicit = ctx.obj if isinstance(ctx.obj, Path) else None
+        env = os.environ.get("LITSCHEMA_CONFIG")
+        config_path = explicit or (Path(env) if env else find_config(Path(args[0]).parent))
+        if config_path is not None:
+            cfg = load_config(config_path)
+            _enforce_version_pin(cfg)
+            extraction = resolve_extraction_schema(cfg)
+    raise typer.Exit(code=validate_reasoning.run(args, extraction))
 
 
 @agent_app.command(
@@ -923,7 +937,7 @@ def agent_record_extraction(
     if files.staged_reasoning.is_file():
         from .agent import validate_reasoning as _validate_reasoning
 
-        if _validate_reasoning.run([str(files.staged_reasoning)]) != 0:
+        if _validate_reasoning.run([str(files.staged_reasoning)], resolved) != 0:
             typer.secho(f"{CROSS} staged reasoning is invalid", fg=typer.colors.RED)
             raise typer.Exit(code=1)
 

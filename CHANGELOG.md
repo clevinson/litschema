@@ -51,6 +51,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+### Changed
+
+- `agent validate-reasoning` and `agent record-extraction` reject reasoning
+  entries whose `path` names a field the extraction schema doesn't define.
+  The verifier finds evidence by path, so such an entry left its field with no
+  visible evidence. Outside a project, `validate-reasoning` checks shape and
+  citations as before.
+
 ## [0.1.1] — 2026-09-27
 
 First release on PyPI.
