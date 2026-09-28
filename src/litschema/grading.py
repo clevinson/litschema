@@ -455,9 +455,12 @@ class GradeStatus:
 
 def current_grade(run: RunFiles) -> GradeStatus:
     """The newest grade whose input hashes match the run's files."""
+    records = list_grades(run)
+    if not records:
+        return GradeStatus(grade=None)
     hashes = input_hashes(run)
     stale = []
-    for record in list_grades(run):
+    for record in records:
         if record["inputs"] == hashes:
             return GradeStatus(grade=record, stale=stale)
         stale.append(record)

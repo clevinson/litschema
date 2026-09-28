@@ -531,3 +531,98 @@ def test_grade_enforces_the_version_pin(project, fake_claude) -> None:
     assert result.exit_code == 3
     assert "pinned to litschema 0.0.1" in result.stderr
     assert _calls(fake_claude) == []
+
+
+# ── the verifier's read surface ─────────────────────────────────────────────
+
+
+@pytest.fixture
+def client(project):
+    from fastapi.testclient import TestClient
+
+    import litschema.webapp.app as webapp
+
+    cfg = load_config(project / "litschema.yaml", reload=True)
+    webapp.app.dependency_overrides[webapp.get_config] = lambda: cfg
+    yield TestClient(webapp.app)
+    webapp.app.dependency_overrides.clear()
+
+
+def test_grades_endpoint_returns_the_current_grade(project, client) -> None:
+    run = _run(project)
+    assert client.get(f"/api/grades/{ARTICLE}").json() == {
+        "run_id": RUN_ID,
+        "grade": None,
+        "stale": [],
+    }
+    _stored(run, "01A", "2026-09-01T00:00:00+00:00")
+    _stored(run, "01B", "2026-09-02T00:00:00+00:00", inputs={"extraction": "sha256:old"})
+
+    body = client.get(f"/api/grades/{ARTICLE}", params={"run_id": RUN_ID}).json()
+
+    assert body["grade"]["grade_id"] == "01A"
+    assert body["stale"] == ["01B"]
+
+
+@pytest.mark.parametrize(
+    ("url", "status"),
+    [
+        ("/api/grades/unextracted-2024-pending", 404),
+        (f"/api/grades/{ARTICLE}?run_id=01NOSUCHRUN", 404),
+        ("/api/grades/..", 404),
+    ],
+)
+def test_grades_endpoint_404s_without_a_run(client, url, status) -> None:
+    assert client.get(url).status_code == status
+
+
+def test_grades_endpoint_reports_a_corrupt_grade(project, client) -> None:
+    run = _run(project)
+    grading.grades_dir(run).mkdir()
+    (grading.grades_dir(run) / "01X.json").write_text("[]")
+
+    response = client.get(f"/api/grades/{ARTICLE}")
+
+    assert response.status_code == 409
+    assert "01X.json" in response.json()["detail"]
+
+
+def test_listing_carries_flag_counts_from_the_current_grade(project, client) -> None:
+    run = _run(project)
+    _stored(
+        run,
+        "01A",
+        "2026-09-01T00:00:00+00:00",
+        fields=[
+            {"path": "site_name", "verdict": "unsupported", "confidence": 0.9, "reasoning": ""},
+            {"path": "crops", "verdict": "partial", "confidence": 0.7, "reasoning": ""},
+            {"path": "tillage", "verdict": "cannot_verify", "confidence": 0.5, "reasoning": ""},
+            {"path": "replicates", "verdict": "supported", "confidence": 1, "reasoning": ""},
+        ],
+    )
+
+    by_id = {a["article_id"]: a for a in client.get("/api/articles").json()["articles"]}
+
+    assert by_id[ARTICLE]["grade"] == {
+        "grade_id": "01A",
+        "created_at": "2026-09-01T00:00:00+00:00",
+        "model": "m",
+        "flags": 2,
+        "unsupported": 1,
+        "partial": 1,
+        "cannot_verify": 1,
+    }
+    assert by_id[ARTICLE]["grade_error"] is None
+    assert by_id["okafor-2023-biochar-trial"]["grade"] is None
+    assert by_id["unextracted-2024-pending"]["grade"] is None
+
+
+def test_listing_survives_a_corrupt_grade(project, client) -> None:
+    run = _run(project)
+    grading.grades_dir(run).mkdir()
+    (grading.grades_dir(run) / "01X.json").write_text("{")
+
+    by_id = {a["article_id"]: a for a in client.get("/api/articles").json()["articles"]}
+
+    assert by_id[ARTICLE]["grade"] is None
+    assert "01X.json" in by_id[ARTICLE]["grade_error"]
