@@ -1006,7 +1006,7 @@
      blue citation/source-line bg (--cited*). Standard <mark> styling
      in the find-on-page tradition (yellow), tuned per-theme so dark
      mode doesn't blow out. */
-  .md-line .search-hit {
+  #panel-left .search-hit {
     background: rgba(255, 213, 79, 0.55);
     color: inherit;
     border-radius: 2px;
@@ -1014,25 +1014,25 @@
     box-decoration-break: clone;
     -webkit-box-decoration-break: clone;
   }
-  .md-line .search-hit.current {
+  #panel-left .search-hit.current {
     background: rgba(255, 167, 38, 0.75);
     outline: 1px solid rgba(255, 167, 38, 0.95);
   }
   @media (prefers-color-scheme: dark) {
-    .md-line .search-hit {
+    #panel-left .search-hit {
       background: rgba(255, 213, 79, 0.28);
       color: #ffe8a3;
     }
-    .md-line .search-hit.current {
+    #panel-left .search-hit.current {
       background: rgba(255, 167, 38, 0.45);
       outline: 1px solid rgba(255, 167, 38, 0.7);
     }
   }
-  [data-theme="dark"] .md-line .search-hit {
+  [data-theme="dark"] #panel-left .search-hit {
     background: rgba(255, 213, 79, 0.28);
     color: #ffe8a3;
   }
-  [data-theme="dark"] .md-line .search-hit.current {
+  [data-theme="dark"] #panel-left .search-hit.current {
     background: rgba(255, 167, 38, 0.45);
     outline: 1px solid rgba(255, 167, 38, 0.7);
   }
@@ -3012,9 +3012,10 @@ function showOverview() {
 
 // "Paessler 2024 · first six title words", for the breadcrumb.
 function shortCitation(meta) {
-  const first = (meta.authors && meta.authors[0]) || meta.corporate_author || "";
-  const name = typeof first === "string" ? first : (first.family || first.given || "");
-  const surname = surnameOf(String(name)) || meta.article_id;
+  const first = meta.authors && meta.authors[0];
+  // Organization names are never surname-split.
+  const surname = (typeof first === "string" ? surnameOf(first) : first && (first.family || first.given))
+    || meta.corporate_author || meta.article_id;
   const title = (meta.title || "").split(/\s+/).slice(0, 6).join(" ");
   return `${surname} ${meta.year || ""} · ${title}`.trim();
 }
@@ -3948,6 +3949,8 @@ function setLeftPane(pane) {
     history.replaceState(null, "", location.pathname + location.search + docHash(state.currentId));
   }
   renderMarkdown();
+  // Search marks and match keys belong to the pane that was replaced.
+  if (state._lastQuery && state.leftPane !== "pdf" && !state.selectedPath) doSearch();
   if (state.currentId) renderExtractionPanel();
   if (!state.selectedPath) return;
   if (state.viewMode === "data" && state.dataMode === "json") selectEvidencePath(state.selectedPath);
@@ -6189,12 +6192,18 @@ function parseSourceLines(str) {
 function activateMatch(index, matches) {
   document.querySelectorAll(".md-line.active").forEach(e => e.classList.remove("active"));
 
-  const m = matches[index];
-  const lineEl = document.querySelector(`.md-line[data-line="${m.line}"]`);
-  if (lineEl) {
-    lineEl.classList.add("active");
-    scrollDocTo(lineEl);
+  const el = searchUnit(matches[index].line);
+  if (el) {
+    el.classList.add("active");
+    scrollDocTo(el);
   }
+}
+
+// The raw line or top-level rendered block a search match key names.
+function searchUnit(key) {
+  return docPane() === "rendered"
+    ? document.querySelector(`#panel-left .rendered .col > .blk[data-start="${key}"]`)
+    : document.querySelector(`.md-line[data-line="${key}"]`);
 }
 
 // ── Keyboard navigation ──
@@ -6239,14 +6248,15 @@ function doSearch() {
   state.searchMatches = [];
   const reSrc = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-  // Walk each rendered .md-line and wrap text matches in <mark class="search-hit">.
-  // Using TreeWalker over text nodes avoids matching inside HTML attributes
-  // and skips the line-number gutter.
-  document.querySelectorAll(".md-line").forEach((lineEl) => {
-    const lineNum = parseInt(lineEl.dataset.line, 10);
-    if (highlightMatchesIn(lineEl, reSrc)) {
-      state.searchMatches.push(lineNum);
-    }
+  // Wrap text matches in <mark class="search-hit"> per raw line or rendered
+  // block. Walking text nodes avoids matching inside HTML attributes and skips
+  // the line-number gutter. Top-level blocks only: figure captions nest.
+  const units = docPane() === "rendered"
+    ? document.querySelectorAll("#panel-left .rendered .col > .blk")
+    : document.querySelectorAll(".md-line");
+  units.forEach((el) => {
+    const key = el.dataset.line || el.dataset.start;
+    if (highlightMatchesIn(el, reSrc)) state.searchMatches.push(key);
   });
 
   state.searchIndex = 0;
@@ -6297,11 +6307,10 @@ function highlightMatchesIn(lineEl, reSrc) {
 function scrollToSearchMatch(index) {
   document.querySelectorAll(".search-hit.current").forEach((e) => e.classList.remove("current"));
   state.searchIndex = index;
-  const lineNum = state.searchMatches[index];
-  const lineEl = document.querySelector(`.md-line[data-line="${lineNum}"]`);
-  if (lineEl) {
-    lineEl.querySelectorAll(".search-hit").forEach((m) => m.classList.add("current"));
-    scrollDocTo(lineEl);
+  const el = searchUnit(state.searchMatches[index]);
+  if (el) {
+    el.querySelectorAll(".search-hit").forEach((m) => m.classList.add("current"));
+    scrollDocTo(el);
   }
   updateSearchNav();
 }
