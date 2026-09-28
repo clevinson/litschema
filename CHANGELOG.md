@@ -53,6 +53,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ### Changed
 
+- `init` gitignores prepared text (`article.md`) and extracted figures along
+  with PDFs, since most papers can't be redistributed. Existing
+  projects need `data/papers/*/article.md` and `data/papers/*/figures/` added
+  to `.gitignore` by hand.
+
+### Changed
+
 - `agent validate-reasoning` and `agent record-extraction` reject reasoning
   entries whose `path` names a field the extraction schema doesn't define.
   The verifier finds evidence by path, so such an entry left its field with no
