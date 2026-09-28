@@ -6,7 +6,6 @@ abstract: "Schema-driven extraction of structured data from PDFs, with line-cite
 authors:
   - family-names: Levinson
     given-names: Cory
-    affiliation: "University of California, Davis"
     orcid: "https://orcid.org/0009-0009-8902-102X"
 repository-code: "https://github.com/clevinson/litschema"
 license: Apache-2.0
