@@ -1,17 +1,42 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 STATIC_HTML = Path("src/litschema/webapp/static/index.html")
 
 
-def test_verifier_uses_litschema_verify_branding() -> None:
+def test_app_uses_litschema_branding() -> None:
     html = STATIC_HTML.read_text()
 
-    assert "<title>litschema verify</title>" in html
-    assert "<h1>litschema verify</h1>" in html
+    assert "<title>litschema</title>" in html
+    assert 'class="brand">litschema<' in html
     assert "brand-script" not in html
     assert "ERW Extraction Verifier" not in html
+
+
+def test_app_loads_nothing_from_the_network() -> None:
+    html = STATIC_HTML.read_text()
+
+    assert not re.search(r'<(script|link)[^>]+(src|href)="https?://', html)
+    assert "fonts.googleapis" not in html
+    assert "shoelace" not in html.lower()
+
+
+def test_app_uses_the_icon_sprite_not_unicode_symbols() -> None:
+    html = STATIC_HTML.read_text()
+
+    assert 'href="/static/icons.svg#settings"' in html
+    for symbol in ["⚙", "✎", "\U0001f513", "\U0001f512", "⟳", "☾", "☼",
+                   "&#9881;", "&#9998;", "&#10227;", "&#9790;", "&#9664;", "&#9654;"]:
+        assert symbol not in html, f"unicode icon {symbol!r} still in index.html"
+
+
+def test_raw_lines_escape_html() -> None:
+    html = STATIC_HTML.read_text()
+
+    assert "marked.parseInline" not in html
+    assert "escapeHtml(lines[i])" in html
 
 
 def test_verifier_pdf_button_treats_127_0_0_1_as_local() -> None:
@@ -185,14 +210,13 @@ def test_verifier_edits_inline_in_value_cell() -> None:
     assert "flag-dialog" not in html
 
 
-def test_verifier_uses_unicode_pencil_for_edit_actions() -> None:
+def test_verifier_uses_pencil_icon_for_edit_actions() -> None:
     html = STATIC_HTML.read_text()
 
     assert 'class="icon-svg edit-icon"' not in html
     assert 'aria-label="Edit selected field"' not in html
-    assert "&#9998;" in html
     assert "row-edit-action" in html
-    assert 'title="Edit value">&#9998;</button>' in html
+    assert 'title="Edit value">${icon("pencil")}</button>' in html
 
 
 def test_verifier_table_uses_compact_evidence_badges() -> None:
@@ -290,7 +314,7 @@ def test_verifier_action_column_uses_compact_status() -> None:
     assert ".field-status.status-empty:hover .status-icon-main" in html
     assert ".field-status.status-empty:hover .status-icon-hover" in html
     assert ".field-status.status-verified:hover" in html
-    assert 'const hoverIcon = status === "verified" ? "&#10005;" : "&#10003;"' in html
+    assert 'const hoverIcon = icon(status === "verified" ? "x" : "check")' in html
     assert "state.annotations[path] = entry" in html
     assert "renderReviewState()" in html
     assert "status-cell" in html
@@ -302,7 +326,7 @@ def test_verifier_action_column_uses_compact_status() -> None:
     assert "row-edit-action" in html
     assert "row-clear-edit-action" in html
     assert "Revert edited value" in html
-    assert "&#8634;" in html
+    assert 'icon("undo-2")' in html
     assert "grid-template-columns: 22px 18px" in html
     assert ".ext-table tr:hover .row-clear-edit-action" in html
     assert "displayFieldValueForPath" in html
@@ -416,7 +440,7 @@ def test_bib_header_has_provenance_badge_and_edit_affordance() -> None:
     assert "lastBibMeta" in html
     assert "bibArticleId" in html
     # Lock model affordances: generic DOI pill, unlock control, per-article sync.
-    assert "✓ from DOI" in html
+    assert 'label: "from DOI", icon: "check"' in html
     assert "verified via" not in html
     assert 'id="bib-sync-btn"' in html
     assert "/sync" in html
