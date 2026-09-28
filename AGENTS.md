@@ -25,7 +25,7 @@ Always prefix with `uv run`.
 uv run pytest                 # full suite
 uv run ruff check .           # lint
 uv run litschema --help       # CLI surface: prepare-text, assemble, extract,
-                               # validate, verify, mcp, export, status,
+                               # validate, verify, grade, mcp, export, status,
                                # doctor, init, skills, agent, meta
 ```
 
