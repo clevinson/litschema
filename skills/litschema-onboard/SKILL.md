@@ -211,6 +211,10 @@ Tell the user, briefly:
   pilot — otherwise `litschema verify`): the
   header shows what each paper IS (verified when fetched by DOI, editable
   otherwise); the body is per-field accept / edit / sign-off of what it SAYS.
+- Optional: `litschema grade --all` has a second model check each value
+  against its cited lines (it uses their `claude` login; add
+  `--model claude-haiku-4-5` for a cheap pass). The app then lists flagged
+  fields first in each paper and counts them on the overview.
 - Their dataset lives in `data/papers/<id>/`, in git, reproducible.
 - Re-running this later is safe — finished work is skipped.
 

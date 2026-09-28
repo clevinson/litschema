@@ -333,6 +333,29 @@ presumed local and its anonymous reviews the reviewer's own; inside one they
 may be a collaborator's, and the dialog says so with a count before proceeding,
 because the file cannot distinguish afterwards.
 
+## Grader verdicts
+
+When the active run has a current grade (`specs/grading/spec.md`), the verifier
+shows it beside the extractor's evidence. A field's grade is its own entry,
+else the nearest ancestor's, the same resolution evidence uses.
+
+- Audit table: the Source cell carries a small verdict label. Supported shows
+  nothing; partial is amber (`--accent`), unsupported red (`--red`), can't
+  verify grey (`--text-dim`). A table row graded as a whole shows the label
+  once, in its own Source cell.
+- Evidence box: under the extractor's note, the grader's model, verdict,
+  confidence, and reasoning, naming the ancestor when the grade is inherited.
+- Review order: a "Flagged first" toggle in the review pane's header, next to
+  Audit/Data, shown only when a grade exists and on by default then. It lists
+  every leaf in groups (unsupported, partial, can't verify, the extractor's
+  fields with confidence below 0.85 lowest first, then the rest in document
+  order), each row labelled with its full path. Previous/Next follow that
+  order. Turning it off restores the sectioned table.
+- Overview: a sortable Flags column counts unsupported plus partial fields in
+  the current grade, with a dash for ungraded documents and `?` when the grade
+  file is unreadable. A "Flagged" chip, shown when any document has flags,
+  keeps only those documents and lives in the hash like the other chips.
+
 ## Extractor explanations
 
 The reasoning artifact's overall confidence and its accompanying explanation
@@ -356,6 +379,14 @@ failure is 422, and the client falls back to Raw lines.
 
 `GET /api/figure/{id}/{name}` serves a bare image name (png, jpg, jpeg, webp)
 from the article's `figures/` folder. Anything else, including a path, is 404.
+
+`GET /api/grades/{id}` returns `{run_id, grade, stale}` for the active run, or
+the run named by `run_id`: `grade` is the current grade record or `null`, and
+`stale` lists the ids of newer grades ignored because their inputs changed. No
+run is 404; a corrupt grade file is 409. `/api/articles` carries a `grade`
+summary per article (`grade_id`, `created_at`, `model`, `flags`, `unsupported`,
+`partial`, `cannot_verify`) or `null`, and `grade_error` when the grade file is
+unreadable; a bad grade never fails the listing.
 
 `/api/settings` includes `project_name`, the project directory's name, for the
 top bar. Extraction and
@@ -405,6 +436,10 @@ Implementation coverage must replace brittle source-substring assertions with:
 - backfill touching only unattributed entries, and warning inside a repository;
 - the extractor explanation surfacing behind its own affordance, including for
   a run that extracted nothing;
+- grader verdict markers (none for supported, inherited by a row's cells), the
+  grader's reasoning and confidence in the evidence box, the flagged-first
+  toggle defaulting on and reordering rows both ways, and the Flags column
+  count, sort, and chip;
 - silence from a bulk action that succeeds, and a stated failure when one does
   not;
 - clear-arming suppressed for a single verification's own control and not for
