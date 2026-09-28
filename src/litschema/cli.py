@@ -1,6 +1,6 @@
 """litschema CLI - single entry point for the pipeline.
 
-Verbs: assemble / prepare-text / meta (show|set|sync) / validate / verify /
+Verbs: assemble / prepare-text / meta (show|set|sync) / validate / verify / grade /
 mcp / status / doctor / skills install / agent / init.
 """
 
@@ -401,6 +401,129 @@ def verify(
     from .webapp import app as webapp_app
 
     webapp_app.run_app(project.config, port=port, open_browser=open_browser)
+
+
+@app.command(help="Grade extraction runs against their cited evidence with claude -p.")
+def grade(
+    ctx: typer.Context,
+    article_id: str | None = typer.Argument(None, help="Article to grade"),
+    all_articles: bool = typer.Option(False, "--all", help="Grade every article's active run."),
+    run_id: str | None = typer.Option(None, "--run", help="Grade this run instead of the active one."),
+    model: str | None = typer.Option(None, "--model", help="Grader model (default claude-sonnet-5)."),
+    force: bool = typer.Option(False, "--force", help="With --all, regrade runs that already have a grade."),
+    concurrency: int = typer.Option(2, "--concurrency", min=1, help="Runs graded at once."),
+):
+    from concurrent.futures import ThreadPoolExecutor
+
+    from . import grading
+    from .runs import BrokenActiveRunError, active_run, is_error_run, run_files
+
+    if (article_id is None) == (not all_articles):
+        typer.secho(f"{CROSS} give an article id or --all, not both", fg=typer.colors.RED)
+        raise typer.Exit(code=2)
+    if run_id is not None and all_articles:
+        typer.secho(f"{CROSS} --run needs a single article, not --all", fg=typer.colors.RED)
+        raise typer.Exit(code=2)
+    project = _require_project(ctx)
+    cfg = project.config
+    model = model or grading.DEFAULT_MODEL
+
+    failures: list[str] = []
+    runs = []
+    if article_id is not None:
+        files = _require_article(cfg, article_id)
+        try:
+            run = run_files(files, run_id) if run_id is not None else active_run(files)
+        except BrokenActiveRunError as exc:
+            typer.secho(f"{CROSS} {exc}", fg=typer.colors.RED)
+            raise typer.Exit(code=1) from None
+        if run is None:
+            typer.secho(f"{CROSS} {article_id} has no active run", fg=typer.colors.RED)
+            raise typer.Exit(code=1)
+        if not run.run_json.is_file() or not run.extraction.is_file():
+            typer.secho(f"{CROSS} {run.run_id} is not a published run of {article_id}", fg=typer.colors.RED)
+            raise typer.Exit(code=1)
+        if is_error_run(run):
+            typer.secho(f"{CROSS} {run.run_id} is an error-marker run", fg=typer.colors.RED)
+            raise typer.Exit(code=1)
+        runs.append(run)
+    else:
+        for metadata_path in iter_metadata_paths(cfg):
+            files = article_files(cfg, metadata_path.parent.name)
+            try:
+                run = active_run(files)
+            except BrokenActiveRunError as exc:
+                failures.append(files.article_id)
+                typer.secho(f"{CROSS} {files.article_id}: {exc}", fg=typer.colors.RED)
+                continue
+            if run is None or is_error_run(run):
+                continue
+            if not force and grading.has_current_grade(run, model):
+                typer.echo(f"{DIM}  {files.article_id}: already graded by {model}{RESET}")
+                continue
+            runs.append(run)
+
+    if not runs:
+        typer.echo("nothing to grade")
+        raise typer.Exit(code=1 if failures else 0)
+    try:
+        executable = grading.claude_executable()
+    except grading.ClaudeNotFoundError as exc:
+        typer.secho(f"{CROSS} {exc}", fg=typer.colors.RED)
+        raise typer.Exit(code=1) from None
+    harness_version = grading.claude_version(executable)
+    descriptions = grading.slot_descriptions(cfg)
+
+    def one(run):
+        try:
+            return grading.grade_run(
+                cfg,
+                run,
+                model=model,
+                executable=executable,
+                harness_version=harness_version,
+                descriptions=descriptions,
+            )
+        except grading.GradeError as exc:
+            return exc
+
+    total_cost = 0.0
+    graded = 0
+    with ThreadPoolExecutor(max_workers=concurrency) as pool:
+        for run, outcome in zip(runs, pool.map(one, runs), strict=True):
+            label = f"{run.article.article_id} {run.run_id}"
+            if isinstance(outcome, Exception):
+                failures.append(run.article.article_id)
+                typer.secho(f"{CROSS} {label}: {outcome}", fg=typer.colors.RED)
+                continue
+            counts = outcome.counts
+            cost = outcome.record["usage"]["cost_estimate_usd"]
+            total_cost += cost or 0.0
+            summary = (
+                f"{len(outcome.record['fields'])} fields: "
+                f"{counts['unsupported']} unsupported, {counts['partial']} partial, "
+                f"{counts['cannot_verify']} can't verify"
+            )
+            tail = f"{outcome.record['grader']['model'] or model}"
+            if cost is not None:
+                tail += f", ${cost:.3f}"
+            tail += f", {outcome.seconds:.0f}s"
+            ungraded = outcome.record["ungraded"]
+            if ungraded:
+                failures.append(run.article.article_id)
+                typer.secho(
+                    f"{WARN} {label}: {summary}; {len(ungraded)} fields left ungraded ({tail})",
+                    fg=typer.colors.YELLOW,
+                )
+            else:
+                graded += 1
+                typer.echo(f"{CHECK} {label}: {summary} ({tail})")
+
+    if len(runs) > 1:
+        typer.echo(f"graded {graded} of {len(runs)} runs, ${total_cost:.3f}")
+    if failures:
+        typer.secho(f"{CROSS} not fully graded: {', '.join(sorted(set(failures)))}", fg=typer.colors.RED)
+        raise typer.Exit(code=1)
 
 
 @app.command(
