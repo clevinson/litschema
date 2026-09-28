@@ -8,7 +8,7 @@ from litschema.config import LitSchemaConfig
 from litschema.ingest import pdf_to_markdown
 from litschema.webapp import app as webapp
 
-from .helpers import publish_test_run
+from .helpers import make_pdf, publish_test_run
 
 
 def _cfg(project: Path) -> LitSchemaConfig:
@@ -26,24 +26,14 @@ def _cfg(project: Path) -> LitSchemaConfig:
     )
 
 
-def test_pdf_conversion_defaults_to_article_folder(
-    tmp_path: Path,
-    monkeypatch,
-) -> None:
+def test_pdf_conversion_defaults_to_article_folder(tmp_path: Path) -> None:
     cfg = _cfg(tmp_path)
-    cfg.paper_inbox_dir.mkdir(parents=True)
     article_dir = cfg.article_store_dir / "smith-2024"
     article_dir.mkdir(parents=True)
     (article_dir / "article-metadata.json").write_text(
         json.dumps({"id": "smith-2024", "filename": "smith.pdf"})
     )
-    (cfg.paper_inbox_dir / "smith.pdf").write_text("pdf placeholder")
-
-    def fake_convert_pdf(pdf_path: Path, out_path: Path) -> int:
-        out_path.write_text("# Smith\n")
-        return 250
-
-    monkeypatch.setattr(pdf_to_markdown, "convert_pdf", fake_convert_pdf)
+    make_pdf(cfg.paper_inbox_dir / "smith.pdf", title="Smith study")
 
     stats = pdf_to_markdown.run(
         cfg,
@@ -52,31 +42,18 @@ def test_pdf_conversion_defaults_to_article_folder(
     )
 
     assert stats["converted"] == 1
-    assert (cfg.article_store_dir / "smith-2024" / "article.md").read_text() == "# Smith\n"
+    assert "Smith study" in (cfg.article_store_dir / "smith-2024" / "article.md").read_text()
 
 
-def test_pdf_conversion_can_prepare_one_article(
-    tmp_path: Path,
-    monkeypatch,
-) -> None:
+def test_pdf_conversion_can_prepare_one_article(tmp_path: Path) -> None:
     cfg = _cfg(tmp_path)
-    cfg.paper_inbox_dir.mkdir(parents=True)
     for article_id in ("smith-2024", "jones-2025"):
         article_dir = cfg.article_store_dir / article_id
         article_dir.mkdir(parents=True)
         (article_dir / "article-metadata.json").write_text(
             json.dumps({"id": article_id, "filename": f"{article_id}.pdf"})
         )
-        (cfg.paper_inbox_dir / f"{article_id}.pdf").write_text("pdf placeholder")
-
-    converted = []
-
-    def fake_convert_pdf(pdf_path: Path, out_path: Path) -> int:
-        converted.append(pdf_path.name)
-        out_path.write_text(f"# {pdf_path.stem}\n")
-        return 250
-
-    monkeypatch.setattr(pdf_to_markdown, "convert_pdf", fake_convert_pdf)
+        make_pdf(cfg.paper_inbox_dir / f"{article_id}.pdf", title=f"{article_id} study")
 
     stats = pdf_to_markdown.run(
         cfg,
@@ -85,8 +62,7 @@ def test_pdf_conversion_can_prepare_one_article(
     )
 
     assert stats["converted"] == 1
-    assert converted == ["smith-2024.pdf"]
-    assert (cfg.article_store_dir / "smith-2024" / "article.md").is_file()
+    assert "smith-2024 study" in (cfg.article_store_dir / "smith-2024" / "article.md").read_text()
     assert not (cfg.article_store_dir / "jones-2025" / "article.md").exists()
 
 

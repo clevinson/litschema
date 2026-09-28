@@ -106,6 +106,13 @@ what it ran, the publisher records that without verification, and an
 unavailable field is omitted rather than invented. A caller that cannot name
 its model still publishes.
 
+When the article has a `prepared-text.json`, the publisher checks that its
+`text_sha256` matches the `article.md` it just hashed and copies the record
+into `run.json` as `conversion` (shape in `specs/article-store/spec.md`). A
+mismatch refuses publication: the reasoning's line citations index into text
+that no longer matches its conversion record. Re-run `prepare-text --force`
+and extract again.
+
 `litschema agent record-extraction <article-id> --run-id <run-id>` finalizes a
 staged attempt and publishes the directory atomically. It does not write
 extraction provenance into `article-metadata.json`. Publishing a complete
@@ -118,7 +125,8 @@ support in a future release.
 The bundled `extract-article` skill performs:
 
 setup gate (`litschema status`, stopping on a version mismatch) → schema-context generation → prepared-text
-check → extraction from that article's markdown only → write both staged
+check → extraction from that article's markdown and the figures it links only
+→ write both staged
 artifacts → validate both, with bounded repair attempts → record provenance and
 publish → bib-metadata enrichment through its own CLI.
 
@@ -136,6 +144,11 @@ It chose the model for each dispatch, so it is the only party that knows it.
 The subagent stages and validates, then reports; the conductor calls
 `record-extraction` naming the model it dispatched. A standalone extraction
 with no conductor publishes itself and omits the model.
+
+A markdown line `![](figures/<name>)` is a figure from the PDF. The skill
+opens the image with its file-reading tool when a value may sit in a figure or
+an image-only table, cites the figure line (and its caption line) in
+`source_lines`, and omits any value it cannot read from the image.
 
 The skill never overwrites a run, changes `active-run.json` implicitly for a
 rerun, edits source metadata files directly, or imports facts from another
@@ -170,6 +183,8 @@ Implementation coverage must pin:
 - publisher-computed schema and input hashes, refusal of caller-supplied
   hashes, and publication failure when one cannot be computed;
 - publication success with partial or absent agent attribution;
+- the `conversion` block copied from `prepared-text.json`, and refusal when
+  its `text_sha256` does not match `article.md`;
 - skill text forbidding self-described provider/model and assigning
   publication to a dispatching conductor;
 - no manifest provenance write and no implicit rerun activation;

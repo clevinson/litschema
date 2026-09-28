@@ -332,6 +332,35 @@ def _agent_attribution(provider: str | None, model: str | None) -> dict:
     return agent
 
 
+def _conversion_block(files: ArticleFiles, text_sha256: str) -> dict | None:
+    """The article's prepared-text.json as a run.json block, or None if absent.
+
+    Refuses publication when article.md no longer matches the record: the
+    text was edited, or re-converted by something that wrote no record.
+    """
+    from .ingest.pdf_to_markdown import figures_sha256
+
+    path = files.prepared_text_record
+    if not path.is_file():
+        return None
+    try:
+        record = json.loads(path.read_text())
+    except (OSError, ValueError) as exc:
+        raise RunPublishError(f"cannot read {path}: {exc}") from exc
+    if not isinstance(record, dict) or not isinstance(record.get("figures"), list):
+        raise RunPublishError(f"{path} is not a prepared-text record")
+    if record.get("text_sha256") != text_sha256:
+        raise RunPublishError(
+            f"{files.markdown} does not match {path.name} "
+            f"(recorded {record.get('text_sha256')}, found {text_sha256}); the text was "
+            f"edited or re-converted without a record. Run `litschema prepare-text "
+            f"{files.article_id} --force` and extract again."
+        )
+    block = {key: value for key, value in record.items() if key != "figures"}
+    block["figures_sha256"] = figures_sha256(record["figures"])
+    return block
+
+
 def resolve_skill_file(cfg: LitSchemaConfig, override: Path | None = None) -> Path:
     """The SKILL.md that conducted the extraction: explicit, project, then global."""
     if override is not None:
@@ -400,6 +429,7 @@ def publish_run(
         "domain_context": _hash_file(cfg.project_root / "domain_context.md", "domain context"),
         "skill": _hash_file(resolve_skill_file(cfg, skill_file), "skill"),
     }
+    conversion = _conversion_block(files, inputs["prepared_text"])
     record = {
         "version": RUN_JSON_VERSION,
         "run_id": new_run_id(),
@@ -410,6 +440,8 @@ def publish_run(
         "agent": _agent_attribution(provider, model),
         "litschema": {"version": installed_version(), **install_source().as_record()},
     }
+    if conversion is not None:
+        record["conversion"] = conversion
 
     run = RunFiles(article=files, run_id=record["run_id"])
     staging = files.runs_dir / f".staging-{record['run_id']}"

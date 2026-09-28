@@ -51,7 +51,28 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+### Added
+
+- `prepare-text` writes the PDF's figures to `figures/` beside `article.md`
+  and links them as `![](figures/<name>)`. It drops logos repeated on 3 or more
+  pages and images under 150x100 px. The `extract-article` skill opens a
+  figure when a value may sit in it or in an image-only table.
+- `prepare-text` writes `prepared-text.json`: converter name and version,
+  options, and hashes of the PDF, the markdown, and each figure. Commit it; it
+  holds no paper text.
+- `agent record-extraction` copies that record into `run.json` as
+  `conversion`, and refuses to publish when `article.md` no longer matches the
+  record's hash.
+
 ### Changed
+
+- `prepare-text` no longer runs OCR, and drops page headers and footers and
+  `<mark>` highlight tags. Scanned PDFs now convert as `empty`. Re-run
+  `prepare-text --all --force` to regenerate existing text; runs extracted
+  from the old text keep citing its line numbers.
+- `prepare-text` falls back to the canonical `<article-id>.pdf` when the
+  manifest's `filename` names a file that isn't in the article directory.
+- pymupdf4llm 1.28.2 (lockfile; the dependency range is unchanged).
 
 - `agent validate-reasoning` and `agent record-extraction` reject reasoning
   entries whose `path` names a field the extraction schema doesn't define.
