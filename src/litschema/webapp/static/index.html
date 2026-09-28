@@ -532,7 +532,14 @@
   }
 
   .theme-btn:hover { color: var(--text); }
-  .toolbar .brand { font-weight: 600; margin-right: 4px; }
+  .app-bar { position:sticky; top:0; z-index:20; background:var(--bg-raised); border-bottom:1px solid var(--border); }
+  .app-bar .brand { font-weight:650; color:var(--text); }
+  .app-project { color:var(--text-secondary); padding-left:12px; border-left:1px solid var(--border); white-space:nowrap; }
+  .app-project:empty { display:none; }
+  .app-crumb { color:var(--text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex-shrink:0; max-width:36ch; }
+  .app-crumb a { color:var(--text); text-decoration:none; }
+  .app-crumb a:hover { text-decoration:underline; }
+  .app-crumb #app-crumb-doc:not(:empty)::before { content:" \203A  "; }
 
   /* ── Search (inside left panel header) ── */
   .panel-header-row {
@@ -820,12 +827,6 @@
     font-size: 11px; font-family: ui-monospace, monospace; color: var(--text-dim);
     border: 1px solid var(--border); border-radius: 10px; padding: 1px 7px;
   }
-  .back-to-overview { white-space: nowrap; }
-  .doc-breadcrumb {
-    font-size: 12px; color: var(--text-dim); margin-bottom: 6px;
-  }
-  .doc-breadcrumb a { color: var(--text-dim); text-decoration: none; }
-  .doc-breadcrumb a:hover { text-decoration: underline; }
   .reasoning-note { position: relative; display: inline-flex; cursor: help; }
   .reasoning-note-icon {
     display: inline-flex; align-items: center; justify-content: center;
@@ -887,27 +888,38 @@
   .settings-status { padding-top: 10px; font-size: 12px; color: var(--text-dim); min-height: 16px; }
   .settings-status[data-status="error"] { color: var(--red, #f85149); }
   .overview-route { padding: 28px 32px 48px; overflow-y: auto; height: 100%; }
-  .overview-head { display: flex; align-items: baseline; gap: 16px; margin-bottom: 20px; }
-  .overview-head h1 { font-size: 20px; font-weight: 600; margin: 0; }
-  .overview-totals { color: var(--text-dim); font-size: 13px; }
-  .overview-table-wrap { overflow-x: auto; }
+  .overview-head { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 20px; }
+  .ov-strip { display:flex; gap:24px; flex-basis:100%; margin-bottom:6px; color:var(--text-secondary); font-size:12px; }
+  .ov-strip b { display:block; font-size:18px; font-weight:650; color:var(--text); }
+  .ov-search { flex:1; max-width:360px; padding:6px 10px; border:1px solid var(--border); border-radius:var(--radius); background:var(--bg-input); color:var(--text); font:inherit; }
+  .ov-chips { display:flex; gap:6px; }
+  .ov-chips button { border:1px solid var(--border); border-radius:12px; padding:2px 9px; background:var(--bg-raised); color:var(--text-secondary); font:inherit; font-size:12px; cursor:pointer; }
+  .ov-chips button[aria-pressed="true"] { background:var(--text); color:var(--bg); border-color:var(--text); }
+  #ov-advanced { margin-left:auto; }
   .overview-table { border-collapse: collapse; width: 100%; font-size: 13px; }
   .overview-table th {
     text-align: left; font-weight: 600; color: var(--text-dim);
     border-bottom: 1px solid var(--border); padding: 8px 12px; white-space: nowrap;
   }
+  /* The overview scrolls in its own container below the app bar; -28px
+     cancels that container's top padding. */
+  .overview-table thead th { position:sticky; top:-28px; z-index:10; background:var(--bg-overlay); box-shadow:inset 0 -1px 0 var(--border); cursor:pointer; }
+  .overview-table thead th[data-dir="asc"]::after { content:" \2191"; }
+  .overview-table thead th[data-dir="desc"]::after { content:" \2193"; }
   .overview-table td { padding: 8px 12px; border-bottom: 1px solid var(--border); }
   .overview-table tbody tr { cursor: pointer; }
   .overview-table tbody tr:hover { background: var(--hover); }
   .overview-table .ov-num, .overview-table td.ov-num { text-align: right; font-variant-numeric: tabular-nums; }
   .ov-title { font-weight: 500; }
   .ov-sub { color: var(--text-dim); font-size: 12px; margin-top: 2px; }
-  .ov-run-model { font-size: 12px; white-space: nowrap; }
-  .overview-table .ov-date { white-space: nowrap; color: var(--text-dim); font-size: 12px; }
+  .overview-table .ov-run { font-size: 12px; white-space: nowrap; color: var(--text-secondary); }
+  .ov-status { font-size:11px; border-radius:10px; padding:2px 8px; white-space:nowrap; background:var(--bg-overlay); color:var(--text-secondary); }
+  .ov-status.in-progress { background:var(--accent-muted); color:var(--accent); }
+  .ov-status.done { background:rgba(22,163,74,.12); color:var(--green); }
+  .ov-status.problem { color:var(--red); }
+  .ov-dot { display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:5px; }
   .ov-bar { position: relative; width: 120px; height: 6px; border-radius: 3px; background: var(--border); }
   .ov-bar span { position: absolute; inset: 0 auto 0 0; border-radius: 3px; background: var(--green, #3fb950); }
-  .ov-state { font-size: 12px; color: var(--text-dim); }
-  .ov-state.done { color: var(--green, #3fb950); }
   .ov-state.problem { color: var(--red, #f85149); }
   /* A mark, not an alarm: the run is readable and its progress is real. */
   .ov-drift {
@@ -2502,13 +2514,11 @@
 </head>
 <body>
 
-<div class="toolbar">
+<div class="toolbar app-bar">
   <span class="brand">litschema</span>
-  <!-- The exit back to the document list. NN/g's "emergency exit": every
-       document route needs a clearly marked way out that is not the browser
-       back button. -->
-  <button class="toolbar-btn back-to-overview" id="btn-all-documents" type="button"
-          title="Back to all documents"><svg class="icon" aria-hidden="true"><use href="/static/icons.svg#arrow-left"/></svg>&nbsp;All documents</button>
+  <span class="app-project" id="app-project"></span>
+  <!-- The way back to the document list without the browser back button. -->
+  <nav class="app-crumb" id="app-crumb"><a href="#/" data-route="overview">All documents</a><span id="app-crumb-doc"></span></nav>
   <select id="article-select">
     <option value="">Select an article...</option>
   </select>
@@ -2630,20 +2640,21 @@ e.g. year >= 2024 && study_types.includes("review")'
 
 <div class="overview-route" id="overview-route">
   <header class="overview-head">
-    <h1>litschema verify</h1>
-    <div class="overview-totals" id="overview-totals"></div>
+    <div class="ov-strip" id="overview-totals"></div>
+    <input class="ov-search" id="ov-search" type="search" placeholder="Filter by title, author, year, id…">
+    <div class="ov-chips" id="ov-chips"></div>
+    <button class="toolbar-btn" id="ov-advanced" type="button">Advanced filter</button>
   </header>
   <div class="overview-table-wrap">
     <table class="overview-table" id="overview-table">
       <thead>
         <tr>
-          <th class="ov-doc">Document</th>
-          <th class="ov-num">Fields</th>
-          <th class="ov-num">Reviewed</th>
-          <th class="ov-num">Edited</th>
-          <th class="ov-prog">Progress</th>
-          <th class="ov-run">Extracted by</th>
-          <th class="ov-date">Extraction date</th>
+          <th class="ov-doc" data-sort="title">Document</th>
+          <th data-sort="status">Status</th>
+          <th class="ov-num" data-sort="fields">Fields</th>
+          <th class="ov-prog" data-sort="progress">Progress</th>
+          <th class="ov-num" data-sort="confidence">Confidence</th>
+          <th class="ov-run" data-sort="run">Extracted by</th>
         </tr>
       </thead>
       <tbody id="overview-rows"></tbody>
@@ -2655,7 +2666,6 @@ e.g. year >= 2024 && study_types.includes("review")'
   <div class="panel panel-left">
     <div class="panel-header">
       <div class="article-bibheader" id="article-bibheader" style="display:none">
-        <div class="doc-breadcrumb"><a href="#/">All documents</a> &rsaquo; this document</div>
         <span class="bib-title" id="bib-title"></span>
         <span class="bib-meta">
           <span class="bib-authors" id="bib-authors"></span>
@@ -2985,7 +2995,7 @@ function setToolbarScope(inDocument) {
   // Document-scoped controls are hidden on the overview rather than disabled:
   // there is no document for them to act on, so showing them implies a context
   // the user is not in.
-  for (const sel of ["#article-select", ".article-nav", ".view-mode-toggle", "#btn-all-documents"]) {
+  for (const sel of ["#article-select", ".article-nav", ".view-mode-toggle"]) {
     const el = document.querySelector(sel);
     if (el) el.style.display = inDocument ? "" : "none";
   }
@@ -2995,7 +3005,18 @@ function showOverview() {
   $("#panels").style.display = "none";
   $("#overview-route").style.display = "block";
   setToolbarScope(false);
+  $("#app-crumb-doc").textContent = "";
+  $("#ov-search").value = overviewQuery().q;
   renderOverview();
+}
+
+// "Paessler 2024 · first six title words", for the breadcrumb.
+function shortCitation(meta) {
+  const first = (meta.authors && meta.authors[0]) || meta.corporate_author || "";
+  const name = typeof first === "string" ? first : (first.family || first.given || "");
+  const surname = surnameOf(String(name)) || meta.article_id;
+  const title = (meta.title || "").split(/\s+/).slice(0, 6).join(" ");
+  return `${surname} ${meta.year || ""} · ${title}`.trim();
 }
 
 async function applyRoute() {
@@ -3039,37 +3060,85 @@ function runCellHtml(article) {
   // or months apart from the rest.
   const run = article.active_run;
   if (!run) return "&mdash;";
-  const model = run.model || "unknown model";
-  const title = `Run ${run.run_id}`;
-  return `<div class="ov-run-model" title="${escapeHtml(title)}">${escapeHtml(model)}</div>` +
-    (run.effort ? `<div class="ov-sub">${escapeHtml(run.effort)}</div>` : "");
+  const title = [`Run ${run.run_id}`, run.effort && `effort ${run.effort}`, run.created_at].filter(Boolean).join("\n");
+  const text = `${run.model || "unknown model"} · ${shortDate(run.created_at) || ""}`;
+  return `<span title="${escapeHtml(title)}">${escapeHtml(text)}</span>`;
 }
 
-function runDateHtml(article) {
-  const run = article.active_run;
-  const when = run && shortDate(run.created_at);
-  if (!when) return "&mdash;";
-  return `<span title="${escapeHtml(run.created_at)}">${escapeHtml(when)}</span>`;
+function articleStatus(a) {
+  if (a.schema_error || a.review_error) return { key: "problem", label: a.schema_error ? "schema unreadable" : "review unreadable" };
+  if (!a.active_run_id) return { key: "not-extracted", label: "Not extracted" };
+  // Zero fields is complete by arithmetic, not by review.
+  if ((a.n_fields ?? 0) === 0) return { key: "not-started", label: "Nothing extracted" };
+  if (a.is_complete) return { key: "done", label: "Done" };
+  if ((a.n_reviewed ?? 0) > 0) return { key: "in-progress", label: "In progress" };
+  return { key: "not-started", label: "Not started" };
 }
+
+// Overview text filter, status chip and sort live in the hash so reload keeps them.
+function overviewQuery() {
+  const p = new URLSearchParams(location.hash.split("?")[1] || "");
+  return { q: p.get("q") || "", status: p.get("status") || "all", sort: p.get("sort") || "title", dir: p.get("dir") || "asc" };
+}
+
+function setOverviewQuery(next) {
+  const q = { ...overviewQuery(), ...next };
+  const p = new URLSearchParams();
+  if (q.q) p.set("q", q.q);
+  if (q.status !== "all") p.set("status", q.status);
+  if (q.sort !== "title") p.set("sort", q.sort);
+  if (q.dir !== "asc") p.set("dir", q.dir);
+  const s = p.toString();
+  history.replaceState(null, "", location.pathname + location.search + "#/" + (s ? "?" + s : ""));
+  renderOverview();
+}
+
+function matchesText(a, q) {
+  if (!q) return true;
+  const hay = [a.title, a.article_id, a.year, a.journal, a.corporate_author, ...(a.authors || [])]
+    .filter(Boolean).join(" ").toLowerCase();
+  return q.toLowerCase().split(/\s+/).every(t => hay.includes(t));
+}
+
+const SORT_KEYS = {
+  title: a => (a.title || a.article_id).toLowerCase(),
+  status: a => ["problem", "not-extracted", "not-started", "in-progress", "done"].indexOf(articleStatus(a).key),
+  fields: a => a.n_fields ?? -1,
+  progress: a => (a.n_fields ? (a.n_reviewed ?? 0) / a.n_fields : -1),
+  confidence: a => a.confidence ?? -1,
+  run: a => (a.active_run && a.active_run.created_at) || "",
+};
 
 function renderOverview() {
   const body = $("#overview-rows");
   const totals = $("#overview-totals");
   if (!body) return;
   const rows = overviewRowsFor(state.articles);
-
-  if (!rows.length) {
-    body.innerHTML = '<tr class="ov-none"><td colspan="7">No documents match.</td></tr>';
-    if (totals) totals.textContent = "";
-    return;
-  }
+  const query = overviewQuery();
+  const visible = rows
+    .filter(a => matchesText(a, query.q))
+    .filter(a => query.status === "all" || articleStatus(a).key === query.status);
+  const key = SORT_KEYS[query.sort] || SORT_KEYS.title;
+  const dir = query.dir === "desc" ? -1 : 1;
+  visible.sort((x, y) => (key(x) < key(y) ? -1 : key(x) > key(y) ? 1 : 0) * dir);
+  document.querySelectorAll("#overview-table thead th[data-sort]").forEach(th => {
+    if (th.dataset.sort === query.sort) th.dataset.dir = query.dir;
+    else delete th.dataset.dir;
+  });
 
   let sumFields = 0, sumReviewed = 0, complete = 0, unextracted = 0, stale = 0;
-  let html = "";
   for (const a of rows) {
+    const problem = !!a.review_error || !!a.schema_error;
+    if (!problem) { sumFields += a.n_fields ?? 0; sumReviewed += a.n_reviewed ?? 0; }
+    if (a.is_complete && (a.n_fields ?? 0) > 0) complete++;
+    if (!a.active_run_id) unextracted++;
+    if (!problem && a.schema_drift) stale++;
+  }
+
+  let html = "";
+  for (const a of visible) {
     const nFields = a.n_fields ?? 0;
     const nReviewed = a.n_reviewed ?? 0;
-    const nOverridden = a.n_overridden ?? 0;
     // Either kind of "we cannot tell" reads the same in this table: the counts
     // are dashes, not zeros, because zero is a confident claim about the work.
     const problem = !!a.review_error || !!a.schema_error;
@@ -3081,10 +3150,6 @@ function renderOverview() {
     // An article with no active run is listed, never hidden — it is exactly
     // the work someone still has to do.
     const noRun = !a.active_run_id;
-    if (!problem) { sumFields += nFields; sumReviewed += nReviewed; }
-    if (a.is_complete && nFields > 0) complete++;
-    if (noRun) unextracted++;
-    if (drifted) stale++;
 
     const pct = nFields > 0 ? Math.round((nReviewed / nFields) * 100) : 0;
     // Shown beside real progress, never in place of it.
@@ -3093,38 +3158,38 @@ function renderOverview() {
         ` against an earlier version of the schema. Verification still works;` +
         ` editing is disabled until it is re-extracted.">*</abbr>`
       : "";
-    let stateCell;
-    if (a.schema_error) {
-      stateCell = `<span class="ov-state problem" title="${escapeHtml(a.schema_error)}">schema unreadable</span>`;
-    } else if (problem) stateCell = '<span class="ov-state problem">review unreadable</span>';
-    else if (noRun) stateCell = '<span class="ov-state">not extracted</span>';
-    // A run that produced no reviewable field is complete by arithmetic, but
-    // calling it "complete" reads as audited work. Say what actually happened.
-    else if (nFields === 0) stateCell = `<span class="ov-state">nothing extracted</span>${driftMark}`;
-    else if (a.is_complete) stateCell = `<span class="ov-state done">complete</span>${driftMark}`;
-    else stateCell = `<div class="ov-bar"><span style="width:${pct}%"></span></div>${driftMark}`;
-
-    const title = a.title || a.article_id;
+    const st = articleStatus(a);
+    const authors = formatAuthors(a.authors) || a.corporate_author || "";
+    const sub = [authors && `${authors}${a.year ? " " + a.year : ""}`, a.journal].filter(Boolean).join(" · ");
+    const conf = a.confidence;
+    const confCell = conf == null ? "&mdash;"
+      : `<span class="ov-dot" style="background:var(--${conf < 0.6 ? "red" : conf > 0.85 ? "green" : "yellow"})"></span>${conf.toFixed(2)}`;
+    const stTitle = a.schema_error ? ` title="${escapeHtml(a.schema_error)}"` : "";
     html += `<tr data-article="${escapeHtml(a.article_id)}">`;
-    html += `<td class="ov-doc"><div class="ov-title">${escapeHtml(title)}</div>`;
-    html += `<div class="ov-sub">${escapeHtml(a.article_id)}</div></td>`;
+    html += `<td class="ov-doc"><div class="ov-title">${escapeHtml(a.title || a.article_id)}</div><div class="ov-sub">${escapeHtml(sub || a.article_id)}</div></td>`;
+    html += `<td><span class="ov-status ${st.key}"${stTitle}>${escapeHtml(st.label)}</span>${driftMark}</td>`;
     html += `<td class="ov-num">${problem || noRun ? "&mdash;" : nFields}</td>`;
-    html += `<td class="ov-num">${problem || noRun ? "&mdash;" : nReviewed}</td>`;
-    html += `<td class="ov-num">${problem || noRun ? "&mdash;" : nOverridden}</td>`;
-    html += `<td class="ov-prog">${stateCell}</td>`;
+    html += `<td class="ov-prog">${problem || noRun ? "&mdash;" : `<div class="ov-bar" title="${nReviewed}/${nFields} reviewed"><span style="width:${pct}%"></span></div>`}</td>`;
+    html += `<td class="ov-num">${confCell}</td>`;
     html += `<td class="ov-run">${runCellHtml(a)}</td>`;
-    html += `<td class="ov-date">${runDateHtml(a)}</td>`;
     html += `</tr>`;
   }
-  body.innerHTML = html;
+  body.innerHTML = html || '<tr class="ov-none"><td colspan="6">No documents match.</td></tr>';
 
   if (totals) {
-    const pct = sumFields > 0 ? Math.round((sumReviewed / sumFields) * 100) : 0;
-    const bits = [`${rows.length} documents`, `${complete} complete`, `${sumReviewed}/${sumFields} fields reviewed (${pct}%)`];
-    if (unextracted) bits.push(`${unextracted} not extracted`);
-    if (stale) bits.push(`${stale} on an older schema`);
-    totals.textContent = bits.join(" \u00b7 ");
+    const pctAll = sumFields > 0 ? Math.round((sumReviewed / sumFields) * 100) : 0;
+    const inProgress = rows.filter(a => articleStatus(a).key === "in-progress").length;
+    const problems = rows.filter(a => articleStatus(a).key === "problem").length;
+    const stat = (n, label) => `<div><b>${n}</b>${label}</div>`;
+    totals.innerHTML = [stat(rows.length, "documents"), stat(inProgress, "in progress"), stat(complete, "done"),
+      stat(`${pctAll}%`, "fields reviewed"),
+      unextracted ? stat(unextracted, "not extracted") : "", problems ? stat(problems, "problems") : "",
+      stale ? stat(stale, "on an older schema") : ""].join("");
   }
+  const chips = [["all", "All"], ["not-started", "Not started"], ["in-progress", "In progress"], ["done", "Done"]];
+  if (unextracted) chips.push(["not-extracted", "Not extracted"]);
+  $("#ov-chips").innerHTML = chips.map(([k, l]) =>
+    `<button type="button" data-status="${k}" aria-pressed="${query.status === k}">${l}</button>`).join("");
 
   body.querySelectorAll("tr[data-article]").forEach(tr => {
     tr.addEventListener("click", () => routeToDoc(tr.dataset.article));
@@ -3168,9 +3233,16 @@ async function init() {
   wireFilterControls();
   wireSelectedFieldActions();
 
+  $("#ov-search").addEventListener("input", e => setOverviewQuery({ q: e.target.value }));
+  $("#ov-chips").addEventListener("click", e => { const s = e.target.dataset.status; if (s) setOverviewQuery({ status: s }); });
+  $("#overview-table thead").addEventListener("click", e => {
+    const k = e.target.closest("th")?.dataset.sort; if (!k) return;
+    const q = overviewQuery();
+    setOverviewQuery({ sort: k, dir: q.sort === k && q.dir === "asc" ? "desc" : "asc" });
+  });
+  $("#ov-advanced").addEventListener("click", () => $("#btn-filter-toggle").click());
   // Deep links survive reload, and the back button moves between the overview
   // and a document rather than leaving the app.
-  $("#btn-all-documents").addEventListener("click", () => { window.location.hash = "#/"; });
   wireSettings();
   loadSettings();
   window.addEventListener("hashchange", () => { applyRoute(); });
@@ -3672,6 +3744,7 @@ async function loadArticle(id) {
 
   const meta = bibData || state.articles.find(a => a.article_id === id);
   if (meta) renderBibHeader(meta);
+  $("#app-crumb-doc").textContent = shortCitation(meta || { article_id: id });
 
   $("#search-row").style.display = state.leftPane === "pdf" ? "none" : "flex";
   updateNavState();
@@ -3694,10 +3767,16 @@ const PROVENANCE_BADGES = {
 let lastBibMeta = null;
 let bibArticleId = null;
 
+// Author strings come as "Family, Given" or "Given Family".
+function surnameOf(name) {
+  const n = name.trim();
+  return n.includes(",") ? n.split(",")[0].trim() : n.split(/\s+/).pop();
+}
+
 function formatAuthors(authors) {
   if (!authors || !authors.length) return "";
   const families = authors
-    .map(a => typeof a === "string" ? a.trim().split(/\s+/).pop() : (a.family || a.given || ""))
+    .map(a => typeof a === "string" ? surnameOf(a) : (a.family || a.given || ""))
     .filter(Boolean);
   if (families.length === 0) return "";
   if (families.length === 1) return families[0];
@@ -7091,6 +7170,7 @@ async function loadSettings() {
   } catch {
     return;
   }
+  $("#app-project").textContent = settingsState.project_name || "";
   $("#toggle-require-reviewer").checked = !!settingsState.require_reviewer;
   renderBackfillRow();
 }

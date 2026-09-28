@@ -111,7 +111,7 @@ def test_review_header_holds_queue_controls_but_not_identity() -> None:
     """
     html = STATIC_HTML.read_text()
 
-    toolbar = html[html.index('<div class="toolbar">'):html.index('<div class="orcid-modal-backdrop"')]
+    toolbar = html[html.index('<div class="toolbar app-bar">'):html.index('<div class="orcid-modal-backdrop"')]
     assert 'id="review-identity-controls"' not in toolbar
     assert 'id="view-mode-json"' not in toolbar
     # Identity now lives in the settings dialog, after the review header.
@@ -658,10 +658,9 @@ def test_document_route_has_a_marked_exit_to_the_overview() -> None:
     """NN/g emergency exit: leaving a document must not require the back button."""
     html = STATIC_HTML.read_text()
 
-    assert 'id="btn-all-documents"' in html
+    assert 'id="app-crumb"' in html
     assert "All documents" in html
     assert 'href="#/"' in html  # breadcrumb link
-    assert "doc-breadcrumb" in html
 
 
 def test_overview_is_not_also_the_name_of_a_document_view_mode() -> None:
@@ -729,9 +728,9 @@ def test_overview_distinguishes_nothing_extracted_from_complete() -> None:
     """Zero reviewable fields is complete by arithmetic, not by review."""
     html = STATIC_HTML.read_text()
 
-    assert "nothing extracted" in html
-    assert "nFields === 0" in html
-    assert "a.is_complete && nFields > 0" in html  # excluded from the tally too
+    assert "Nothing extracted" in html
+    assert "(a.n_fields ?? 0) === 0" in html
+    assert "a.is_complete && (a.n_fields ?? 0) > 0" in html  # excluded from the tally too
 
 
 def test_settings_dialog_holds_identity_and_project_policy() -> None:
@@ -804,3 +803,10 @@ def test_no_separate_bulk_status_surface_remains() -> None:
     assert "fields cleared" not in html
 
 
+def test_overview_has_status_confidence_and_sticky_header() -> None:
+    html = STATIC_HTML.read_text()
+
+    assert 'data-sort="status"' in html
+    assert 'data-sort="confidence"' in html
+    assert "position:sticky" in html.replace(" ", "")
+    assert "<h1>litschema verify</h1>" not in html
