@@ -51,13 +51,42 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+### Added
+
+- The app's document pane renders prepared text as formatted paragraphs,
+  tables, and figures, and highlights the cited paragraph, table row, or
+  figure; the extracted value is marked when it appears verbatim. Raw lines
+  and the PDF are tabs beside it. If a document fails to render, the pane
+  shows Raw lines.
+- Overview: summary strip, text filter and status chips, Status and Confidence
+  columns, sortable columns, and a header that stays visible while scrolling.
+  The filter, chip, and sort are kept in the URL, so reload keeps them.
+
 ### Changed
 
+- The app is titled "litschema", with a persistent top bar naming the project.
+- The app loads nothing from the network: icons, fonts, and scripts are
+  bundled.
+- In the formatted view, evidence and source labels name the source instead
+  of line numbers; Raw lines still shows them.
+- The toolbar Filter button is hidden on the overview, which has its own
+  "Advanced filter" button.
 - `agent validate-reasoning` and `agent record-extraction` reject reasoning
   entries whose `path` names a field the extraction schema doesn't define.
   The verifier finds evidence by path, so such an entry left its field with no
   visible evidence. Outside a project, `validate-reasoning` checks shape and
   citations as before.
+
+### Fixed
+
+- HTML inside prepared text is sanitized in the formatted view and shown as
+  text in Raw lines (tdj4).
+
+### Known limits
+
+- Prepared text converted with old pymupdf4llm versions splits paragraphs at
+  PDF line breaks, so formatted paragraphs can break mid-sentence. Re-convert
+  the document to fix it (kata 03y2).
 
 ## [0.1.1] — 2026-09-27
 

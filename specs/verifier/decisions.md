@@ -186,3 +186,37 @@ neither alone harms anyone, since no user can currently create an added value.
 already was — the Pending line did not stop the section reading as a contract.
 Also rejected: deleting the requirements outright, which would have lost the
 reasoning above along with them.
+
+## 2026-09-27 — Render prepared text on the server, keep raw lines one click away
+
+**Context:** the document pane showed article.md as raw lines rendered one at a
+time, so tables stayed as pipes, `<br>`-collapsed cells stacked, and converter
+HTML reached the page unsanitized (tdj4).
+
+**Decision:** `/api/rendered` returns blocks with their source line ranges,
+built with markdown-it-py and sanitized with nh3. The pane defaults to this
+view and highlights the cited paragraph, table row, or figure, marking the
+value when it appears verbatim. Raw lines stays as a tab, and the client falls
+back to it when rendering fails. Rendering on the server keeps the line mapping
+and sanitization in pytest and keeps the endpoint usable by any future front
+end.
+
+Line numbers mean nothing in the rendered view, so the evidence box and source
+labels drop them there and name the source count instead. Text keeps a 64ch
+measure for reading; tables and figures take the full pane width because
+converter tables are wide and a scrollbar hides the cited column. Far jumps
+scroll instantly, since a long smooth scroll reads as the app being slow.
+
+The overview keeps "Nothing extracted" for a run with zero fields, and its
+text filter, status chip, and sort go in the URL hash so reload and shared
+links restore the same list.
+
+**Rejected:** block rendering in the browser with marked (line mapping by
+counting newlines, untested) and with markdown-it in JavaScript (untestable in
+the suite).
+
+## 2026-09-27 — Bundle icons and fonts; nothing loads from the network
+
+**Decision:** Lucide icons as a bundled SVG sprite replace Unicode symbols,
+which rendered at inconsistent sizes and as emoji. DM Sans and DM Mono ship as
+woff2. marked and Shoelace are removed.
