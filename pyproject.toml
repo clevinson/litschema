@@ -35,6 +35,8 @@ dependencies = [
     # after comparing output, not by resolution.
     "pymupdf4llm>=1.28.0,<1.29",
     "fastapi[standard]>=0.115",  # `verify` — verification webapp
+    "markdown-it-py>=3.0",       # `verify` — rendered document view
+    "nh3>=0.2.17",               # `verify` — HTML sanitizer for rendered markdown
     "duckdb>=1.0.0",             # `mcp` — explore store
     "mcp>=1.27.0",               # `mcp` — Model Context Protocol server
 ]
