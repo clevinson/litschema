@@ -2262,6 +2262,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
+  .source-evidence-lines:empty { display: none; }
 
   .source-cycle-control {
     display: inline-flex;
@@ -2478,13 +2479,13 @@
   .pane-tabs button { border:0; background:none; padding:4px 10px; border-radius:6px; color:var(--text-secondary); font:inherit; cursor:pointer; }
   .pane-tabs button[aria-selected="true"] { background:var(--bg-overlay); color:var(--text); font-weight:550; }
   .rendered { font-family: Charter, "Iowan Old Style", Georgia, serif; font-size:15px; line-height:1.6; padding:18px 26px; }
-  .rendered .col { max-width:64ch; }
+  .rendered .col > .blk:not(:has(table)):not(figure) { max-width:64ch; }
   .rendered p { margin:0 0 12px; }
   .rendered ul, .rendered ol { margin:0 0 12px; padding-left:1.4em; }
   .rendered h1, .rendered h2 { font-size:20px; line-height:1.3; margin:8px 0 10px; }
   .rendered h3, .rendered h4, .rendered h5, .rendered h6 { font-family:var(--font-sans); font-size:12px; letter-spacing:.07em; text-transform:uppercase; color:var(--text-secondary); margin:18px 0 8px; }
   .rendered table { border-collapse:collapse; font-variant-numeric:tabular-nums; font-size:13px; margin:6px 0 14px; display:block; overflow-x:auto; }
-  .rendered th, .rendered td { border-bottom:1px solid var(--border-subtle); padding:5px 8px; }
+  .rendered th, .rendered td { border-bottom:1px solid var(--border-subtle); padding:5px 8px; vertical-align:top; }
   .rendered thead th { border-bottom:1.5px solid var(--grey); font-family:var(--font-sans); font-size:12px; font-weight:600; }
   .rendered figure { margin:6px 0 12px; }
   .rendered figure img { max-width:100%; border:1px solid var(--border-subtle); border-radius:3px; background:#fff; }
@@ -3869,7 +3870,9 @@ function setLeftPane(pane) {
   }
   renderMarkdown();
   if (state.currentId) renderExtractionPanel();
-  if (state.selectedPath) focusSelectedSource();
+  if (!state.selectedPath) return;
+  if (state.viewMode === "data" && state.dataMode === "json") selectEvidencePath(state.selectedPath);
+  else selectTableRow(state.selectedPath);
 }
 
 function renderMarkdown() {
@@ -5203,7 +5206,7 @@ function renderSourceState(nav) {
   const firstLine = highlightDocRange(start, end, valueForPath(entry.path));
   if (firstLine) {
     firstLine.classList.add("active");
-    firstLine.scrollIntoView({ behavior: "smooth", block: "center" });
+    scrollDocTo(firstLine);
   }
 
   // 2. Highlight matching cell
@@ -5424,7 +5427,8 @@ function updateSourceEvidenceOverlay() {
   const current = ranges[state.selectedSourceIndex];
   if (cycle) cycle.style.display = ranges.length < 2 ? "none" : "inline-flex";
   indexEl.textContent = `${state.selectedSourceIndex + 1}/${ranges.length}`;
-  lines.textContent = current;
+  // Line numbers mean nothing in the rendered view.
+  lines.textContent = docPane() === "rendered" ? "" : current;
   if (prev) prev.disabled = ranges.length < 2;
   if (next) next.disabled = ranges.length < 2;
 }
@@ -5442,7 +5446,7 @@ function focusSelectedSource(index = state.selectedSourceIndex) {
   const firstLine = highlightDocRange(start, end, valueForPath(state.selectedPath));
   if (firstLine) {
     firstLine.classList.add("active");
-    firstLine.scrollIntoView({ behavior: "smooth", block: "center" });
+    scrollDocTo(firstLine);
   }
 }
 
@@ -5569,7 +5573,7 @@ function wireTableEvents(panel) {
           const firsts = lineRanges.map(([s, e2]) => highlightDocRange(s, e2, cited));
           if (lineRanges.length > 0) {
             const fl = firsts[0];
-            if (fl) { fl.classList.add("active"); fl.scrollIntoView({ behavior: "smooth", block: "center" }); }
+            if (fl) { fl.classList.add("active"); scrollDocTo(fl); }
           }
           $("#stat-citations").textContent = `${rowPath}: ${allRangesStr}`;
         }
@@ -5593,7 +5597,7 @@ function wireTableEvents(panel) {
           const firsts = lineRanges.map(([s, e2]) => highlightDocRange(s, e2, cited));
           if (lineRanges.length > 0) {
             const fl = firsts[0];
-            if (fl) { fl.classList.add("active"); fl.scrollIntoView({ behavior: "smooth", block: "center" }); }
+            if (fl) { fl.classList.add("active"); scrollDocTo(fl); }
           }
           $("#stat-citations").textContent = `${link.dataset.path}: ${sourceLine}`;
         }
@@ -5710,7 +5714,7 @@ function wireTableEvents(panel) {
           const firsts = lineRanges.map(([s, e2]) => highlightDocRange(s, e2, cited));
           if (lineRanges.length > 0) {
             const fl = firsts[0];
-            if (fl) { fl.classList.add("active"); fl.scrollIntoView({ behavior: "smooth", block: "center" }); }
+            if (fl) { fl.classList.add("active"); scrollDocTo(fl); }
           }
           $("#stat-citations").textContent = docPane() === "raw" ? `${cellPath}: ${entry.source_lines}` : cellPath;
         }
@@ -5768,7 +5772,7 @@ function selectTableRow(path, rangeIndex) {
 
   if (state.sections.length > 0) {
     state.sections[0].firstLine.classList.add("active");
-    state.sections[0].firstLine.scrollIntoView({ behavior: "smooth", block: "center" });
+    scrollDocTo(state.sections[0].firstLine);
   }
 
   let statusMsg = docPane() === "raw" ? `${path}: ${entry.source_lines}` : path;
@@ -5975,7 +5979,7 @@ function scrollToSection() {
 
   const section = state.sections[state.sectionIndex];
   section.firstLine.classList.add("active");
-  section.firstLine.scrollIntoView({ behavior: "smooth", block: "center" });
+  scrollDocTo(section.firstLine);
 
   const counter = document.querySelector(".section-nav .section-counter");
   if (counter) counter.textContent = `${state.sectionIndex + 1}/${state.sections.length}`;
@@ -5985,6 +5989,15 @@ function scrollToSection() {
   let msg = `${path}: ${state.sectionIndex + 1}/${state.sections.length} (${section.label})`;
   if (entry && entry.reasoning) msg += ` \u2014 ${entry.reasoning}`;
   $("#stat-citations").textContent = msg;
+}
+
+// Jumps farther than one viewport scroll instantly; nearer ones animate.
+function scrollDocTo(el) {
+  const pane = $("#panel-left");
+  const r = el.getBoundingClientRect();
+  const p = pane.getBoundingClientRect();
+  const far = Math.abs(r.top + r.height / 2 - (p.top + p.height / 2)) > pane.clientHeight;
+  el.scrollIntoView({ behavior: far ? "auto" : "smooth", block: "center" });
 }
 
 // Every citation highlight goes through these two, so each pane mode
@@ -6101,7 +6114,7 @@ function activateMatch(index, matches) {
   const lineEl = document.querySelector(`.md-line[data-line="${m.line}"]`);
   if (lineEl) {
     lineEl.classList.add("active");
-    lineEl.scrollIntoView({ behavior: "smooth", block: "center" });
+    scrollDocTo(lineEl);
   }
 }
 
@@ -6209,7 +6222,7 @@ function scrollToSearchMatch(index) {
   const lineEl = document.querySelector(`.md-line[data-line="${lineNum}"]`);
   if (lineEl) {
     lineEl.querySelectorAll(".search-hit").forEach((m) => m.classList.add("current"));
-    lineEl.scrollIntoView({ behavior: "smooth", block: "center" });
+    scrollDocTo(lineEl);
   }
   updateSearchNav();
 }
