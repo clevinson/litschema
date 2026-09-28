@@ -208,93 +208,6 @@
 
   .toolbar-spacer { flex: 1; }
 
-  /* ── Filter row ──
-     Drawer-style panel pulled down from the toolbar. Uses the page bg
-     (subtly different from the toolbar's bg-raised) plus an inset top
-     shadow to read as "below the toolbar fold." Stacks vertically:
-     header (label + help), textarea, footer (count + actions). */
-  .filter-row {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    padding: 10px 16px 12px;
-    background: var(--bg);
-    border-bottom: 1px solid var(--border);
-    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.06),
-                inset 3px 0 0 var(--accent);
-    flex-shrink: 0;
-  }
-  .filter-header {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-  .filter-header-label {
-    font-family: var(--font-sans);
-    font-size: 10px;
-    font-weight: 600;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: var(--text-dim);
-  }
-  .filter-row .filter-input {
-    width: 100%;
-    box-sizing: border-box;
-    font-family: var(--font-mono);
-    font-size: 12px;
-    line-height: 1.55;
-    color: var(--text);
-    background: var(--bg-input);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 8px 10px;
-    min-height: 60px;
-    resize: vertical;
-    outline: none;
-  }
-  .filter-row .filter-input:focus {
-    border-color: var(--accent);
-    box-shadow: 0 0 0 2px rgba(212, 160, 84, 0.18);
-  }
-  .filter-row .filter-input.error { border-color: var(--red, #ef4444); }
-  .filter-row .filter-input.error:focus {
-    box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.18);
-  }
-  .filter-footer {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-  .filter-footer .filter-count {
-    flex: 1;
-    font-family: var(--font-mono);
-    font-size: 11px;
-    color: var(--text-secondary);
-    text-align: left;
-  }
-  .filter-footer .filter-count.loading {
-    color: var(--text-dim);
-    font-style: italic;
-  }
-  .filter-row .filter-count.error { color: var(--red, #ef4444); }
-  .toolbar-btn.filter-toggle.active {
-    color: var(--accent);
-    border-color: var(--accent);
-  }
-  .toolbar-btn.filter-toggle .filter-badge {
-    margin-left: 6px;
-    padding: 1px 6px;
-    border-radius: 8px;
-    font-family: var(--font-mono);
-    font-size: 10px;
-    background: var(--accent);
-    color: var(--bg);
-  }
-
-  /* Inline help indicator next to the header label. Reads as a tooltip
-     cue, not an action button. Standard pointer cursor — clicking
-     opens the modal, so the affordance is "this is clickable," not
-     "hover for a tooltip." */
   .filter-help-btn {
     width: 18px;
     height: 18px;
@@ -318,8 +231,6 @@
     border-color: var(--text-dim);
   }
 
-  /* Primary action — accent fill makes it visually distinct from the
-     close affordance next to it. */
   .filter-primary-btn {
     height: 28px;
     padding: 0 14px;
@@ -336,31 +247,6 @@
   }
   .filter-primary-btn:hover { filter: brightness(1.08); }
   .filter-primary-btn:disabled { opacity: 0.5; cursor: default; }
-
-  /* Icon close — dismisses the filter row and clears any active filter.
-     Sits next to Apply but its icon-only / unfilled styling visually
-     distinguishes it from the primary action. */
-  .filter-close-btn {
-    width: 28px;
-    height: 28px;
-    padding: 0;
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    background: transparent;
-    color: var(--text-dim);
-    font-size: 16px;
-    line-height: 1;
-    cursor: pointer;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-    transition: color 0.1s, border-color 0.1s;
-  }
-  .filter-close-btn:hover {
-    color: var(--text);
-    border-color: var(--text-dim);
-  }
 
   /* ── Filter help modal ── */
   .filter-help-modal {
@@ -890,18 +776,33 @@
   .overview-head { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 20px; }
   .ov-strip { display:flex; gap:24px; flex-basis:100%; margin-bottom:6px; color:var(--text-secondary); font-size:12px; }
   .ov-strip b { display:block; font-size:18px; font-weight:650; color:var(--text); }
-  .ov-search { flex:1; max-width:360px; padding:6px 10px; border:1px solid var(--border); border-radius:var(--radius); background:var(--bg-input); color:var(--text); font:inherit; }
-  .ov-chips { display:flex; gap:6px; }
-  .ov-chips button { border:1px solid var(--border); border-radius:12px; padding:2px 9px; background:var(--bg-raised); color:var(--text-secondary); font:inherit; font-size:12px; cursor:pointer; }
-  .ov-chips button[aria-pressed="true"] { background:var(--text); color:var(--bg); border-color:var(--text); }
-  .ov-advanced-wrap { position:relative; margin-left:auto; display:flex; align-items:center; gap:8px; }
-  .ov-filter-active { display:inline-flex; align-items:center; gap:4px; max-width:32ch; padding:2px 4px 2px 8px; border:1px solid var(--accent); border-radius:var(--radius); font-size:12px; }
+  /* One filter bar: a Search | Expression switch, the input for the active
+     mode, and the applied expression as a chip. */
+  .ov-filterbar { flex:1; min-width:0; max-width:720px; display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
+  .ov-filterbar .view-mode-toggle { height:32px; }
+  .ov-field { flex:1; min-width:220px; display:flex; align-items:center; gap:6px; height:32px; padding:0 4px 0 10px;
+    border:1px solid var(--border); border-radius:var(--radius); background:var(--bg-input); }
+  .ov-field:focus-within { border-color:var(--accent); box-shadow:0 0 0 2px var(--accent-muted); }
+  .ov-field.error, .ov-field.error:focus-within { border-color:var(--red, #ef4444); }
+  .ov-field input { flex:1; min-width:0; border:none; outline:none; background:none; color:var(--text); font:inherit; font-size:13px; padding:0; }
+  .ov-field .filter-input { font-family:var(--font-mono); font-size:12px; }
+  .ov-field .filter-count { font-family:var(--font-mono); font-size:11px; color:var(--text-secondary); white-space:nowrap; }
+  .ov-field .filter-count.loading { color:var(--text-dim); font-style:italic; }
+  .ov-field .filter-primary-btn { height:24px; padding:0 10px; }
+  .ov-filterbar[data-mode="search"] .expr-only, .ov-filterbar[data-mode="expression"] .search-only { display:none; }
+  .ov-filter-msg { flex-basis:100%; margin:-2px 0 0; font-size:12px; color:var(--text-secondary); }
+  .ov-filter-msg.error { color:var(--red, #ef4444); font-family:var(--font-mono); font-size:11px; }
+  .ov-filter-msg:empty { display:none; }
+  .ov-filter-active { display:inline-flex; align-items:center; gap:4px; max-width:32ch; height:26px; padding:0 4px 0 8px; border:1px solid var(--accent); border-radius:var(--radius); background:var(--accent-muted); font-size:12px; }
+  .ov-filter-active[hidden] { display:none; }
   .ov-filter-active code { font-family:var(--font-mono); font-size:11px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .ov-filter-active button { display:inline-flex; padding:2px; border:none; background:none; color:var(--text-secondary); cursor:pointer; }
   .ov-filter-active button:hover { color:var(--text); }
-  /* On the overview the filter row is a popover anchored under its button. */
-  .filter-row.as-popover { position:absolute; top:calc(100% + 6px); right:0; z-index:50; width:min(560px, calc(100vw - 32px));
-    background:var(--bg-raised); border:1px solid var(--border); border-radius:var(--radius); box-shadow:0 8px 24px rgba(0,0,0,0.18); }
+  .ov-chips { display:flex; gap:6px; }
+  .ov-chips button { border:1px solid var(--border); border-radius:12px; padding:2px 9px; background:var(--bg-raised); color:var(--text-secondary); font:inherit; font-size:12px; cursor:pointer; }
+  .ov-chips button[aria-pressed="true"] { background:var(--text); color:var(--bg); border-color:var(--text); }
+  /* Above the sticky app bar and table header. */
+  #filter-help-modal { z-index:1000; }
   .overview-table { border-collapse: collapse; width: 100%; font-size: 13px; }
   .overview-table th {
     text-align: left; font-weight: 600; color: var(--text-dim);
@@ -2587,22 +2488,6 @@
   </div>
 </div>
 
-<div class="filter-row" id="filter-row" style="display:none">
-  <div class="filter-header">
-    <span class="filter-header-label">Add Filter</span>
-    <button class="filter-help-btn" id="btn-filter-help" type="button" aria-label="Filter expression reference" title="Filter expression reference">?</button>
-  </div>
-  <textarea class="filter-input" id="filter-input" rows="2"
-            placeholder='JS expression over article fields. Cmd/Ctrl+Enter to apply.
-e.g. year >= 2024 && study_types.includes("review")'
-            spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off"></textarea>
-  <div class="filter-footer">
-    <span class="filter-count" id="filter-count">&mdash;</span>
-    <button class="filter-primary-btn" id="btn-filter-apply" type="button">Apply</button>
-    <button class="filter-close-btn" id="btn-filter-close" type="button" aria-label="Close filter" title="Close (clears active filter)"><svg class="icon" aria-hidden="true"><use href="/static/icons.svg#x"/></svg></button>
-  </div>
-</div>
-
 <div class="orcid-modal-backdrop" id="filter-help-modal" role="dialog" aria-modal="true" aria-labelledby="filter-help-title">
   <div class="filter-help-modal">
     <header>
@@ -2619,7 +2504,7 @@ e.g. year >= 2024 && study_types.includes("review")'
       <p>
         <strong>Deep extraction fields</strong> (e.g. <code>experimental_setups</code>,
         <code>quantification_approaches</code>, <code>modeling_details</code>) load in the
-        background when this panel opens. Until they finish loading, expressions that
+        background once you start writing an expression. Until they finish loading, expressions that
         reference them will return no matches; the count will update automatically once load completes.
       </p>
       <h4>Summary fields</h4>
@@ -2644,12 +2529,24 @@ e.g. year >= 2024 && study_types.includes("review")'
 <div class="overview-route" id="overview-route">
   <header class="overview-head">
     <div class="ov-strip" id="overview-totals"></div>
-    <input class="ov-search" id="ov-search" type="search" placeholder="Filter by title, author, year, id…">
-    <div class="ov-chips" id="ov-chips"></div>
-    <div class="ov-advanced-wrap" id="ov-advanced-wrap">
-      <button class="toolbar-btn filter-toggle" id="ov-advanced" type="button">Advanced filter<span class="filter-badge" id="filter-badge" style="display:none"></span></button>
-      <span class="ov-filter-active" id="ov-filter-active" style="display:none"><code id="ov-filter-expr"></code><button type="button" id="ov-filter-clear" aria-label="Clear advanced filter" title="Clear advanced filter"></button></span>
+    <div class="ov-filterbar" id="ov-filterbar" data-mode="search">
+      <div class="view-mode-toggle" role="group" aria-label="Filter mode">
+        <button class="view-mode-btn active" id="ov-mode-search" data-filter-mode="search" type="button" aria-pressed="true">Search</button>
+        <button class="view-mode-btn" id="ov-mode-expression" data-filter-mode="expression" type="button" aria-pressed="false">Expression</button>
+      </div>
+      <div class="ov-field" id="ov-field">
+        <input class="ov-search search-only" id="ov-search" type="search" placeholder="Filter by title, author, year, id…" aria-label="Search documents">
+        <input class="filter-input expr-only" id="filter-input" type="text" aria-label="Filter expression"
+               placeholder='year >= 2024 &amp;&amp; study_types.includes("review")'
+               spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off">
+        <span class="filter-count expr-only" id="filter-count" title="Documents matching this expression"></span>
+        <button class="filter-help-btn expr-only" id="btn-filter-help" type="button" aria-label="Filter expression reference" title="Filter expression reference">?</button>
+        <button class="filter-primary-btn expr-only" id="btn-filter-apply" type="button">Apply</button>
+      </div>
+      <span class="ov-filter-active" id="ov-filter-active" hidden><code id="ov-filter-expr"></code><button type="button" id="ov-filter-clear" aria-label="Clear expression filter" title="Clear expression filter"></button></span>
+      <p class="ov-filter-msg" id="filter-msg" aria-live="polite"></p>
     </div>
+    <div class="ov-chips" id="ov-chips"></div>
   </header>
   <div class="overview-table-wrap">
     <table class="overview-table" id="overview-table">
@@ -3001,28 +2898,10 @@ function setToolbarScope(inDocument) {
   // Document-scoped controls are hidden on the overview rather than disabled:
   // there is no document for them to act on, so showing them implies a context
   // the user is not in.
-  for (const sel of ["#article-select", ".article-nav", ".view-mode-toggle"]) {
+  for (const sel of ["#article-select", ".app-bar .article-nav", ".app-bar .view-mode-toggle"]) {
     const el = document.querySelector(sel);
     if (el) el.style.display = inDocument ? "" : "none";
   }
-  placeFilterRow(!inDocument);
-}
-
-// The filter row is a popover under "Advanced filter" on the overview. On a
-// document it only shows for an unconfirmed URL filter, as a drawer under the app bar.
-let filterRowHome = null;
-function placeFilterRow(onOverview) {
-  const row = $("#filter-row");
-  if (!row) return;
-  if (!filterRowHome) filterRowHome = { parent: row.parentNode, next: row.nextSibling };
-  if (onOverview) $("#ov-advanced-wrap").appendChild(row);
-  else filterRowHome.parent.insertBefore(row, filterRowHome.next);
-  row.classList.toggle("as-popover", onOverview);
-  if (!onOverview && !state.filterUnconfirmed) setFilterRowOpen(false);
-}
-
-function setFilterRowOpen(open) {
-  $("#filter-row").style.display = open ? "flex" : "none";
 }
 
 function showOverview() {
@@ -3231,7 +3110,7 @@ async function init() {
     await ensureDeepFields();
   }
   populateDropdown();
-  updateFilterBadge();
+  updateFilterChip();
 
   // Prev/next handlers
   $("#btn-prev").addEventListener("click", () => navigateArticle(-1));
@@ -3255,7 +3134,7 @@ async function init() {
     setOverviewQuery({ sort: k, dir: q.sort === k && q.dir === "asc" ? "desc" : "asc" });
   });
   $("#ov-filter-clear").innerHTML = icon("x");
-  $("#ov-filter-clear").addEventListener("click", () => { clearFilter(); setFilterRowOpen(false); });
+  $("#ov-filter-clear").addEventListener("click", () => clearFilter());
   // Deep links survive reload, and the back button moves between the overview
   // and a document rather than leaving the app.
   wireSettings();
@@ -3296,58 +3175,80 @@ function applyInitialFilterFromUrl() {
   state.filterFn = null;          // inert until confirmed
   state.filterUnconfirmed = true; // and the live preview must not run it either
   $("#filter-input").value = expr;
-  // Opened, not collapsed: an unconfirmed filter is a decision waiting on the
-  // user, and the toolbar badge alone would not tell them one is pending.
-  setFilterRowOpen(true);
-  $("#ov-advanced").classList.add("active");
-  const count = $("#filter-count");
-  if (count) {
-    count.textContent = "From this link — review it, then press Apply to run it.";
-    count.classList.add("error");
-  }
+  // Not persisted: the link chose this mode, the user did not.
+  setFilterMode("expression", { persist: false });
   return false;  // nothing to evaluate, so no deep field load is needed yet
 }
 
-function updateFilterBadge() {
-  const badge = $("#filter-badge");
-  const btn = $("#ov-advanced");
-  const active = $("#ov-filter-active");
+const LINK_FILTER_PROMPT = "From this link. Review it, then press Apply to run it.";
+
+function setFilterMessage(text, isError = false) {
+  const msg = $("#filter-msg");
+  msg.textContent = text || "";
+  msg.classList.toggle("error", !!text && isError);
+}
+
+function updateFilterChip() {
+  const chip = $("#ov-filter-active");
   if (state.filterFn) {
-    badge.textContent = `${state.filteredArticles.length}/${state.articles.length}`;
-    badge.style.display = "inline";
-    btn.classList.add("active");
     $("#ov-filter-expr").textContent = state.filterExpr;
-    active.title = state.filterExpr;
-    active.style.display = "";
+    chip.title = state.filterExpr;
+    chip.hidden = false;
   } else {
-    badge.style.display = "none";
-    btn.classList.remove("active");
-    active.style.display = "none";
+    chip.hidden = true;
   }
 }
 
+const FILTER_MODE_KEY = "litschema.filterMode";
+
+function initialFilterMode() {
+  try { return localStorage.getItem(FILTER_MODE_KEY) === "expression" ? "expression" : "search"; }
+  catch (_) { return "search"; }
+}
+
+function setFilterMode(mode, { persist = true, focus = false } = {}) {
+  const bar = $("#ov-filterbar");
+  bar.dataset.mode = mode;
+  bar.querySelectorAll("[data-filter-mode]").forEach(b => {
+    const on = b.dataset.filterMode === mode;
+    b.classList.toggle("active", on);
+    b.setAttribute("aria-pressed", String(on));
+  });
+  if (persist) {
+    try { localStorage.setItem(FILTER_MODE_KEY, mode); } catch (_) {}
+  }
+  if (mode === "expression") {
+    evaluateFilterPreview($("#filter-input").value);
+  } else {
+    // The chip still shows an applied expression; nothing else of it belongs here.
+    setFilterMessage("");
+    $("#ov-field").classList.remove("error");
+  }
+  if (focus) $(mode === "expression" ? "#filter-input" : "#ov-search").focus();
+}
+
 function evaluateFilterPreview(expr) {
-  const input = $("#filter-input");
+  const field = $("#ov-field");
   const countEl = $("#filter-count");
   if (state.filterUnconfirmed) {
     // Still the expression that arrived in the URL. Evaluating it to show a
-    // match count runs it just as surely as applying it, so reopening the
-    // filter row must not become a way around the confirmation.
-    countEl.textContent = "From this link — review it, then press Apply to run it.";
-    countEl.classList.add("error");
+    // match count runs it just as surely as applying it, so the preview must
+    // not become a way around the confirmation.
+    countEl.textContent = "";
+    setFilterMessage(LINK_FILTER_PROMPT, true);
     return null;
   }
   const { fn, error } = compileFilter(expr);
   if (error) {
-    input.classList.add("error");
-    countEl.classList.add("error");
-    countEl.textContent = "syntax error";
+    field.classList.add("error");
+    countEl.textContent = "";
+    setFilterMessage(error, true);
     return null;
   }
-  input.classList.remove("error");
-  countEl.classList.remove("error");
+  field.classList.remove("error");
+  setFilterMessage("");
   if (!fn) {
-    countEl.textContent = `${state.articles.length}/${state.articles.length}`;
+    countEl.textContent = "";
     return null;
   }
   const matches = state.articles.filter(safeFilterCall(fn));
@@ -3357,7 +3258,11 @@ function evaluateFilterPreview(expr) {
 
 async function applyFilter(expr) {
   const { fn, error } = compileFilter(expr);
-  if (error) return;
+  if (error) {
+    $("#ov-field").classList.add("error");
+    setFilterMessage(error, true);
+    return;
+  }
   // If the user wrote a filter that references deep fields and we haven't
   // loaded them yet, wait. ensureDeepFields() is a no-op once cached.
   await ensureDeepFields();
@@ -3371,8 +3276,9 @@ async function applyFilter(expr) {
     url.searchParams.delete("filter");
   }
   history.replaceState(null, "", url.toString());
+  evaluateFilterPreview($("#filter-input").value);
   populateDropdown();
-  updateFilterBadge();
+  updateFilterChip();
   if (onOverview()) renderOverview();
 }
 
@@ -3422,7 +3328,7 @@ async function ensureDeepFields() {
     state.deepLoading = null;
     setDeepLoadingHint(false);
     // Re-run the live preview now that deep fields are available.
-    evaluateFilterPreview($("#filter-input").value);
+    if ($("#ov-filterbar").dataset.mode === "expression") evaluateFilterPreview($("#filter-input").value);
   })();
   return state.deepLoading;
 }
@@ -3456,14 +3362,14 @@ function clearFilter() {
   state.filterFn = null;
   state.filterUnconfirmed = false;
   $("#filter-input").value = "";
-  $("#filter-input").classList.remove("error");
-  $("#filter-count").classList.remove("error");
-  $("#filter-count").textContent = `${state.articles.length}/${state.articles.length}`;
+  $("#ov-field").classList.remove("error");
+  $("#filter-count").textContent = "";
+  setFilterMessage("");
   const url = new URL(window.location.href);
   url.searchParams.delete("filter");
   history.replaceState(null, "", url.toString());
   populateDropdown();
-  updateFilterBadge();
+  updateFilterChip();
   if (onOverview()) renderOverview();
 }
 
@@ -3472,46 +3378,23 @@ function onOverview() {
 }
 
 function wireFilterControls() {
-  const toggle = $("#ov-advanced");
-  const row = $("#filter-row");
   const input = $("#filter-input");
-  toggle.addEventListener("click", () => {
-    const open = row.style.display !== "none";
-    setFilterRowOpen(!open);
-    if (!open) {
-      input.focus();
-      evaluateFilterPreview(input.value);
-      ensureDeepFields();
-    }
-  });
+  document.querySelectorAll("#ov-filterbar [data-filter-mode]").forEach(b =>
+    b.addEventListener("click", () => setFilterMode(b.dataset.filterMode, { focus: true })));
   let debounce;
   input.addEventListener("input", () => {
     clearTimeout(debounce);
-    debounce = setTimeout(() => evaluateFilterPreview(input.value), 200);
+    debounce = setTimeout(() => evaluateFilterPreview(input.value), 150);
   });
+  // Expressions may reach into full extractions; fetch them once the user starts writing one.
+  input.addEventListener("focus", () => { if (!state.filterUnconfirmed) ensureDeepFields(); });
   input.addEventListener("keydown", (e) => {
-    // Cmd/Ctrl+Enter applies. Plain Enter inserts a newline (textarea default).
-    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+    if (e.key === "Enter") {
       e.preventDefault();
       applyFilter(input.value);
-      setFilterRowOpen(false);
     }
-    if (e.key === "Escape") { clearFilter(); setFilterRowOpen(false); }
   });
-  $("#btn-filter-apply").addEventListener("click", () => {
-    applyFilter(input.value);
-    setFilterRowOpen(false);
-  });
-  $("#btn-filter-close").addEventListener("click", () => {
-    clearFilter();
-    setFilterRowOpen(false);
-  });
-  // A click elsewhere on the overview dismisses the popover without clearing it.
-  document.addEventListener("click", (e) => {
-    if (!row.classList.contains("as-popover") || row.style.display === "none") return;
-    if (e.target.closest("#ov-advanced-wrap, #filter-help-modal")) return;
-    setFilterRowOpen(false);
-  });
+  $("#btn-filter-apply").addEventListener("click", () => applyFilter(input.value));
   $("#btn-filter-help").addEventListener("click", openFilterHelp);
   $("#btn-filter-help-close").addEventListener("click", closeFilterHelp);
   $("#filter-help-modal").addEventListener("click", (e) => {
@@ -3522,15 +3405,8 @@ function wireFilterControls() {
       closeFilterHelp();
     }
   });
-  // Seed the live count display
-  $("#filter-count").textContent = `${state.articles.length}/${state.articles.length}`;
-  if (state.filterUnconfirmed) {
-    const countEl = $("#filter-count");
-    countEl.textContent = "From this link — review it, then press Apply to run it.";
-    countEl.classList.add("error");
-  } else if (state.filterExpr) {
-    evaluateFilterPreview(state.filterExpr);
-  }
+  const mode = state.filterUnconfirmed ? "expression" : initialFilterMode();
+  setFilterMode(mode, { persist: false });
 }
 
 // ── Filter help modal ──
@@ -3596,7 +3472,10 @@ function openFilterHelp() {
       <td class="col-desc">${f.note}</td>
     </tr>`).join("");
   $("#filter-help-examples").textContent = FILTER_HELP_EXAMPLES;
-  $("#filter-help-modal").classList.add("active");
+  const modal = $("#filter-help-modal");
+  // Last child of body, so nothing later in the document can paint over it.
+  document.body.appendChild(modal);
+  modal.classList.add("active");
 }
 
 function closeFilterHelp() {
@@ -6551,7 +6430,7 @@ function mergeArticleSummaries(fresh) {
       // An applied filter is still holding the previous run's matches, and the
       // dropdown and navigation read from that list.
       populateDropdown();
-      updateFilterBadge();
+      updateFilterChip();
     }
   }
 }

@@ -668,12 +668,22 @@ def _js_function(html: str, name: str) -> str:
     return html[start:html.index("\n}\n", start)]
 
 
-def test_advanced_filter_rerenders_the_overview() -> None:
+def test_expression_filter_rerenders_the_overview() -> None:
     """Apply and Clear must redraw the overview, not wait for the next keystroke."""
     html = STATIC_HTML.read_text()
 
     for name in ("applyFilter", "clearFilter"):
         assert "renderOverview()" in _js_function(html, name), name
+
+
+def test_overview_has_one_filter_bar_not_an_advanced_popover() -> None:
+    html = STATIC_HTML.read_text()
+
+    assert 'data-filter-mode="search"' in html
+    assert 'data-filter-mode="expression"' in html
+    for removed in ('id="ov-advanced"', 'id="filter-row"', "as-popover", 'id="filter-badge"',
+                    "Advanced filter", "setFilterRowOpen"):
+        assert removed not in html, removed
 
 
 def test_document_app_bar_does_not_repeat_the_document_name() -> None:

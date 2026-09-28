@@ -69,8 +69,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
   bundled.
 - In the formatted view, evidence and source labels name the source instead
   of line numbers; Raw lines still shows them.
-- The toolbar Filter button is hidden on the overview, which has its own
-  "Advanced filter" button.
+- The overview has one filter bar with Search and Expression modes. The
+  toolbar Filter button and the "Advanced filter" popover are gone.
 - `agent validate-reasoning` and `agent record-extraction` reject reasoning
   entries whose `path` names a field the extraction schema doesn't define.
   The verifier finds evidence by path, so such an entry left its field with no

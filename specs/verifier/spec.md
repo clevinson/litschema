@@ -11,13 +11,16 @@ ORCID lookup. Its read API is the `/api/...` surface named under API ownership
 below.
 
 A top bar titled "litschema" names the project on every route. On the overview
-it hides the document-only controls (article picker, prev/next, Audit/Data, and
-the toolbar Filter button, which the overview's "Advanced filter" replaces).
-The overview has a summary strip, a text filter, status chips, sortable
+it hides the document-only controls (article picker, prev/next, Audit/Data).
+The overview has a summary strip, one filter bar, status chips, sortable
 columns including Status and Confidence, and a header that stays visible while
 scrolling. The text filter, status chip, and sort live in the URL hash
-(`#/?q=…&status=…&sort=…&dir=…`), so reload and shared links keep them. An
-article whose run extracted no fields reads "Nothing extracted".
+(`#/?q=…&status=…&sort=…&dir=…`), so reload and shared links keep them. The
+filter bar switches between Search (the text filter) and Expression (the
+`?filter=` queue expression, with a live match count; Enter or Apply runs it).
+An applied expression shows as a chip in both modes and combines with the text
+filter; it also governs prev/next on a document. Document pages have no filter
+UI. An article whose run extracted no fields reads "Nothing extracted".
 
 Live today: both routes, the dataset overview with progress aggregation, the
 document review against an explicit active run, deep links that survive reload
