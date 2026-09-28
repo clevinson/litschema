@@ -2287,11 +2287,23 @@
     line-height: 1.45;
   }
 
-  .evidence-verdict {
+  .evidence-grade {
     font-size: 11px;
     color: var(--text-dim);
   }
-  .evidence-verdict b { font-weight: 600; }
+  .evidence-grade b { font-weight: 600; }
+  .evidence-grade-issue { margin-top: 1px; }
+  .evidence-basis {
+    margin-top: 4px;
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+  .evidence-basis b { font-weight: 600; color: var(--text-secondary); }
+  .evidence-basis-note {
+    margin-top: 1px;
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
   .evidence-extraction {
     margin-top: 4px;
     font-size: 11px;
@@ -2308,8 +2320,7 @@
     color: var(--text-secondary);
   }
 
-  /* Grader verdicts: nothing for supported, amber partial, red unsupported,
-     grey can't verify. */
+  /* Grader bands: nothing for high, amber check, red low, grey can't verify. */
   .grade-mark {
     display: block;
     margin-top: 2px;
@@ -2318,10 +2329,10 @@
     font-weight: 600;
     white-space: nowrap;
   }
-  .grade-verdict.grade-partial { color: var(--accent); }
-  .grade-verdict.grade-unsupported { color: var(--red); }
-  .grade-verdict.grade-cannot_verify { color: var(--text-dim); }
-  .grade-verdict.grade-supported { color: var(--green); }
+  .grade-band.band-check { color: var(--accent); }
+  .grade-band.band-low { color: var(--red); }
+  .grade-band.band-cannot_verify { color: var(--text-dim); }
+  .grade-band.band-high { color: var(--green); }
   .review-order-toggle[hidden] { display: none; }
   .panel-header.data-active .review-order-toggle { display: none; }
   .review-group-count { color: var(--text-dim); font-weight: 400; margin-left: 6px; }
@@ -2611,7 +2622,7 @@
           <th class="ov-num" data-sort="fields">Fields</th>
           <th class="ov-prog" data-sort="progress">Progress</th>
           <th class="ov-num" data-sort="confidence">Confidence</th>
-          <th class="ov-num" data-sort="flags" title="Unsupported and partial fields in the current grade">Flags</th>
+          <th class="ov-num" data-sort="flags" title="Check, low, and can't-verify fields in the current grade">Flags</th>
           <th class="ov-run" data-sort="run">Extracted by</th>
         </tr>
       </thead>
@@ -2711,7 +2722,7 @@
           </div>
           <div class="view-mode-toggle review-order-toggle" id="review-order-toggle" hidden>
             <button class="view-mode-btn" id="btn-review-order" type="button" aria-pressed="false"
-                    title="Unsupported, partial, and can't-verify fields first, then the extractor's low-confidence fields, then the rest">Flagged first</button>
+                    title="Low, check, and can't-verify fields first, then inferred or assumed values, then the rest">Flagged first</button>
           </div>
           <div class="view-mode-toggle" role="group" aria-label="Extraction view mode">
             <button class="view-mode-btn active" id="view-mode-review" data-view-mode="review" type="button">Audit</button>
@@ -3030,7 +3041,7 @@ function flagsCellHtml(a) {
   if (a.grade_error) return `<span class="ov-flags" title="${escapeHtml(a.grade_error)}" style="color:var(--red)">?</span>`;
   const g = a.grade;
   if (!g) return "&mdash;";
-  const title = [`${g.unsupported} unsupported, ${g.partial} partial`,
+  const title = [`${g.low ?? 0} low, ${g.check ?? 0} check`,
     g.cannot_verify ? `${g.cannot_verify} can't verify` : "", g.model && `graded by ${g.model}`].filter(Boolean).join("\n");
   return `<span class="ov-flags ${g.flags ? "has-flags" : "clean"}" title="${escapeHtml(title)}">${g.flags}</span>`;
 }
@@ -4201,27 +4212,26 @@ function setReviewOrder(order) {
   renderExtractionPanel();
 }
 
-const LOW_CONFIDENCE = 0.85;
+const UNSTATED_BASES = new Set(["inferred", "assumed"]);
 
-// Review order: unsupported, partial, can't verify, the extractor's
-// low-confidence fields (lowest first), then the rest in document order.
+// Review order: low, check, can't verify, values the extractor inferred or
+// assumed, then the rest in document order.
 function reviewOrderGroups() {
   const groups = [
-    { key: "unsupported", label: "Unsupported", paths: [] },
-    { key: "partial", label: "Partial", paths: [] },
+    { key: "low", label: "Low", paths: [] },
+    { key: "check", label: "Check", paths: [] },
     { key: "cannot_verify", label: "Can't verify", paths: [] },
-    { key: "low-confidence", label: "Low extractor confidence", paths: [] },
+    { key: "unstated", label: "Inferred or assumed", paths: [] },
     { key: "rest", label: "Everything else", paths: [] },
   ];
   const byKey = Object.fromEntries(groups.map(g => [g.key, g]));
   for (const path of collectLeafPaths(state.extraction)) {
-    const verdict = gradeFor(path)?.verdict;
-    const conf = reasoningFor(path)?.confidence;
-    if (verdict && verdict !== "supported" && byKey[verdict]) byKey[verdict].paths.push(path);
-    else if (typeof conf === "number" && conf < LOW_CONFIDENCE) byKey["low-confidence"].paths.push(path);
+    const band = gradeFor(path)?.band;
+    const basis = reasoningFor(path)?.basis;
+    if (band && FLAG_BANDS.has(band)) byKey[band].paths.push(path);
+    else if (UNSTATED_BASES.has(basis)) byKey.unstated.paths.push(path);
     else byKey.rest.paths.push(path);
   }
-  byKey["low-confidence"].paths.sort((a, b) => reasoningFor(a).confidence - reasoningFor(b).confidence);
   return groups.filter(g => g.paths.length);
 }
 
@@ -5304,32 +5314,45 @@ function gradeFor(path) {
   }
 }
 
-const VERDICT_LABELS = {
-  supported: "supported",
-  partial: "partial",
-  unsupported: "unsupported",
-  cannot_verify: "can't verify",
+// Bands are derived by the server (`band` on each grade field) from the
+// thresholds in litschema.grading.BANDS.
+const FLAG_BANDS = new Set(["low", "check", "cannot_verify"]);
+const BAND_LABELS = { high: "High", check: "Check", low: "Low", cannot_verify: "Can't verify" };
+const BASIS_LABELS = {
+  stated: "Stated",
+  converted: "Converted",
+  normalized: "Normalized",
+  calculated: "Calculated",
+  inferred: "Inferred",
+  assumed: "Assumed",
 };
 
-// Longer wording for the evidence box and marker tooltips.
-const VERDICT_PHRASES = {
-  partial: "Partially supported",
-  unsupported: "Not supported",
-  cannot_verify: "Can't verify",
-};
-
-// A grade that should replace the extractor's note: anything but supported.
-function flaggedGradeFor(path) {
-  const grade = gradeFor(path);
-  return grade && VERDICT_PHRASES[grade.verdict] ? grade : null;
+// "Check · 72%"; version-1 grades and can't-verify fields show no number,
+// since only a version-2 confidence is the probability the value is right.
+function gradeHeadline(grade) {
+  const label = BAND_LABELS[grade.band] || grade.band;
+  const pct = !("verdict" in grade) && typeof grade.confidence === "number"
+    ? ` \u00b7 ${Math.round(grade.confidence * 100)}%` : "";
+  return label + pct;
 }
 
-// Supported shows nothing; the other verdicts get a small colored label.
+// The grade's one-line problem; version-1 grades kept theirs in `reasoning`.
+function gradeIssue(grade) {
+  return grade.issue || ("verdict" in grade && grade.band !== "high" ? grade.reasoning : "") || "";
+}
+
+function flaggedGradeFor(path) {
+  const grade = gradeFor(path);
+  return grade && FLAG_BANDS.has(grade.band) ? grade : null;
+}
+
+// High shows nothing; the other bands get a small colored label.
 function gradeMarkHtml(path) {
   const grade = flaggedGradeFor(path);
   if (!grade) return "";
-  const title = VERDICT_PHRASES[grade.verdict] + (grade.reasoning ? `: ${grade.reasoning}` : "");
-  return `<span class="grade-mark grade-verdict grade-${grade.verdict}" data-verdict="${grade.verdict}" title="${escapeHtml(title)}">${VERDICT_LABELS[grade.verdict]}</span>`;
+  const issue = gradeIssue(grade);
+  const title = gradeHeadline(grade) + (issue ? `: ${issue}` : "");
+  return `<span class="grade-mark grade-band band-${grade.band}" data-band="${grade.band}" title="${escapeHtml(title)}">${escapeHtml(BAND_LABELS[grade.band].toLowerCase())}</span>`;
 }
 
 // Mirrors `effective_extraction` in reviews.py. The two must agree exactly:
@@ -5443,7 +5466,7 @@ function buildSourceMap(rowPath) {
             map.push({
               range: range[0],
               path: path,
-              reasoning: entry.reasoning || null,
+              reasoning: extractorNote(entry) || null,
               label: trimmed
             });
           }
@@ -5599,9 +5622,13 @@ function selectedVerifyExtra(path) {
   return {};
 }
 
+// The extractor's one-line account: `note` in new runs, `reasoning` in old ones.
+function extractorNote(entry) {
+  return entry ? entry.note || entry.reasoning || "" : "";
+}
+
 function selectedReasoning(path) {
-  const entry = reasoningFor(path);
-  return entry && entry.reasoning ? entry.reasoning : "";
+  return extractorNote(reasoningFor(path));
 }
 
 function selectedConfidence(path) {
@@ -5711,14 +5738,9 @@ function updateSourceEvidenceOverlay() {
     valueText.title = valueDisplay.title;
     valueBox.style.display = "inline-flex";
   }
-  const reasoningText = selectedReasoning(state.selectedPath);
-  const grade = flaggedGradeFor(state.selectedPath);
-  if (reasoning) {
-    if (grade) reasoning.innerHTML = flaggedEvidenceHtml(grade, reasoningText);
-    else reasoning.textContent = reasoningText || "No reasoning note for this field.";
-  }
+  if (reasoning) reasoning.innerHTML = evidenceNoteHtml(state.selectedPath);
   if (confidenceEl) {
-    // A graded field shows its verdict instead of a score.
+    // Only an ungraded old run shows the extractor's own score.
     const conf = gradeFor(state.selectedPath) ? null : selectedConfidence(state.selectedPath);
     if (conf === null) {
       confidenceEl.style.display = "none";
@@ -5750,16 +5772,35 @@ function updateSourceEvidenceOverlay() {
   if (next) next.disabled = ranges.length < 2;
 }
 
-// The check's reason leads; the extractor's note sits behind a disclosure.
-function flaggedEvidenceHtml(grade, extractorNote) {
-  const scope = grade.inheritedFrom ? ` \u00b7 for ${pathLabelParts(grade.inheritedFrom).join(" / ")}` : "";
-  const note = extractorNote
-    ? `<details class="evidence-extraction"><summary>How it was extracted</summary>` +
-      `<div class="evidence-extraction-note">${escapeHtml(extractorNote)}</div></details>`
-    : "";
-  return `<div class="evidence-verdict"><b class="grade-verdict grade-${grade.verdict}" data-verdict="${grade.verdict}">` +
-    `${VERDICT_PHRASES[grade.verdict]}</b>${escapeHtml(scope)}</div>` +
-    `<div class="evidence-grade-reason">${escapeHtml(grade.reasoning || "")}</div>` + note;
+// The grader's band, confidence, and issue lead; then how the extractor got
+// the value. Old runs have no basis, so their free-text note sits behind a
+// disclosure when a grade is shown.
+function evidenceNoteHtml(path) {
+  const grade = gradeFor(path);
+  const entry = reasoningFor(path);
+  let html = "";
+  if (grade) {
+    const scope = grade.inheritedFrom ? ` \u00b7 for ${pathLabelParts(grade.inheritedFrom).join(" / ")}` : "";
+    const issue = gradeIssue(grade);
+    html += `<div class="evidence-grade"><b class="grade-band band-${grade.band}" data-band="${grade.band}">` +
+      `${escapeHtml(gradeHeadline(grade))}</b>${escapeHtml(scope)}</div>`;
+    if (issue) html += `<div class="evidence-grade-issue">${escapeHtml(issue)}</div>`;
+  }
+  if (entry && entry.basis) {
+    html += `<div class="evidence-basis" data-basis="${escapeHtml(entry.basis)}">How it was extracted: ` +
+      `<b>${escapeHtml(BASIS_LABELS[entry.basis] || entry.basis)}</b></div>`;
+    if (entry.basis !== "stated" && entry.note) {
+      html += `<div class="evidence-basis-note">${escapeHtml(entry.note)}</div>`;
+    }
+    return html;
+  }
+  const note = extractorNote(entry);
+  if (!grade) return escapeHtml(note || "No reasoning note for this field.");
+  if (note) {
+    html += `<details class="evidence-extraction"><summary>How it was extracted</summary>` +
+      `<div class="evidence-extraction-note">${escapeHtml(note)}</div></details>`;
+  }
+  return html;
 }
 
 function focusSelectedSource(index = state.selectedSourceIndex) {
@@ -6105,7 +6146,7 @@ function selectTableRow(path, rangeIndex) {
   }
 
   let statusMsg = docPane() === "raw" ? `${path}: ${entry.source_lines}` : path;
-  if (entry.reasoning) statusMsg += ` \u2014 ${entry.reasoning}`;
+  if (extractorNote(entry)) statusMsg += ` \u2014 ${extractorNote(entry)}`;
   $("#stat-citations").textContent = statusMsg;
 }
 
@@ -6269,15 +6310,15 @@ function selectLeaf(el) {
     }
   }
 
-  if (entry.reasoning) {
+  if (extractorNote(entry)) {
     const tooltip = document.createElement("div");
     tooltip.className = "reasoning-tooltip";
-    tooltip.textContent = entry.reasoning;
+    tooltip.textContent = extractorNote(entry);
     el.after(tooltip);
   }
 
   let statusMsg = docPane() === "raw" ? `${path}: ${entry.source_lines}` : path;
-  if (entry.reasoning) statusMsg += ` \u2014 ${entry.reasoning}`;
+  if (extractorNote(entry)) statusMsg += ` \u2014 ${extractorNote(entry)}`;
   $("#stat-citations").textContent = statusMsg;
 
   if (state.sections.length > 1) {
@@ -6316,7 +6357,7 @@ function scrollToSection() {
   const path = state.selectedPath;
   const entry = reasoningFor(path);
   let msg = `${path}: ${state.sectionIndex + 1}/${state.sections.length} (${section.label})`;
-  if (entry && entry.reasoning) msg += ` \u2014 ${entry.reasoning}`;
+  if (extractorNote(entry)) msg += ` \u2014 ${extractorNote(entry)}`;
   $("#stat-citations").textContent = msg;
 }
 

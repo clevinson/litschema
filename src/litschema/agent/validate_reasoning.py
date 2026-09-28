@@ -59,6 +59,18 @@ def check_paths(data: dict, extraction: ResolvedExtractionSchema) -> list[str]:
     return problems
 
 
+def check_notes(data: dict) -> list[str]:
+    """A value that was not stated needs a note saying how it was derived."""
+    problems: list[str] = []
+    for entry in data.get("fields") or []:
+        if not isinstance(entry, dict):
+            continue
+        basis = entry.get("basis")
+        if basis and basis != "stated" and not str(entry.get("note") or "").strip():
+            problems.append(f"{entry.get('path', '<no path>')}: basis {basis} needs a note")
+    return problems
+
+
 def check_citations(data: dict, prepared_text: Path) -> list[str]:
     """Every citation must name lines that exist and carry content.
 
@@ -122,6 +134,8 @@ def validate_file(
 ) -> tuple[bool, list[str]]:
     data = json.loads(filepath.read_text())
     errors = validate_linkml_data(data, schema_path, root_class)
+    if not errors:
+        errors = check_notes(data)
     if not errors and extraction is not None:
         errors = check_paths(data, extraction)
     if not errors and check_source_lines:

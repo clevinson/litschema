@@ -333,37 +333,40 @@ presumed local and its anonymous reviews the reviewer's own; inside one they
 may be a collaborator's, and the dialog says so with a count before proceeding,
 because the file cannot distinguish afterwards.
 
-## Grader verdicts
+## Grader bands
 
 When the active run has a current grade (`specs/grading/spec.md`), the verifier
 shows it beside the extractor's evidence. A field's grade is its own entry,
-else the nearest ancestor's, the same resolution evidence uses.
+else the nearest ancestor's, the same resolution evidence uses. The band comes
+from the server (`band` on each field of `/api/grades`), so the app and
+`litschema grade` use the same thresholds.
 
-- Audit table: the Source cell carries a small verdict label. Supported shows
-  nothing; partial is amber (`--accent`), unsupported red (`--red`), can't
-  verify grey (`--text-dim`). A table row graded as a whole shows the label
-  once, in its own Source cell.
-- Evidence box: one reason and one signal per field. A supported or ungraded
-  field shows the extractor's note, as before grading. A partial, unsupported,
-  or can't-verify field shows the verdict ("Partially supported", "Not
-  supported", "Can't verify") and the check's reasoning, naming the ancestor
-  when the grade is inherited; the extractor's note sits in a collapsed "How it
-  was extracted" disclosure. A graded field shows no confidence score from
-  either model; an ungraded field keeps the extractor's confidence. The grade
-  record keeps the grader's confidence, but the verifier does not render it.
+- Audit table: the Source cell carries a small band label. High shows nothing;
+  check is amber (`--accent`), low red (`--red`), can't verify grey
+  (`--text-dim`). A table row graded as a whole shows the label once, in its
+  own Source cell.
+- Evidence box, graded field: the band and the grader's confidence as a
+  percentage ("Check · 72%"), naming the ancestor when the grade is inherited,
+  then the grader's `issue` if any. Can't verify and version-1 grades show no
+  percentage.
+- Evidence box, extractor side: "How it was extracted: <basis>" and, when the
+  basis is not stated, the extractor's `note`, shown open. Old runs without a
+  basis show their free-text reasoning plainly when ungraded and behind a
+  collapsed "How it was extracted" disclosure when graded. Only an ungraded old
+  run shows the extractor's own confidence score.
 - The field-level UI never names the grader model. When a current grade
   exists, the run chip's tooltip reads "Extracted by <model> · checked by
   <grader model>".
 - Review order: a "Flagged first" toggle in the review pane's header, next to
   Audit/Data, shown only when a grade exists and on by default then. It lists
-  every leaf in groups (unsupported, partial, can't verify, the extractor's
-  fields with confidence below 0.85 lowest first, then the rest in document
-  order), each row labelled with its full path. Previous/Next follow that
-  order. Turning it off restores the sectioned table.
-- Overview: a sortable Flags column counts unsupported plus partial fields in
-  the current grade, with a dash for ungraded documents and `?` when the grade
-  file is unreadable. A "Flagged" chip, shown when any document has flags,
-  keeps only those documents and lives in the hash like the other chips.
+  every leaf in groups (low, check, can't verify, values whose basis is
+  inferred or assumed, then the rest in document order), each row labelled
+  with its full path. Previous/Next follow that order. Turning it off restores
+  the sectioned table.
+- Overview: a sortable Flags column counts check, low, and can't-verify fields
+  in the current grade, with a dash for ungraded documents and `?` when the
+  grade file is unreadable. A "Flagged" chip, shown when any document has
+  flags, keeps only those documents and lives in the hash like the other chips.
 
 ## Extractor explanations
 
@@ -390,11 +393,12 @@ failure is 422, and the client falls back to Raw lines.
 from the article's `figures/` folder. Anything else, including a path, is 404.
 
 `GET /api/grades/{id}` returns `{run_id, grade, stale}` for the active run, or
-the run named by `run_id`: `grade` is the current grade record or `null`, and
+the run named by `run_id`: `grade` is the current grade record, each field with
+a derived `band`, or `null`, and
 `stale` lists the ids of newer grades ignored because their inputs changed. No
 run is 404; a corrupt grade file is 409. `/api/articles` carries a `grade`
-summary per article (`grade_id`, `created_at`, `model`, `flags`, `unsupported`,
-`partial`, `cannot_verify`) or `null`, and `grade_error` when the grade file is
+summary per article (`grade_id`, `created_at`, `model`, `flags`, `low`,
+`check`, `cannot_verify`) or `null`, and `grade_error` when the grade file is
 unreadable; a bad grade never fails the listing.
 
 `/api/settings` includes `project_name`, the project directory's name, for the
@@ -445,13 +449,13 @@ Implementation coverage must replace brittle source-substring assertions with:
 - backfill touching only unattributed entries, and warning inside a repository;
 - the extractor explanation surfacing behind its own affordance, including for
   a run that extracted nothing;
-- grader verdict markers (none for supported, inherited by a row's cells), the
-  evidence box showing the extractor's note for supported fields and the
-  verdict and check reasoning for flagged ones with the note behind a closed
-  disclosure, no grader model in the evidence box, the run chip tooltip naming
-  the grader model, the flagged-first
-  toggle defaulting on and reordering rows both ways, and the Flags column
-  count, sort, and chip;
+- grader band markers (none for high, inherited by a row's cells), the
+  evidence box showing band, percentage, and issue, the extractor's basis and
+  open note, no percentage for can't verify, no grader model in the evidence
+  box, the run chip tooltip naming the grader model, the flagged-first toggle
+  defaulting on with its group order and reordering rows both ways, the Flags
+  column count, sort, and chip, and a version-1 grade rendering as a band with
+  the old extractor note behind a closed disclosure;
 - silence from a bulk action that succeeds, and a stated failure when one does
   not;
 - clear-arming suppressed for a single verification's own control and not for

@@ -2,9 +2,10 @@
 
   data/papers/<id>/extraction-runs/<run-id>/grades/<grade-id>.json
 
-A grader sees each reasoning entry's value, the extractor's note, the slot's
-description, and the cited lines, and returns a verdict, a confidence, and one
-line of reasoning per field (`specs/grading/spec.md`). Grades sit beside the
+A grader sees each reasoning entry's value, the extractor's basis and note, the
+slot's description, and the cited lines, and returns per field the probability
+that the value is correct and supported, plus a one-line issue when it is not
+clearly so (`specs/grading/spec.md`). Grades sit beside the
 immutable run like reviews do; each pass adds a file and none is overwritten.
 """
 
@@ -26,11 +27,22 @@ from .review_paths import InvalidReviewPathError, canonical_review_path, parse_p
 from .runs import RunFiles, new_run_id
 from .version import installed_version
 
-GRADE_VERSION = 1
+GRADE_VERSION = 2
+READABLE_VERSIONS = (1, 2)
 GRADES_DIRNAME = "grades"
 DEFAULT_MODEL = "claude-sonnet-5"
-VERDICTS = ("supported", "partial", "unsupported", "cannot_verify")
-FLAG_VERDICTS = ("unsupported", "partial")
+
+#: Lower bounds of the confidence bands; below `check` is `low`.
+BANDS = {"high": 0.9, "check": 0.6}
+BAND_NAMES = ("high", "check", "low", "cannot_verify")
+FLAG_BANDS = ("check", "low", "cannot_verify")
+#: Version-1 grades stored a verdict; this is how each one displays.
+VERDICT_BANDS = {
+    "supported": "high",
+    "partial": "check",
+    "unsupported": "low",
+    "cannot_verify": "cannot_verify",
+}
 STRIPPED_ENV = ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL")
 CLAUDE_TIMEOUT_S = 1800
 
@@ -42,28 +54,31 @@ _CITE_RE = re.compile(r"L(\d+)(?:\s*-\s*L?(\d+))?", re.IGNORECASE)
 _FIGURE_RE = re.compile(r"!\[[^\]]*\]\((figures/[^)\s]+)\)")
 
 RUBRIC = """You are grading an extraction from a scientific paper. You did not write it.
-For each field below you get: the field's path and meaning, the extracted value, the
-extractor's note on how it got the value, and the cited lines of the paper
-(line-numbered; cited lines are marked with > and shown whole, and up to two lines either
-side are included for context).
+For each field below you get: the field's path and meaning, the extracted value, how the
+extractor says it got the value (its basis, and a note when the value is not stated
+directly), and the cited lines of the paper (line-numbered; cited lines are marked with >
+and shown whole, and up to two lines either side are included for context).
 
-Judge only whether the cited evidence supports the value:
-- "supported": the evidence states the value, or it follows directly. Routine unit
-  conversions (degrees-minutes to decimal degrees, cm to m) count as supported.
-- "partial": the value is plausible but needs an inference, a combination, or outside
-  knowledge; or only part of the value is supported. If your reasoning relies on
-  "implies", "suggests", "likely", or knowledge that is not in the evidence, the verdict
-  is "partial", not "supported".
-- "unsupported": the evidence does not back the value, contradicts it, or is about a
-  different site, setup, sample, or treatment than the field describes.
-- "cannot_verify": the deciding evidence is a figure you cannot read, or there is no
-  citation.
+For each field give a confidence: the probability (0-1) that the extracted value is
+correct as stated AND supported by its cited lines. It is not your confidence in a
+verdict. The basis and note tell you what to check; they are claims, not evidence.
+- A value stated plainly in the evidence: about 0.95 or higher.
+- A routine conversion (units, degrees-minutes to decimal degrees) or a clear mapping
+  onto a schema enum or list stays high if it is correct.
+- An inference, a choice among alternatives, or knowledge that is not in the evidence
+  lowers the confidence. If your reasoning relies on "implies", "suggests", or "likely",
+  the value is not clearly supported.
+- Evidence about a different site, setup, sample, or treatment than the field describes,
+  or evidence that contradicts the value: low.
+- Use null only when it cannot be judged: the deciding evidence is a figure you cannot
+  read, or there is no citation.
+
+When the confidence is below 0.9 or null, add an issue: one short line saying what is
+weak, naming what in the evidence decides it. Omit the issue otherwise.
 
 Figure lines appear as [figure image: PATH]. When one is cited, open the image at PATH
 with the Read tool and judge from it.
-Do not use outside knowledge of the paper. Give a confidence (0-1) that your verdict is
-right, and one short sentence of reasoning that names what in the evidence decides it.
-Return one grade per field id."""
+Do not use outside knowledge of the paper. Return one grade per field id."""
 
 RUBRIC_SHA256 = "sha256:" + hashlib.sha256(RUBRIC.encode()).hexdigest()
 
@@ -76,11 +91,10 @@ GRADE_SCHEMA = {
                 "type": "object",
                 "properties": {
                     "id": {"type": "integer"},
-                    "verdict": {"enum": list(VERDICTS)},
-                    "confidence": {"type": "number", "minimum": 0, "maximum": 1},
-                    "reasoning": {"type": "string"},
+                    "confidence": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+                    "issue": {"type": "string"},
                 },
-                "required": ["id", "verdict", "confidence", "reasoning"],
+                "required": ["id", "confidence"],
                 "additionalProperties": False,
             },
         }
@@ -100,6 +114,52 @@ class ClaudeNotFoundError(GradeError):
 
 class GradeCorruptError(Exception):
     """A stored grade file is unreadable or not a grade."""
+
+
+def band_for(confidence: float | None, bands: dict | None = None) -> str:
+    """The display band for a grader confidence; null is `cannot_verify`."""
+    if confidence is None:
+        return "cannot_verify"
+    bands = bands or BANDS
+    if confidence >= bands["high"]:
+        return "high"
+    if confidence >= bands["check"]:
+        return "check"
+    return "low"
+
+
+def field_band(field: dict, bands: dict | None = None) -> str | None:
+    """A stored grade field's band, mapping version-1 verdicts."""
+    if "verdict" in field:
+        return VERDICT_BANDS.get(field["verdict"])
+    confidence = field.get("confidence")
+    if confidence is not None and not isinstance(confidence, (int, float)):
+        return None
+    return band_for(confidence, bands)
+
+
+def grade_bands(grade: dict) -> dict:
+    """The thresholds a grade was stored with, else the current ones."""
+    bands = (grade.get("grader") or {}).get("bands")
+    if isinstance(bands, dict) and all(isinstance(bands.get(k), (int, float)) for k in BANDS):
+        return bands
+    return BANDS
+
+
+def with_bands(grade: dict) -> dict:
+    """A copy of the grade with each field's derived `band` added."""
+    bands = grade_bands(grade)
+    fields = [
+        {**f, "band": field_band(f, bands)} if isinstance(f, dict) else f
+        for f in grade.get("fields") or []
+    ]
+    return {**grade, "fields": fields}
+
+
+def band_counts(grade: dict) -> dict[str, int]:
+    bands = grade_bands(grade)
+    found = [field_band(f, bands) for f in grade.get("fields") or [] if isinstance(f, dict)]
+    return {name: found.count(name) for name in BAND_NAMES}
 
 
 # ── evidence ────────────────────────────────────────────────────────────────
@@ -193,6 +253,7 @@ class GradeTarget:
     value: object
     note: str | None
     source_lines: str | None
+    basis: str | None = None
 
 
 def grade_targets(run: RunFiles) -> list[GradeTarget]:
@@ -212,8 +273,9 @@ def grade_targets(run: RunFiles) -> list[GradeTarget]:
             GradeTarget(
                 path=path,
                 value=value,
-                note=entry.get("reasoning"),
+                note=entry.get("note") or entry.get("reasoning"),
                 source_lines=entry.get("source_lines"),
+                basis=entry.get("basis"),
             )
         )
     return targets
@@ -232,6 +294,7 @@ def build_prompt(
             f"### Field {index}: {target.path}",
             f"Meaning: {meaning or '(no description)'}",
             f"Value: {json.dumps(target.value, ensure_ascii=False)}",
+            f"Basis: {target.basis or '(not given)'}",
             f"Extractor's note: {target.note or '(none)'}",
             "Evidence:",
             build_evidence(lines, target.source_lines, article_dir),
@@ -350,10 +413,12 @@ def parse_grades(result: dict, targets: list[GradeTarget]) -> tuple[list[dict], 
         index = grade.get("id")
         if not isinstance(index, int) or isinstance(index, bool) or not 0 <= index < len(targets):
             continue
-        if index in by_id or grade.get("verdict") not in VERDICTS:
+        if index in by_id or "confidence" not in grade:
             continue
-        confidence = grade.get("confidence")
-        if not isinstance(confidence, (int, float)) or isinstance(confidence, bool):
+        confidence = grade["confidence"]
+        if confidence is not None and (
+            not isinstance(confidence, (int, float)) or isinstance(confidence, bool)
+        ):
             continue
         by_id[index] = grade
     fields, ungraded = [], []
@@ -362,14 +427,14 @@ def parse_grades(result: dict, targets: list[GradeTarget]) -> tuple[list[dict], 
         if grade is None:
             ungraded.append(target.path)
             continue
-        fields.append(
-            {
-                "path": target.path,
-                "verdict": grade["verdict"],
-                "confidence": max(0.0, min(1.0, float(grade["confidence"]))),
-                "reasoning": str(grade.get("reasoning") or ""),
-            }
-        )
+        confidence = grade["confidence"]
+        if confidence is not None:
+            confidence = max(0.0, min(1.0, float(confidence)))
+        entry = {"path": target.path, "confidence": confidence}
+        issue = str(grade.get("issue") or "").strip()
+        if issue and band_for(confidence) != "high":
+            entry["issue"] = issue
+        fields.append(entry)
     if not fields:
         raise GradeError("claude graded none of the fields")
     return fields, ungraded
@@ -425,11 +490,11 @@ def read_grade(path: Path) -> dict:
         raise GradeCorruptError(f"{path} is unreadable: {exc}") from exc
     if (
         not isinstance(record, dict)
-        or record.get("version") != GRADE_VERSION
+        or record.get("version") not in READABLE_VERSIONS
         or not isinstance(record.get("fields"), list)
         or not isinstance(record.get("inputs"), dict)
     ):
-        raise GradeCorruptError(f"{path} is not a version-{GRADE_VERSION} grade")
+        raise GradeCorruptError(f"{path} is not a grade litschema can read")
     return record
 
 
@@ -485,9 +550,8 @@ def has_current_grade(run: RunFiles, model: str) -> bool:
 def flag_count(grade: dict | None) -> int | None:
     if grade is None:
         return None
-    return sum(
-        1 for f in grade["fields"] if isinstance(f, dict) and f.get("verdict") in FLAG_VERDICTS
-    )
+    counts = band_counts(grade)
+    return sum(counts[name] for name in FLAG_BANDS)
 
 
 # ── grading ─────────────────────────────────────────────────────────────────
@@ -502,8 +566,7 @@ class GradeOutcome:
 
     @property
     def counts(self) -> dict[str, int]:
-        verdicts = [f["verdict"] for f in self.record["fields"]]
-        return {v: verdicts.count(v) for v in VERDICTS}
+        return band_counts(self.record)
 
 
 def grade_run(
@@ -545,6 +608,7 @@ def grade_run(
             "requested_model": model,
             "model": reported_model(result),
             "rubric_sha256": RUBRIC_SHA256,
+            "bands": dict(BANDS),
             "litschema_version": installed_version(),
         },
         "inputs": hashes,

@@ -3,11 +3,29 @@
 Status: current.
 
 `litschema grade` asks a separate model to check each extracted value against
-the evidence the extractor cited. The grader sees only the value and its
-evidence and returns, per reasoning entry, a verdict, a confidence, and one
-sentence of reasoning. Grades sit beside the immutable run like reviews do and
-never change the extraction. The extractor's own field confidence stays as a
-second signal.
+the evidence the extractor cited. The grader sees the value, the extractor's
+basis and note, and the evidence, and returns per reasoning entry a
+`confidence`: the probability (0-1) that the value is correct as stated and
+supported by its cited lines. It is not confidence in a verdict; there is no
+verdict. `confidence` is `null` only when the field cannot be judged. Fields
+below 0.9, or null, carry a one-line `issue`. Grades sit beside the immutable
+run like reviews do and never change the extraction.
+
+## Bands
+
+Bands are derived from `confidence`, never stored per field:
+
+| band | confidence |
+|---|---|
+| `high` | >= 0.9 |
+| `check` | >= 0.6 and < 0.9 |
+| `low` | < 0.6 |
+| `cannot_verify` | null |
+
+The thresholds live in `litschema.grading.BANDS` and are copied into each
+grade's `grader.bands`; readers use the grade's own `bands` when present, so a
+report and the app agree on an old grade after the thresholds move. Flags are
+`check`, `low`, and `cannot_verify`.
 
 Runs and the active pointer are owned by `specs/article-store/spec.md`; the
 reasoning contract by `specs/extraction/spec.md`; how the verifier shows grades
@@ -34,7 +52,7 @@ litschema grade <article_id> | --all [--run <run-id>] [--model <model>] [--force
 - Exit 0 when every requested run was graded with every field graded; 1
   otherwise, naming the articles that were not fully graded.
 
-Each graded run prints its verdict counts, the reported model, the cost
+Each graded run prints its low, check, and can't-verify counts, the reported model, the cost
 estimate, and wall time; `--all` ends with a total.
 
 ## The grader call
@@ -68,7 +86,8 @@ The prompt holds the rubric, then one block per reasoning entry, numbered from
 - the schema slot's description, looked up by the path with indices dropped;
 - the value, read from the extraction at that path (the reasoning entry's
   `value` when the path does not resolve);
-- the extractor's `reasoning` note;
+- the extractor's `basis` (`(not given)` for old runs) and its `note`, or the
+  old free-text `reasoning` when there is no note;
 - the cited lines of `article.md`, each shown whole and marked `>`, with two
   lines of context either side trimmed to 300 characters, gaps shown as `...`,
   at most 40 lines per field and a note of how many more were hidden;
@@ -80,25 +99,28 @@ The prompt holds the rubric, then one block per reasoning entry, numbered from
 ## Rubric
 
 The rubric text lives in `litschema.grading.RUBRIC`; its SHA-256 is recorded on
-every grade and pinned by a test, so changing it is deliberate.
+every grade and pinned by a test, so changing it is deliberate. It tells the
+grader:
 
-- `supported`: the evidence states the value, or it follows directly; routine
-  unit conversions count.
-- `partial`: plausible but needs an inference, a combination, or outside
-  knowledge, or only part of the value is supported. Reasoning that relies on
-  "implies", "suggests", "likely", or knowledge outside the evidence is partial.
-- `unsupported`: the evidence doesn't back the value, contradicts it, or is
-  about a different site, setup, sample, or treatment.
-- `cannot_verify`: the deciding evidence is an unreadable figure, or there is
-  no citation.
+- a value stated plainly in the evidence: about 0.95 or higher;
+- a routine conversion or a clear mapping onto a schema enum stays high if
+  correct;
+- an inference, a choice among alternatives, or outside knowledge lowers the
+  confidence;
+- evidence about a different site, setup, sample, or treatment, or evidence
+  that contradicts the value: low;
+- `null` only for an unreadable figure or no citation;
+- the basis and note say what to check; they are claims, not evidence.
 
 ## Parsing
 
-The JSON schema asks for `{"grades": [{id, verdict, confidence, reasoning}]}`.
-The first grade per known id wins; unknown ids, repeats, unknown verdicts, and
-non-numeric confidences are ignored; confidence is clamped to 0–1. Entries the
-grader skipped are listed in `ungraded`. A grade with any ungraded entry is
-stored, fails the command, and does not count as complete for `--all`.
+The JSON schema asks for `{"grades": [{id, confidence, issue?}]}` with
+`confidence` a number in 0-1 or null. The first grade per known id wins;
+unknown ids, repeats, and grades without a numeric or null confidence are
+ignored; confidence is clamped to 0-1. An `issue` is kept only when the band is
+not `high`. Entries the grader skipped are listed in `ungraded`. A grade with
+any ungraded entry is stored, fails the command, and does not count as complete
+for `--all`.
 
 ## Storage
 
@@ -108,15 +130,18 @@ ULID.
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "grade_id": "01K…",
   "article_id": "…", "run_id": "…",
   "created_at": "…",
   "grader": {"harness": "claude-code", "harness_version": "2.1.283",
              "requested_model": "claude-haiku-4-5", "model": "claude-haiku-4-5",
-             "rubric_sha256": "sha256:…", "litschema_version": "…"},
+             "rubric_sha256": "sha256:…", "bands": {"high": 0.9, "check": 0.6},
+             "litschema_version": "…"},
   "inputs": {"extraction": "sha256:…", "reasoning": "sha256:…", "prepared_text": "sha256:…"},
-  "fields": [{"path": "experiments[0].ph", "verdict": "partial", "confidence": 0.8, "reasoning": "…"}],
+  "fields": [{"path": "experiments[0].ph", "confidence": 0.72,
+              "issue": "pH read from a figure axis, not the text."},
+             {"path": "experiments[0].depth_cm", "confidence": 0.97}],
   "ungraded": [],
   "usage": {"input_tokens": 0, "output_tokens": 0, "cache_read_input_tokens": 0,
             "cache_creation_input_tokens": 0, "cost_estimate_usd": 0.0}
@@ -129,8 +154,12 @@ Field paths are canonical (no leading dot). `inputs` hashes the run's
 - The current grade is the newest grade (by `created_at`, then id) whose
   `inputs` match the run's files now.
 - A newer grade whose inputs don't match is stale: it is ignored and reported.
-- A grade file that is not valid JSON or not a version-1 grade is corrupt;
-  readers raise rather than skip it.
+- A grade file that is not valid JSON or not a version 1 or 2 grade is
+  corrupt; readers raise rather than skip it.
+- Version-1 grades stored `verdict`, `confidence`, and `reasoning` per field.
+  Readers map the verdict to a band (`supported` high, `partial` check,
+  `unsupported` low, `cannot_verify` cannot_verify) and show no percentage,
+  since that confidence was in the verdict.
 
 A grade applies to its path and, like evidence, to every leaf beneath it that
 has no grade of its own.
@@ -145,7 +174,9 @@ the grader against human reviews; grading with agents other than Claude Code.
 `tests/test_grading.py` pins: citation parsing; evidence windows, whole cited
 lines, trimmed context, gaps, the 40-line cap, figure paths, missing citations,
 and citations past the end; the rubric hash; slot descriptions and values in
-the prompt; parsing with missing, extra, repeated, and invalid grades; the
+the prompt, with the extractor's basis and note; parsing with missing, extra,
+repeated, invalid, and null-confidence grades; band thresholds and the
+version-1 verdict mapping; the
 reported model; credential stripping; newest-grade selection, stale and corrupt
 grades; and the command end to end against a fake `claude` placed first on
 PATH: the stored record, the exact flags and environment, `--run`, `--all`

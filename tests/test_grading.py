@@ -39,14 +39,14 @@ if mode == "error":
     print(json.dumps({{"type": "result", "is_error": True, "subtype": "error_max_turns", "result": "ran out of turns"}}))
     sys.exit(1)
 ids = [int(n) for n in re.findall(r"^### Field (\\d+):", prompt, re.M)]
-verdicts = ["unsupported", "partial", "cannot_verify"]
+confidences = [0.3, 0.72, None]
 grades = [
-    {{"id": i, "verdict": verdicts[i] if i < len(verdicts) else "supported",
-     "confidence": 0.9, "reasoning": f"field {{i}} reason"}}
+    {{"id": i, "confidence": confidences[i] if i < len(confidences) else 0.95,
+     "issue": f"field {{i}} issue"}}
     for i in ids
 ]
 if mode == "missing":
-    grades = grades[:-1] + [{{"id": 999, "verdict": "supported", "confidence": 1, "reasoning": "extra"}}]
+    grades = grades[:-1] + [{{"id": 999, "confidence": 1}}]
 print(json.dumps({{
     "type": "result", "is_error": False, "subtype": "success",
     "total_cost_usd": 0.0123,
@@ -170,7 +170,7 @@ def test_rubric_hash_is_the_sha256_of_the_rubric_text() -> None:
     # Pinned: a rubric edit changes which grades count as current, so it
     # must be a deliberate change here too.
     assert grading.RUBRIC_SHA256 == (
-        "sha256:51126430921013397f8c8c68c43af7b5b041c0c4027e2aa012c54b6e3372daaa"
+        "sha256:8ceebcecbbd30a2188d54d219816560b2aa2e1dc20a15f95acae0288c0270b71"
     )
 
 
@@ -187,11 +187,24 @@ def test_prompt_carries_value_meaning_note_and_evidence(project) -> None:
     temp = prompt.split("### Field 2: mean_annual_temperature_c\n")[1].split("###")[0]
     assert "Meaning: Site mean annual temperature in degrees Celsius." in temp
     assert "Value: 9.4" in temp
-    assert "Extractor's note: (none)" in temp
+    assert "Basis: (not given)" in temp
+    assert "Extractor's note: stated directly as mean annual temperature" in temp
     assert ">L8: annual temperature at the site is 9.4 °C." in temp
     measurement = prompt.split("### Field 6: measurements[0]\n")[1].split("###")[0]
     assert "Meaning: Reported soil measurements." in measurement
     assert '"outcome": "soil organic carbon"' in measurement
+
+
+def test_prompt_carries_the_extractors_basis_and_note(project) -> None:
+    run = _run(project)
+    reasoning = json.loads(run.reasoning.read_text())
+    reasoning["fields"][2].update(basis="converted", note="Converted from Fahrenheit.")
+    run.reasoning.write_text(json.dumps(reasoning))
+
+    [target] = [t for t in grading.grade_targets(run) if t.path == "mean_annual_temperature_c"]
+    prompt = grading.build_prompt([target], ["x"] * 20, {}, run.article.article_dir)
+
+    assert "Basis: converted\nExtractor's note: Converted from Fahrenheit." in prompt
 
 
 # ── parsing the result ──────────────────────────────────────────────────────
@@ -207,22 +220,65 @@ def test_parse_keeps_known_ids_and_lists_missing_ones() -> None:
     result = {
         "structured_output": {
             "grades": [
-                {"id": 2, "verdict": "partial", "confidence": 0.6, "reasoning": "r2"},
-                {"id": 0, "verdict": "supported", "confidence": 1.4, "reasoning": "r0"},
-                {"id": 0, "verdict": "unsupported", "confidence": 0.1, "reasoning": "dup"},
-                {"id": 7, "verdict": "supported", "confidence": 0.9, "reasoning": "extra"},
-                {"id": 3, "verdict": "maybe", "confidence": 0.9, "reasoning": "bad verdict"},
+                {"id": 2, "confidence": 0.6, "issue": "r2"},
+                {"id": 0, "confidence": 1.4, "issue": "dropped when high"},
+                {"id": 0, "confidence": 0.1, "issue": "dup"},
+                {"id": 7, "confidence": 0.9},
+                {"id": 3, "confidence": "high"},
+                {"id": 4, "confidence": None, "issue": "figure unreadable"},
+                {"id": 5, "issue": "no confidence"},
             ]
         }
     }
 
-    fields, ungraded = grading.parse_grades(result, _targets(4))
+    fields, ungraded = grading.parse_grades(result, _targets(6))
 
     assert fields == [
-        {"path": "f0", "verdict": "supported", "confidence": 1.0, "reasoning": "r0"},
-        {"path": "f2", "verdict": "partial", "confidence": 0.6, "reasoning": "r2"},
+        {"path": "f0", "confidence": 1.0},
+        {"path": "f2", "confidence": 0.6, "issue": "r2"},
+        {"path": "f4", "confidence": None, "issue": "figure unreadable"},
     ]
-    assert ungraded == ["f1", "f3"]
+    assert ungraded == ["f1", "f3", "f5"]
+
+
+@pytest.mark.parametrize(
+    ("confidence", "band"),
+    [
+        (1.0, "high"),
+        (0.9, "high"),
+        (0.89, "check"),
+        (0.6, "check"),
+        (0.59, "low"),
+        (0, "low"),
+        (None, "cannot_verify"),
+    ],
+)
+def test_bands_are_derived_from_confidence(confidence, band) -> None:
+    assert grading.band_for(confidence) == band
+
+
+@pytest.mark.parametrize(
+    ("verdict", "band"),
+    [
+        ("supported", "high"),
+        ("partial", "check"),
+        ("unsupported", "low"),
+        ("cannot_verify", "cannot_verify"),
+    ],
+)
+def test_version_1_verdicts_map_to_bands(verdict, band) -> None:
+    field = {"path": "x", "verdict": verdict, "confidence": 0.99, "reasoning": "r"}
+
+    assert grading.field_band(field) == band
+
+
+def test_a_grade_uses_the_bands_it_was_stored_with() -> None:
+    grade = {
+        "grader": {"bands": {"high": 0.8, "check": 0.5}},
+        "fields": [{"path": "a", "confidence": 0.85}, {"path": "b", "confidence": 0.55}],
+    }
+
+    assert [f["band"] for f in grading.with_bands(grade)["fields"]] == ["high", "check"]
 
 
 @pytest.mark.parametrize(
@@ -233,7 +289,7 @@ def test_parse_keeps_known_ids_and_lists_missing_ones() -> None:
         {"structured_output": {"grades": []}},
         {
             "structured_output": {
-                "grades": [{"id": 9, "verdict": "supported", "confidence": 1, "reasoning": ""}]
+                "grades": [{"id": 9, "confidence": 1}]
             }
         },
     ],
@@ -284,7 +340,7 @@ def test_grader_env_strips_api_credentials() -> None:
 
 def _stored(run, grade_id: str, created_at: str, **overrides) -> dict:
     record = {
-        "version": 1,
+        "version": 2,
         "grade_id": grade_id,
         "article_id": run.article.article_id,
         "run_id": run.run_id,
@@ -292,7 +348,7 @@ def _stored(run, grade_id: str, created_at: str, **overrides) -> dict:
         "grader": {"requested_model": "m", "model": "m", "rubric_sha256": grading.RUBRIC_SHA256},
         "inputs": grading.input_hashes(run),
         "fields": [
-            {"path": "site_name", "verdict": "partial", "confidence": 0.5, "reasoning": grade_id}
+            {"path": "site_name", "confidence": 0.5, "issue": grade_id}
         ],
         "ungraded": [],
         "usage": {},
@@ -359,12 +415,12 @@ def test_grade_writes_a_grade_beside_the_run(project, fake_claude) -> None:
     result = _grade(project, ARTICLE)
 
     assert result.exit_code == 0, result.output + result.stderr
-    assert "8 fields: 1 unsupported, 1 partial, 1 can't verify" in result.output
+    assert "8 fields: 1 low, 1 check, 1 can't verify" in result.output
     run = _run(project)
     [path] = list(grading.grades_dir(run).glob("*.json"))
     record = json.loads(path.read_text())
     assert path.stem == record["grade_id"] and len(record["grade_id"]) == 26
-    assert record["version"] == 1
+    assert record["version"] == 2
     assert (record["article_id"], record["run_id"]) == (ARTICLE, RUN_ID)
     assert record["grader"] == {
         "harness": "claude-code",
@@ -372,15 +428,16 @@ def test_grade_writes_a_grade_beside_the_run(project, fake_claude) -> None:
         "requested_model": "claude-sonnet-5",
         "model": "claude-test-1",
         "rubric_sha256": grading.RUBRIC_SHA256,
+        "bands": {"high": 0.9, "check": 0.6},
         "litschema_version": record["grader"]["litschema_version"],
     }
     assert record["inputs"] == grading.input_hashes(run)
-    assert record["fields"][0] == {
-        "path": "site_name",
-        "verdict": "unsupported",
-        "confidence": 0.9,
-        "reasoning": "field 0 reason",
-    }
+    assert record["fields"][:4] == [
+        {"path": "site_name", "confidence": 0.3, "issue": "field 0 issue"},
+        {"path": "site_country", "confidence": 0.72, "issue": "field 1 issue"},
+        {"path": "mean_annual_temperature_c", "confidence": None, "issue": "field 2 issue"},
+        {"path": "crops", "confidence": 0.95},
+    ]
     assert record["ungraded"] == []
     assert record["usage"] == {
         "input_tokens": 10,
@@ -561,7 +618,26 @@ def test_grades_endpoint_returns_the_current_grade(project, client) -> None:
     body = client.get(f"/api/grades/{ARTICLE}", params={"run_id": RUN_ID}).json()
 
     assert body["grade"]["grade_id"] == "01A"
+    assert body["grade"]["fields"] == [
+        {"path": "site_name", "confidence": 0.5, "issue": "01A", "band": "low"}
+    ]
     assert body["stale"] == ["01B"]
+    stored = json.loads((grading.grades_dir(run) / "01A.json").read_text())
+    assert "band" not in stored["fields"][0]
+
+
+def test_grades_endpoint_reads_version_1_grades_as_bands(project, client) -> None:
+    run = _stored_v1(_run(project))
+
+    fields = client.get(f"/api/grades/{ARTICLE}").json()["grade"]["fields"]
+
+    assert [(f["path"], f["band"]) for f in fields] == [
+        ("site_name", "low"),
+        ("crops", "check"),
+        ("tillage", "cannot_verify"),
+        ("replicates", "high"),
+    ]
+    assert grading.flag_count(grading.current_grade(run).grade) == 3
 
 
 @pytest.mark.parametrize(
@@ -587,6 +663,22 @@ def test_grades_endpoint_reports_a_corrupt_grade(project, client) -> None:
     assert "01X.json" in response.json()["detail"]
 
 
+def _stored_v1(run):
+    _stored(
+        run,
+        "01V",
+        "2026-08-01T00:00:00+00:00",
+        version=1,
+        fields=[
+            {"path": "site_name", "verdict": "unsupported", "confidence": 0.9, "reasoning": ""},
+            {"path": "crops", "verdict": "partial", "confidence": 0.7, "reasoning": ""},
+            {"path": "tillage", "verdict": "cannot_verify", "confidence": 0.5, "reasoning": ""},
+            {"path": "replicates", "verdict": "supported", "confidence": 1, "reasoning": ""},
+        ],
+    )
+    return run
+
+
 def test_listing_carries_flag_counts_from_the_current_grade(project, client) -> None:
     run = _run(project)
     _stored(
@@ -594,10 +686,11 @@ def test_listing_carries_flag_counts_from_the_current_grade(project, client) -> 
         "01A",
         "2026-09-01T00:00:00+00:00",
         fields=[
-            {"path": "site_name", "verdict": "unsupported", "confidence": 0.9, "reasoning": ""},
-            {"path": "crops", "verdict": "partial", "confidence": 0.7, "reasoning": ""},
-            {"path": "tillage", "verdict": "cannot_verify", "confidence": 0.5, "reasoning": ""},
-            {"path": "replicates", "verdict": "supported", "confidence": 1, "reasoning": ""},
+            {"path": "site_name", "confidence": 0.2, "issue": "wrong site"},
+            {"path": "crops", "confidence": 0.7, "issue": "inferred"},
+            {"path": "tillage", "confidence": None, "issue": "figure"},
+            {"path": "replicates", "confidence": 0.97},
+            {"path": "site_country", "confidence": 0.9},
         ],
     )
 
@@ -607,9 +700,9 @@ def test_listing_carries_flag_counts_from_the_current_grade(project, client) -> 
         "grade_id": "01A",
         "created_at": "2026-09-01T00:00:00+00:00",
         "model": "m",
-        "flags": 2,
-        "unsupported": 1,
-        "partial": 1,
+        "flags": 3,
+        "low": 1,
+        "check": 1,
         "cannot_verify": 1,
     }
     assert by_id[ARTICLE]["grade_error"] is None

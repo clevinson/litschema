@@ -62,15 +62,24 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
   columns, sortable columns, and a header that stays visible while scrolling.
   The filter, chip, and sort are kept in the URL, so reload keeps them.
 - `litschema grade` checks each extracted value against the lines it cites,
-  using a separate model through your own `claude` CLI, and stores a verdict
-  (supported, partial, unsupported, can't verify), a confidence, and a reason
-  per field beside the run. `--all` skips runs already graded by the same
+  using a separate model through your own `claude` CLI, and stores per field
+  the probability that the value is right (`confidence`, null when it can't be
+  judged) and a one-line `issue` below 0.9. Bands are derived: high >= 0.9,
+  check >= 0.6, low below, can't verify for null. `--all` skips runs already graded by the same
   model; `--model claude-haiku-4-5` is a cheap pass (about $0.09 a paper in
   the pilot). See `specs/grading/spec.md`.
-- The app shows grader verdicts in the audit table and the grader's reasoning
-  in the evidence box, and orders a graded document's fields flagged first,
-  with a toggle beside Audit/Data. The overview has a Flags column and a
-  Flagged chip.
+- The app marks check, low, and can't-verify fields in the audit table, shows
+  the band, confidence, and issue in the evidence box ("Check · 72%"), and
+  orders a graded document's fields flagged first (low, check, can't verify,
+  then inferred or assumed values), with a toggle beside Audit/Data. The
+  overview has a Flags column and a Flagged chip. Grade files from before this
+  change still display, with verdicts mapped to bands.
+- Reasoning entries carry a required `basis` (stated, converted, normalized,
+  calculated, inferred, assumed) and a one-line `note` on how the value was
+  derived, required unless the basis is stated. The evidence box shows both.
+  The `extract-article` skill no longer asks for per-field or overall
+  confidence or free-text reasoning; the schema still accepts them from older
+  runs.
 
 ### Changed
 

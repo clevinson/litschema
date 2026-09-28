@@ -501,7 +501,7 @@ def grade(
             total_cost += cost or 0.0
             summary = (
                 f"{len(outcome.record['fields'])} fields: "
-                f"{counts['unsupported']} unsupported, {counts['partial']} partial, "
+                f"{counts['low']} low, {counts['check']} check, "
                 f"{counts['cannot_verify']} can't verify"
             )
             tail = f"{outcome.record['grader']['model'] or model}"

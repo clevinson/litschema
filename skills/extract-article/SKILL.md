@@ -72,19 +72,33 @@ The output must conform to the extraction schema. Include `article_id` when the 
 
 Write a SEPARATE reasoning file to `data/papers/{article_id}/agent-reasoning.json`.
 
-This file documents WHY each value was extracted, with line-number evidence from the markdown. Every non-identifier leaf field in the extraction MUST have an entry.
+This file records, for each value, where it came from and how you got it. Every non-identifier leaf field in the extraction MUST have an entry. A separate grader later checks each value against the lines you cite, and your `basis` and `note` tell it what to check.
 
-Confidence lives here, in the reasoning file — never in the extraction JSON (which stays pure domain data). Set a top-level `confidence` (0.0-1.0) summarizing how well the source supported the extraction overall, and a `confidence_reasoning` explaining that score (e.g. "sparse methods section", "all values stated explicitly in Table 2").
+```json
+{
+  "fields": [
+    {"path": ".site_name", "value": "Nsukka Research Farm", "source_lines": "L5", "basis": "stated"},
+    {"path": ".latitude", "value": "6.87", "source_lines": "L6", "basis": "converted",
+     "note": "Converted 6°52' N to decimal degrees."}
+  ]
+}
+```
 
 ### Reasoning format rules
 
-- **confidence** (top level, optional): overall extraction confidence, 0.0-1.0
-- **confidence_reasoning** (top level, optional): one line on why that score was assigned
 - **path**: jq-style dot notation starting with `.` (e.g., `.foo.bar[0].baz`)
 - **value**: the extracted value rendered as text for cross-reference with the extraction JSON
 - **source_lines**: comma-separated line references from the markdown. Use `L{n}` for single lines, `L{start}-L{end}` for ranges. Example: `L23-L34,L55,L80-L90`
-- **reasoning**: plain text explanation for a human reviewer evaluating the extraction. Omit this key when the source lines are self-explanatory (the value appears verbatim in the cited lines)
-- **confidence** (per field, optional): 0.0-1.0 for a single field, to flag inferred or weakly-supported values
+- **basis** (required): how you got the value from the cited lines. One of:
+  - `stated`: read directly from the cited lines
+  - `converted`: stated, then converted between units or formats
+  - `normalized`: mapped onto a schema enum value or controlled list
+  - `calculated`: computed from other numbers in the paper
+  - `inferred`: reasoned from context rather than stated
+  - `assumed`: a default or outside knowledge filled it
+- **note**: one line saying HOW the value was derived (the conversion, the mapping, the calculation, the inference). Required when `basis` is not `stated`; omit it when it is. Don't restate the cited text.
+- Pick the most honest basis. A value you had to choose among alternatives or read between the lines for is `inferred`, not `stated`.
+- Don't add `confidence` or `reasoning` keys, per field or at the top level.
 - Skip `article_id`; document every extracted domain data field
 
 ## Validation
@@ -103,7 +117,8 @@ If either command exits nonzero, read the errors, fix the JSON, and re-run the f
 - Invalid enum value: check the runtime JSON Schema for allowed values
 - Extra property: field name not in the schema
 - Wrong type: e.g., string where number expected
-- Missing `fields` or `path`/`source_lines`: every reasoning entry needs these
+- Missing `fields` or `path`/`source_lines`/`basis`: every reasoning entry needs these
+- `basis X needs a note`: add a one-line `note` for any basis other than `stated`
 
 Do NOT finish until both validation commands exit 0 or you have exhausted retries.
 
@@ -183,6 +198,6 @@ Before finishing, verify:
 - [ ] `data/papers/{article_id}/agent-reasoning.json` exists and passes reasoning validation
 - [ ] `agent record-extraction` exited 0 (run published and activated; staged files consumed)
 - [ ] Bibliographic backfill was attempted via `meta set --source auto` (with `--doi ... --sync` when a DOI was visible; transcription only as the fallback)
-- [ ] Every non-identifier leaf field in the extraction has a corresponding reasoning entry
+- [ ] Every non-identifier leaf field in the extraction has a corresponding reasoning entry with a `basis`, and a `note` when the basis is not `stated`
 - [ ] All `source_lines` reference real line numbers from the markdown
 - [ ] No data was extracted from the References/Bibliography section

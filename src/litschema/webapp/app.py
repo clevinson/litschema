@@ -33,7 +33,7 @@ from ..bib_metadata import (
     update_bib_metadata,
 )
 from ..config import LitSchemaConfig
-from ..grading import FLAG_VERDICTS, GradeCorruptError, current_grade
+from ..grading import FLAG_BANDS, GradeCorruptError, band_counts, current_grade, with_bands
 from ..ingest.openalex_harvest import RegistryUnavailableError, sync_article
 from ..review_paths import InvalidReviewPathError, canonical_review_path
 from ..reviews import (
@@ -246,7 +246,7 @@ def _run_summary_for(run) -> dict | None:
 
 
 def _grade_summary(run) -> tuple[dict | None, str | None]:
-    """Verdict counts from the run's current grade, and any error reading it."""
+    """Band counts from the run's current grade, and any error reading it."""
     if run is None:
         return None, None
     try:
@@ -256,16 +256,16 @@ def _grade_summary(run) -> tuple[dict | None, str | None]:
     grade = status.grade
     if grade is None:
         return None, None
-    verdicts = [f.get("verdict") for f in grade["fields"] if isinstance(f, dict)]
+    counts = band_counts(grade)
     grader = grade.get("grader") or {}
     return {
         "grade_id": grade.get("grade_id"),
         "created_at": grade.get("created_at"),
         "model": grader.get("model") or grader.get("requested_model"),
-        "flags": sum(1 for v in verdicts if v in FLAG_VERDICTS),
-        "unsupported": verdicts.count("unsupported"),
-        "partial": verdicts.count("partial"),
-        "cannot_verify": verdicts.count("cannot_verify"),
+        "flags": sum(counts[name] for name in FLAG_BANDS),
+        "low": counts["low"],
+        "check": counts["check"],
+        "cannot_verify": counts["cannot_verify"],
     }, None
 
 
@@ -865,6 +865,8 @@ async def get_reasoning(article_id: str, cfg: CfgDep, run_id: str | None = None)
 async def get_grades(article_id: str, cfg: CfgDep, run_id: str | None = None):
     """The run's current grade, or null, plus the newer grades ignored as stale.
 
+    Each field carries a derived `band`; version-1 verdicts map onto bands.
+
     ``run_id`` pins the read like `/api/reasoning`; omitted, the active run.
     """
     from ..runs import BrokenActiveRunError, active_run
@@ -885,7 +887,7 @@ async def get_grades(article_id: str, cfg: CfgDep, run_id: str | None = None):
         raise HTTPException(409, str(exc)) from exc
     return {
         "run_id": run.run_id,
-        "grade": status.grade,
+        "grade": with_bands(status.grade) if status.grade else None,
         "stale": [g.get("grade_id") for g in status.stale],
     }
 

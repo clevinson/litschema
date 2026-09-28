@@ -336,7 +336,7 @@ classes:
     )
     (article_dir / "agent-reasoning.json").write_text(
         json.dumps(
-            {"fields": [{"path": ".title", "source_lines": "L3", "value": "A title"}]}
+            {"fields": [{"path": ".title", "source_lines": "L3", "value": "A title", "basis": "stated"}]}
         )
     )
     return cfg, article_dir
@@ -546,7 +546,7 @@ def test_agent_record_extraction_re_extraction_keeps_prior_run(
         json.dumps({"article_id": "smith-2024", "title": "Better title"})
     )
     (article_dir / "agent-reasoning.json").write_text(
-        json.dumps({"fields": [{"path": ".title", "source_lines": "L3"}]})
+        json.dumps({"fields": [{"path": ".title", "source_lines": "L3", "basis": "stated"}]})
     )
     assert runner.invoke(cli.app, ["agent", "record-extraction", "smith-2024"]).exit_code == 0
 

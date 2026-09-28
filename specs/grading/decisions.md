@@ -38,3 +38,23 @@ Flags.
 **Rationale:** those are the fields only a human looking at the figure can
 check. Counting them as flags would inflate the overview for documents that
 lean on figures.
+
+## 2026-09-28 — One number per field: probability the value is right
+
+**Context:** version-1 grades stored a verdict plus the grader's confidence in
+that verdict, and the extractor stored its own confidence and free-text
+reasoning. A reviewer saw two confidences that meant different things, and the
+extractor's reasoning often restated the evidence.
+
+**Decision:** the grader returns `confidence` as the probability that the value
+is correct as stated and supported by its cited lines, with `null` for fields
+it cannot judge, and a one-line `issue` below 0.9. Bands (high, check, low,
+can't verify) are derived from fixed thresholds, not stored. The extractor
+records a `basis` enum and a one-line `note` on how it derived any value it
+did not read directly; it no longer rates its own confidence. Flags now count
+can't-verify fields, superseding the entry above: with no verdict, a null
+confidence is a field nobody has checked.
+
+**Rejected:** keeping a verdict beside the confidence (two signals that can
+disagree); storing the band per field (thresholds would be frozen into old
+files and could drift from the app).

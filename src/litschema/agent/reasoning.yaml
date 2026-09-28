@@ -2,23 +2,39 @@ id: https://example.org/litschema/extraction-reasoning
 name: litschema_extraction_reasoning
 default_range: string
 
+enums:
+  ExtractionBasis:
+    description: How an extracted value was obtained from the source.
+    permissible_values:
+      stated:
+        description: Read directly from the cited lines.
+      converted:
+        description: Stated in the source, then converted between units or formats.
+      normalized:
+        description: Mapped onto a schema enum value or controlled list.
+      calculated:
+        description: Computed from other numbers in the source.
+      inferred:
+        description: Reasoned from context rather than stated.
+      assumed:
+        description: A default or outside knowledge filled the value.
+
 classes:
   ExtractionReasoning:
-    description: Per-field evidence and reasoning for one extraction.
+    description: Per-field evidence for one extraction.
     tree_root: true
     attributes:
       confidence:
         description: >-
-          Overall confidence in this extraction, 0.0-1.0. Summarizes how well the
-          source supported the extracted values as a whole. Optional.
+          Overall extractor confidence, 0.0-1.0. Kept so older runs validate;
+          new extractions omit it.
         range: float
         minimum_value: 0.0
         maximum_value: 1.0
       confidence_reasoning:
         description: >-
-          Short explanation of why the overall confidence score was assigned
-          (e.g. sparse source, ambiguous reporting, well-structured methods).
-          Optional.
+          Why the overall confidence was assigned. Kept so older runs validate;
+          new extractions omit it.
       fields:
         description: Evidence entries for extracted non-identifier leaf fields.
         range: ReasoningField
@@ -26,7 +42,7 @@ classes:
         required: true
 
   ReasoningField:
-    description: Evidence and explanation for one extracted field value.
+    description: Evidence and basis for one extracted field value.
     attributes:
       path:
         description: jq-style path to the extracted field, starting with a dot.
@@ -36,12 +52,20 @@ classes:
       source_lines:
         description: Markdown line references such as L23 or L23-L34,L55.
         required: true
+      basis:
+        description: How the value was obtained from the cited lines.
+        range: ExtractionBasis
+        required: true
+      note:
+        description: >-
+          One line on how the value was derived. Required when basis is not
+          stated; omitted when it is. Does not restate the evidence.
       reasoning:
-        description: Short explanation of why the cited lines support the value.
+        description: Free-text explanation from older runs. New extractions use note.
       confidence:
         description: >-
-          Confidence in this single field's extracted value, 0.0-1.0. Optional;
-          use it to flag fields that were inferred or weakly supported.
+          Per-field extractor confidence, 0.0-1.0, from older runs. New
+          extractions omit it.
         range: float
         minimum_value: 0.0
         maximum_value: 1.0
