@@ -65,6 +65,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 ### Changed
 
 - The app is titled "litschema", with a persistent top bar naming the project.
+- On a document page the app bar has an Overview button, a document switcher
+  you can search by title, author, year, or id, and previous/next. Esc
+  returns to the overview. The native article dropdown and the "All
+  documents" link are gone, and the Audit/Data toggle moved into the review
+  pane's header.
 - The app loads nothing from the network: icons, fonts, and scripts are
   bundled.
 - In the formatted view, evidence and source labels name the source instead

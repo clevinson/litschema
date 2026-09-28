@@ -403,7 +403,7 @@ def run_flow(harness: Harness) -> None:
 
         print("\n[document-scoped controls belong to the document]")
         hidden_on_overview = [
-            sel for sel in ("#article-select", "#stat-citations")
+            sel for sel in ("#app-nav", "#btn-overview", "#switcher-btn", "#view-mode-review", "#stat-citations")
             if page.locator(sel).count() and page.locator(sel).first.is_visible()
         ]
         check("document controls are hidden on the overview", not hidden_on_overview,
@@ -417,7 +417,7 @@ def run_flow(harness: Harness) -> None:
               bool(page.evaluate("() => state.currentRunId")),
               str(page.evaluate("() => state.currentRunId")))
         check("document controls appear with the document",
-              page.locator("#article-select").first.is_visible())
+              page.locator("#switcher-btn").is_visible() and page.locator("#btn-overview").is_visible())
 
         print("\n[the document says what produced it]")
         run_meta = next(a for a in articles if a["article_id"] == article).get("active_run") or {}
@@ -440,15 +440,108 @@ def run_flow(harness: Harness) -> None:
             check("provenance chip present", False, "no run chip rendered")
 
         print("\n[there is a way back]")
-        exit_control = page.locator("#back-to-overview, .back-to-overview, [data-route='overview']")
-        check("document offers a marked exit", exit_control.count() > 0)
-        if exit_control.count():
-            exit_control.first.click()
-            page.wait_for_timeout(900)
-            check("exit returns to the overview", page.url.rstrip("/").endswith("#/")
-                  or page.locator("#overview-route").is_visible(), page.url)
-            page.goto(f"{base}/#/doc/{article}", wait_until="networkidle")
-            await_document(page)
+        # The overview's own view (sort, text, status) lives in its hash; leaving
+        # a document through the app bar or Esc returns to that view.
+        overview_hash = "#/?sort=fields&dir=desc"
+        page.goto(f"{base}/{overview_hash}", wait_until="networkidle")
+        page.wait_for_selector("#overview-route", state="visible", timeout=20000)
+        page.locator(f'#overview-rows tr[data-article="{article}"]').click()
+        await_document(page)
+        page.locator("#btn-overview").click()
+        page.wait_for_timeout(700)
+        check("Overview returns to the overview", page.locator("#overview-route").is_visible())
+        check("and keeps the overview's hash query", page.url.endswith(overview_hash), page.url)
+        page.go_back()
+        await_document(page)
+        check("browser back reopens the document", f"#/doc/{article}" in page.url, page.url)
+        page.locator("body").click(position={"x": 5, "y": 300})
+        page.keyboard.press("Escape")
+        page.wait_for_timeout(700)
+        check("Esc on a document returns to the overview",
+              page.locator("#overview-route").is_visible() and page.url.endswith(overview_hash), page.url)
+        page.goto(f"{base}/#/doc/{article}", wait_until="networkidle")
+        await_document(page)
+        page.locator("#search-box").click()
+        page.keyboard.press("Escape")
+        page.wait_for_timeout(500)
+        check("Esc inside an input stays on the document", f"#/doc/{article}" in page.url, page.url)
+
+        print("\n[document switcher]")
+        other = next(a["article_id"] for a in articles if a["article_id"] != article)
+        switcher = page.locator("#switcher-btn")
+        check("switcher names the open document",
+              switcher.get_attribute("title", timeout=2000) not in (None, "", "Jump to a document"),
+              str(switcher.get_attribute("title")))
+        switcher.click()
+        check("click opens the list", page.locator("#switcher-pop").is_visible()
+              and switcher.get_attribute("aria-expanded") == "true")
+        check("focus moves to the search input",
+              page.evaluate("() => document.activeElement.id") == "switcher-input")
+        options = page.locator("#switcher-list li[role=option]")
+        check("lists the queue", options.count() == len(articles), f"{options.count()} of {len(articles)}")
+        check("marks the open document", page.locator("#switcher-list li.current").get_attribute("data-article") == article)
+        page.keyboard.type(other)
+        page.wait_for_timeout(200)
+        check("typing filters the list", 0 < options.count() < len(articles), str(options.count()))
+        check("the hint counts matches", page.locator("#switcher-hint").inner_text().startswith(f"{options.count()} of {len(articles)}"),
+              page.locator("#switcher-hint").inner_text())
+        page.keyboard.press("Enter")
+        page.wait_for_function(f"() => location.hash.startsWith('#/doc/{other}')", timeout=10000)
+        check("Enter opens the match", f"#/doc/{other}" in page.url, page.url)
+        check("and closes the list", page.locator("#switcher-pop").is_hidden())
+        switcher.click()
+        page.keyboard.press("Escape")
+        page.wait_for_timeout(200)
+        check("Esc closes the list", page.locator("#switcher-pop").is_hidden())
+        check("focus returns to the switcher", page.evaluate("() => document.activeElement.id") == "switcher-btn")
+        check("and the document stays open", f"#/doc/{other}" in page.url, page.url)
+        switcher.click()
+        page.locator("#panel-right").click(position={"x": 20, "y": 20})
+        check("a click outside closes the list", page.locator("#switcher-pop").is_hidden())
+
+        print("\n[previous/next follow the filtered queue]")
+        pair = [a["article_id"] for a in articles][:2]
+        page.locator("#btn-overview").click()
+        page.wait_for_selector("#overview-route", state="visible", timeout=20000)
+        page.locator("#ov-mode-expression").click()
+        page.locator("#filter-input").fill(f"{json.dumps(pair)}.includes(article_id)")
+        page.locator("#filter-input").press("Enter")
+        page.wait_for_timeout(500)
+        page.locator(f'#overview-rows tr[data-article="{pair[0]}"]').click()
+        page.wait_for_function(f"() => location.hash.startsWith('#/doc/{pair[0]}')", timeout=10000)
+        page.wait_for_timeout(500)
+        check("counter counts the filtered queue", page.locator("#nav-counter").inner_text() == "1/2",
+              page.locator("#nav-counter").inner_text())
+        page.locator("#btn-next").click()
+        page.wait_for_function(f"() => location.hash.startsWith('#/doc/{pair[1]}')", timeout=10000)
+        page.wait_for_timeout(300)
+        check("next steps to the second match", page.locator("#nav-counter").inner_text() == "2/2",
+              page.locator("#nav-counter").inner_text())
+        check("and stops at the end", page.locator("#btn-next").is_disabled())
+        page.locator("#btn-prev").click()
+        page.wait_for_function(f"() => location.hash.startsWith('#/doc/{pair[0]}')", timeout=10000)
+        check("previous steps back", f"#/doc/{pair[0]}" in page.url, page.url)
+        switcher.click()
+        check("the switcher lists the same queue", options.count() == 2, str(options.count()))
+        page.keyboard.press("Escape")
+        page.locator("#btn-overview").click()
+        page.wait_for_selector("#overview-route", state="visible", timeout=20000)
+        check("Overview keeps ?filter=", "filter=" in page.url, page.url)
+        page.locator("#ov-filter-clear").click()
+        page.locator("#ov-mode-search").click()
+
+        print("\n[Audit/Data lives in the review pane]")
+        page.goto(f"{base}/#/doc/{article}", wait_until="networkidle")
+        await_document(page)
+        toggle = page.locator("#extraction-panel-header #view-mode-data")
+        check("the toggle sits in the review header", toggle.is_visible())
+        toggle.click()
+        page.wait_for_timeout(300)
+        check("Data switches the pane", page.evaluate("() => state.viewMode") == "data"
+              and page.locator("#extraction-panel-title").inner_text() == "Extraction Data")
+        page.locator("#view-mode-review").click()
+        page.wait_for_timeout(300)
+        check("Audit switches back", page.evaluate("() => state.viewMode") == "review")
 
         print("\n[deep links honour the view they name]")
         for view, expected in (("review", "review"), ("data", "data")):

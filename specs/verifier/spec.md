@@ -4,14 +4,21 @@ Status: partially current.
 
 ## Implementation status
 
-Live today: `litschema verify` serving a single-page app with an article
-dropdown, the `?filter=` queue expression, the Audit/Data toggle for one
+Live today: `litschema verify` serving a single-page app with a document
+switcher, the `?filter=` queue expression, the Audit/Data toggle for one
 article's extraction, Rendered, Raw lines, and PDF panes, review editing, and
 ORCID lookup. Its read API is the `/api/...` surface named under API ownership
 below.
 
-A top bar titled "litschema" names the project on every route. On the overview
-it hides the document-only controls (article picker, prev/next, Audit/Data).
+The app bar reads `litschema / <project>` on every route, with theme and
+settings on the right. A document page adds a navigation group after a
+divider: an Overview button, a document switcher, and previous/next with an
+`n/N` counter. The switcher shows a short citation ("Paessler 2024 · title")
+and opens a searchable list of the queue with each document's status; arrows
+move, Enter opens, Esc closes. Overview and Esc (when no dialog, switcher, or
+inline editor is open and focus is not in a text field) return to the
+overview with its hash query and `?filter=` intact. The Audit/Data toggle sits
+in the review pane's header, beside "Extraction Review".
 The overview has a summary strip, one filter bar, status chips, sortable
 columns including Status and Confidence, and a header that stays visible while
 scrolling. The text filter, status chip, and sort live in the URL hash
@@ -95,11 +102,11 @@ than one. That surface is developed on the `feat/multirun` branch and is not
 specified here.
 
 Each route states where the user is and offers a marked way out. A document
-shows a breadcrumb back to the overview and a persistent control returning to
-it, so leaving never depends on the browser's back button. Controls scoped to a
-document — the article selector, previous/next, and the view-mode toggle — are
-hidden on the overview rather than shown inert, since a visible control implies
-a context the user is not in.
+shows an Overview button in the app bar, and Esc does the same, so leaving
+never depends on the browser's back button. Controls scoped to a document (the
+Overview button, the document switcher, and previous/next) are hidden on the
+overview rather than shown inert, since a visible control implies a context the
+user is not in.
 
 Provenance is reported where it can be acted on. The document view names the
 model that produced the extraction being reviewed — enough context while
@@ -385,7 +392,7 @@ Implementation coverage must replace brittle source-substring assertions with:
 - browser behavior on `#/` and `#/doc/{id}`, including direct load, fragment
   query state, filtered next/previous, exclusion of the open article,
   navigation, back/forward, and reload;
-- a marked exit from every document route, breadcrumb linking, and hiding of
+- a marked exit from every document route (Overview button and Esc), and hiding of
   document-scoped controls on the overview;
 - displayed run provenance (model, effort, extraction time) with the opaque
   identifier available but not foregrounded, and its absence for an

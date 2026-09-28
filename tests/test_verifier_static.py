@@ -114,6 +114,11 @@ def test_review_header_holds_queue_controls_but_not_identity() -> None:
     toolbar = html[html.index('<div class="toolbar app-bar">'):html.index('<div class="orcid-modal-backdrop"')]
     assert 'id="review-identity-controls"' not in toolbar
     assert 'id="view-mode-json"' not in toolbar
+    # Audit/Data sits with the pane it switches, not in the app bar.
+    assert 'id="view-mode-review"' not in toolbar
+    review_header = html[html.index('id="extraction-panel-header"'):html.index('id="review-queue-actions"')]
+    assert 'id="view-mode-review"' in review_header
+    assert 'id="view-mode-data"' in review_header
     # Identity now lives in the settings dialog, after the review header.
     assert 'id="settings-modal"' in html
     assert html.index('id="review-identity-controls"') > html.index('id="settings-modal-title"')
@@ -363,7 +368,9 @@ def test_verifier_section_headers_keep_status_and_bulk_action_together() -> None
     assert "bulk-section-actions" not in html
     assert "tv-toggle" not in html
     assert "tv-heading.collapsed" not in html
-    assert "aria-expanded" not in html
+    # Sections do not collapse; the document switcher is the only disclosure.
+    expanded = [line for line in html.splitlines() if "aria-expanded" in line]
+    assert all("switcher" in line for line in expanded), expanded
 
 
 def test_verifier_scopes_review_navigation_to_current_article() -> None:
@@ -383,7 +390,7 @@ def test_verifier_scopes_review_navigation_to_current_article() -> None:
     assert " flagged</span>" not in html.lower()
     assert " flagged`" not in html.lower()
     assert "edited" in html.lower()
-    assert "articleOptionLabel" in html
+    assert "shortCitation" in html
     assert "article.confidence" not in html
     assert "filter-group" not in html
     assert "queue-summary" not in html
@@ -604,10 +611,10 @@ def test_verifier_exposes_overview_and_document_routes() -> None:
 
 
 def test_navigation_goes_through_the_route_not_around_it() -> None:
-    """One path through the app: dropdown, deep link, and back all route."""
+    """One path through the app: switcher, deep link, and back all route."""
     html = STATIC_HTML.read_text()
 
-    assert "if (e.target.value) routeToDoc(e.target.value);" in html
+    assert "if (articleId && articleId !== state.currentId) routeToDoc(articleId);" in html
     assert "routeToDoc(state.filteredArticles[nextIdx].article_id);" in html
     # The old direct-dispatch path must be gone.
     assert 'dispatchEvent(new Event("change"))' not in html
@@ -658,9 +665,20 @@ def test_document_route_has_a_marked_exit_to_the_overview() -> None:
     """NN/g emergency exit: leaving a document must not require the back button."""
     html = STATIC_HTML.read_text()
 
-    assert 'id="app-crumb"' in html
-    assert "All documents" in html
-    assert 'href="#/"' in html  # breadcrumb link
+    assert 'id="btn-overview"' in html
+    assert ">Overview</button>" in html
+    assert "function goToOverview(" in html
+    assert "escapeLeavesDocument" in html
+
+
+def test_app_bar_switcher_replaces_the_native_select() -> None:
+    html = STATIC_HTML.read_text()
+
+    for removed in ('id="article-select"', 'id="app-crumb"', "populateDropdown", "articleOptionLabel"):
+        assert removed not in html, removed
+    assert 'id="switcher-btn"' in html
+    assert 'role="listbox"' in html
+    assert "aria-activedescendant" in html
 
 
 def _js_function(html: str, name: str) -> str:
@@ -687,7 +705,7 @@ def test_overview_has_one_filter_bar_not_an_advanced_popover() -> None:
 
 
 def test_document_app_bar_does_not_repeat_the_document_name() -> None:
-    """The article dropdown already names the document; the breadcrumb only leads out."""
+    """The document switcher already names the document."""
     html = STATIC_HTML.read_text()
 
     assert "app-crumb-doc" not in html

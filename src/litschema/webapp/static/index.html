@@ -117,30 +117,6 @@
     height: 48px;
   }
 
-  /* Native select — reliable dropdown rendering */
-  #article-select {
-    font-family: var(--font-mono);
-    font-size: 12px;
-    color: var(--text);
-    background: var(--bg-input);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 6px 28px 6px 10px;
-    height: 32px;
-    min-width: 280px;
-    appearance: none;
-    -webkit-appearance: none;
-    background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%238b8b92' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-    background-repeat: no-repeat;
-    background-position: right 10px center;
-    cursor: pointer;
-    outline: none;
-  }
-
-  #article-select:focus {
-    border-color: var(--accent);
-  }
-
   /* Article nav: < 3/179 > */
   .article-nav {
     display: flex;
@@ -149,7 +125,7 @@
     background: var(--bg);
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    height: 32px;
+    height: 28px;
     flex-shrink: 0;
   }
 
@@ -420,11 +396,41 @@
   .theme-btn:hover { color: var(--text); }
   .app-bar { position:sticky; top:0; z-index:20; background:var(--bg-raised); border-bottom:1px solid var(--border); }
   .app-bar .brand { font-weight:650; color:var(--text); }
-  .app-project { color:var(--text-secondary); padding-left:12px; border-left:1px solid var(--border); white-space:nowrap; }
+  .app-bar .brand { flex:none; }
+  /* Shrink order at narrow widths: the switcher's title first, then the project name. */
+  .app-project { color:var(--text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; flex:0 0.001 auto; margin-left:-4px; }
+  .app-project::before { content:"/"; color:var(--text-dim); margin-right:6px; }
   .app-project:empty { display:none; }
-  .app-crumb { color:var(--text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex-shrink:0; max-width:36ch; }
-  .app-crumb a { color:var(--text); text-decoration:none; }
-  .app-crumb a:hover { text-decoration:underline; }
+  .app-nav { display:flex; align-items:center; gap:8px; min-width:0; flex:0 1 auto; }
+  .app-nav::before { content:""; flex:none; width:1px; height:22px; background:var(--border); margin:0 4px 0 2px; }
+  .btn-overview { flex:none; white-space:nowrap; height:28px; padding:0 10px; border:1px solid var(--border); border-radius:var(--radius); background:var(--bg); color:var(--text); font:500 12.5px var(--font-sans); cursor:pointer; }
+  .btn-overview:hover { background:var(--bg-overlay); }
+  .doc-switcher { position:relative; min-width:0; flex:0 1 auto; }
+  .switcher-btn { display:flex; align-items:center; gap:6px; max-width:440px; min-width:96px; width:100%; height:28px; padding:0 8px; border:1px solid transparent; border-radius:var(--radius); background:none; color:var(--text); font:400 13px var(--font-sans); cursor:pointer; }
+  .switcher-btn:hover, .switcher-btn[aria-expanded="true"] { background:var(--bg-overlay); border-color:var(--border); }
+  .switcher-btn .icon { color:var(--text-secondary); }
+  .switcher-label { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-align:left; }
+  .switcher-cite { font-weight:500; }
+  .switcher-title { color:var(--text-secondary); }
+  .switcher-title:not(:empty)::before { content:" \00b7  "; white-space:pre; }
+  .switcher-pop { position:absolute; top:calc(100% + 6px); left:0; width:480px; max-width:calc(100vw - 24px); background:var(--bg-raised); border:1px solid var(--border); border-radius:8px; box-shadow:0 8px 28px rgba(0,0,0,.14); z-index:40; overflow:hidden; }
+  .switcher-pop[hidden] { display:none; }
+  .switcher-input { display:block; width:100%; box-sizing:border-box; border:0; border-bottom:1px solid var(--border); padding:10px 12px; font:400 13px var(--font-sans); color:var(--text); background:transparent; outline:none; }
+  .switcher-hint, .switcher-foot { font-size:11px; color:var(--text-dim); padding:6px 12px 2px; }
+  .switcher-foot { border-top:1px solid var(--border); padding:6px 12px 8px; margin-top:4px; }
+  .switcher-list { list-style:none; margin:0; padding:2px 0; max-height:calc(12 * 31px); overflow-y:auto; }
+  .switcher-list li { display:flex; align-items:baseline; gap:8px; padding:6px 12px; cursor:pointer; }
+  .switcher-list li .t { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .switcher-list li .t b { font-weight:500; }
+  .switcher-list li .t span { color:var(--text-secondary); }
+  .switcher-list li .s { flex:none; font-size:11px; color:var(--text-secondary); white-space:nowrap; }
+  .switcher-list li[aria-selected="true"] { background:var(--bg-overlay); }
+  .switcher-list li.current { box-shadow:inset 2px 0 0 var(--accent); }
+  .switcher-list li.current .t b { font-weight:600; }
+  .switcher-empty { padding:10px 12px; color:var(--text-secondary); }
+  .btn-overview:focus-visible, .switcher-btn:focus-visible, .article-nav button:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
+  .review-actions .view-mode-toggle { height:28px; }
+  .review-actions .view-mode-btn { height:22px; }
 
   /* ── Search (inside left panel header) ── */
   .panel-header-row {
@@ -579,6 +585,7 @@
   }
 
   .review-panel-top {
+    align-items: flex-start;
     gap: 10px;
     margin-bottom: 6px;
   }
@@ -612,7 +619,8 @@
   .review-progress-row {
     display: flex;
     align-items: baseline;
-    gap: 8px;
+    flex-wrap: wrap;
+    gap: 4px 8px;
     min-width: 0;
   }
 
@@ -711,6 +719,7 @@
   .run-chip {
     font-size: 11px; font-family: ui-monospace, monospace; color: var(--text-dim);
     border: 1px solid var(--border); border-radius: 10px; padding: 1px 7px;
+    white-space: nowrap;
   }
   .reasoning-note { position: relative; display: inline-flex; cursor: help; }
   .reasoning-note-icon {
@@ -2307,13 +2316,8 @@
     }
 
     .toolbar {
-      overflow-x: auto;
       padding: 6px 8px;
       gap: 8px;
-    }
-
-    #article-select {
-      min-width: 280px;
     }
 
     .toolbar-spacer {
@@ -2424,21 +2428,30 @@
 <div class="toolbar app-bar">
   <span class="brand">litschema</span>
   <span class="app-project" id="app-project"></span>
-  <!-- The way back to the document list without the browser back button. -->
-  <nav class="app-crumb" id="app-crumb"><a href="#/" data-route="overview">All documents</a></nav>
-  <select id="article-select">
-    <option value="">Select an article...</option>
-  </select>
-  <div class="article-nav">
-    <button id="btn-prev" disabled aria-label="Previous article"><svg class="icon" aria-hidden="true"><use href="/static/icons.svg#chevron-left"/></svg></button>
-    <span class="nav-counter" id="nav-counter">&mdash;</span>
-    <button id="btn-next" disabled aria-label="Next article"><svg class="icon" aria-hidden="true"><use href="/static/icons.svg#chevron-right"/></svg></button>
+  <div class="app-nav" id="app-nav">
+    <button class="btn-overview" id="btn-overview" type="button" title="All documents (Esc)">Overview</button>
+    <div class="doc-switcher" id="doc-switcher">
+      <button class="switcher-btn" id="switcher-btn" type="button" aria-haspopup="listbox"
+              aria-expanded="false" aria-controls="switcher-pop" title="Jump to a document">
+        <span class="switcher-label"><span class="switcher-cite" id="switcher-cite"></span><span class="switcher-title" id="switcher-title"></span></span>
+        <svg class="icon" aria-hidden="true"><use href="/static/icons.svg#chevron-down"/></svg>
+      </button>
+      <div class="switcher-pop" id="switcher-pop" hidden>
+        <input class="switcher-input" id="switcher-input" type="text" role="combobox" autocomplete="off"
+               spellcheck="false" aria-expanded="true" aria-autocomplete="list" aria-controls="switcher-list"
+               aria-label="Jump to a document" placeholder="Jump to a document&hellip;">
+        <div class="switcher-hint" id="switcher-hint"></div>
+        <ul class="switcher-list" id="switcher-list" role="listbox" aria-label="Documents"></ul>
+        <div class="switcher-foot">&uarr;&darr; to move &middot; Enter to open &middot; Esc to close</div>
+      </div>
+    </div>
+    <div class="article-nav">
+      <button id="btn-prev" disabled aria-label="Previous document"><svg class="icon" aria-hidden="true"><use href="/static/icons.svg#chevron-left"/></svg></button>
+      <span class="nav-counter" id="nav-counter">&mdash;</span>
+      <button id="btn-next" disabled aria-label="Next document"><svg class="icon" aria-hidden="true"><use href="/static/icons.svg#chevron-right"/></svg></button>
+    </div>
   </div>
   <div class="toolbar-spacer"></div>
-  <div class="view-mode-toggle" aria-label="Extraction view mode">
-    <button class="view-mode-btn active" id="view-mode-review" data-view-mode="review" type="button">Audit</button>
-    <button class="view-mode-btn" id="view-mode-data" data-view-mode="data" type="button">Data</button>
-  </div>
   <button class="theme-btn" id="btn-theme" title="Toggle theme" aria-label="Toggle theme"><svg class="icon" aria-hidden="true"><use href="/static/icons.svg#moon"/></svg></button>
   <button class="theme-btn" id="btn-settings" title="Settings" aria-label="Settings"><svg class="icon" aria-hidden="true"><use href="/static/icons.svg#settings"/></svg></button>
 </div>
@@ -2653,6 +2666,10 @@
           <div class="view-mode-toggle data-mode-toggle" aria-label="Data display mode">
             <button class="view-mode-btn active" id="data-mode-table" data-data-mode="table" type="button">Table</button>
             <button class="view-mode-btn" id="data-mode-json" data-data-mode="json" type="button">JSON</button>
+          </div>
+          <div class="view-mode-toggle" role="group" aria-label="Extraction view mode">
+            <button class="view-mode-btn active" id="view-mode-review" data-view-mode="review" type="button">Audit</button>
+            <button class="view-mode-btn" id="view-mode-data" data-view-mode="data" type="button">Data</button>
           </div>
         </div>
       </div>
@@ -2898,10 +2915,14 @@ function setToolbarScope(inDocument) {
   // Document-scoped controls are hidden on the overview rather than disabled:
   // there is no document for them to act on, so showing them implies a context
   // the user is not in.
-  for (const sel of ["#article-select", ".app-bar .article-nav", ".app-bar .view-mode-toggle"]) {
-    const el = document.querySelector(sel);
-    if (el) el.style.display = inDocument ? "" : "none";
-  }
+  $("#app-nav").style.display = inDocument ? "" : "none";
+  if (!inDocument) closeSwitcher({ restoreFocus: false });
+}
+
+// The overview's own hash (#/?q=…&status=…), so leaving a document returns to
+// the same view of the list. ?filter= lives in the search part and rides along.
+function goToOverview() {
+  window.location.hash = state.overviewHash || "#/";
 }
 
 function showOverview() {
@@ -2923,10 +2944,7 @@ async function applyRoute() {
       if (totals) totals.textContent = `No document "${route.articleId}" in this project.`;
       return;
     }
-    const select = $("#article-select");
-    if (select && select.value !== route.articleId) {
-      select.value = route.articleId;
-    }
+    closeSwitcher({ restoreFocus: false });
     if (state.currentId !== route.articleId) await loadArticle(route.articleId);
     else {
       $("#overview-route").style.display = "none";
@@ -2937,8 +2955,7 @@ async function applyRoute() {
   }
   state.currentId = null;
   state.currentRunId = null;
-  const select = $("#article-select");
-  if (select) select.value = "";
+  state.overviewHash = window.location.hash || "#/";
   showOverview();
 }
 
@@ -2982,7 +2999,8 @@ function setOverviewQuery(next) {
   if (q.sort !== "title") p.set("sort", q.sort);
   if (q.dir !== "asc") p.set("dir", q.dir);
   const s = p.toString();
-  history.replaceState(null, "", location.pathname + location.search + "#/" + (s ? "?" + s : ""));
+  state.overviewHash = "#/" + (s ? "?" + s : "");
+  history.replaceState(null, "", location.pathname + location.search + state.overviewHash);
   renderOverview();
 }
 
@@ -3104,14 +3122,19 @@ async function init() {
     b.addEventListener("click", () => setLeftPane(b.dataset.pane)));
   syncViewControls();
   // If a URL filter is present, load deep fields up front so the first
-  // dropdown render reflects accurate matches (the filter expression may
+  // queue reflects accurate matches (the filter expression may
   // reference fields like experimental_setups that aren't in the summary).
   if (applyInitialFilterFromUrl()) {
     await ensureDeepFields();
   }
-  populateDropdown();
+  refreshQueue();
   updateFilterChip();
 
+  $("#btn-overview").addEventListener("click", goToOverview);
+  wireSwitcher();
+  document.addEventListener("keydown", (e) => {
+    if (escapeLeavesDocument(e)) { e.preventDefault(); goToOverview(); }
+  });
   // Prev/next handlers
   $("#btn-prev").addEventListener("click", () => navigateArticle(-1));
   $("#btn-next").addEventListener("click", () => navigateArticle(1));
@@ -3277,7 +3300,7 @@ async function applyFilter(expr) {
   }
   history.replaceState(null, "", url.toString());
   evaluateFilterPreview($("#filter-input").value);
-  populateDropdown();
+  refreshQueue();
   updateFilterChip();
   if (onOverview()) renderOverview();
 }
@@ -3368,7 +3391,7 @@ function clearFilter() {
   const url = new URL(window.location.href);
   url.searchParams.delete("filter");
   history.replaceState(null, "", url.toString());
-  populateDropdown();
+  refreshQueue();
   updateFilterChip();
   if (onOverview()) renderOverview();
 }
@@ -3402,6 +3425,7 @@ function wireFilterControls() {
   });
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && $("#filter-help-modal").classList.contains("active")) {
+      e.preventDefault();
       closeFilterHelp();
     }
   });
@@ -3482,61 +3506,40 @@ function closeFilterHelp() {
   $("#filter-help-modal").classList.remove("active");
 }
 
-function articleOptionLabel(article) {
-  const authors = formatAuthors(article.authors);
-  const year = article.year ? ` ${article.year}` : "";
-  if (authors) {
-    return `${authors}${year}${article.title ? `. ${article.title}` : ""}`;
-  }
-  if (article.corporate_author) {
-    return `${article.corporate_author}${year}${article.title ? `. ${article.title}` : ""}`;
-  }
-  if (article.title) {
-    return article.year ? `${article.title} (${article.year})` : article.title;
-  }
-  return article.article_id || "Untitled article";
+// "Paessler 2024": first author's surname and year, for the switcher.
+function shortCitation(article) {
+  const first = (article.authors || [])[0];
+  const name = first
+    ? (typeof first === "string" ? surnameOf(first) : (first.family || first.given || ""))
+    : (article.corporate_author || "");
+  const cite = [name, article.year].filter(Boolean).join(" ");
+  return cite || article.article_id || "Untitled";
 }
 
-function populateDropdown() {
-  const select = $("#article-select");
-  const currentVal = select.value;
-  // Remove all except placeholder
-  while (select.options.length > 1) select.remove(1);
-
+// The queue prev/next and the switcher walk: every document, or the ones the
+// applied expression filter keeps.
+function refreshQueue() {
   state.filteredArticles = state.filterFn
     ? state.articles.filter(safeFilterCall(state.filterFn))
     : [...state.articles];
 
-  for (const a of state.filteredArticles) {
-    const opt = document.createElement("option");
-    opt.value = a.article_id;
-    opt.textContent = articleOptionLabel(a);
-    select.appendChild(opt);
-  }
-
-  const currentStillVisible =
-    currentVal && state.filteredArticles.some((a) => a.article_id === currentVal);
-  if (currentStillVisible) {
-    select.value = currentVal;
-  } else if (state.filteredArticles.length > 0 && state.currentId) {
-    // The open article was filtered out. Move to the first match rather than
-    // leaving a document on screen that the queue no longer contains.
-    const firstId = state.filteredArticles[0].article_id;
-    select.value = firstId;
-    if (currentVal !== firstId) routeToDoc(firstId);
-  } else if (state.currentId || currentVal) {
-    // Filter has zero matches and an article was previously loaded —
-    // return to the welcome screen rather than leaving stale content up.
-    select.value = "";
-    state.currentId = null;
-    state.currentRunId = null;
-    // Route to the overview rather than only swapping panels, so the URL and
-    // what is on screen agree — a reload here reopened the old document.
-    window.location.hash = "#/";
-    showOverview();
+  const current = state.currentId;
+  if (current && !state.filteredArticles.some(a => a.article_id === current)) {
+    if (state.filteredArticles.length > 0) {
+      // The open document was filtered out. Move to the first match rather
+      // than leaving a document on screen that the queue no longer contains.
+      routeToDoc(state.filteredArticles[0].article_id);
+    } else {
+      // Zero matches: route to the overview so the URL and the screen agree.
+      state.currentId = null;
+      state.currentRunId = null;
+      goToOverview();
+      showOverview();
+    }
   }
 
   updateNavState();
+  if (switcherOpen()) renderSwitcherList();
 }
 
 function navigateArticle(direction) {
@@ -3553,14 +3556,144 @@ function updateNavState() {
   $("#btn-prev").disabled = idx <= 0;
   $("#btn-next").disabled = idx < 0 || idx >= total - 1;
   $("#nav-counter").textContent = idx >= 0 ? `${idx + 1}/${total}` : `\u2014/${total}`;
+  updateSwitcherLabel();
 }
 
+// ── Document switcher ──
+function updateSwitcherLabel() {
+  const article = state.articles.find(a => a.article_id === state.currentId);
+  $("#switcher-cite").textContent = article ? shortCitation(article) : "";
+  $("#switcher-title").textContent = article?.title || "";
+  $("#switcher-btn").title = article
+    ? [shortCitation(article), article.title].filter(Boolean).join(". ")
+    : "Jump to a document";
+}
+
+function switcherOpen() {
+  return !$("#switcher-pop").hidden;
+}
+
+function switcherMatches() {
+  const q = $("#switcher-input").value.trim();
+  return state.filteredArticles.filter(a => matchesText(a, q));
+}
+
+function renderSwitcherList() {
+  const matches = switcherMatches();
+  const list = $("#switcher-list");
+  const total = state.filteredArticles.length;
+  $("#switcher-hint").textContent = `${matches.length} of ${total} \u00b7 type to filter by title, author, year, id`;
+  state.switcherIndex = Math.max(0, Math.min(state.switcherIndex ?? 0, matches.length - 1));
+  list.innerHTML = matches.length
+    ? matches.map((a, i) => {
+        const current = a.article_id === state.currentId;
+        const title = a.title ? `<span> \u00b7 ${escapeHtml(a.title)}</span>` : "";
+        return `<li id="switcher-opt-${i}" role="option" data-article="${escapeHtml(a.article_id)}"` +
+          ` aria-selected="${i === state.switcherIndex}"${current ? ' class="current" aria-current="true"' : ""}>` +
+          `<span class="t"><b>${escapeHtml(shortCitation(a))}</b>${title}</span>` +
+          `<span class="s">${escapeHtml(articleStatus(a).label)}</span></li>`;
+      }).join("")
+    : `<li class="switcher-empty" role="presentation">No documents match.</li>`;
+  syncSwitcherActive();
+}
+
+function syncSwitcherActive() {
+  const input = $("#switcher-input");
+  const options = $("#switcher-list").querySelectorAll("li[role=option]");
+  options.forEach((li, i) => li.setAttribute("aria-selected", i === state.switcherIndex ? "true" : "false"));
+  const active = options[state.switcherIndex];
+  if (active) {
+    input.setAttribute("aria-activedescendant", active.id);
+    active.scrollIntoView({ block: "nearest" });
+  } else {
+    input.removeAttribute("aria-activedescendant");
+  }
+}
+
+function openSwitcher() {
+  const input = $("#switcher-input");
+  input.value = "";
+  const idx = state.filteredArticles.findIndex(a => a.article_id === state.currentId);
+  state.switcherIndex = Math.max(0, idx);
+  $("#switcher-pop").hidden = false;
+  $("#switcher-btn").setAttribute("aria-expanded", "true");
+  renderSwitcherList();
+  input.focus();
+}
+
+function closeSwitcher({ restoreFocus = true } = {}) {
+  if (!switcherOpen()) return;
+  $("#switcher-pop").hidden = true;
+  $("#switcher-btn").setAttribute("aria-expanded", "false");
+  if (restoreFocus) $("#switcher-btn").focus();
+}
+
+function openSwitcherChoice(articleId) {
+  closeSwitcher();
+  if (articleId && articleId !== state.currentId) routeToDoc(articleId);
+}
+
+function wireSwitcher() {
+  const input = $("#switcher-input");
+  $("#switcher-btn").addEventListener("click", () => {
+    if (switcherOpen()) closeSwitcher();
+    else openSwitcher();
+  });
+  input.addEventListener("input", () => {
+    state.switcherIndex = 0;
+    renderSwitcherList();
+  });
+  input.addEventListener("keydown", (e) => {
+    const count = $("#switcher-list").querySelectorAll("li[role=option]").length;
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      if (!count) return;
+      state.switcherIndex = (state.switcherIndex + (e.key === "ArrowDown" ? 1 : -1) + count) % count;
+      syncSwitcherActive();
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      const li = $("#switcher-list").querySelectorAll("li[role=option]")[state.switcherIndex];
+      if (li) openSwitcherChoice(li.dataset.article);
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      e.stopPropagation();
+      closeSwitcher();
+    } else if (e.key === "Tab") {
+      closeSwitcher({ restoreFocus: false });
+    }
+  });
+  $("#switcher-list").addEventListener("mousemove", (e) => {
+    const li = e.target.closest("li[role=option]");
+    if (!li) return;
+    const i = [...$("#switcher-list").querySelectorAll("li[role=option]")].indexOf(li);
+    if (i !== state.switcherIndex) { state.switcherIndex = i; syncSwitcherActive(); }
+  });
+  // mousedown, not click: the input keeps focus until the choice is made.
+  $("#switcher-list").addEventListener("mousedown", (e) => {
+    const li = e.target.closest("li[role=option]");
+    if (!li) return;
+    e.preventDefault();
+    openSwitcherChoice(li.dataset.article);
+  });
+  document.addEventListener("mousedown", (e) => {
+    if (switcherOpen() && !$("#doc-switcher").contains(e.target)) closeSwitcher({ restoreFocus: false });
+  });
+}
+
+// Esc on a document returns to the overview, when nothing else claims it.
+function escapeLeavesDocument(e) {
+  if (e.key !== "Escape" || e.defaultPrevented) return false;
+  if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return false;
+  if (parseRoute().name !== "doc" || switcherOpen() || state.editingPath) return false;
+  if (document.querySelector(".orcid-modal-backdrop.active")) return false;
+  const t = e.target;
+  return !(t && (t.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName)));
+}
+
+
 // ── Article selection ──
-// The dropdown drives the route; applyRoute drives loadArticle. A dropdown
+// The switcher drives the route; applyRoute drives loadArticle. A switcher
 // pick, a deep link, and the back button therefore all take one path.
-$("#article-select").addEventListener("change", (e) => {
-  if (e.target.value) routeToDoc(e.target.value);
-});
 
 async function loadArticle(id) {
   state.currentId = id;
@@ -3767,7 +3900,7 @@ function applyBibBlock(articleId, block) {
     for (const key of ["title", "year", "journal", "doi", "corporate_author"]) entry[key] = block[key] ?? null;
     entry.authors = block.authors || [];
     entry.bib_source = block.bib_source;
-    populateDropdown();
+    refreshQueue();
   }
   if (articleId === state.currentId) renderBibHeader(block);
 }
@@ -6392,8 +6525,7 @@ async function syncCurrentArticleProgress() {
   const article = state.articles.find(a => a.article_id === id);
   if (!article) return;
 
-  const option = $(`#article-select option[value="${CSS.escape(id)}"]`);
-  if (option) option.textContent = articleOptionLabel(article);
+  if (id === state.currentId) updateSwitcherLabel();
   if ($("#overview-route")?.style.display === "block") renderOverview();
   updateReviewWorkspace();
 }
@@ -6428,8 +6560,8 @@ function mergeArticleSummaries(fresh) {
     state.deepGeneration = (state.deepGeneration || 0) + 1;
     if (state.filterFn) {
       // An applied filter is still holding the previous run's matches, and the
-      // dropdown and navigation read from that list.
-      populateDropdown();
+      // switcher and prev/next read from that list.
+      refreshQueue();
       updateFilterChip();
     }
   }
