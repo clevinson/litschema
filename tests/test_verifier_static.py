@@ -39,11 +39,11 @@ def test_raw_lines_escape_html() -> None:
     assert "escapeHtml(lines[i])" in html
 
 
-def test_verifier_pdf_button_treats_127_0_0_1_as_local() -> None:
+def test_verifier_pdf_is_a_document_tab_not_a_popup_button() -> None:
     html = STATIC_HTML.read_text()
 
-    assert 'location.hostname === "127.0.0.1"' in html
-    assert '!location.origin.includes("localhost")' not in html
+    assert 'data-pane="pdf"' in html
+    assert 'id="btn-pdf"' not in html
 
 
 def test_verifier_defaults_to_review_table_with_mode_switcher() -> None:
