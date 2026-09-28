@@ -43,6 +43,7 @@ specs/
   `feat/multirun`;
 - `explore`: export views, audit sidecars, DuckDB, and MCP;
 - `verifier`: web routes, read surfaces, and frontend constraints;
+- `grading`: the independent grader, its rubric, and stored grades;
 - `bib-metadata`: bibliographic data and provenance.
 
 Other specs cross-link these rules instead of redefining them.

@@ -97,9 +97,9 @@ class Harness:
         self.tmp = Path(tempfile.mkdtemp(prefix="litschema-flow-"))
         self.project = self.tmp / source.name
         shutil.copytree(source, self.project)
-        self.render_article = (
-            self._add_render_article() if source.resolve() == DEFAULT_PROJECT.resolve() else None
-        )
+        is_default = source.resolve() == DEFAULT_PROJECT.resolve()
+        self.render_article = self._add_render_article() if is_default else None
+        self.graded_article = self._add_grade() if is_default else None
         self.port = free_port()
         self.base = f"http://127.0.0.1:{self.port}"
         self.server: subprocess.Popen | None = None
@@ -175,6 +175,50 @@ class Harness:
         run_meta = json.loads((run / "run.json").read_text())
         run_meta["article_id"] = article_id
         (run / "run.json").write_text(json.dumps(run_meta, indent=2))
+        return article_id
+
+    def _add_grade(self) -> str:
+        """A current grade for the okafor run: one unsupported, one partial row, one can't verify."""
+        sys.path.insert(0, str(REPO_ROOT / "src"))
+        from litschema.articles import article_files
+        from litschema.config import load_config
+        from litschema.grading import input_hashes, write_grade
+        from litschema.runs import active_run
+
+        article_id = "okafor-2023-biochar-trial"
+        cfg = load_config(self.project / "litschema.yaml", reload=True)
+        run = active_run(article_files(cfg, article_id))
+        notes = {
+            ".site_name": "Site named in the methods section.",
+            ".measurements[0]": "Depth and unit read from Table 2.",
+        }
+        reasoning = json.loads(run.reasoning.read_text())
+        for entry in reasoning["fields"]:
+            if entry["path"] in notes:
+                entry["reasoning"] = notes[entry["path"]]
+        run.reasoning.write_text(json.dumps(reasoning, indent=2))
+        verdicts = {
+            "site_name": ("supported", "L5 names the Nsukka Research Farm."),
+            "replicates": ("unsupported", "L9 gives four replicates, not three."),
+            "tillage": ("cannot_verify", "The tillage system is only shown in a figure."),
+            "measurements[0]": ("partial", "The depth range is inferred from the table caption."),
+        }
+        write_grade(run, {
+            "version": 1,
+            "grade_id": "01FLOWGRADE00000000000000",
+            "article_id": article_id,
+            "run_id": run.run_id,
+            "created_at": "2026-09-28T00:00:00+00:00",
+            "grader": {"harness": "claude-code", "model": "claude-flow-1",
+                       "requested_model": "claude-flow-1", "rubric_sha256": "sha256:flow"},
+            "inputs": input_hashes(run),
+            "fields": [
+                {"path": path, "verdict": verdict, "confidence": 0.8, "reasoning": reason}
+                for path, (verdict, reason) in verdicts.items()
+            ],
+            "ungraded": [],
+            "usage": {},
+        })
         return article_id
 
     def start(self) -> None:
@@ -757,6 +801,8 @@ def run_flow(harness: Harness) -> None:
 
         if harness.render_article:
             rendered_flow(page, base, harness.render_article)
+        if harness.graded_article:
+            grade_flow(page, base, harness.graded_article)
 
         print("\n[console]")
         real = [e for e in page_errors if "favicon" not in e.lower()]
@@ -825,6 +871,100 @@ def rendered_flow(page, base: str, article: str) -> None:
     print("\n[icons]")
     check("icons come from the bundled sprite",
           page.locator('use[href="/static/icons.svg#settings"]').count() >= 1)
+
+
+def grade_flow(page, base: str, article: str) -> None:
+    print("\n[grader verdicts]")
+    page.goto(f"{base}/#/doc/{article}", wait_until="networkidle")
+    await_document(page)
+    toggle = page.locator("#btn-review-order")
+    check("the review-order toggle shows when a grade exists", toggle.is_visible())
+    check("and defaults to flagged first", toggle.get_attribute("aria-pressed") == "true")
+    groups = page.locator("#panel-right [data-review-group]")
+    check("unsupported comes first", groups.count() > 0
+          and groups.first.get_attribute("data-review-group") == "unsupported",
+          str(groups.count() and groups.first.get_attribute("data-review-group")))
+    order = page.locator("#panel-right tr.clickable[data-path]")
+    check("its row leads the table", order.first.get_attribute("data-path") == "replicates",
+          str(order.first.get_attribute("data-path")))
+    marks = {
+        v: page.locator(f'#panel-right .grade-mark[data-verdict="{v}"]').count()
+        for v in ("supported", "partial", "unsupported", "cannot_verify")
+    }
+    check("verdict markers render, none for supported",
+          marks["unsupported"] == 1 and marks["cannot_verify"] == 1
+          and marks["partial"] >= 1 and marks["supported"] == 0, json.dumps(marks))
+    partial_cell = "measurements[0].unit"
+    check("a row's grade covers its cells",
+          page.locator(f'#panel-right tr[data-path="{partial_cell}"] .grade-mark').count() == 1)
+
+    chip_title = page.locator("#run-chip").get_attribute("title") or ""
+    check("the run chip names the grader model", "checked by claude-flow-1" in chip_title,
+          chip_title.replace("\n", " | ")[:90])
+
+    box = page.locator("#source-evidence-reasoning")
+    evidence = page.locator("#source-evidence-overlay")
+
+    page.locator('#panel-right tr[data-path="site_name"] td.value-cell').first.click()
+    page.wait_for_timeout(600)
+    text = box.inner_text()
+    check("a supported field shows the extractor's note",
+          "Site named in the methods section." in text, text[:90])
+    check("and no verdict text",
+          box.locator(".evidence-verdict").count() == 0 and "Nsukka Research Farm" not in text, text[:90])
+    check("and no confidence score",
+          not page.locator("#source-evidence-confidence").is_visible())
+
+    page.locator(f'#panel-right tr[data-path="{partial_cell}"] td.value-cell').first.click()
+    page.wait_for_timeout(600)
+    text = box.inner_text()
+    check("a partial field leads with the verdict and the check's reason",
+          "Partially supported" in text and "inferred from the table caption" in text, text[:90])
+    details = box.locator("details.evidence-extraction")
+    check("the extractor's note sits in a closed disclosure",
+          details.count() == 1 and details.get_attribute("open") is None
+          and "How it was extracted" in details.locator("summary").inner_text()
+          and "Depth and unit read from Table 2." not in text,
+          str(details.count()))
+    details.locator("summary").click()
+    check("and opens to show it", "Depth and unit read from Table 2." in box.inner_text())
+    check("no confidence score for a graded field",
+          not page.locator("#source-evidence-confidence").is_visible())
+    all_text = evidence.inner_text()
+    check("the evidence box never names the grader model",
+          "claude-flow-1" not in all_text and "Grader" not in all_text, all_text[:90])
+
+    toggle.click()
+    page.wait_for_timeout(600)
+    check("the toggle switches to document order", toggle.get_attribute("aria-pressed") == "false")
+    check("rows follow the document again",
+          page.locator("#panel-right [data-review-group]").count() == 0
+          and order.first.get_attribute("data-path") == "site_name",
+          str(order.first.get_attribute("data-path")))
+    check("markers stay in document order",
+          page.locator('#panel-right .grade-mark[data-verdict="unsupported"]').count() == 1)
+    toggle.click()
+    page.wait_for_timeout(400)
+
+    print("\n[flags on the overview]")
+    page.goto(f"{base}/#/", wait_until="networkidle")
+    page.wait_for_selector("#overview-route", state="visible", timeout=20000)
+    row = page.locator(f'#overview-rows tr[data-article="{article}"] .ov-flags')
+    check("the graded document shows its flag count", row.count() == 1
+          and row.inner_text().strip() == "2", row.inner_text() if row.count() else "none")
+    page.locator('#overview-table th[data-sort="flags"]').click()
+    page.locator('#overview-table th[data-sort="flags"]').click()
+    page.wait_for_timeout(300)
+    check("Flags sorts, most flagged first",
+          page.locator("#overview-rows tr[data-article]").first.get_attribute("data-article") == article
+          and "sort=flags" in page.url, page.url)
+    page.locator('#ov-chips [data-status="flagged"]').click()
+    page.wait_for_timeout(300)
+    shown = page.locator("#overview-rows tr[data-article]")
+    check("the Flagged chip keeps only flagged documents",
+          shown.count() == 1 and shown.first.get_attribute("data-article") == article,
+          f"{shown.count()} rows")
+    page.locator('#ov-chips [data-status="all"]').click()
 
 
 def main() -> int:

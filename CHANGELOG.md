@@ -61,6 +61,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 - Overview: summary strip, text filter and status chips, Status and Confidence
   columns, sortable columns, and a header that stays visible while scrolling.
   The filter, chip, and sort are kept in the URL, so reload keeps them.
+- `litschema grade` checks each extracted value against the lines it cites,
+  using a separate model through your own `claude` CLI, and stores a verdict
+  (supported, partial, unsupported, can't verify), a confidence, and a reason
+  per field beside the run. `--all` skips runs already graded by the same
+  model; `--model claude-haiku-4-5` is a cheap pass (about $0.09 a paper in
+  the pilot). See `specs/grading/spec.md`.
+- The app shows grader verdicts in the audit table and the grader's reasoning
+  in the evidence box, and orders a graded document's fields flagged first,
+  with a toggle beside Audit/Data. The overview has a Flags column and a
+  Flagged chip.
 
 ### Changed
 

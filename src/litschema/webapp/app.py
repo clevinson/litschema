@@ -33,6 +33,7 @@ from ..bib_metadata import (
     update_bib_metadata,
 )
 from ..config import LitSchemaConfig
+from ..grading import FLAG_VERDICTS, GradeCorruptError, current_grade
 from ..ingest.openalex_harvest import RegistryUnavailableError, sync_article
 from ..review_paths import InvalidReviewPathError, canonical_review_path
 from ..reviews import (
@@ -242,6 +243,30 @@ def _run_summary_for(run) -> dict | None:
         "effort": agent.get("effort"),
         "harness": agent.get("harness"),
     }
+
+
+def _grade_summary(run) -> tuple[dict | None, str | None]:
+    """Verdict counts from the run's current grade, and any error reading it."""
+    if run is None:
+        return None, None
+    try:
+        status = current_grade(run)
+    except (GradeCorruptError, OSError) as exc:
+        return None, str(exc)
+    grade = status.grade
+    if grade is None:
+        return None, None
+    verdicts = [f.get("verdict") for f in grade["fields"] if isinstance(f, dict)]
+    grader = grade.get("grader") or {}
+    return {
+        "grade_id": grade.get("grade_id"),
+        "created_at": grade.get("created_at"),
+        "model": grader.get("model") or grader.get("requested_model"),
+        "flags": sum(1 for v in verdicts if v in FLAG_VERDICTS),
+        "unsupported": verdicts.count("unsupported"),
+        "partial": verdicts.count("partial"),
+        "cannot_verify": verdicts.count("cannot_verify"),
+    }, None
 
 
 def _count_unattributed(cfg: LitSchemaConfig) -> int:
@@ -610,6 +635,8 @@ async def list_articles(cfg: CfgDep):
                     "n_setups": 0,
                     "active_run_id": None,
                     "active_run": None,
+                    "grade": None,
+                    "grade_error": None,
                     **(
                         {**_article_progress(files, None), "review_error": run_error}
                         if run_error
@@ -621,8 +648,11 @@ async def list_articles(cfg: CfgDep):
             setups = data.get("experimental_setups") or []
             progress = _article_progress(files, run)
             run_summary = _run_summary_for(run)
+            grade, grade_error = _grade_summary(run)
             entry.update(
                 {
+                    "grade": grade,
+                    "grade_error": grade_error,
                     "has_extraction": True,
                     "confidence": _extraction_confidence(files, run),
                     "study_types": data.get("study_types", []),
@@ -829,6 +859,35 @@ async def get_reasoning(article_id: str, cfg: CfgDep, run_id: str | None = None)
     if path is None or not path.exists():
         raise HTTPException(404, f"No reasoning for {article_id}")
     return json.loads(path.read_text())
+
+
+@app.get("/api/grades/{article_id}")
+async def get_grades(article_id: str, cfg: CfgDep, run_id: str | None = None):
+    """The run's current grade, or null, plus the newer grades ignored as stale.
+
+    ``run_id`` pins the read like `/api/reasoning`; omitted, the active run.
+    """
+    from ..runs import BrokenActiveRunError, active_run
+
+    files = article_files(cfg, article_id)
+    if run_id is not None:
+        run = _require_run(cfg, article_id, run_id)
+    else:
+        try:
+            run = active_run(files)
+        except BrokenActiveRunError as exc:
+            raise HTTPException(404, str(exc)) from exc
+        if run is None:
+            raise HTTPException(404, f"No extraction for {article_id}")
+    try:
+        status = current_grade(run)
+    except (GradeCorruptError, OSError) as exc:
+        raise HTTPException(409, str(exc)) from exc
+    return {
+        "run_id": run.run_id,
+        "grade": status.grade,
+        "stale": [g.get("grade_id") for g in status.stale],
+    }
 
 
 @app.get("/api/settings")

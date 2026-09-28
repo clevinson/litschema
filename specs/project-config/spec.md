@@ -115,6 +115,7 @@ an uncommitted schema may become unreconstructable once edited. `doctor` and
 | `validate`, `agent *` | `specs/extraction` |
 | `meta *` | `specs/bib-metadata` |
 | `verify` | `specs/verifier` |
+| `grade` | `specs/grading` |
 | `export`, `mcp` | `specs/explore` |
 
 `doctor` also inspects the schema for slots that silently discard authored
