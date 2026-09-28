@@ -82,8 +82,12 @@ show which of the two they used.
   or directory narrows the scope. It exits 0 only when every selected artifact
   is valid and exits 1 with per-file errors otherwise.
 - `litschema agent validate-reasoning <file>` validates one reasoning artifact
-  against the bundled schema without requiring a project. It exits 0 when valid
-  and 1 for missing or invalid input, with bounded error output.
+  against the bundled schema without requiring a project. When the file is in a
+  project (found from `--config`, `LITSCHEMA_CONFIG`, or the file's directory),
+  it also requires every entry's `path` to name a field the extraction schema
+  defines, since the verifier finds evidence by path. It exits 0 when valid and
+  1 for missing or invalid input, with bounded error output. `record-extraction`
+  runs the same checks before publishing.
 - A missing explicit target fails. Error markers are valid diagnostic
   artifacts, but they are not activatable extractions.
 - Validator instances are reused within a command. Writes remain atomic and
