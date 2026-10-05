@@ -51,87 +51,103 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+## [0.1.2] — 2026-10-05
+
+### Breaking changes
+
+- New extractions record a `basis` for every value, plus a `note` unless the
+  basis is `stated`. After moving a project's pin to 0.1.2, run
+  `litschema skills install --local --force` so the `extract-article` skill
+  matches. Existing runs and reviews load unchanged.
+- `prepare-text` output changed (no OCR, no page headers or footers, figures
+  extracted), so line numbers in re-converted text differ from the old text.
+  Existing runs keep their own citations; re-convert before extracting again.
+- Existing projects need `data/papers/*/article.md` and
+  `data/papers/*/figures/` added to `.gitignore` by hand.
+
 ### Added
 
 - The app's document pane renders prepared text as formatted paragraphs,
   tables, and figures, and highlights the cited paragraph, table row, or
   figure; the extracted value is marked when it appears verbatim. Raw lines
   and the PDF are tabs beside it. If a document fails to render, the pane
-  shows Raw lines.
+  shows Raw lines. ([#23](https://github.com/clevinson/litschema/pull/23))
 - Overview: summary strip, text filter and status chips, a Status column,
   sortable columns, and a header that stays visible while scrolling.
-  The filter, chip, and sort are kept in the URL, so reload keeps them.
+  The filter, chip, and sort are kept in the URL, so reload keeps them. ([#23](https://github.com/clevinson/litschema/pull/23))
 - `litschema grade` checks each extracted value against the lines it cites,
   using a separate model through your own `claude` CLI, and stores per field
   the probability that the value is right (`confidence`, null when it can't be
   judged) and a one-line `issue` below 0.9. Bands are derived: high >= 0.9,
   check >= 0.6, low below, can't verify for null. `--all` skips runs already graded by the same
   model; `--model claude-haiku-4-5` is a cheap pass (about $0.09 a paper in
-  the pilot). See `specs/grading/spec.md`.
+  the pilot). See `specs/grading/spec.md`. ([#26](https://github.com/clevinson/litschema/pull/26))
 - The app marks check, low, and can't-verify fields in the audit table, shows
   the band, confidence, and issue in the evidence box ("Check · 72%"), and
   orders a graded document's fields flagged first (low, check, can't verify,
   then inferred or assumed values), with a toggle beside Audit/Data. The
   overview has a Flags column and a Flagged chip. Grade files from before this
-  change still display, with verdicts mapped to bands.
+  change still display, with verdicts mapped to bands. ([#26](https://github.com/clevinson/litschema/pull/26))
 - Reasoning entries carry a required `basis` (stated, converted, normalized,
   calculated, inferred, assumed) and a one-line `note` on how the value was
   derived, required unless the basis is stated. The evidence box shows both.
   The `extract-article` skill no longer asks for per-field or overall
   confidence or free-text reasoning; the schema still accepts them from older
-  runs.
+  runs. ([#26](https://github.com/clevinson/litschema/pull/26))
 - `prepare-text` writes the PDF's figures to `figures/` beside `article.md`
   and links them as `![](figures/<name>)`. It drops logos repeated on 3 or more
   pages and images under 150x100 px. The `extract-article` skill opens a
-  figure when a value may sit in it or in an image-only table.
+  figure when a value may sit in it or in an image-only table. ([#25](https://github.com/clevinson/litschema/pull/25))
 - `prepare-text` writes `prepared-text.json`: converter name and version,
   options, and hashes of the PDF, the markdown, and each figure. Commit it; it
-  holds no paper text.
+  holds no paper text. ([#25](https://github.com/clevinson/litschema/pull/25))
 - `agent record-extraction` copies that record into `run.json` as
   `conversion`, and refuses to publish when `article.md` no longer matches the
-  record's hash.
+  record's hash. ([#25](https://github.com/clevinson/litschema/pull/25))
 - `init` gitignores prepared text (`article.md`) and extracted figures along
   with PDFs, since most papers can't be redistributed. Existing
   projects need `data/papers/*/article.md` and `data/papers/*/figures/` added
-  to `.gitignore` by hand.
+  to `.gitignore` by hand ([#24](https://github.com/clevinson/litschema/pull/24)).
+- Documentation at [litschema.readthedocs.io](https://litschema.readthedocs.io/),
+  and screenshots in the README ([#27](https://github.com/clevinson/litschema/pull/27)).
 
 ### Changed
 
-- The app is titled "litschema", with a persistent top bar naming the project.
+- The app is titled "litschema", with a persistent top bar naming the project. ([#23](https://github.com/clevinson/litschema/pull/23))
 - On a document page the app bar has an Overview button, a document switcher
   you can search by title, author, year, or id, and previous/next. Esc
   returns to the overview. The native article dropdown and the "All
   documents" link are gone, and the Audit/Data toggle moved into the review
-  pane's header.
+  pane's header. ([#23](https://github.com/clevinson/litschema/pull/23))
 - The app loads nothing from the network: icons, fonts, and scripts are
-  bundled.
+  bundled. ([#23](https://github.com/clevinson/litschema/pull/23))
 - In the formatted view, evidence and source labels name the source instead
-  of line numbers; Raw lines still shows them.
+  of line numbers; Raw lines still shows them. ([#23](https://github.com/clevinson/litschema/pull/23))
 - The overview has one filter bar with Search and Expression modes. The
-  toolbar Filter button and the "Advanced filter" popover are gone.
+  toolbar Filter button and the "Advanced filter" popover are gone. ([#23](https://github.com/clevinson/litschema/pull/23))
 - `prepare-text` no longer runs OCR, and drops page headers and footers and
   `<mark>` highlight tags. Scanned PDFs now convert as `empty`. Re-run
   `prepare-text --all --force` to regenerate existing text; runs extracted
-  from the old text keep citing its line numbers.
+  from the old text keep citing its line numbers. ([#25](https://github.com/clevinson/litschema/pull/25))
 - `prepare-text` falls back to the canonical `<article-id>.pdf` when the
-  manifest's `filename` names a file that isn't in the article directory.
-- pymupdf4llm 1.28.2 (lockfile; the dependency range is unchanged).
+  manifest's `filename` names a file that isn't in the article directory. ([#25](https://github.com/clevinson/litschema/pull/25))
+- pymupdf4llm 1.28.2 (lockfile; the dependency range is unchanged). ([#25](https://github.com/clevinson/litschema/pull/25))
 - `agent validate-reasoning` and `agent record-extraction` reject reasoning
   entries whose `path` names a field the extraction schema doesn't define.
   The verifier finds evidence by path, so such an entry left its field with no
   visible evidence. Outside a project, `validate-reasoning` checks shape and
-  citations as before.
+  citations as before. ([#22](https://github.com/clevinson/litschema/pull/22))
 
 ### Fixed
 
 - HTML inside prepared text is sanitized in the formatted view and shown as
-  text in Raw lines (tdj4).
+  text in Raw lines. ([#23](https://github.com/clevinson/litschema/pull/23))
 
 ### Known limits
 
 - Prepared text converted with old pymupdf4llm versions splits paragraphs at
   PDF line breaks, so formatted paragraphs can break mid-sentence. Re-convert
-  the document to fix it (kata 03y2).
+  the document to fix it. ([#23](https://github.com/clevinson/litschema/pull/23))
 
 ## [0.1.1] — 2026-09-27
 
