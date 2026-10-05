@@ -33,6 +33,8 @@ data/papers/<article-id>/
   article-metadata.json
   <article-id>.pdf
   article.md
+  figures/
+  prepared-text.json
   active-run.json
   extraction-runs/
     <run-id>/
@@ -91,9 +93,30 @@ they cannot become active. Partial directories are never runs.
   "litschema": {
     "version": "0.1.1",
     "source": "release"
+  },
+
+  "conversion": {
+    "version": 1,
+    "tool": "pymupdf4llm",
+    "tool_version": "1.28.2",
+    "pymupdf_version": "1.28.2",
+    "options": {"use_ocr": false, "header": false, "footer": false, "…": "…"},
+    "pdf_sha256": "sha256:5e0a…",
+    "text_sha256": "sha256:c41d…",
+    "figures_sha256": "sha256:88b3…",
+    "litschema_version": "0.1.2",
+    "created_at": "2026-07-26T17:58:02+00:00"
   }
 }
 ```
+
+`conversion` is optional. The publisher copies it from the article's
+`prepared-text.json` (see Text preparation), dropping the `figures` list and
+adding `figures_sha256`: the SHA-256 of the UTF-8 lines `<name>:<sha256>\n`,
+one per figure, sorted by name. An article with no `prepared-text.json`
+publishes without the block. When the record exists, its `text_sha256` must
+equal `inputs.prepared_text`, or publication fails: `article.md` was edited, or
+something rewrote it without writing a record.
 
 Every hash is `<algorithm>:<hex>`. The algorithm lives in the value, never in
 the key, so a key never contradicts what it holds.
@@ -195,8 +218,8 @@ the batch continues.
 
 Stats are `inbox_pdfs`, `assembled`, `already_assembled`, and `errors`. Per-file
 errors do not abort the batch; interruption exits 130 and preserves resumable
-work. The manifest, canonical PDF, and prepared text stay at article root
-because they belong to the article, not a run.
+work. The manifest, canonical PDF, prepared text, figures, and conversion record stay
+at article root because they belong to the article, not a run.
 
 ## Text preparation
 
@@ -206,9 +229,55 @@ skipped unless `--force` is used. `--inbox-dir` and `--output-dir` retain their
 current override behavior.
 
 PDF resolution checks the manifest filename under the article directory, then
-the inbox. Batch mode also discovers inbox PDFs without manifests. Stats are
-`total`, `converted`, `skipped`, `empty`, `missing`, and `errors`; output under
-100 characters is `empty` but remains written.
+the canonical `<article-id>.pdf`, then the inbox. Batch mode also discovers
+inbox PDFs without manifests. Stats are `total`, `converted`, `skipped`,
+`empty`, `missing`, and `errors`; output under 100 characters is `empty` but
+remains written.
+
+Conversion calls `pymupdf4llm.to_markdown` with `use_ocr=False`,
+`header=False`, `footer=False`, `write_images=True`, `image_format="png"`, and
+`dpi=150`. OCR is off: a scanned PDF converts to little or no text and counts
+as `empty`. Post-processing then:
+
+- drops every image whose content hash occurs 3 or more times in the document
+  (logos, page furniture) and every image under 150 px wide or 100 px tall,
+  deleting the file and blanking its markdown line (the line stays, empty);
+- rewrites each kept image ref to `![](figures/<name>)`;
+- strips `<mark>` and `</mark>` (MuPDF flags shaded form fields as highlights).
+
+Kept images go to `<article-id>/figures/`. A rerun with `--force` replaces the
+directory; a conversion that keeps no images leaves none.
+
+Each conversion writes `<article-id>/prepared-text.json` atomically, after
+`article.md`:
+
+```json
+{
+  "version": 1,
+  "tool": "pymupdf4llm",
+  "tool_version": "1.28.2",
+  "pymupdf_version": "1.28.2",
+  "options": {
+    "use_ocr": false, "header": false, "footer": false, "write_images": true,
+    "image_format": "png", "dpi": 150,
+    "drop_figure_repeats_at": 3, "min_figure_width_px": 150, "min_figure_height_px": 100
+  },
+  "pdf_sha256": "sha256:…",
+  "text_sha256": "sha256:…",
+  "figures": [{"name": "smith-2024.pdf-0003-02.png", "sha256": "sha256:…"}],
+  "litschema_version": "0.1.2",
+  "created_at": "2026-07-26T17:58:02+00:00"
+}
+```
+
+`text_sha256` hashes the `article.md` bytes as written, the same bytes
+`inputs.prepared_text` hashes at publication. The record holds no text from the
+paper, so projects commit it; `article.md` and `figures/` stay ignored and
+regenerate from the PDF.
+
+With `--output-dir DIR`, the markdown goes to `DIR/<article-id>.md`, figures to
+`DIR/<article-id>-figures/` with refs `![](<article-id>-figures/<name>)`, and
+the record to `DIR/<article-id>.prepared-text.json`.
 
 ## Invariants
 
@@ -222,6 +291,8 @@ the inbox. Batch mode also discovers inbox PDFs without manifests. Stats are
 - WHEN the same PDF bytes are assembled twice, THEN no duplicate article is
   created.
 - WHEN an input hash cannot be computed, THEN publication fails.
+- WHEN `prepared-text.json` exists and its `text_sha256` differs from the
+  hash of `article.md`, THEN publication fails.
 - WHEN agent attribution is unavailable, THEN publication still succeeds and
   the record omits what it cannot observe rather than inventing it.
 
@@ -249,4 +320,9 @@ Implementation coverage must pin:
 - missing active selection as a normal unextracted state and broken selection
   as an integrity failure;
 - assemble idempotence, collision handling, offline operation, and atomic
-  manifests.
+  manifests;
+- prepare-text on a real PDF: recorded options, repeated and small images
+  dropped, refs rewritten, `<mark>` stripped, record hashes, `--force`
+  replacing `figures/`, flat-mode paths, and the canonical-PDF fallback;
+- the `conversion` block copied into `run.json`, its absence without a record,
+  and refusal on a text hash mismatch.
