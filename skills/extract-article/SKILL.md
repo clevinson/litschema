@@ -53,11 +53,15 @@ to `data/papers/{article_id}/agent-extraction.json`.
 1. **Domain context** (`domain_context.md`) tells you what the research domain is and gives domain-specific extraction rules and field guidance. Follow these rules exactly.
 2. **Extraction schema** (`.litschema/runtime/extraction_schema.json`) is already generated with the correct top-level root object. Read it for fields, types, enums, and descriptions; do not infer a different root from `$defs`.
 3. **Reasoning schema** (`.litschema/runtime/reasoning_schema.json`) defines the format for your reasoning output.
-4. **The article markdown** is your sole data source. Extract ONLY from this text.
+4. **The article markdown** and the figures it links are your sole data source. Extract ONLY from them.
 
-**CRITICAL: Extract ONLY from the markdown file provided. Do NOT use any information from memory files, conversation context, prior knowledge about this paper, or other articles. Every extracted value must come from the text of this specific paper.**
+**CRITICAL: Extract ONLY from the markdown file provided and the figures it links. Do NOT use any information from memory files, conversation context, prior knowledge about this paper, or other articles. Every extracted value must come from the text of this specific paper.**
 
 Extract ONLY non-bibliographic fields. Bibliographic fields (title, DOI, year, authors, publisher, journal, abstract, keywords) are source metadata — what the document IS, not what it SAYS — and are handled by the backfill step at the end of this skill, never by the schema extraction.
+
+## Figures
+
+Lines like `![](figures/NAME)` are figures from the PDF. When a value may sit in a figure or an image-only table (often right after a "Table N" or "Figure N" caption line), open `data/papers/{article_id}/figures/NAME` with the Read tool and read it. Cite the figure's line, and the caption line, in `source_lines`. If you can't read a value from the image, leave it out; never guess.
 
 ## Output 1: Extraction JSON
 

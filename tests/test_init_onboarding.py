@@ -27,7 +27,8 @@ def test_init_scaffolds_standalone_project(tmp_path) -> None:
     assert "papers-inbox/*.pdf" in gitignore
     assert "papers-inbox/.processed/*.pdf" in gitignore
     assert "data/papers/*/*.pdf" in gitignore
-    assert "data/papers/*/article.md" not in gitignore
+    assert "data/papers/*/article.md" in gitignore
+    assert "data/papers/*/figures/" in gitignore
     assert "agent-extraction.json" not in gitignore
     assert "agent-reasoning.json" not in gitignore
     assert "reviews.jsonl" not in gitignore

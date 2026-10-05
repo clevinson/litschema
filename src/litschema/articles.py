@@ -2,6 +2,8 @@
 
   data/papers/<id>/article-metadata.json
   data/papers/<id>/article.md
+  data/papers/<id>/figures/
+  data/papers/<id>/prepared-text.json
   data/papers/<id>/active-run.json
   data/papers/<id>/extraction-runs/<run-id>/...
 
@@ -37,6 +39,15 @@ class ArticleFiles:
     @property
     def markdown(self) -> Path:
         return self.article_dir / "article.md"
+
+    @property
+    def figures_dir(self) -> Path:
+        return self.article_dir / "figures"
+
+    @property
+    def prepared_text_record(self) -> Path:
+        """Conversion record for article.md (tool, options, hashes)."""
+        return self.article_dir / "prepared-text.json"
 
     @property
     def pdf(self) -> Path:
