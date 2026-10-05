@@ -46,7 +46,7 @@ Homepage = "https://github.com/clevinson/litschema"
 Repository = "https://github.com/clevinson/litschema"
 Issues = "https://github.com/clevinson/litschema/issues"
 Changelog = "https://github.com/clevinson/litschema/blob/main/CHANGELOG.md"
-Documentation = "https://github.com/clevinson/litschema#readme"
+Documentation = "https://litschema.readthedocs.io/"
 
 [project.scripts]
 litschema = "litschema.cli:app"
