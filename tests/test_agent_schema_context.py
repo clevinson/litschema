@@ -176,7 +176,8 @@ def test_validate_reasoning_uses_bundled_schema_when_project_schema_absent(
                         "path": ".study_type",
                         "value": "field trial",
                         "source_lines": "L12-L14",
-                        "reasoning": "The cited lines describe a field trial.",
+                        "basis": "normalized",
+                        "note": "Mapped the described design onto the field trial enum.",
                     }
                 ]
             }
@@ -187,7 +188,7 @@ def test_validate_reasoning_uses_bundled_schema_when_project_schema_absent(
     assert f"Reasoning valid: {reasoning}" in capsys.readouterr().out
 
 
-def test_bundled_reasoning_schema_accepts_confidence_fields(tmp_path) -> None:
+def test_bundled_reasoning_schema_still_accepts_old_confidence_fields(tmp_path) -> None:
     from litschema.agent import validate_reasoning
 
     (tmp_path / "litschema.yaml").write_text('project_root: "."\nschema_dir: "schema"\n')
@@ -208,6 +209,7 @@ def test_bundled_reasoning_schema_accepts_confidence_fields(tmp_path) -> None:
                         "source_lines": "L12-L14",
                         "reasoning": "The cited lines describe a field trial.",
                         "confidence": 0.95,
+                        "basis": "stated",
                     }
                 ],
             }
@@ -307,7 +309,8 @@ def test_agent_validate_reasoning_cli_command_does_not_require_project_config(
                         "path": ".study_type",
                         "value": "field trial",
                         "source_lines": "L12-L14",
-                        "reasoning": "The cited lines describe a field trial.",
+                        "basis": "normalized",
+                        "note": "Mapped the described design onto the field trial enum.",
                     }
                 ]
             }
@@ -329,7 +332,7 @@ def _reasoning_project(tmp_path, source_lines: str, *, lines: list[str] | None =
     (tmp_path / "article.md").write_text("\n".join(body) + "\n")
     reasoning = tmp_path / "agent-reasoning.json"
     reasoning.write_text(
-        json.dumps({"fields": [{"path": ".site", "source_lines": source_lines}]})
+        json.dumps({"fields": [{"path": ".site", "source_lines": source_lines, "basis": "stated"}]})
     )
     return reasoning
 
@@ -385,7 +388,7 @@ def test_missing_prepared_text_fails_rather_than_skipping(tmp_path) -> None:
     from litschema.agent.validate_reasoning import validate_file
 
     reasoning = tmp_path / "agent-reasoning.json"
-    reasoning.write_text(json.dumps({"fields": [{"path": ".x", "source_lines": "L1"}]}))
+    reasoning.write_text(json.dumps({"fields": [{"path": ".x", "source_lines": "L1", "basis": "stated"}]}))
 
     ok, errors = validate_file(reasoning, reasoning_schema_source_path())
 
@@ -444,7 +447,7 @@ def _project_with_reasoning(tmp_path, path: str):
     run_dir.mkdir(parents=True)
     (article / "article.md").write_text("intro\nbody\n")
     reasoning = run_dir / "agent-reasoning.json"
-    reasoning.write_text(json.dumps({"fields": [{"path": path, "source_lines": "L2"}]}))
+    reasoning.write_text(json.dumps({"fields": [{"path": path, "source_lines": "L2", "basis": "stated"}]}))
     return reasoning
 
 
@@ -480,3 +483,46 @@ def test_reasoning_paths_the_schema_defines_are_accepted(tmp_path, monkeypatch, 
     result = CliRunner().invoke(cli.app, ["agent", "validate-reasoning", str(reasoning)])
 
     assert result.exit_code == 0, result.output
+
+
+def _basis_reasoning(tmp_path, entry: dict):
+    (tmp_path / "article.md").write_text("intro\nbody\n")
+    reasoning = tmp_path / "agent-reasoning.json"
+    reasoning.write_text(json.dumps({"fields": [{"path": ".x", "source_lines": "L1", **entry}]}))
+    return reasoning
+
+
+@pytest.mark.parametrize(
+    ("entry", "problem"),
+    [
+        ({}, "'basis' is a required property"),
+        ({"basis": "guessed"}, "guessed"),
+        ({"basis": "inferred"}, "basis inferred needs a note"),
+        ({"basis": "converted", "note": "  "}, "basis converted needs a note"),
+    ],
+)
+def test_reasoning_basis_is_required_and_non_stated_needs_a_note(tmp_path, entry, problem) -> None:
+    from litschema.agent.reasoning_schema import reasoning_schema_source_path
+    from litschema.agent.validate_reasoning import validate_file
+
+    ok, errors = validate_file(_basis_reasoning(tmp_path, entry), reasoning_schema_source_path())
+
+    assert ok is False
+    assert any(problem in error for error in errors), errors
+
+
+@pytest.mark.parametrize(
+    "entry",
+    [
+        {"basis": "stated"},
+        {"basis": "converted", "note": "Converted 45°30' N to decimal degrees."},
+        {"basis": "assumed", "note": "No depth given; used the plough layer default."},
+    ],
+)
+def test_reasoning_basis_with_the_note_it_needs_is_accepted(tmp_path, entry) -> None:
+    from litschema.agent.reasoning_schema import reasoning_schema_source_path
+    from litschema.agent.validate_reasoning import validate_file
+
+    ok, errors = validate_file(_basis_reasoning(tmp_path, entry), reasoning_schema_source_path())
+
+    assert ok is True, errors

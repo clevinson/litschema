@@ -56,12 +56,28 @@ current project schema.
 
 ### Reasoning
 
-`agent-reasoning.json` records why values were extracted. It contains optional
-overall `confidence` in 0.0–1.0, optional `confidence_reasoning`, and required
-`fields`. Each field entry has canonical `path` and `source_lines`; it may carry
-value text, concise reasoning, and 0.0–1.0 field confidence. Paths use bracket
-indices and no leading dot, for example `experiments[0].ph`. Source lines use
-`L<n>` or `L<start>-L<end>` ranges.
+`agent-reasoning.json` records where each value came from and how the
+extractor got it. It has required `fields`. Each field entry has `path`,
+`source_lines`, and `basis`, and may carry `value` text and a `note`:
+
+```json
+{"path": ".latitude", "value": "6.87", "source_lines": "L6",
+ "basis": "converted", "note": "Converted 6°52' N to decimal degrees."}
+```
+
+`basis` is one of `stated` (read directly), `converted` (units or formats),
+`normalized` (mapped onto a schema enum or list), `calculated` (from other
+numbers), `inferred` (reasoned from context), or `assumed` (a default or outside
+knowledge). `note` is one line on how the value was derived. Validation
+requires it when `basis` is not `stated`; the skill omits it for stated values
+and does not restate the evidence. The grader (`specs/grading/spec.md`) reads
+both.
+
+Older runs carry free-text `reasoning`, per-field `confidence`, and top-level
+`confidence` and `confidence_reasoning`. The schema keeps them optional; the
+skill no longer writes them. Paths use bracket indices and no leading dot, for
+example `experiments[0].ph`. Source lines use `L<n>` or `L<start>-L<end>`
+ranges.
 
 Confidence belongs only in reasoning. The project extraction schema does not
 gain framework confidence fields.
@@ -176,7 +192,8 @@ Implementation coverage must pin:
   handling;
 - no-argument published-run discovery and missing explicit-target
   failure;
-- reasoning schema validation, confidence bounds, canonical paths, and
+- reasoning schema validation, required `basis` and its `note` when not
+  stated, confidence bounds, canonical paths, and
   resolution of a leaf to its own entry or the nearest ancestor's;
 - staged validation before publication and absence of partial runs;
 - immutable published artifacts;

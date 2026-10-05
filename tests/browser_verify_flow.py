@@ -97,9 +97,9 @@ class Harness:
         self.tmp = Path(tempfile.mkdtemp(prefix="litschema-flow-"))
         self.project = self.tmp / source.name
         shutil.copytree(source, self.project)
-        self.render_article = (
-            self._add_render_article() if source.resolve() == DEFAULT_PROJECT.resolve() else None
-        )
+        is_default = source.resolve() == DEFAULT_PROJECT.resolve()
+        self.render_article = self._add_render_article() if is_default else None
+        self.graded_article = self._add_grade() if is_default else None
         self.port = free_port()
         self.base = f"http://127.0.0.1:{self.port}"
         self.server: subprocess.Popen | None = None
@@ -176,6 +176,98 @@ class Harness:
         run_meta["article_id"] = article_id
         (run / "run.json").write_text(json.dumps(run_meta, indent=2))
         return article_id
+
+    def _add_grade(self) -> str:
+        """A current grade for the okafor run, with basis on every reasoning entry.
+
+        Bands: site_name high, replicates low, tillage can't verify,
+        measurements[0] check. site_country is high but inferred.
+        """
+        sys.path.insert(0, str(REPO_ROOT / "src"))
+        from litschema.articles import article_files
+        from litschema.config import load_config
+        from litschema.grading import BANDS, GRADE_VERSION, input_hashes, write_grade
+        from litschema.runs import active_run
+
+        article_id = "okafor-2023-biochar-trial"
+        cfg = load_config(self.project / "litschema.yaml", reload=True)
+        run = active_run(article_files(cfg, article_id))
+        bases = {
+            ".site_name": ("stated", None),
+            ".site_country": ("inferred", "Country taken from the Nsukka place name."),
+            ".mean_annual_temperature_c": ("stated", None),
+            ".crops": ("normalized", "Crop names mapped onto the crop list."),
+            ".replicates": ("converted", "The word three written as 3."),
+            ".tillage": ("normalized", "No-till mapped to no_till."),
+            ".measurements[0]": ("converted", "Depth 0-20 cm split into min and max."),
+        }
+        reasoning = json.loads(run.reasoning.read_text())
+        reasoning.pop("confidence", None)
+        reasoning.pop("confidence_reasoning", None)
+        for entry in reasoning["fields"]:
+            entry.pop("note", None)
+            basis, note = bases[entry["path"]]
+            entry["basis"] = basis
+            if note:
+                entry["note"] = note
+        run.reasoning.write_text(json.dumps(reasoning, indent=2))
+        write_grade(run, {
+            "version": GRADE_VERSION,
+            "grade_id": "01FLOWGRADE00000000000000",
+            "article_id": article_id,
+            "run_id": run.run_id,
+            "created_at": "2026-09-28T00:00:00+00:00",
+            "grader": {"harness": "claude-code", "model": "claude-flow-1",
+                       "requested_model": "claude-flow-1", "rubric_sha256": "sha256:flow",
+                       "bands": dict(BANDS)},
+            "inputs": input_hashes(run),
+            "fields": [
+                {"path": "site_name", "confidence": 0.97},
+                {"path": "site_country", "confidence": 0.93},
+                {"path": "replicates", "confidence": 0.3,
+                 "issue": "L9 gives four replicates, not three."},
+                {"path": "tillage", "confidence": None,
+                 "issue": "The tillage system is only shown in a figure."},
+                {"path": "measurements[0]", "confidence": 0.72,
+                 "issue": "The depth range is inferred from the table caption."},
+            ],
+            "ungraded": [],
+            "usage": {},
+        })
+        return article_id
+
+    def add_version_1_grade(self, article_id: str) -> None:
+        """A version-1 grade (verdicts) and an old free-text note on an old run."""
+        from litschema.articles import article_files
+        from litschema.config import load_config
+        from litschema.grading import input_hashes, write_grade
+        from litschema.runs import active_run
+
+        cfg = load_config(self.project / "litschema.yaml", reload=True)
+        run = active_run(article_files(cfg, article_id))
+        reasoning = json.loads(run.reasoning.read_text())
+        for entry in reasoning["fields"]:
+            if entry["path"] == ".site_name":
+                entry["reasoning"] = "Station name from the site description."
+        run.reasoning.write_text(json.dumps(reasoning, indent=2))
+        write_grade(run, {
+            "version": 1,
+            "grade_id": "01FLOWGRADEV1000000000000",
+            "article_id": article_id,
+            "run_id": run.run_id,
+            "created_at": "2026-09-27T00:00:00+00:00",
+            "grader": {"harness": "claude-code", "model": "claude-flow-0",
+                       "requested_model": "claude-flow-0", "rubric_sha256": "sha256:old"},
+            "inputs": input_hashes(run),
+            "fields": [
+                {"path": "site_name", "verdict": "partial", "confidence": 0.8,
+                 "reasoning": "L9 names a station, not a farm."},
+                {"path": "mean_annual_temperature_c", "verdict": "supported",
+                 "confidence": 0.9, "reasoning": "Stated in the table."},
+            ],
+            "ungraded": [],
+            "usage": {},
+        })
 
     def start(self) -> None:
         self.server = subprocess.Popen(
@@ -757,6 +849,11 @@ def run_flow(harness: Harness) -> None:
 
         if harness.render_article:
             rendered_flow(page, base, harness.render_article)
+        if harness.graded_article:
+            grade_flow(page, base, harness.graded_article)
+        if harness.render_article:
+            harness.add_version_1_grade(harness.render_article)
+            version_1_grade_flow(page, base, harness.render_article)
 
         print("\n[console]")
         real = [e for e in page_errors if "favicon" not in e.lower()]
@@ -825,6 +922,131 @@ def rendered_flow(page, base: str, article: str) -> None:
     print("\n[icons]")
     check("icons come from the bundled sprite",
           page.locator('use[href="/static/icons.svg#settings"]').count() >= 1)
+
+
+def grade_flow(page, base: str, article: str) -> None:
+    print("\n[grader bands]")
+    page.goto(f"{base}/#/doc/{article}", wait_until="networkidle")
+    await_document(page)
+    toggle = page.locator("#btn-review-order")
+    check("the review-order toggle shows when a grade exists", toggle.is_visible())
+    check("and defaults to flagged first", toggle.get_attribute("aria-pressed") == "true")
+    groups = page.locator("#panel-right [data-review-group]")
+    keys = [groups.nth(i).get_attribute("data-review-group") for i in range(groups.count())]
+    check("groups run low, check, can't verify, inferred or assumed, then the rest",
+          keys == ["low", "check", "cannot_verify", "unstated", "rest"], str(keys))
+    order = page.locator("#panel-right tr.clickable[data-path]")
+    check("the low row leads the table", order.first.get_attribute("data-path") == "replicates",
+          str(order.first.get_attribute("data-path")))
+    unstated = page.locator('#panel-right [data-review-group="unstated"] + .tv-body tr[data-path]')
+    check("an inferred value sits in its own group",
+          unstated.count() == 1 and unstated.first.get_attribute("data-path") == "site_country",
+          str(unstated.count()))
+    marks = {
+        b: page.locator(f'#panel-right .grade-mark[data-band="{b}"]').count()
+        for b in ("high", "check", "low", "cannot_verify")
+    }
+    check("band markers render, none for high",
+          marks["low"] == 1 and marks["cannot_verify"] == 1
+          and marks["check"] >= 1 and marks["high"] == 0, json.dumps(marks))
+    check_cell = "measurements[0].unit"
+    check("a row's grade covers its cells",
+          page.locator(f'#panel-right tr[data-path="{check_cell}"] .grade-mark').count() == 1)
+
+    chip_title = page.locator("#run-chip").get_attribute("title") or ""
+    check("the run chip names the grader model", "checked by claude-flow-1" in chip_title,
+          chip_title.replace("\n", " | ")[:90])
+
+    box = page.locator("#source-evidence-reasoning")
+    evidence = page.locator("#source-evidence-overlay")
+
+    def select(path: str) -> str:
+        page.locator(f'#panel-right tr[data-path="{path}"] td.value-cell').first.click()
+        page.wait_for_timeout(600)
+        return box.inner_text()
+
+    text = select("site_name")
+    check("a high field shows its band and confidence", "High \u00b7 97%" in text, text[:90])
+    check("and how it was extracted, with no note for a stated value",
+          "How it was extracted: Stated" in text and box.locator(".evidence-basis-note").count() == 0,
+          text[:120])
+    check("and no extractor confidence score",
+          not page.locator("#source-evidence-confidence").is_visible())
+
+    text = select(check_cell)
+    check("a check field shows its confidence and the grader's issue",
+          "Check \u00b7 72%" in text and "inferred from the table caption" in text, text[:90])
+    check("the extractor's basis and note are visible, not collapsed",
+          "How it was extracted: Converted" in text
+          and "Depth 0-20 cm split into min and max." in text
+          and box.locator("details").count() == 0, text[:160])
+
+    text = select("tillage")
+    check("a can't-verify field shows no number",
+          "Can't verify" in text and "%" not in text and "only shown in a figure" in text, text[:90])
+
+    text = select("site_country")
+    check("an inferred value shows its note", "How it was extracted: Inferred" in text
+          and "Country taken from the Nsukka place name." in text, text[:120])
+    all_text = evidence.inner_text()
+    check("the evidence box never names the grader model",
+          "claude-flow-1" not in all_text and "Grader" not in all_text, all_text[:90])
+
+    toggle.click()
+    page.wait_for_timeout(600)
+    check("the toggle switches to document order", toggle.get_attribute("aria-pressed") == "false")
+    check("rows follow the document again",
+          page.locator("#panel-right [data-review-group]").count() == 0
+          and order.first.get_attribute("data-path") == "site_name",
+          str(order.first.get_attribute("data-path")))
+    check("markers stay in document order",
+          page.locator('#panel-right .grade-mark[data-band="low"]').count() == 1)
+    toggle.click()
+    page.wait_for_timeout(400)
+
+    print("\n[flags on the overview]")
+    page.goto(f"{base}/#/", wait_until="networkidle")
+    page.wait_for_selector("#overview-route", state="visible", timeout=20000)
+    row = page.locator(f'#overview-rows tr[data-article="{article}"] .ov-flags')
+    check("the graded document counts check, low, and can't verify", row.count() == 1
+          and row.inner_text().strip() == "3", row.inner_text() if row.count() else "none")
+    page.locator('#overview-table th[data-sort="flags"]').click()
+    page.locator('#overview-table th[data-sort="flags"]').click()
+    page.wait_for_timeout(300)
+    check("Flags sorts, most flagged first",
+          page.locator("#overview-rows tr[data-article]").first.get_attribute("data-article") == article
+          and "sort=flags" in page.url, page.url)
+    page.locator('#ov-chips [data-status="flagged"]').click()
+    page.wait_for_timeout(300)
+    shown = page.locator("#overview-rows tr[data-article]")
+    check("the Flagged chip keeps only flagged documents",
+          shown.count() == 1 and shown.first.get_attribute("data-article") == article,
+          f"{shown.count()} rows")
+    page.locator('#ov-chips [data-status="all"]').click()
+
+
+def version_1_grade_flow(page, base: str, article: str) -> None:
+    print("\n[version-1 grades still render]")
+    page.goto(f"{base}/#/doc/{article}", wait_until="networkidle")
+    await_document(page)
+    with contextlib.suppress(Exception):
+        page.wait_for_selector("#panel-right .grade-mark", timeout=10000)
+    check("a partial verdict shows as check",
+          page.locator('#panel-right .grade-mark[data-band="check"]').count() == 1
+          and page.locator('#panel-right .grade-mark[data-band="high"]').count() == 0)
+    box = page.locator("#source-evidence-reasoning")
+    page.locator('#panel-right tr[data-path="site_name"] td.value-cell').first.click()
+    page.wait_for_timeout(600)
+    text = box.inner_text()
+    check("its band and reason show, with no number",
+          "Check" in text and "%" not in text and "names a station, not a farm" in text, text[:90])
+    details = box.locator("details.evidence-extraction")
+    check("the old extractor note sits in a closed disclosure",
+          details.count() == 1 and details.get_attribute("open") is None
+          and "How it was extracted" in details.locator("summary").inner_text()
+          and "Station name from the site description." not in text, str(details.count()))
+    details.locator("summary").click()
+    check("and opens to show it", "Station name from the site description." in box.inner_text())
 
 
 def main() -> int:
