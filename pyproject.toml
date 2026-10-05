@@ -124,6 +124,8 @@ filterwarnings = [
     "ignore::DeprecationWarning:linkml.*",
     "ignore::DeprecationWarning:linkml_runtime.*",
     "ignore::Warning:requests.*",  # RequestsDependencyWarning + UserWarnings
+    # PyMuPDF's SWIG bindings, raised from importlib during `import pymupdf`
+    "ignore:builtin type .* has no __module__ attribute:DeprecationWarning",
 ]
 
 [tool.mypy]

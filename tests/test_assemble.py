@@ -576,6 +576,72 @@ def test_agent_record_extraction_fails_without_hashable_inputs(
     assert not (article_dir / "active-run.json").exists()
 
 
+def _prepare_real_text(cfg: LitSchemaConfig, article_dir: Path) -> dict:
+    """Replace the fixture's article.md with a real conversion and its record."""
+    from litschema.ingest import pdf_to_markdown
+
+    from .helpers import make_pdf
+
+    make_pdf(article_dir / "smith-2024.pdf")
+    stats = pdf_to_markdown.run(cfg, article_ids=["smith-2024"], force=True)
+    assert stats["converted"] == 1, stats
+    return json.loads((article_dir / "prepared-text.json").read_text())
+
+
+def test_agent_record_extraction_copies_the_conversion_record(
+    tmp_path: Path, monkeypatch
+) -> None:
+    from litschema.ingest.pdf_to_markdown import figures_sha256
+
+    cfg, article_dir = _publishable_project(tmp_path)
+    prepared = _prepare_real_text(cfg, article_dir)
+    monkeypatch.setattr(cli, "_require_project", lambda ctx=None: SimpleNamespace(config=cfg))
+
+    result = CliRunner().invoke(cli.app, ["agent", "record-extraction", "smith-2024"])
+
+    assert result.exit_code == 0, result.output
+    (run_dir,) = (article_dir / "extraction-runs").iterdir()
+    record = json.loads((run_dir / "run.json").read_text())
+    expected = {k: v for k, v in prepared.items() if k != "figures"}
+    expected["figures_sha256"] = figures_sha256(prepared["figures"])
+    assert record["conversion"] == expected
+    assert record["conversion"]["text_sha256"] == record["inputs"]["prepared_text"]
+    assert len(prepared["figures"]) == 1
+
+
+def test_agent_record_extraction_refuses_text_that_no_longer_matches_its_record(
+    tmp_path: Path, monkeypatch
+) -> None:
+    cfg, article_dir = _publishable_project(tmp_path)
+    _prepare_real_text(cfg, article_dir)
+    with (article_dir / "article.md").open("a") as fh:
+        fh.write("hand edit\n")
+    monkeypatch.setattr(cli, "_require_project", lambda ctx=None: SimpleNamespace(config=cfg))
+
+    result = CliRunner().invoke(cli.app, ["agent", "record-extraction", "smith-2024"])
+
+    assert result.exit_code == 1
+    assert "does not match prepared-text.json" in result.output
+    assert not (article_dir / "extraction-runs").exists() or not list(
+        (article_dir / "extraction-runs").iterdir()
+    )
+    assert not (article_dir / "active-run.json").exists()
+    assert (article_dir / "agent-extraction.json").is_file()
+
+
+def test_agent_record_extraction_without_a_conversion_record_has_no_block(
+    tmp_path: Path, monkeypatch
+) -> None:
+    cfg, article_dir = _publishable_project(tmp_path)
+    monkeypatch.setattr(cli, "_require_project", lambda ctx=None: SimpleNamespace(config=cfg))
+
+    result = CliRunner().invoke(cli.app, ["agent", "record-extraction", "smith-2024"])
+
+    assert result.exit_code == 0, result.output
+    (run_dir,) = (article_dir / "extraction-runs").iterdir()
+    assert "conversion" not in json.loads((run_dir / "run.json").read_text())
+
+
 def test_agent_record_extraction_rejects_unknown_article(tmp_path: Path, monkeypatch) -> None:
     cfg = _cfg(tmp_path)
     cfg.article_store_dir.mkdir(parents=True)
