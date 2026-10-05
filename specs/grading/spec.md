@@ -114,8 +114,9 @@ grader:
 
 ## Parsing
 
-The JSON schema asks for `{"grades": [{id, confidence, issue?}]}` with
-`confidence` a number in 0-1 or null. The first grade per known id wins;
+The JSON schema asks for `{"grades": [{id, confidence, issue}]}` with
+`confidence` a number in 0-1 or null and `issue` a string, empty when the value
+is high. An optional `issue` was left out for about half the flagged fields. The first grade per known id wins;
 unknown ids, repeats, and grades without a numeric or null confidence are
 ignored; confidence is clamped to 0-1. An `issue` is kept only when the band is
 not `high`. Entries the grader skipped are listed in `ungraded`. A grade with
