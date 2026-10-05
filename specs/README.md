@@ -17,8 +17,8 @@ specs/
   `partially current`, `approved target`, or `draft`. `current` describes
   shipped behavior. `partially current` means some of the contract ships today
   and some does not; the spec must then carry an **Implementation status**
-  section naming the boundary and the issue tracking the rest — a reader must
-  never have to guess which half they are reading. `approved target` records an
+  section naming the boundary and the issue tracking the rest, so a reader never
+  has to guess which half they are reading. `approved target` records an
   accepted behavior change before implementation; its implementation and tests
   may lag, but competing current prose must be removed. `draft` is not
   approved. Behavioral requirements use WHEN/THEN phrasing where precision
@@ -28,7 +28,7 @@ specs/
   tests pass and the status becomes `current`.
 - **`decisions.md` records why.** Each entry is dated and states the context,
   the decision, the rationale, and the alternatives rejected. Entries are never
-  rewritten — a reversed decision gets a new entry that supersedes the old one.
+  rewritten; a reversed decision gets a new entry that supersedes the old one.
 
 ## Normative ownership
 
@@ -50,8 +50,7 @@ Other specs cross-link these rules instead of redefining them.
 
 ## Alpha status: no backwards compatibility
 
-litschema is pre-release alpha software. Until a release with a version
-number has been published:
+litschema is alpha software. Until 1.0:
 
 - Specs describe either current behavior or one explicitly approved target.
   They do not document legacy fallbacks or runtime compatibility shims.
@@ -59,20 +58,19 @@ number has been published:
   non-goals. Format changes land clean. Conservative review reconciliation
   between first-class runs is current product behavior, not legacy support.
 - Existing corpus data is updated in its own (domain) repo when a format
-  changes — typically agent-driven, using the framework's own CLI as the
-  write surface.
-
-This section is superseded the day a versioned release ships.
+  changes, usually by an agent using the framework's own CLI.
+- Each release states its format changes under **Breaking changes** in
+  `CHANGELOG.md`.
 
 ## Scope boundaries
 
 Deliberate non-goals. They are recorded here rather than in a capability spec
-because a gap that belongs to no capability is otherwise invisible — no spec is
+because a gap that belongs to no capability is otherwise invisible: no spec is
 responsible for noticing it is missing.
 
 - **Screening is out of scope.** litschema begins once PDFs are in the inbox.
-  Deciding which papers belong in a review — title/abstract screening,
-  full-text eligibility, PRISMA counts — happens in whatever tool the user
+  Deciding which papers belong in a review (title/abstract screening,
+  full-text eligibility, PRISMA counts) happens in whatever tool the user
   already uses. There is consequently no corpus-level exclusion state: an
   assembled article is in the corpus. Refinement-scope exclusion is a
   different thing, scoped to one refinement pass; it belongs to the deferred
@@ -92,7 +90,7 @@ only after its test obligations pass. There is no separate proposal tree.
 When implementation lands in stages, move the status to `partially current`
 and keep its Implementation status section accurate in the same change that
 ships the code. The status line and that section are the primary signal of
-what actually works — they are maintained as the code moves, not at release
+what works. They are maintained as the code moves, not at release
 boundaries.
 
 ## For agents
@@ -101,36 +99,20 @@ Read the capability's `spec.md` (and skim `decisions.md`) before modifying any
 part of its surface. If your change alters behavior described in the spec,
 update the spec in the same change.
 
-Repo-wide conventions that aren't capability behavior — build/test commands,
-project layout, git and PR conventions, issue tracking — live in `AGENTS.md`
+Repo-wide conventions that aren't capability behavior (build and test commands,
+project layout, git and PR conventions, issue tracking) live in `AGENTS.md`
 at the repo root, not here.
 
-## Release plan: 0.1.0 and multirun
+## Next: multirun
 
-Decided 2026-07-26; supersedes the 2026-07-24 scope note. Work runs on two
-branches so the MVP ships without waiting on multi-run behavior:
+0.1.x shipped the run-shaped on-disk format (`extraction-runs/<run-id>/`,
+`run.json`, `active-run.json`), run-bound reviews, the review app, grading,
+and PyPI publishing. Multirun targets 0.2.0 on `feat/multirun`: everything that
+exists because an article can have more than one meaningful run. That covers
+the refinement capability and `/litschema-refine`, review reconciliation and
+proposals, the rest of the `runs` CLI (`trash`/`restore`/`purge`), the
+verifier `#/runs` route and refinement metrics, and run selection beyond
+publish-activates. It is developed spec-first.
 
-**0.1.0 — the `release/0.1.0` branch.** The tightest publishable MVP. It
-ships the run-shaped on-disk format so 0.2.0 introduces no breaking layout
-change, but none of the multi-run behavior:
-
-- article store: the `extraction-runs/<run-id>/` layout, the simplified
-  `run.json`, and `active-run.json`. Publishing a complete non-error run
-  activates it; prior runs stay inert on disk. No `runs` command group.
-- reviews v2 — run-bound replace/remove/add — without reconciliation.
-- verifier: dataset overview page and document review. No `#/runs` route and
-  no refinement metrics.
-- CI, the pre-release naming pass, the runnable demo project, and PyPI
-  publishing. `litschema extract` stays a documented stub.
-
-**Multirun — the `feat/multirun` branch, targeting 0.2.0.** Everything that
-exists because an article can have more than one meaningful run: the
-refinement capability and `/litschema-refine`, review reconciliation and
-proposals, the `runs` CLI (`list`/`activate`/`trash`/`restore`/`purge`), the
-verifier `#/runs` route and refinement metrics, and any run-selection
-semantics beyond publish-activates. Developed spec-first and rebased onto the
-0.1.0 line regularly.
-
-Export views (`--view audited` and the audit sidecar) are post-0.1.0 but do
-not depend on multirun. The alpha-policy rationale stands: the 0.1.0 format
-must be one nobody has to migrate away from when multirun lands.
+Export views (`--view audited` and the audit sidecar) don't depend on
+multirun.

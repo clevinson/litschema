@@ -585,8 +585,8 @@ def mcp(
 
 
 @app.command(
-    help="Export the reviewed extractions — overrides applied, error markers "
-    "skipped — as JSONL (default) or CSV, to stdout or --output."
+    help="Export the reviewed extractions, with overrides applied and error markers "
+    "skipped, as JSONL (default) or CSV, to stdout or --output."
 )
 def export(
     ctx: typer.Context,
@@ -790,7 +790,7 @@ def meta_set(
         False,
         "--sync",
         help="After recording the DOI, fetch registry metadata and lock the block. "
-        "Takes ONLY --doi — registry values replace the whole block, so fallback "
+        "Takes ONLY --doi: registry values replace the whole block, so fallback "
         "values belong in a separate `meta set`.",
     ),
     force: bool = typer.Option(
@@ -816,7 +816,7 @@ def meta_set(
         if not doi or any(v is not None for v in others) or clear:
             typer.secho(
                 f"{CROSS} --sync requires --doi with a value and takes no other field "
-                "options — registry values replace the whole block, so fallback values "
+                "options: registry values replace the whole block, so fallback values "
                 "belong in a separate `meta set`",
                 fg=typer.colors.RED,
             )
@@ -862,8 +862,7 @@ def meta_set(
     if not force and not can_overwrite(existing, source):
         typer.secho(
             f"{CROSS} refusing: metadata is {existing!r} and auto writes never overwrite "
-            "human or registry data — this is expected for machine callers; a human who "
-            "wants to override can pass --force",
+            "human or registry data. Pass --force to override",
             fg=typer.colors.RED,
         )
         raise typer.Exit(code=1)
@@ -889,26 +888,26 @@ def meta_set(
     except openalex_harvest.RegistryUnavailableError:
         typer.echo(json.dumps(block, indent=2, ensure_ascii=False))
         typer.secho(
-            f"{WARN} NOT locked — DOI registry unavailable; {retry_hint}",
+            f"{WARN} NOT locked: DOI registry unavailable; {retry_hint}",
             fg=typer.colors.YELLOW,
         )
         return
     if synced is None:
         typer.echo(json.dumps(block, indent=2, ensure_ascii=False))
         typer.secho(
-            f"{WARN} NOT locked — the registry has no usable record for this DOI; "
+            f"{WARN} NOT locked: the registry has no usable record for this DOI; "
             f"{retry_hint}",
             fg=typer.colors.YELLOW,
         )
         return
     typer.echo(json.dumps(synced, indent=2, ensure_ascii=False))
-    typer.echo(f"{CHECK} synced from registry — metadata locked (was {source})")
+    typer.echo(f"{CHECK} synced from registry; metadata locked (was {source})")
 
 
 @meta_app.command(
     "sync",
-    help="Fetch metadata from the DOI registry and lock the block (overwrites any state — "
-    "invoking this IS the consent). Use --all for the batch sweep, which enriches "
+    help="Fetch metadata from the DOI registry and lock the block (overwrites any state; "
+    "running it is the consent). Use --all for the batch sweep, which enriches "
     "machine-seeded records and never touches manual ones.",
 )
 def meta_sync(
@@ -956,7 +955,7 @@ def meta_sync(
         raise typer.Exit(code=1) from exc
     except openalex_harvest.RegistryUnavailableError:
         typer.secho(
-            f"{CROSS} DOI registry unavailable — try again later; nothing was recorded",
+            f"{CROSS} DOI registry unavailable; try again later; nothing was recorded",
             fg=typer.colors.RED,
         )
         raise typer.Exit(code=1) from None
@@ -1077,7 +1076,7 @@ def agent_record_extraction(
         typer.secho(f"{CROSS} {exc}", fg=typer.colors.RED)
         raise typer.Exit(code=1) from None
     state = "activated" if activated else "published inactive (error marker)"
-    typer.echo(f"{CHECK} published run {run.run_id} for {article_id} — {state}")
+    typer.echo(f"{CHECK} published run {run.run_id} for {article_id}: {state}")
 
 
 @skills_app.command(
@@ -1216,7 +1215,7 @@ def status(ctx: typer.Context):
     if corrupt_reviews:
         typer.echo(
             f"{CROSS} unreadable:  {corrupt_reviews} review files could not be read "
-            f"— their reviews are not counted above"
+            f"and are not counted above"
         )
 
 
@@ -1239,7 +1238,7 @@ def doctor(ctx: typer.Context):
         typer.echo(f"{CHECK} uv on PATH")
     else:
         typer.echo(f"{CROSS} uv not on PATH")
-        issues.append("uv not installed — see https://docs.astral.sh/uv/")
+        issues.append("uv not installed; see https://docs.astral.sh/uv/")
 
     # Agent skills run the bare `litschema` from PATH, so that is the one to
     # report, not necessarily the process running doctor.
@@ -1284,8 +1283,8 @@ def doctor(ctx: typer.Context):
         resolved = None
         typer.echo(f"{CROSS} cannot resolve the extraction schema: {exc}")
         issues.append(
-            f"fix the extraction schema at {cfg.schema_dir} — every other command "
-            "reads it, and it must parse and declare exactly one `tree_root: true` class"
+            f"fix the extraction schema at {cfg.schema_dir}. Every other command "
+            "reads it; it must parse and declare exactly one `tree_root: true` class"
         )
 
     # A multivalued class-range slot whose range has an identifier serializes
@@ -1297,7 +1296,7 @@ def doctor(ctx: typer.Context):
             lost = ", ".join(finding["lost"])
             typer.echo(
                 f"{WARN} `{finding['owner']}.{finding['slot']}` stores only "
-                f"{finding['range']} identifiers — {lost} cannot be recorded"
+                f"{finding['range']} identifiers, so {lost} cannot be recorded"
             )
             issues.append(
                 f"add `inlined_as_list: true` to the `{finding['slot']}` slot so "
@@ -1345,7 +1344,7 @@ def doctor(ctx: typer.Context):
     if agent_cli:
         typer.echo(f"{CHECK} agent CLI on PATH ({Path(agent_cli).name})")
     else:
-        typer.echo(f"{WARN} no agent CLI on PATH — bundled skills need one to run")
+        typer.echo(f"{WARN} no agent CLI on PATH; bundled skills need one to run")
         issues.append(
             "install an agentic CLI that reads installed skills (e.g. Claude Code or Codex)"
         )
@@ -1358,8 +1357,8 @@ def doctor(ctx: typer.Context):
         unattributed = _unattributed_review_count(cfg)
         if unattributed:
             typer.echo(
-                f"{WARN} {unattributed} review entries have no reviewer — this project is "
-                "in Git, so it may be shared"
+                f"{WARN} {unattributed} review entries have no reviewer, and this project "
+                "is in Git, so it may be shared"
             )
             typer.echo(
                 f"{DIM}     connect an ORCID in `litschema verify` to attribute new "
@@ -1456,8 +1455,8 @@ def init(
     # is_symlink() catches dangling symlinks, which exists() follows and misses.
     if config_path.exists() or config_path.is_symlink():
         typer.secho(
-            f"{CROSS} {project} is already a litschema project (litschema.yaml exists) — "
-            "edit litschema.yaml directly, or run "
+            f"{CROSS} {project} is already a litschema project (litschema.yaml exists). "
+            "Edit litschema.yaml directly, or run "
             "'litschema skills install --local --force' from inside the project "
             "to refresh skills",
             fg=typer.colors.RED,
@@ -1483,7 +1482,7 @@ def init(
     ):
         if project.joinpath(entry).is_symlink():
             typer.secho(
-                f"{CROSS} {project / entry} is a symlink — init only writes real files "
+                f"{CROSS} {project / entry} is a symlink; init only writes real files "
                 "and directories inside the project",
                 fg=typer.colors.RED,
             )
@@ -1536,7 +1535,7 @@ def init(
         typer.echo(
             "  3. Open this project in your agent (e.g. `claude`) and run /litschema-onboard"
         )
-        typer.echo("     — it drafts your schema with you, runs intake, and extracts your papers")
+        typer.echo("     to draft your schema with you, convert the PDFs, and extract your papers")
     else:
         typer.echo(
             "  3. Install agent skills (`litschema skills install --local` from the project),"
