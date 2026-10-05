@@ -852,10 +852,11 @@ def test_no_separate_bulk_status_surface_remains() -> None:
     assert "fields cleared" not in html
 
 
-def test_overview_has_status_confidence_and_sticky_header() -> None:
+def test_overview_has_status_flags_and_sticky_header() -> None:
     html = STATIC_HTML.read_text()
 
     assert 'data-sort="status"' in html
-    assert 'data-sort="confidence"' in html
+    assert 'data-sort="flags"' in html
+    assert 'data-sort="confidence"' not in html
     assert "position:sticky" in html.replace(" ", "")
     assert "<h1>litschema verify</h1>" not in html

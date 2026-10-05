@@ -58,8 +58,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
   figure; the extracted value is marked when it appears verbatim. Raw lines
   and the PDF are tabs beside it. If a document fails to render, the pane
   shows Raw lines.
-- Overview: summary strip, text filter and status chips, Status and Confidence
-  columns, sortable columns, and a header that stays visible while scrolling.
+- Overview: summary strip, text filter and status chips, a Status column,
+  sortable columns, and a header that stays visible while scrolling.
   The filter, chip, and sort are kept in the URL, so reload keeps them.
 - `litschema grade` checks each extracted value against the lines it cites,
   using a separate model through your own `claude` CLI, and stores per field

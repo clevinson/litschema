@@ -20,7 +20,7 @@ inline editor is open and focus is not in a text field) return to the
 overview with its hash query and `?filter=` intact. The Audit/Data toggle sits
 in the review pane's header, beside "Extraction Review".
 The overview has a summary strip, one filter bar, status chips, sortable
-columns including Status and Confidence, and a header that stays visible while
+columns including Status and Flags, and a header that stays visible while
 scrolling. The text filter, status chip, and sort live in the URL hash
 (`#/?q=…&status=…&sort=…&dir=…`), so reload and shared links keep them. The
 filter bar switches between Search (the text filter) and Expression (the

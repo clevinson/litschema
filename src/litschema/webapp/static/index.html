@@ -833,7 +833,6 @@
   .ov-status.in-progress { background:var(--accent-muted); color:var(--accent); }
   .ov-status.done { background:rgba(22,163,74,.12); color:var(--green); }
   .ov-status.problem { color:var(--red); }
-  .ov-dot { display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:5px; }
   .ov-bar { position: relative; width: 120px; height: 6px; border-radius: 3px; background: var(--border); }
   .ov-bar span { position: absolute; inset: 0 auto 0 0; border-radius: 3px; background: var(--green, #3fb950); }
   .ov-state.problem { color: var(--red, #f85149); }
@@ -2621,7 +2620,6 @@
           <th data-sort="status">Status</th>
           <th class="ov-num" data-sort="fields">Fields</th>
           <th class="ov-prog" data-sort="progress">Progress</th>
-          <th class="ov-num" data-sort="confidence">Confidence</th>
           <th class="ov-num" data-sort="flags" title="Check, low, and can't-verify fields in the current grade">Flags</th>
           <th class="ov-run" data-sort="run">Extracted by</th>
         </tr>
@@ -3087,7 +3085,6 @@ const SORT_KEYS = {
   status: a => ["problem", "not-extracted", "not-started", "in-progress", "done"].indexOf(articleStatus(a).key),
   fields: a => a.n_fields ?? -1,
   progress: a => (a.n_fields ? (a.n_reviewed ?? 0) / a.n_fields : -1),
-  confidence: a => a.confidence ?? -1,
   flags: a => (a.grade ? a.grade.flags : -1),
   run: a => (a.active_run && a.active_run.created_at) || "",
 };
@@ -3145,21 +3142,17 @@ function renderOverview() {
     const st = articleStatus(a);
     const authors = formatAuthors(a.authors) || a.corporate_author || "";
     const sub = [authors && `${authors}${a.year ? " " + a.year : ""}`, a.journal].filter(Boolean).join(" · ");
-    const conf = a.confidence;
-    const confCell = conf == null ? "&mdash;"
-      : `<span class="ov-dot" style="background:var(--${conf < 0.6 ? "red" : conf > 0.85 ? "green" : "yellow"})"></span>${conf.toFixed(2)}`;
     const stTitle = a.schema_error ? ` title="${escapeHtml(a.schema_error)}"` : "";
     html += `<tr data-article="${escapeHtml(a.article_id)}">`;
     html += `<td class="ov-doc"><div class="ov-title">${escapeHtml(a.title || a.article_id)}</div><div class="ov-sub">${escapeHtml(sub || a.article_id)}</div></td>`;
     html += `<td><span class="ov-status ${st.key}"${stTitle}>${escapeHtml(st.label)}</span>${driftMark}</td>`;
     html += `<td class="ov-num">${problem || noRun ? "&mdash;" : nFields}</td>`;
     html += `<td class="ov-prog">${problem || noRun ? "&mdash;" : `<div class="ov-bar" title="${nReviewed}/${nFields} reviewed"><span style="width:${pct}%"></span></div>`}</td>`;
-    html += `<td class="ov-num">${confCell}</td>`;
     html += `<td class="ov-num">${flagsCellHtml(a)}</td>`;
     html += `<td class="ov-run">${runCellHtml(a)}</td>`;
     html += `</tr>`;
   }
-  body.innerHTML = html || '<tr class="ov-none"><td colspan="7">No documents match.</td></tr>';
+  body.innerHTML = html || '<tr class="ov-none"><td colspan="6">No documents match.</td></tr>';
 
   if (totals) {
     const pctAll = sumFields > 0 ? Math.round((sumReviewed / sumFields) * 100) : 0;
