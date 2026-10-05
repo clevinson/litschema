@@ -27,7 +27,10 @@ data/papers/<article-id>/
     review.json                          your verdicts on this run
 ```
 
-Plain JSON on disk, one directory per document, diffable in git. A run is
+Plain JSON on disk, one directory per document, diffable in git. The PDF,
+`article.md`, and extracted figures are gitignored by default, since most
+papers can't be redistributed; `prepare-text` regenerates the text from the
+PDF. A run is
 immutable once published: its extraction, reasoning, and `run.json` never
 change, so a review written against it stays meaningful forever. Re-extracting
 creates a new run rather than overwriting the old one.

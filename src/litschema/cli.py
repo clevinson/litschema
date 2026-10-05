@@ -1291,9 +1291,11 @@ def _ensure_gitignore_entries(project: Path) -> None:
         ".litschema/",
         "papers-inbox/*.pdf",
         "papers-inbox/.processed/*.pdf",
+        "# Source documents and anything derived from their text stay local;",
+        "# `litschema prepare-text` regenerates article.md and figures from the PDF.",
         "data/papers/*/*.pdf",
-        "# For non-open-access articles, add article-specific ignores such as:",
-        "# data/papers/<article-id>/article.md",
+        "data/papers/*/article.md",
+        "data/papers/*/figures/",
         ".DS_Store",
     ]
     if not gitignore_path.exists():
