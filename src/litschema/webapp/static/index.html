@@ -3,17 +3,18 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>litschema verify</title>
+<title>litschema</title>
 <link rel="icon" href="data:,">
-<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.19/cdn/themes/dark.css" />
-<script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.19/cdn/shoelace-autoloader.js"></script>
+<style>
+  @font-face { font-family: "DM Sans"; font-weight: 400; src: url("/static/fonts/dm-sans-latin-400-normal.woff2") format("woff2"); }
+  @font-face { font-family: "DM Sans"; font-weight: 500; src: url("/static/fonts/dm-sans-latin-500-normal.woff2") format("woff2"); }
+  @font-face { font-family: "DM Sans"; font-weight: 600; src: url("/static/fonts/dm-sans-latin-600-normal.woff2") format("woff2"); }
+  @font-face { font-family: "DM Mono"; font-weight: 400; src: url("/static/fonts/dm-mono-latin-400-normal.woff2") format("woff2"); }
+  .icon { width: 14px; height: 14px; vertical-align: -2px; flex: none; }
+  .app-bar .icon { width: 16px; height: 16px; }
+</style>
 <style>
   :root {
-    --sl-color-primary-600: #b0863e;
     --radius: 6px;
     --font-sans: 'DM Sans', -apple-system, sans-serif;
     --font-mono: 'DM Mono', 'SF Mono', monospace;
@@ -40,19 +41,10 @@
     --border-subtle: #ededf0;
     --val-string: #1a7a2e;
     --val-number: #7c3aad;
-
-    /* Shoelace overrides for popup panels (hoisted to body) */
-    --sl-color-neutral-0: var(--bg-raised);
-    --sl-color-neutral-50: var(--bg-overlay);
-    --sl-color-neutral-100: var(--bg-overlay);
-    --sl-color-neutral-700: var(--text);
-    --sl-panel-background-color: var(--bg-raised);
-    --sl-panel-border-color: var(--border);
   }
 
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
-      --sl-color-primary-600: #d4a054;
       --bg: #111113;
       --bg-raised: #18181b;
       --bg-overlay: #1e1e22;
@@ -74,17 +66,10 @@
       --border-subtle: #1f1f23;
       --val-string: #a3d9a5;
       --val-number: #c4a5e0;
-      --sl-color-neutral-0: #18181b;
-      --sl-color-neutral-50: #1e1e22;
-      --sl-color-neutral-100: #1e1e22;
-      --sl-color-neutral-700: #e4e4e7;
-      --sl-panel-background-color: #18181b;
-      --sl-panel-border-color: #27272a;
     }
   }
 
   :root[data-theme="dark"] {
-    --sl-color-primary-600: #d4a054;
     --bg: #111113;
     --bg-raised: #18181b;
     --bg-overlay: #1e1e22;
@@ -104,12 +89,6 @@
     --grey: #444;
     --border: #27272a;
     --border-subtle: #1f1f23;
-    --sl-color-neutral-0: #18181b;
-    --sl-color-neutral-50: #1e1e22;
-    --sl-color-neutral-100: #1e1e22;
-    --sl-color-neutral-700: #e4e4e7;
-    --sl-panel-background-color: #18181b;
-    --sl-panel-border-color: #27272a;
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -138,31 +117,7 @@
     height: 48px;
   }
 
-  /* Native select — reliable dropdown rendering */
-  #article-select {
-    font-family: var(--font-mono);
-    font-size: 12px;
-    color: var(--text);
-    background: var(--bg-input);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 6px 28px 6px 10px;
-    height: 32px;
-    min-width: 280px;
-    appearance: none;
-    -webkit-appearance: none;
-    background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%238b8b92' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-    background-repeat: no-repeat;
-    background-position: right 10px center;
-    cursor: pointer;
-    outline: none;
-  }
-
-  #article-select:focus {
-    border-color: var(--accent);
-  }
-
-  /* Article nav: ◀ 3/179 ▶ */
+  /* Article nav: < 3/179 > */
   .article-nav {
     display: flex;
     align-items: center;
@@ -170,7 +125,7 @@
     background: var(--bg);
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    height: 32px;
+    height: 28px;
     flex-shrink: 0;
   }
 
@@ -229,93 +184,6 @@
 
   .toolbar-spacer { flex: 1; }
 
-  /* ── Filter row ──
-     Drawer-style panel pulled down from the toolbar. Uses the page bg
-     (subtly different from the toolbar's bg-raised) plus an inset top
-     shadow to read as "below the toolbar fold." Stacks vertically:
-     header (label + help), textarea, footer (count + actions). */
-  .filter-row {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    padding: 10px 16px 12px;
-    background: var(--bg);
-    border-bottom: 1px solid var(--border);
-    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.06),
-                inset 3px 0 0 var(--accent);
-    flex-shrink: 0;
-  }
-  .filter-header {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-  .filter-header-label {
-    font-family: var(--font-sans);
-    font-size: 10px;
-    font-weight: 600;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: var(--text-dim);
-  }
-  .filter-row .filter-input {
-    width: 100%;
-    box-sizing: border-box;
-    font-family: var(--font-mono);
-    font-size: 12px;
-    line-height: 1.55;
-    color: var(--text);
-    background: var(--bg-input);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 8px 10px;
-    min-height: 60px;
-    resize: vertical;
-    outline: none;
-  }
-  .filter-row .filter-input:focus {
-    border-color: var(--accent);
-    box-shadow: 0 0 0 2px rgba(212, 160, 84, 0.18);
-  }
-  .filter-row .filter-input.error { border-color: var(--red, #ef4444); }
-  .filter-row .filter-input.error:focus {
-    box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.18);
-  }
-  .filter-footer {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-  .filter-footer .filter-count {
-    flex: 1;
-    font-family: var(--font-mono);
-    font-size: 11px;
-    color: var(--text-secondary);
-    text-align: left;
-  }
-  .filter-footer .filter-count.loading {
-    color: var(--text-dim);
-    font-style: italic;
-  }
-  .filter-row .filter-count.error { color: var(--red, #ef4444); }
-  .toolbar-btn.filter-toggle.active {
-    color: var(--accent);
-    border-color: var(--accent);
-  }
-  .toolbar-btn.filter-toggle .filter-badge {
-    margin-left: 6px;
-    padding: 1px 6px;
-    border-radius: 8px;
-    font-family: var(--font-mono);
-    font-size: 10px;
-    background: var(--accent);
-    color: var(--bg);
-  }
-
-  /* Inline help indicator next to the header label. Reads as a tooltip
-     cue, not an action button. Standard pointer cursor — clicking
-     opens the modal, so the affordance is "this is clickable," not
-     "hover for a tooltip." */
   .filter-help-btn {
     width: 18px;
     height: 18px;
@@ -339,8 +207,6 @@
     border-color: var(--text-dim);
   }
 
-  /* Primary action — accent fill makes it visually distinct from the
-     close affordance next to it. */
   .filter-primary-btn {
     height: 28px;
     padding: 0 14px;
@@ -357,31 +223,6 @@
   }
   .filter-primary-btn:hover { filter: brightness(1.08); }
   .filter-primary-btn:disabled { opacity: 0.5; cursor: default; }
-
-  /* Icon close — dismisses the filter row and clears any active filter.
-     Sits next to Apply but its icon-only / unfilled styling visually
-     distinguishes it from the primary action. */
-  .filter-close-btn {
-    width: 28px;
-    height: 28px;
-    padding: 0;
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    background: transparent;
-    color: var(--text-dim);
-    font-size: 16px;
-    line-height: 1;
-    cursor: pointer;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-    transition: color 0.1s, border-color 0.1s;
-  }
-  .filter-close-btn:hover {
-    color: var(--text);
-    border-color: var(--text-dim);
-  }
 
   /* ── Filter help modal ── */
   .filter-help-modal {
@@ -553,6 +394,43 @@
   }
 
   .theme-btn:hover { color: var(--text); }
+  .app-bar { position:sticky; top:0; z-index:20; background:var(--bg-raised); border-bottom:1px solid var(--border); }
+  .app-bar .brand { font-weight:650; color:var(--text); }
+  .app-bar .brand { flex:none; }
+  /* Shrink order at narrow widths: the switcher's title first, then the project name. */
+  .app-project { color:var(--text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; flex:0 0.001 auto; margin-left:-4px; }
+  .app-project::before { content:"/"; color:var(--text-dim); margin-right:6px; }
+  .app-project:empty { display:none; }
+  .app-nav { display:flex; align-items:center; gap:8px; min-width:0; flex:0 1 auto; }
+  .app-nav::before { content:""; flex:none; width:1px; height:22px; background:var(--border); margin:0 4px 0 2px; }
+  .btn-overview { flex:none; white-space:nowrap; height:28px; padding:0 10px; border:1px solid var(--border); border-radius:var(--radius); background:var(--bg); color:var(--text); font:500 12.5px var(--font-sans); cursor:pointer; }
+  .btn-overview:hover { background:var(--bg-overlay); }
+  .doc-switcher { position:relative; min-width:0; flex:0 1 auto; }
+  .switcher-btn { display:flex; align-items:center; gap:6px; max-width:440px; min-width:96px; width:100%; height:28px; padding:0 8px; border:1px solid transparent; border-radius:var(--radius); background:none; color:var(--text); font:400 13px var(--font-sans); cursor:pointer; }
+  .switcher-btn:hover, .switcher-btn[aria-expanded="true"] { background:var(--bg-overlay); border-color:var(--border); }
+  .switcher-btn .icon { color:var(--text-secondary); }
+  .switcher-label { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-align:left; }
+  .switcher-cite { font-weight:500; }
+  .switcher-title { color:var(--text-secondary); }
+  .switcher-title:not(:empty)::before { content:" \00b7  "; white-space:pre; }
+  .switcher-pop { position:absolute; top:calc(100% + 6px); left:0; width:480px; max-width:calc(100vw - 24px); background:var(--bg-raised); border:1px solid var(--border); border-radius:8px; box-shadow:0 8px 28px rgba(0,0,0,.14); z-index:40; overflow:hidden; }
+  .switcher-pop[hidden] { display:none; }
+  .switcher-input { display:block; width:100%; box-sizing:border-box; border:0; border-bottom:1px solid var(--border); padding:10px 12px; font:400 13px var(--font-sans); color:var(--text); background:transparent; outline:none; }
+  .switcher-hint, .switcher-foot { font-size:11px; color:var(--text-dim); padding:6px 12px 2px; }
+  .switcher-foot { border-top:1px solid var(--border); padding:6px 12px 8px; margin-top:4px; }
+  .switcher-list { list-style:none; margin:0; padding:2px 0; max-height:calc(12 * 31px); overflow-y:auto; }
+  .switcher-list li { display:flex; align-items:baseline; gap:8px; padding:6px 12px; cursor:pointer; }
+  .switcher-list li .t { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .switcher-list li .t b { font-weight:500; }
+  .switcher-list li .t span { color:var(--text-secondary); }
+  .switcher-list li .s { flex:none; font-size:11px; color:var(--text-secondary); white-space:nowrap; }
+  .switcher-list li[aria-selected="true"] { background:var(--bg-overlay); }
+  .switcher-list li.current { box-shadow:inset 2px 0 0 var(--accent); }
+  .switcher-list li.current .t b { font-weight:600; }
+  .switcher-empty { padding:10px 12px; color:var(--text-secondary); }
+  .btn-overview:focus-visible, .switcher-btn:focus-visible, .article-nav button:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
+  .review-actions .view-mode-toggle { height:28px; }
+  .review-actions .view-mode-btn { height:22px; }
 
   /* ── Search (inside left panel header) ── */
   .panel-header-row {
@@ -707,6 +585,7 @@
   }
 
   .review-panel-top {
+    align-items: flex-start;
     gap: 10px;
     margin-bottom: 6px;
   }
@@ -740,7 +619,8 @@
   .review-progress-row {
     display: flex;
     align-items: baseline;
-    gap: 8px;
+    flex-wrap: wrap;
+    gap: 4px 8px;
     min-width: 0;
   }
 
@@ -839,13 +719,8 @@
   .run-chip {
     font-size: 11px; font-family: ui-monospace, monospace; color: var(--text-dim);
     border: 1px solid var(--border); border-radius: 10px; padding: 1px 7px;
+    white-space: nowrap;
   }
-  .back-to-overview { white-space: nowrap; }
-  .doc-breadcrumb {
-    font-size: 12px; color: var(--text-dim); margin-bottom: 6px;
-  }
-  .doc-breadcrumb a { color: var(--text-dim); text-decoration: none; }
-  .doc-breadcrumb a:hover { text-decoration: underline; }
   .reasoning-note { position: relative; display: inline-flex; cursor: help; }
   .reasoning-note-icon {
     display: inline-flex; align-items: center; justify-content: center;
@@ -907,27 +782,60 @@
   .settings-status { padding-top: 10px; font-size: 12px; color: var(--text-dim); min-height: 16px; }
   .settings-status[data-status="error"] { color: var(--red, #f85149); }
   .overview-route { padding: 28px 32px 48px; overflow-y: auto; height: 100%; }
-  .overview-head { display: flex; align-items: baseline; gap: 16px; margin-bottom: 20px; }
-  .overview-head h1 { font-size: 20px; font-weight: 600; margin: 0; }
-  .overview-totals { color: var(--text-dim); font-size: 13px; }
-  .overview-table-wrap { overflow-x: auto; }
+  .overview-head { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 20px; }
+  .ov-strip { display:flex; gap:24px; flex-basis:100%; margin-bottom:6px; color:var(--text-secondary); font-size:12px; }
+  .ov-strip b { display:block; font-size:18px; font-weight:650; color:var(--text); }
+  /* One filter bar: a Search | Expression switch, the input for the active
+     mode, and the applied expression as a chip. */
+  .ov-filterbar { flex:1; min-width:0; max-width:720px; display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
+  .ov-filterbar .view-mode-toggle { height:32px; }
+  .ov-field { flex:1; min-width:220px; display:flex; align-items:center; gap:6px; height:32px; padding:0 4px 0 10px;
+    border:1px solid var(--border); border-radius:var(--radius); background:var(--bg-input); }
+  .ov-field:focus-within { border-color:var(--accent); box-shadow:0 0 0 2px var(--accent-muted); }
+  .ov-field.error, .ov-field.error:focus-within { border-color:var(--red, #ef4444); }
+  .ov-field input { flex:1; min-width:0; border:none; outline:none; background:none; color:var(--text); font:inherit; font-size:13px; padding:0; }
+  .ov-field .filter-input { font-family:var(--font-mono); font-size:12px; }
+  .ov-field .filter-count { font-family:var(--font-mono); font-size:11px; color:var(--text-secondary); white-space:nowrap; }
+  .ov-field .filter-count.loading { color:var(--text-dim); font-style:italic; }
+  .ov-field .filter-primary-btn { height:24px; padding:0 10px; }
+  .ov-filterbar[data-mode="search"] .expr-only, .ov-filterbar[data-mode="expression"] .search-only { display:none; }
+  .ov-filter-msg { flex-basis:100%; margin:-2px 0 0; font-size:12px; color:var(--text-secondary); }
+  .ov-filter-msg.error { color:var(--red, #ef4444); font-family:var(--font-mono); font-size:11px; }
+  .ov-filter-msg:empty { display:none; }
+  .ov-filter-active { display:inline-flex; align-items:center; gap:4px; max-width:32ch; height:26px; padding:0 4px 0 8px; border:1px solid var(--accent); border-radius:var(--radius); background:var(--accent-muted); font-size:12px; }
+  .ov-filter-active[hidden] { display:none; }
+  .ov-filter-active code { font-family:var(--font-mono); font-size:11px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .ov-filter-active button { display:inline-flex; padding:2px; border:none; background:none; color:var(--text-secondary); cursor:pointer; }
+  .ov-filter-active button:hover { color:var(--text); }
+  .ov-chips { display:flex; gap:6px; }
+  .ov-chips button { border:1px solid var(--border); border-radius:12px; padding:2px 9px; background:var(--bg-raised); color:var(--text-secondary); font:inherit; font-size:12px; cursor:pointer; }
+  .ov-chips button[aria-pressed="true"] { background:var(--text); color:var(--bg); border-color:var(--text); }
+  /* Above the sticky app bar and table header. */
+  #filter-help-modal { z-index:1000; }
   .overview-table { border-collapse: collapse; width: 100%; font-size: 13px; }
   .overview-table th {
     text-align: left; font-weight: 600; color: var(--text-dim);
     border-bottom: 1px solid var(--border); padding: 8px 12px; white-space: nowrap;
   }
+  /* The overview scrolls in its own container below the app bar; -28px
+     cancels that container's top padding. */
+  .overview-table thead th { position:sticky; top:-28px; z-index:10; background:var(--bg-overlay); box-shadow:inset 0 -1px 0 var(--border); cursor:pointer; }
+  .overview-table thead th[data-dir="asc"]::after { content:" \2191"; }
+  .overview-table thead th[data-dir="desc"]::after { content:" \2193"; }
   .overview-table td { padding: 8px 12px; border-bottom: 1px solid var(--border); }
   .overview-table tbody tr { cursor: pointer; }
   .overview-table tbody tr:hover { background: var(--hover); }
   .overview-table .ov-num, .overview-table td.ov-num { text-align: right; font-variant-numeric: tabular-nums; }
   .ov-title { font-weight: 500; }
   .ov-sub { color: var(--text-dim); font-size: 12px; margin-top: 2px; }
-  .ov-run-model { font-size: 12px; white-space: nowrap; }
-  .overview-table .ov-date { white-space: nowrap; color: var(--text-dim); font-size: 12px; }
+  .overview-table .ov-run { font-size: 12px; white-space: nowrap; color: var(--text-secondary); }
+  .ov-status { font-size:11px; border-radius:10px; padding:2px 8px; white-space:nowrap; background:var(--bg-overlay); color:var(--text-secondary); }
+  .ov-status.in-progress { background:var(--accent-muted); color:var(--accent); }
+  .ov-status.done { background:rgba(22,163,74,.12); color:var(--green); }
+  .ov-status.problem { color:var(--red); }
+  .ov-dot { display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:5px; }
   .ov-bar { position: relative; width: 120px; height: 6px; border-radius: 3px; background: var(--border); }
   .ov-bar span { position: absolute; inset: 0 auto 0 0; border-radius: 3px; background: var(--green, #3fb950); }
-  .ov-state { font-size: 12px; color: var(--text-dim); }
-  .ov-state.done { color: var(--green, #3fb950); }
   .ov-state.problem { color: var(--red, #f85149); }
   /* A mark, not an alarm: the run is readable and its progress is real. */
   .ov-drift {
@@ -1014,7 +922,7 @@
      blue citation/source-line bg (--cited*). Standard <mark> styling
      in the find-on-page tradition (yellow), tuned per-theme so dark
      mode doesn't blow out. */
-  .md-line .search-hit {
+  #panel-left .search-hit {
     background: rgba(255, 213, 79, 0.55);
     color: inherit;
     border-radius: 2px;
@@ -1022,25 +930,25 @@
     box-decoration-break: clone;
     -webkit-box-decoration-break: clone;
   }
-  .md-line .search-hit.current {
+  #panel-left .search-hit.current {
     background: rgba(255, 167, 38, 0.75);
     outline: 1px solid rgba(255, 167, 38, 0.95);
   }
   @media (prefers-color-scheme: dark) {
-    .md-line .search-hit {
+    #panel-left .search-hit {
       background: rgba(255, 213, 79, 0.28);
       color: #ffe8a3;
     }
-    .md-line .search-hit.current {
+    #panel-left .search-hit.current {
       background: rgba(255, 167, 38, 0.45);
       outline: 1px solid rgba(255, 167, 38, 0.7);
     }
   }
-  [data-theme="dark"] .md-line .search-hit {
+  [data-theme="dark"] #panel-left .search-hit {
     background: rgba(255, 213, 79, 0.28);
     color: #ffe8a3;
   }
-  [data-theme="dark"] .md-line .search-hit.current {
+  [data-theme="dark"] #panel-left .search-hit.current {
     background: rgba(255, 167, 38, 0.45);
     outline: 1px solid rgba(255, 167, 38, 0.7);
   }
@@ -2282,6 +2190,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
+  .source-evidence-lines:empty { display: none; }
 
   .source-cycle-control {
     display: inline-flex;
@@ -2407,13 +2316,8 @@
     }
 
     .toolbar {
-      overflow-x: auto;
       padding: 6px 8px;
       gap: 8px;
-    }
-
-    #article-select {
-      min-width: 280px;
     }
 
     .toolbar-spacer {
@@ -2493,41 +2397,70 @@
       width: 28px;
     }
   }
+  /* ── Document pane tabs and rendered view ── */
+  .pane-tabs { display:flex; gap:4px; padding:6px 12px; border-bottom:1px solid var(--border-subtle); }
+  .pane-tabs button { border:0; background:none; padding:4px 10px; border-radius:6px; color:var(--text-secondary); font:inherit; cursor:pointer; }
+  .pane-tabs button[aria-selected="true"] { background:var(--bg-overlay); color:var(--text); font-weight:550; }
+  .rendered { font-family: Charter, "Iowan Old Style", Georgia, serif; font-size:15px; line-height:1.6; padding:18px 26px; }
+  .rendered .col > .blk:not(:has(table)):not(figure) { max-width:64ch; }
+  .rendered p { margin:0 0 12px; }
+  .rendered ul, .rendered ol { margin:0 0 12px; padding-left:1.4em; }
+  .rendered h1, .rendered h2 { font-size:20px; line-height:1.3; margin:8px 0 10px; }
+  .rendered h3, .rendered h4, .rendered h5, .rendered h6 { font-family:var(--font-sans); font-size:12px; letter-spacing:.07em; text-transform:uppercase; color:var(--text-secondary); margin:18px 0 8px; }
+  .rendered table { border-collapse:collapse; font-variant-numeric:tabular-nums; font-size:13px; margin:6px 0 14px; display:block; overflow-x:auto; }
+  .rendered th, .rendered td { border-bottom:1px solid var(--border-subtle); padding:5px 8px; vertical-align:top; }
+  .rendered thead th { border-bottom:1.5px solid var(--grey); font-family:var(--font-sans); font-size:12px; font-weight:600; }
+  .rendered figure { margin:6px 0 12px; }
+  .rendered figure img { max-width:100%; border:1px solid var(--border-subtle); border-radius:3px; background:#fff; }
+  .rendered figcaption { font-size:13.5px; color:var(--text-secondary); margin-bottom:6px; }
+  .rendered .blk.reasoned-highlight { background:var(--cited-muted); border-left:3px solid var(--cited); border-radius:4px 6px 6px 4px; margin-left:-17px; margin-right:-14px; margin-bottom:12px; padding:8px 14px; }
+  .rendered .blk.reasoned-highlight > :last-child { margin-bottom:0; }
+  .rendered tr.reasoned-highlight td { background:var(--cited-muted); }
+  .rendered tr.reasoned-highlight td:first-child { box-shadow:inset 3px 0 0 var(--cited); }
+  .rendered td.val-cell { background:var(--cited-strong) !important; font-weight:700; color:var(--cited); }
+  .rendered .val-mark { background:var(--cited-strong); font-weight:700; color:var(--cited); border-radius:3px; padding:0 3px; }
+  .cite-notice { font-family:var(--font-sans); font-size:12.5px; color:var(--text-secondary); background:var(--bg-overlay); border-radius:6px; padding:8px 12px; margin:10px 26px; }
+  .pdf-frame { width:100%; height:100%; border:0; }
 </style>
 </head>
 <body>
 
-<div class="toolbar">
-  <!-- The exit back to the document list. NN/g's "emergency exit": every
-       document route needs a clearly marked way out that is not the browser
-       back button. -->
-  <button class="toolbar-btn back-to-overview" id="btn-all-documents" type="button"
-          title="Back to all documents">&#8592;&nbsp;All documents</button>
-  <select id="article-select">
-    <option value="">Select an article...</option>
-  </select>
-  <div class="article-nav">
-    <button id="btn-prev" disabled>&#9664;</button>
-    <span class="nav-counter" id="nav-counter">&mdash;</span>
-    <button id="btn-next" disabled>&#9654;</button>
+<div class="toolbar app-bar">
+  <span class="brand">litschema</span>
+  <span class="app-project" id="app-project"></span>
+  <div class="app-nav" id="app-nav">
+    <button class="btn-overview" id="btn-overview" type="button" title="All documents (Esc)">Overview</button>
+    <div class="doc-switcher" id="doc-switcher">
+      <button class="switcher-btn" id="switcher-btn" type="button" aria-haspopup="listbox"
+              aria-expanded="false" aria-controls="switcher-pop" title="Jump to a document">
+        <span class="switcher-label"><span class="switcher-cite" id="switcher-cite"></span><span class="switcher-title" id="switcher-title"></span></span>
+        <svg class="icon" aria-hidden="true"><use href="/static/icons.svg#chevron-down"/></svg>
+      </button>
+      <div class="switcher-pop" id="switcher-pop" hidden>
+        <input class="switcher-input" id="switcher-input" type="text" role="combobox" autocomplete="off"
+               spellcheck="false" aria-expanded="true" aria-autocomplete="list" aria-controls="switcher-list"
+               aria-label="Jump to a document" placeholder="Jump to a document&hellip;">
+        <div class="switcher-hint" id="switcher-hint"></div>
+        <ul class="switcher-list" id="switcher-list" role="listbox" aria-label="Documents"></ul>
+        <div class="switcher-foot">&uarr;&darr; to move &middot; Enter to open &middot; Esc to close</div>
+      </div>
+    </div>
+    <div class="article-nav">
+      <button id="btn-prev" disabled aria-label="Previous document"><svg class="icon" aria-hidden="true"><use href="/static/icons.svg#chevron-left"/></svg></button>
+      <span class="nav-counter" id="nav-counter">&mdash;</span>
+      <button id="btn-next" disabled aria-label="Next document"><svg class="icon" aria-hidden="true"><use href="/static/icons.svg#chevron-right"/></svg></button>
+    </div>
   </div>
   <div class="toolbar-spacer"></div>
-  <button class="toolbar-btn filter-toggle" id="btn-filter-toggle" type="button" title="Filter article queue">
-    Filter<span class="filter-badge" id="filter-badge" style="display:none"></span>
-  </button>
-  <div class="view-mode-toggle" aria-label="Extraction view mode">
-    <button class="view-mode-btn active" id="view-mode-review" data-view-mode="review" type="button">Audit</button>
-    <button class="view-mode-btn" id="view-mode-data" data-view-mode="data" type="button">Data</button>
-  </div>
-  <button class="theme-btn" id="btn-theme" title="Toggle theme">&#9790;</button>
-  <button class="theme-btn" id="btn-settings" title="Settings" aria-label="Settings">&#9881;</button>
+  <button class="theme-btn" id="btn-theme" title="Toggle theme" aria-label="Toggle theme"><svg class="icon" aria-hidden="true"><use href="/static/icons.svg#moon"/></svg></button>
+  <button class="theme-btn" id="btn-settings" title="Settings" aria-label="Settings"><svg class="icon" aria-hidden="true"><use href="/static/icons.svg#settings"/></svg></button>
 </div>
 
 <div class="orcid-modal-backdrop" id="settings-modal" role="dialog" aria-modal="true"
      aria-labelledby="settings-modal-title">
   <div class="orcid-modal settings-modal">
     <header><h3 id="settings-modal-title">Settings</h3>
-      <button class="close-btn" id="btn-settings-close" type="button" aria-label="Close">&times;</button>
+      <button class="close-btn" id="btn-settings-close" type="button" aria-label="Close"><svg class="icon" aria-hidden="true"><use href="/static/icons.svg#x"/></svg></button>
     </header>
     <div class="settings-body">
       <section class="settings-section">
@@ -2568,27 +2501,11 @@
   </div>
 </div>
 
-<div class="filter-row" id="filter-row" style="display:none">
-  <div class="filter-header">
-    <span class="filter-header-label">Add Filter</span>
-    <button class="filter-help-btn" id="btn-filter-help" type="button" aria-label="Filter expression reference" title="Filter expression reference">?</button>
-  </div>
-  <textarea class="filter-input" id="filter-input" rows="2"
-            placeholder='JS expression over article fields. Cmd/Ctrl+Enter to apply.
-e.g. year >= 2024 && study_types.includes("review")'
-            spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off"></textarea>
-  <div class="filter-footer">
-    <span class="filter-count" id="filter-count">&mdash;</span>
-    <button class="filter-primary-btn" id="btn-filter-apply" type="button">Apply</button>
-    <button class="filter-close-btn" id="btn-filter-close" type="button" aria-label="Close filter" title="Close (clears active filter)">&times;</button>
-  </div>
-</div>
-
 <div class="orcid-modal-backdrop" id="filter-help-modal" role="dialog" aria-modal="true" aria-labelledby="filter-help-title">
   <div class="filter-help-modal">
     <header>
       <h3 id="filter-help-title">Filter expression reference</h3>
-      <button class="close-btn" id="btn-filter-help-close" type="button" aria-label="Close">&times;</button>
+      <button class="close-btn" id="btn-filter-help-close" type="button" aria-label="Close"><svg class="icon" aria-hidden="true"><use href="/static/icons.svg#x"/></svg></button>
     </header>
     <div class="help-body">
       <p>
@@ -2600,7 +2517,7 @@ e.g. year >= 2024 && study_types.includes("review")'
       <p>
         <strong>Deep extraction fields</strong> (e.g. <code>experimental_setups</code>,
         <code>quantification_approaches</code>, <code>modeling_details</code>) load in the
-        background when this panel opens. Until they finish loading, expressions that
+        background once you start writing an expression. Until they finish loading, expressions that
         reference them will return no matches; the count will update automatically once load completes.
       </p>
       <h4>Summary fields</h4>
@@ -2624,20 +2541,36 @@ e.g. year >= 2024 && study_types.includes("review")'
 
 <div class="overview-route" id="overview-route">
   <header class="overview-head">
-    <h1>litschema verify</h1>
-    <div class="overview-totals" id="overview-totals"></div>
+    <div class="ov-strip" id="overview-totals"></div>
+    <div class="ov-filterbar" id="ov-filterbar" data-mode="search">
+      <div class="view-mode-toggle" role="group" aria-label="Filter mode">
+        <button class="view-mode-btn active" id="ov-mode-search" data-filter-mode="search" type="button" aria-pressed="true">Search</button>
+        <button class="view-mode-btn" id="ov-mode-expression" data-filter-mode="expression" type="button" aria-pressed="false">Expression</button>
+      </div>
+      <div class="ov-field" id="ov-field">
+        <input class="ov-search search-only" id="ov-search" type="search" placeholder="Filter by title, author, year, id…" aria-label="Search documents">
+        <input class="filter-input expr-only" id="filter-input" type="text" aria-label="Filter expression"
+               placeholder='year >= 2024 &amp;&amp; study_types.includes("review")'
+               spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off">
+        <span class="filter-count expr-only" id="filter-count" title="Documents matching this expression"></span>
+        <button class="filter-help-btn expr-only" id="btn-filter-help" type="button" aria-label="Filter expression reference" title="Filter expression reference">?</button>
+        <button class="filter-primary-btn expr-only" id="btn-filter-apply" type="button">Apply</button>
+      </div>
+      <span class="ov-filter-active" id="ov-filter-active" hidden><code id="ov-filter-expr"></code><button type="button" id="ov-filter-clear" aria-label="Clear expression filter" title="Clear expression filter"></button></span>
+      <p class="ov-filter-msg" id="filter-msg" aria-live="polite"></p>
+    </div>
+    <div class="ov-chips" id="ov-chips"></div>
   </header>
   <div class="overview-table-wrap">
     <table class="overview-table" id="overview-table">
       <thead>
         <tr>
-          <th class="ov-doc">Document</th>
-          <th class="ov-num">Fields</th>
-          <th class="ov-num">Reviewed</th>
-          <th class="ov-num">Edited</th>
-          <th class="ov-prog">Progress</th>
-          <th class="ov-run">Extracted by</th>
-          <th class="ov-date">Extraction date</th>
+          <th class="ov-doc" data-sort="title">Document</th>
+          <th data-sort="status">Status</th>
+          <th class="ov-num" data-sort="fields">Fields</th>
+          <th class="ov-prog" data-sort="progress">Progress</th>
+          <th class="ov-num" data-sort="confidence">Confidence</th>
+          <th class="ov-run" data-sort="run">Extracted by</th>
         </tr>
       </thead>
       <tbody id="overview-rows"></tbody>
@@ -2649,15 +2582,14 @@ e.g. year >= 2024 && study_types.includes("review")'
   <div class="panel panel-left">
     <div class="panel-header">
       <div class="article-bibheader" id="article-bibheader" style="display:none">
-        <div class="doc-breadcrumb"><a href="#/">All documents</a> &rsaquo; this document</div>
         <span class="bib-title" id="bib-title"></span>
         <span class="bib-meta">
           <span class="bib-authors" id="bib-authors"></span>
           <span id="bib-meta"></span>
           <a class="bib-doi" id="bib-doi" target="_blank" rel="noopener" style="display:none"></a>
           <span class="bib-badge" id="bib-badge" hidden></span>
-          <button class="bib-edit-btn" id="bib-edit-btn" type="button" title="Edit document metadata" hidden>&#9998;</button>
-          <button class="bib-edit-btn" id="bib-sync-btn" type="button" title="Sync metadata from the DOI registry" hidden>&#10227; from DOI</button>
+          <button class="bib-edit-btn" id="bib-edit-btn" type="button" title="Edit document metadata" hidden><svg class="icon" role="img" aria-label="Edit"><use href="/static/icons.svg#pencil"/></svg></button>
+          <button class="bib-edit-btn" id="bib-sync-btn" type="button" title="Sync metadata from the DOI registry" hidden><svg class="icon" aria-hidden="true"><use href="/static/icons.svg#refresh-cw"/></svg> from DOI</button>
         </span>
         <form class="bib-edit-form" id="bib-edit-form" hidden>
           <label>Title <input name="title" type="text"></label>
@@ -2673,20 +2605,21 @@ e.g. year >= 2024 && study_types.includes("review")'
           </div>
         </form>
       </div>
+      <div class="pane-tabs" id="pane-tabs" role="tablist" aria-label="Document view">
+        <button type="button" role="tab" data-pane="rendered">Rendered</button>
+        <button type="button" role="tab" data-pane="raw">Raw lines</button>
+        <button type="button" role="tab" data-pane="pdf">PDF</button>
+      </div>
       <div class="panel-header-row search-row" id="search-row" style="display:none">
         <div class="search-container">
           <input type="text" class="search-input" id="search-box" placeholder="Search in document...">
-          <button class="search-clear" id="search-clear" style="display:none" title="Clear search">&#10005;</button>
+          <button class="search-clear" id="search-clear" style="display:none" title="Clear search"><svg class="icon" role="img" aria-label="Clear"><use href="/static/icons.svg#x"/></svg></button>
           <div class="search-results" id="search-results" style="display:none">
-            <button class="search-arrow" id="search-prev">&#9650;</button>
+            <button class="search-arrow" id="search-prev" aria-label="Previous match"><svg class="icon" aria-hidden="true"><use href="/static/icons.svg#chevron-up"/></svg></button>
             <span class="search-counter" id="search-counter"></span>
-            <button class="search-arrow" id="search-next">&#9660;</button>
+            <button class="search-arrow" id="search-next" aria-label="Next match"><svg class="icon" aria-hidden="true"><use href="/static/icons.svg#chevron-down"/></svg></button>
           </div>
         </div>
-        <button class="toolbar-btn" id="btn-pdf" style="display:none">
-          PDF
-          <svg viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-        </button>
       </div>
     </div>
     <div class="panel-body" id="panel-left"></div>
@@ -2696,9 +2629,9 @@ e.g. year >= 2024 && study_types.includes("review")'
         <div class="source-evidence-nav">
           <span class="source-evidence-lines" id="source-evidence-lines">No field selected</span>
           <span class="source-cycle-control" id="source-cycle-control">
-            <button class="source-cycle-btn" id="btn-source-evidence-prev" aria-label="Previous source" disabled>&lsaquo;</button>
+            <button class="source-cycle-btn" id="btn-source-evidence-prev" aria-label="Previous source" disabled><svg class="icon" aria-hidden="true"><use href="/static/icons.svg#chevron-left"/></svg></button>
             <span class="source-cycle-counter" id="source-evidence-index">0/0</span>
-            <button class="source-cycle-btn" id="btn-source-evidence-next" aria-label="Next source" disabled>&rsaquo;</button>
+            <button class="source-cycle-btn" id="btn-source-evidence-next" aria-label="Next source" disabled><svg class="icon" aria-hidden="true"><use href="/static/icons.svg#chevron-right"/></svg></button>
           </span>
         </div>
       </div>
@@ -2733,6 +2666,10 @@ e.g. year >= 2024 && study_types.includes("review")'
           <div class="view-mode-toggle data-mode-toggle" aria-label="Data display mode">
             <button class="view-mode-btn active" id="data-mode-table" data-data-mode="table" type="button">Table</button>
             <button class="view-mode-btn" id="data-mode-json" data-data-mode="json" type="button">JSON</button>
+          </div>
+          <div class="view-mode-toggle" role="group" aria-label="Extraction view mode">
+            <button class="view-mode-btn active" id="view-mode-review" data-view-mode="review" type="button">Audit</button>
+            <button class="view-mode-btn" id="view-mode-data" data-view-mode="data" type="button">Data</button>
           </div>
         </div>
       </div>
@@ -2810,6 +2747,9 @@ const state = {
   reasoning: null,
   reasoningByPath: {},
   schemaFields: {},
+  leftPane: "rendered",
+  rendered: null,
+  renderError: null,
   annotations: {},  // path -> {path, state, override?, note?}
   selectedPath: null,
   editingPath: null,
@@ -2935,7 +2875,7 @@ function toggleTheme() {
 }
 
 function updateThemeIcon() {
-  $("#btn-theme").innerHTML = isDark() ? "&#9788;" : "&#9790;";
+  $("#btn-theme").innerHTML = icon(isDark() ? "sun" : "moon");
 }
 
 $("#btn-theme").addEventListener("click", toggleTheme);
@@ -2959,8 +2899,13 @@ function parseRoute(hash = window.location.hash) {
   return { name: "overview" };
 }
 
+function docHash(articleId) {
+  const pane = state.leftPane !== "rendered" ? `?pane=${state.leftPane}` : "";
+  return `#/doc/${encodeURIComponent(articleId)}${pane}`;
+}
+
 function routeToDoc(articleId, { replace = false } = {}) {
-  const target = `#/doc/${encodeURIComponent(articleId)}`;
+  const target = docHash(articleId);
   if (window.location.hash === target) return;
   if (replace) window.location.replace(target);
   else window.location.hash = target;
@@ -2970,16 +2915,21 @@ function setToolbarScope(inDocument) {
   // Document-scoped controls are hidden on the overview rather than disabled:
   // there is no document for them to act on, so showing them implies a context
   // the user is not in.
-  for (const sel of ["#article-select", ".article-nav", ".view-mode-toggle", "#btn-all-documents"]) {
-    const el = document.querySelector(sel);
-    if (el) el.style.display = inDocument ? "" : "none";
-  }
+  $("#app-nav").style.display = inDocument ? "" : "none";
+  if (!inDocument) closeSwitcher({ restoreFocus: false });
+}
+
+// The overview's own hash (#/?q=…&status=…), so leaving a document returns to
+// the same view of the list. ?filter= lives in the search part and rides along.
+function goToOverview() {
+  window.location.hash = state.overviewHash || "#/";
 }
 
 function showOverview() {
   $("#panels").style.display = "none";
   $("#overview-route").style.display = "block";
   setToolbarScope(false);
+  $("#ov-search").value = overviewQuery().q;
   renderOverview();
 }
 
@@ -2994,10 +2944,7 @@ async function applyRoute() {
       if (totals) totals.textContent = `No document "${route.articleId}" in this project.`;
       return;
     }
-    const select = $("#article-select");
-    if (select && select.value !== route.articleId) {
-      select.value = route.articleId;
-    }
+    closeSwitcher({ restoreFocus: false });
     if (state.currentId !== route.articleId) await loadArticle(route.articleId);
     else {
       $("#overview-route").style.display = "none";
@@ -3008,8 +2955,7 @@ async function applyRoute() {
   }
   state.currentId = null;
   state.currentRunId = null;
-  const select = $("#article-select");
-  if (select) select.value = "";
+  state.overviewHash = window.location.hash || "#/";
   showOverview();
 }
 
@@ -3024,37 +2970,86 @@ function runCellHtml(article) {
   // or months apart from the rest.
   const run = article.active_run;
   if (!run) return "&mdash;";
-  const model = run.model || "unknown model";
-  const title = `Run ${run.run_id}`;
-  return `<div class="ov-run-model" title="${escapeHtml(title)}">${escapeHtml(model)}</div>` +
-    (run.effort ? `<div class="ov-sub">${escapeHtml(run.effort)}</div>` : "");
+  const title = [`Run ${run.run_id}`, run.effort && `effort ${run.effort}`, run.created_at].filter(Boolean).join("\n");
+  const text = `${run.model || "unknown model"} · ${shortDate(run.created_at) || ""}`;
+  return `<span title="${escapeHtml(title)}">${escapeHtml(text)}</span>`;
 }
 
-function runDateHtml(article) {
-  const run = article.active_run;
-  const when = run && shortDate(run.created_at);
-  if (!when) return "&mdash;";
-  return `<span title="${escapeHtml(run.created_at)}">${escapeHtml(when)}</span>`;
+function articleStatus(a) {
+  if (a.schema_error || a.review_error) return { key: "problem", label: a.schema_error ? "schema unreadable" : "review unreadable" };
+  if (!a.active_run_id) return { key: "not-extracted", label: "Not extracted" };
+  // Zero fields is complete by arithmetic, not by review.
+  if ((a.n_fields ?? 0) === 0) return { key: "not-started", label: "Nothing extracted" };
+  if (a.is_complete) return { key: "done", label: "Done" };
+  if ((a.n_reviewed ?? 0) > 0) return { key: "in-progress", label: "In progress" };
+  return { key: "not-started", label: "Not started" };
 }
+
+// Overview text filter, status chip and sort live in the hash so reload keeps them.
+function overviewQuery() {
+  const p = new URLSearchParams(location.hash.split("?")[1] || "");
+  return { q: p.get("q") || "", status: p.get("status") || "all", sort: p.get("sort") || "title", dir: p.get("dir") || "asc" };
+}
+
+function setOverviewQuery(next) {
+  const q = { ...overviewQuery(), ...next };
+  const p = new URLSearchParams();
+  if (q.q) p.set("q", q.q);
+  if (q.status !== "all") p.set("status", q.status);
+  if (q.sort !== "title") p.set("sort", q.sort);
+  if (q.dir !== "asc") p.set("dir", q.dir);
+  const s = p.toString();
+  state.overviewHash = "#/" + (s ? "?" + s : "");
+  history.replaceState(null, "", location.pathname + location.search + state.overviewHash);
+  renderOverview();
+}
+
+function matchesText(a, q) {
+  if (!q) return true;
+  const hay = [a.title, a.article_id, a.year, a.journal, a.corporate_author, ...(a.authors || [])]
+    .filter(Boolean).join(" ").toLowerCase();
+  return q.toLowerCase().split(/\s+/).every(t => hay.includes(t));
+}
+
+const SORT_KEYS = {
+  title: a => (a.title || a.article_id).toLowerCase(),
+  status: a => ["problem", "not-extracted", "not-started", "in-progress", "done"].indexOf(articleStatus(a).key),
+  fields: a => a.n_fields ?? -1,
+  progress: a => (a.n_fields ? (a.n_reviewed ?? 0) / a.n_fields : -1),
+  confidence: a => a.confidence ?? -1,
+  run: a => (a.active_run && a.active_run.created_at) || "",
+};
 
 function renderOverview() {
   const body = $("#overview-rows");
   const totals = $("#overview-totals");
   if (!body) return;
   const rows = overviewRowsFor(state.articles);
-
-  if (!rows.length) {
-    body.innerHTML = '<tr class="ov-none"><td colspan="7">No documents match.</td></tr>';
-    if (totals) totals.textContent = "";
-    return;
-  }
+  const query = overviewQuery();
+  const visible = rows
+    .filter(a => matchesText(a, query.q))
+    .filter(a => query.status === "all" || articleStatus(a).key === query.status);
+  const key = SORT_KEYS[query.sort] || SORT_KEYS.title;
+  const dir = query.dir === "desc" ? -1 : 1;
+  visible.sort((x, y) => (key(x) < key(y) ? -1 : key(x) > key(y) ? 1 : 0) * dir);
+  document.querySelectorAll("#overview-table thead th[data-sort]").forEach(th => {
+    if (th.dataset.sort === query.sort) th.dataset.dir = query.dir;
+    else delete th.dataset.dir;
+  });
 
   let sumFields = 0, sumReviewed = 0, complete = 0, unextracted = 0, stale = 0;
-  let html = "";
   for (const a of rows) {
+    const problem = !!a.review_error || !!a.schema_error;
+    if (!problem) { sumFields += a.n_fields ?? 0; sumReviewed += a.n_reviewed ?? 0; }
+    if (a.is_complete && (a.n_fields ?? 0) > 0) complete++;
+    if (!a.active_run_id) unextracted++;
+    if (!problem && a.schema_drift) stale++;
+  }
+
+  let html = "";
+  for (const a of visible) {
     const nFields = a.n_fields ?? 0;
     const nReviewed = a.n_reviewed ?? 0;
-    const nOverridden = a.n_overridden ?? 0;
     // Either kind of "we cannot tell" reads the same in this table: the counts
     // are dashes, not zeros, because zero is a confident claim about the work.
     const problem = !!a.review_error || !!a.schema_error;
@@ -3066,10 +3061,6 @@ function renderOverview() {
     // An article with no active run is listed, never hidden — it is exactly
     // the work someone still has to do.
     const noRun = !a.active_run_id;
-    if (!problem) { sumFields += nFields; sumReviewed += nReviewed; }
-    if (a.is_complete && nFields > 0) complete++;
-    if (noRun) unextracted++;
-    if (drifted) stale++;
 
     const pct = nFields > 0 ? Math.round((nReviewed / nFields) * 100) : 0;
     // Shown beside real progress, never in place of it.
@@ -3078,38 +3069,38 @@ function renderOverview() {
         ` against an earlier version of the schema. Verification still works;` +
         ` editing is disabled until it is re-extracted.">*</abbr>`
       : "";
-    let stateCell;
-    if (a.schema_error) {
-      stateCell = `<span class="ov-state problem" title="${escapeHtml(a.schema_error)}">schema unreadable</span>`;
-    } else if (problem) stateCell = '<span class="ov-state problem">review unreadable</span>';
-    else if (noRun) stateCell = '<span class="ov-state">not extracted</span>';
-    // A run that produced no reviewable field is complete by arithmetic, but
-    // calling it "complete" reads as audited work. Say what actually happened.
-    else if (nFields === 0) stateCell = `<span class="ov-state">nothing extracted</span>${driftMark}`;
-    else if (a.is_complete) stateCell = `<span class="ov-state done">complete</span>${driftMark}`;
-    else stateCell = `<div class="ov-bar"><span style="width:${pct}%"></span></div>${driftMark}`;
-
-    const title = a.title || a.article_id;
+    const st = articleStatus(a);
+    const authors = formatAuthors(a.authors) || a.corporate_author || "";
+    const sub = [authors && `${authors}${a.year ? " " + a.year : ""}`, a.journal].filter(Boolean).join(" · ");
+    const conf = a.confidence;
+    const confCell = conf == null ? "&mdash;"
+      : `<span class="ov-dot" style="background:var(--${conf < 0.6 ? "red" : conf > 0.85 ? "green" : "yellow"})"></span>${conf.toFixed(2)}`;
+    const stTitle = a.schema_error ? ` title="${escapeHtml(a.schema_error)}"` : "";
     html += `<tr data-article="${escapeHtml(a.article_id)}">`;
-    html += `<td class="ov-doc"><div class="ov-title">${escapeHtml(title)}</div>`;
-    html += `<div class="ov-sub">${escapeHtml(a.article_id)}</div></td>`;
+    html += `<td class="ov-doc"><div class="ov-title">${escapeHtml(a.title || a.article_id)}</div><div class="ov-sub">${escapeHtml(sub || a.article_id)}</div></td>`;
+    html += `<td><span class="ov-status ${st.key}"${stTitle}>${escapeHtml(st.label)}</span>${driftMark}</td>`;
     html += `<td class="ov-num">${problem || noRun ? "&mdash;" : nFields}</td>`;
-    html += `<td class="ov-num">${problem || noRun ? "&mdash;" : nReviewed}</td>`;
-    html += `<td class="ov-num">${problem || noRun ? "&mdash;" : nOverridden}</td>`;
-    html += `<td class="ov-prog">${stateCell}</td>`;
+    html += `<td class="ov-prog">${problem || noRun ? "&mdash;" : `<div class="ov-bar" title="${nReviewed}/${nFields} reviewed"><span style="width:${pct}%"></span></div>`}</td>`;
+    html += `<td class="ov-num">${confCell}</td>`;
     html += `<td class="ov-run">${runCellHtml(a)}</td>`;
-    html += `<td class="ov-date">${runDateHtml(a)}</td>`;
     html += `</tr>`;
   }
-  body.innerHTML = html;
+  body.innerHTML = html || '<tr class="ov-none"><td colspan="6">No documents match.</td></tr>';
 
   if (totals) {
-    const pct = sumFields > 0 ? Math.round((sumReviewed / sumFields) * 100) : 0;
-    const bits = [`${rows.length} documents`, `${complete} complete`, `${sumReviewed}/${sumFields} fields reviewed (${pct}%)`];
-    if (unextracted) bits.push(`${unextracted} not extracted`);
-    if (stale) bits.push(`${stale} on an older schema`);
-    totals.textContent = bits.join(" \u00b7 ");
+    const pctAll = sumFields > 0 ? Math.round((sumReviewed / sumFields) * 100) : 0;
+    const inProgress = rows.filter(a => articleStatus(a).key === "in-progress").length;
+    const problems = rows.filter(a => articleStatus(a).key === "problem").length;
+    const stat = (n, label) => `<div><b>${n}</b>${label}</div>`;
+    totals.innerHTML = [stat(rows.length, "documents"), stat(inProgress, "in progress"), stat(complete, "done"),
+      stat(`${pctAll}%`, "fields reviewed"),
+      unextracted ? stat(unextracted, "not extracted") : "", problems ? stat(problems, "problems") : "",
+      stale ? stat(stale, "on an older schema") : ""].join("");
   }
+  const chips = [["all", "All"], ["not-started", "Not started"], ["in-progress", "In progress"], ["done", "Done"]];
+  if (unextracted) chips.push(["not-extracted", "Not extracted"]);
+  $("#ov-chips").innerHTML = chips.map(([k, l]) =>
+    `<button type="button" data-status="${k}" aria-pressed="${query.status === k}">${l}</button>`).join("");
 
   body.querySelectorAll("tr[data-article]").forEach(tr => {
     tr.addEventListener("click", () => routeToDoc(tr.dataset.article));
@@ -3125,16 +3116,25 @@ async function init() {
   state.schemaFields = schemaData.fields || {};
   state.viewMode = initialViewMode();
   state.dataMode = initialDataMode();
+  state.leftPane = initialLeftPane();
+  syncPaneTabs();
+  document.querySelectorAll("#pane-tabs [data-pane]").forEach(b =>
+    b.addEventListener("click", () => setLeftPane(b.dataset.pane)));
   syncViewControls();
   // If a URL filter is present, load deep fields up front so the first
-  // dropdown render reflects accurate matches (the filter expression may
+  // queue reflects accurate matches (the filter expression may
   // reference fields like experimental_setups that aren't in the summary).
   if (applyInitialFilterFromUrl()) {
     await ensureDeepFields();
   }
-  populateDropdown();
-  updateFilterBadge();
+  refreshQueue();
+  updateFilterChip();
 
+  $("#btn-overview").addEventListener("click", goToOverview);
+  wireSwitcher();
+  document.addEventListener("keydown", (e) => {
+    if (escapeLeavesDocument(e)) { e.preventDefault(); goToOverview(); }
+  });
   // Prev/next handlers
   $("#btn-prev").addEventListener("click", () => navigateArticle(-1));
   $("#btn-next").addEventListener("click", () => navigateArticle(1));
@@ -3149,9 +3149,17 @@ async function init() {
   wireFilterControls();
   wireSelectedFieldActions();
 
+  $("#ov-search").addEventListener("input", e => setOverviewQuery({ q: e.target.value }));
+  $("#ov-chips").addEventListener("click", e => { const s = e.target.dataset.status; if (s) setOverviewQuery({ status: s }); });
+  $("#overview-table thead").addEventListener("click", e => {
+    const k = e.target.closest("th")?.dataset.sort; if (!k) return;
+    const q = overviewQuery();
+    setOverviewQuery({ sort: k, dir: q.sort === k && q.dir === "asc" ? "desc" : "asc" });
+  });
+  $("#ov-filter-clear").innerHTML = icon("x");
+  $("#ov-filter-clear").addEventListener("click", () => clearFilter());
   // Deep links survive reload, and the back button moves between the overview
   // and a document rather than leaving the app.
-  $("#btn-all-documents").addEventListener("click", () => { window.location.hash = "#/"; });
   wireSettings();
   loadSettings();
   window.addEventListener("hashchange", () => { applyRoute(); });
@@ -3190,53 +3198,80 @@ function applyInitialFilterFromUrl() {
   state.filterFn = null;          // inert until confirmed
   state.filterUnconfirmed = true; // and the live preview must not run it either
   $("#filter-input").value = expr;
-  // Opened, not collapsed: an unconfirmed filter is a decision waiting on the
-  // user, and the toolbar badge alone would not tell them one is pending.
-  $("#filter-row").style.display = "";
-  $("#btn-filter-toggle").classList.add("active");
-  const count = $("#filter-count");
-  if (count) {
-    count.textContent = "From this link — review it, then press Apply to run it.";
-    count.classList.add("error");
-  }
+  // Not persisted: the link chose this mode, the user did not.
+  setFilterMode("expression", { persist: false });
   return false;  // nothing to evaluate, so no deep field load is needed yet
 }
 
-function updateFilterBadge() {
-  const badge = $("#filter-badge");
-  const btn = $("#btn-filter-toggle");
+const LINK_FILTER_PROMPT = "From this link. Review it, then press Apply to run it.";
+
+function setFilterMessage(text, isError = false) {
+  const msg = $("#filter-msg");
+  msg.textContent = text || "";
+  msg.classList.toggle("error", !!text && isError);
+}
+
+function updateFilterChip() {
+  const chip = $("#ov-filter-active");
   if (state.filterFn) {
-    badge.textContent = `${state.filteredArticles.length}/${state.articles.length}`;
-    badge.style.display = "inline";
-    btn.classList.add("active");
+    $("#ov-filter-expr").textContent = state.filterExpr;
+    chip.title = state.filterExpr;
+    chip.hidden = false;
   } else {
-    badge.style.display = "none";
-    btn.classList.remove("active");
+    chip.hidden = true;
   }
 }
 
+const FILTER_MODE_KEY = "litschema.filterMode";
+
+function initialFilterMode() {
+  try { return localStorage.getItem(FILTER_MODE_KEY) === "expression" ? "expression" : "search"; }
+  catch (_) { return "search"; }
+}
+
+function setFilterMode(mode, { persist = true, focus = false } = {}) {
+  const bar = $("#ov-filterbar");
+  bar.dataset.mode = mode;
+  bar.querySelectorAll("[data-filter-mode]").forEach(b => {
+    const on = b.dataset.filterMode === mode;
+    b.classList.toggle("active", on);
+    b.setAttribute("aria-pressed", String(on));
+  });
+  if (persist) {
+    try { localStorage.setItem(FILTER_MODE_KEY, mode); } catch (_) {}
+  }
+  if (mode === "expression") {
+    evaluateFilterPreview($("#filter-input").value);
+  } else {
+    // The chip still shows an applied expression; nothing else of it belongs here.
+    setFilterMessage("");
+    $("#ov-field").classList.remove("error");
+  }
+  if (focus) $(mode === "expression" ? "#filter-input" : "#ov-search").focus();
+}
+
 function evaluateFilterPreview(expr) {
-  const input = $("#filter-input");
+  const field = $("#ov-field");
   const countEl = $("#filter-count");
   if (state.filterUnconfirmed) {
     // Still the expression that arrived in the URL. Evaluating it to show a
-    // match count runs it just as surely as applying it, so reopening the
-    // filter row must not become a way around the confirmation.
-    countEl.textContent = "From this link — review it, then press Apply to run it.";
-    countEl.classList.add("error");
+    // match count runs it just as surely as applying it, so the preview must
+    // not become a way around the confirmation.
+    countEl.textContent = "";
+    setFilterMessage(LINK_FILTER_PROMPT, true);
     return null;
   }
   const { fn, error } = compileFilter(expr);
   if (error) {
-    input.classList.add("error");
-    countEl.classList.add("error");
-    countEl.textContent = "syntax error";
+    field.classList.add("error");
+    countEl.textContent = "";
+    setFilterMessage(error, true);
     return null;
   }
-  input.classList.remove("error");
-  countEl.classList.remove("error");
+  field.classList.remove("error");
+  setFilterMessage("");
   if (!fn) {
-    countEl.textContent = `${state.articles.length}/${state.articles.length}`;
+    countEl.textContent = "";
     return null;
   }
   const matches = state.articles.filter(safeFilterCall(fn));
@@ -3246,7 +3281,11 @@ function evaluateFilterPreview(expr) {
 
 async function applyFilter(expr) {
   const { fn, error } = compileFilter(expr);
-  if (error) return;
+  if (error) {
+    $("#ov-field").classList.add("error");
+    setFilterMessage(error, true);
+    return;
+  }
   // If the user wrote a filter that references deep fields and we haven't
   // loaded them yet, wait. ensureDeepFields() is a no-op once cached.
   await ensureDeepFields();
@@ -3260,8 +3299,10 @@ async function applyFilter(expr) {
     url.searchParams.delete("filter");
   }
   history.replaceState(null, "", url.toString());
-  populateDropdown();
-  updateFilterBadge();
+  evaluateFilterPreview($("#filter-input").value);
+  refreshQueue();
+  updateFilterChip();
+  if (onOverview()) renderOverview();
 }
 
 // ── Deep fields: bulk-fetch full extraction JSON into state.articles ──
@@ -3310,7 +3351,7 @@ async function ensureDeepFields() {
     state.deepLoading = null;
     setDeepLoadingHint(false);
     // Re-run the live preview now that deep fields are available.
-    evaluateFilterPreview($("#filter-input").value);
+    if ($("#ov-filterbar").dataset.mode === "expression") evaluateFilterPreview($("#filter-input").value);
   })();
   return state.deepLoading;
 }
@@ -3344,51 +3385,39 @@ function clearFilter() {
   state.filterFn = null;
   state.filterUnconfirmed = false;
   $("#filter-input").value = "";
-  $("#filter-input").classList.remove("error");
-  $("#filter-count").classList.remove("error");
-  $("#filter-count").textContent = `${state.articles.length}/${state.articles.length}`;
+  $("#ov-field").classList.remove("error");
+  $("#filter-count").textContent = "";
+  setFilterMessage("");
   const url = new URL(window.location.href);
   url.searchParams.delete("filter");
   history.replaceState(null, "", url.toString());
-  populateDropdown();
-  updateFilterBadge();
+  refreshQueue();
+  updateFilterChip();
+  if (onOverview()) renderOverview();
+}
+
+function onOverview() {
+  return $("#overview-route")?.style.display === "block";
 }
 
 function wireFilterControls() {
-  const toggle = $("#btn-filter-toggle");
-  const row = $("#filter-row");
   const input = $("#filter-input");
-  toggle.addEventListener("click", () => {
-    const open = row.style.display !== "none";
-    row.style.display = open ? "none" : "flex";
-    if (!open) {
-      input.focus();
-      evaluateFilterPreview(input.value);
-      ensureDeepFields();
-    }
-  });
+  document.querySelectorAll("#ov-filterbar [data-filter-mode]").forEach(b =>
+    b.addEventListener("click", () => setFilterMode(b.dataset.filterMode, { focus: true })));
   let debounce;
   input.addEventListener("input", () => {
     clearTimeout(debounce);
-    debounce = setTimeout(() => evaluateFilterPreview(input.value), 200);
+    debounce = setTimeout(() => evaluateFilterPreview(input.value), 150);
   });
+  // Expressions may reach into full extractions; fetch them once the user starts writing one.
+  input.addEventListener("focus", () => { if (!state.filterUnconfirmed) ensureDeepFields(); });
   input.addEventListener("keydown", (e) => {
-    // Cmd/Ctrl+Enter applies. Plain Enter inserts a newline (textarea default).
-    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+    if (e.key === "Enter") {
       e.preventDefault();
       applyFilter(input.value);
-      row.style.display = "none";
     }
-    if (e.key === "Escape") { clearFilter(); row.style.display = "none"; }
   });
-  $("#btn-filter-apply").addEventListener("click", () => {
-    applyFilter(input.value);
-    row.style.display = "none";
-  });
-  $("#btn-filter-close").addEventListener("click", () => {
-    clearFilter();
-    row.style.display = "none";
-  });
+  $("#btn-filter-apply").addEventListener("click", () => applyFilter(input.value));
   $("#btn-filter-help").addEventListener("click", openFilterHelp);
   $("#btn-filter-help-close").addEventListener("click", closeFilterHelp);
   $("#filter-help-modal").addEventListener("click", (e) => {
@@ -3396,18 +3425,12 @@ function wireFilterControls() {
   });
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && $("#filter-help-modal").classList.contains("active")) {
+      e.preventDefault();
       closeFilterHelp();
     }
   });
-  // Seed the live count display
-  $("#filter-count").textContent = `${state.articles.length}/${state.articles.length}`;
-  if (state.filterUnconfirmed) {
-    const countEl = $("#filter-count");
-    countEl.textContent = "From this link — review it, then press Apply to run it.";
-    countEl.classList.add("error");
-  } else if (state.filterExpr) {
-    evaluateFilterPreview(state.filterExpr);
-  }
+  const mode = state.filterUnconfirmed ? "expression" : initialFilterMode();
+  setFilterMode(mode, { persist: false });
 }
 
 // ── Filter help modal ──
@@ -3473,68 +3496,50 @@ function openFilterHelp() {
       <td class="col-desc">${f.note}</td>
     </tr>`).join("");
   $("#filter-help-examples").textContent = FILTER_HELP_EXAMPLES;
-  $("#filter-help-modal").classList.add("active");
+  const modal = $("#filter-help-modal");
+  // Last child of body, so nothing later in the document can paint over it.
+  document.body.appendChild(modal);
+  modal.classList.add("active");
 }
 
 function closeFilterHelp() {
   $("#filter-help-modal").classList.remove("active");
 }
 
-function articleOptionLabel(article) {
-  const authors = formatAuthors(article.authors);
-  const year = article.year ? ` ${article.year}` : "";
-  if (authors) {
-    return `${authors}${year}${article.title ? `. ${article.title}` : ""}`;
-  }
-  if (article.corporate_author) {
-    return `${article.corporate_author}${year}${article.title ? `. ${article.title}` : ""}`;
-  }
-  if (article.title) {
-    return article.year ? `${article.title} (${article.year})` : article.title;
-  }
-  return article.article_id || "Untitled article";
+// "Paessler 2024": first author's surname and year, for the switcher.
+function shortCitation(article) {
+  const first = (article.authors || [])[0];
+  const name = first
+    ? (typeof first === "string" ? surnameOf(first) : (first.family || first.given || ""))
+    : (article.corporate_author || "");
+  const cite = [name, article.year].filter(Boolean).join(" ");
+  return cite || article.article_id || "Untitled";
 }
 
-function populateDropdown() {
-  const select = $("#article-select");
-  const currentVal = select.value;
-  // Remove all except placeholder
-  while (select.options.length > 1) select.remove(1);
-
+// The queue prev/next and the switcher walk: every document, or the ones the
+// applied expression filter keeps.
+function refreshQueue() {
   state.filteredArticles = state.filterFn
     ? state.articles.filter(safeFilterCall(state.filterFn))
     : [...state.articles];
 
-  for (const a of state.filteredArticles) {
-    const opt = document.createElement("option");
-    opt.value = a.article_id;
-    opt.textContent = articleOptionLabel(a);
-    select.appendChild(opt);
-  }
-
-  const currentStillVisible =
-    currentVal && state.filteredArticles.some((a) => a.article_id === currentVal);
-  if (currentStillVisible) {
-    select.value = currentVal;
-  } else if (state.filteredArticles.length > 0 && state.currentId) {
-    // The open article was filtered out. Move to the first match rather than
-    // leaving a document on screen that the queue no longer contains.
-    const firstId = state.filteredArticles[0].article_id;
-    select.value = firstId;
-    if (currentVal !== firstId) routeToDoc(firstId);
-  } else if (state.currentId || currentVal) {
-    // Filter has zero matches and an article was previously loaded —
-    // return to the welcome screen rather than leaving stale content up.
-    select.value = "";
-    state.currentId = null;
-    state.currentRunId = null;
-    // Route to the overview rather than only swapping panels, so the URL and
-    // what is on screen agree — a reload here reopened the old document.
-    window.location.hash = "#/";
-    showOverview();
+  const current = state.currentId;
+  if (current && !state.filteredArticles.some(a => a.article_id === current)) {
+    if (state.filteredArticles.length > 0) {
+      // The open document was filtered out. Move to the first match rather
+      // than leaving a document on screen that the queue no longer contains.
+      routeToDoc(state.filteredArticles[0].article_id);
+    } else {
+      // Zero matches: route to the overview so the URL and the screen agree.
+      state.currentId = null;
+      state.currentRunId = null;
+      goToOverview();
+      showOverview();
+    }
   }
 
   updateNavState();
+  if (switcherOpen()) renderSwitcherList();
 }
 
 function navigateArticle(direction) {
@@ -3551,14 +3556,144 @@ function updateNavState() {
   $("#btn-prev").disabled = idx <= 0;
   $("#btn-next").disabled = idx < 0 || idx >= total - 1;
   $("#nav-counter").textContent = idx >= 0 ? `${idx + 1}/${total}` : `\u2014/${total}`;
+  updateSwitcherLabel();
 }
 
+// ── Document switcher ──
+function updateSwitcherLabel() {
+  const article = state.articles.find(a => a.article_id === state.currentId);
+  $("#switcher-cite").textContent = article ? shortCitation(article) : "";
+  $("#switcher-title").textContent = article?.title || "";
+  $("#switcher-btn").title = article
+    ? [shortCitation(article), article.title].filter(Boolean).join(". ")
+    : "Jump to a document";
+}
+
+function switcherOpen() {
+  return !$("#switcher-pop").hidden;
+}
+
+function switcherMatches() {
+  const q = $("#switcher-input").value.trim();
+  return state.filteredArticles.filter(a => matchesText(a, q));
+}
+
+function renderSwitcherList() {
+  const matches = switcherMatches();
+  const list = $("#switcher-list");
+  const total = state.filteredArticles.length;
+  $("#switcher-hint").textContent = `${matches.length} of ${total} \u00b7 type to filter by title, author, year, id`;
+  state.switcherIndex = Math.max(0, Math.min(state.switcherIndex ?? 0, matches.length - 1));
+  list.innerHTML = matches.length
+    ? matches.map((a, i) => {
+        const current = a.article_id === state.currentId;
+        const title = a.title ? `<span> \u00b7 ${escapeHtml(a.title)}</span>` : "";
+        return `<li id="switcher-opt-${i}" role="option" data-article="${escapeHtml(a.article_id)}"` +
+          ` aria-selected="${i === state.switcherIndex}"${current ? ' class="current" aria-current="true"' : ""}>` +
+          `<span class="t"><b>${escapeHtml(shortCitation(a))}</b>${title}</span>` +
+          `<span class="s">${escapeHtml(articleStatus(a).label)}</span></li>`;
+      }).join("")
+    : `<li class="switcher-empty" role="presentation">No documents match.</li>`;
+  syncSwitcherActive();
+}
+
+function syncSwitcherActive() {
+  const input = $("#switcher-input");
+  const options = $("#switcher-list").querySelectorAll("li[role=option]");
+  options.forEach((li, i) => li.setAttribute("aria-selected", i === state.switcherIndex ? "true" : "false"));
+  const active = options[state.switcherIndex];
+  if (active) {
+    input.setAttribute("aria-activedescendant", active.id);
+    active.scrollIntoView({ block: "nearest" });
+  } else {
+    input.removeAttribute("aria-activedescendant");
+  }
+}
+
+function openSwitcher() {
+  const input = $("#switcher-input");
+  input.value = "";
+  const idx = state.filteredArticles.findIndex(a => a.article_id === state.currentId);
+  state.switcherIndex = Math.max(0, idx);
+  $("#switcher-pop").hidden = false;
+  $("#switcher-btn").setAttribute("aria-expanded", "true");
+  renderSwitcherList();
+  input.focus();
+}
+
+function closeSwitcher({ restoreFocus = true } = {}) {
+  if (!switcherOpen()) return;
+  $("#switcher-pop").hidden = true;
+  $("#switcher-btn").setAttribute("aria-expanded", "false");
+  if (restoreFocus) $("#switcher-btn").focus();
+}
+
+function openSwitcherChoice(articleId) {
+  closeSwitcher();
+  if (articleId && articleId !== state.currentId) routeToDoc(articleId);
+}
+
+function wireSwitcher() {
+  const input = $("#switcher-input");
+  $("#switcher-btn").addEventListener("click", () => {
+    if (switcherOpen()) closeSwitcher();
+    else openSwitcher();
+  });
+  input.addEventListener("input", () => {
+    state.switcherIndex = 0;
+    renderSwitcherList();
+  });
+  input.addEventListener("keydown", (e) => {
+    const count = $("#switcher-list").querySelectorAll("li[role=option]").length;
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      if (!count) return;
+      state.switcherIndex = (state.switcherIndex + (e.key === "ArrowDown" ? 1 : -1) + count) % count;
+      syncSwitcherActive();
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      const li = $("#switcher-list").querySelectorAll("li[role=option]")[state.switcherIndex];
+      if (li) openSwitcherChoice(li.dataset.article);
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      e.stopPropagation();
+      closeSwitcher();
+    } else if (e.key === "Tab") {
+      closeSwitcher({ restoreFocus: false });
+    }
+  });
+  $("#switcher-list").addEventListener("mousemove", (e) => {
+    const li = e.target.closest("li[role=option]");
+    if (!li) return;
+    const i = [...$("#switcher-list").querySelectorAll("li[role=option]")].indexOf(li);
+    if (i !== state.switcherIndex) { state.switcherIndex = i; syncSwitcherActive(); }
+  });
+  // mousedown, not click: the input keeps focus until the choice is made.
+  $("#switcher-list").addEventListener("mousedown", (e) => {
+    const li = e.target.closest("li[role=option]");
+    if (!li) return;
+    e.preventDefault();
+    openSwitcherChoice(li.dataset.article);
+  });
+  document.addEventListener("mousedown", (e) => {
+    if (switcherOpen() && !$("#doc-switcher").contains(e.target)) closeSwitcher({ restoreFocus: false });
+  });
+}
+
+// Esc on a document returns to the overview, when nothing else claims it.
+function escapeLeavesDocument(e) {
+  if (e.key !== "Escape" || e.defaultPrevented) return false;
+  if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return false;
+  if (parseRoute().name !== "doc" || switcherOpen() || state.editingPath) return false;
+  if (document.querySelector(".orcid-modal-backdrop.active")) return false;
+  const t = e.target;
+  return !(t && (t.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName)));
+}
+
+
 // ── Article selection ──
-// The dropdown drives the route; applyRoute drives loadArticle. A dropdown
+// The switcher drives the route; applyRoute drives loadArticle. A switcher
 // pick, a deep link, and the back button therefore all take one path.
-$("#article-select").addEventListener("change", (e) => {
-  if (e.target.value) routeToDoc(e.target.value);
-});
 
 async function loadArticle(id) {
   state.currentId = id;
@@ -3615,8 +3750,10 @@ async function loadArticle(id) {
   state.schemaError = summary ? summary.schema_error || summary.schema_drift || null : null;
   const runQuery = state.currentRunId ? `?run_id=${encodeURIComponent(state.currentRunId)}` : "";
 
-  const [mdData, extraction, reasoningData, annData, bibData] = await Promise.all([
+  const [mdData, renderedData, extraction, reasoningData, annData, bibData] = await Promise.all([
     fetchJson(`/api/markdown/${id}`).catch(() => null),
+    fetchJson(`/api/rendered/${encodeURIComponent(id)}`)
+      .then(rendered => ({ rendered }), err => ({ error: String(err && err.message || err) })),
     hasExtraction ? fetchJson(`/api/article/${id}${runQuery}`) : Promise.resolve(null),
     hasExtraction
       ? fetchJson(`/api/reasoning/${id}${runQuery}`).catch(() => null)
@@ -3632,6 +3769,8 @@ async function loadArticle(id) {
   if (id !== state.currentId) return;
 
   state.markdown = mdData ? mdData.markdown : null;
+  state.rendered = renderedData.rendered || null;
+  state.renderError = renderedData.error || null;
   state.extraction = extraction;
   state.reasoning = reasoningData;
 
@@ -3650,8 +3789,7 @@ async function loadArticle(id) {
   const meta = bibData || state.articles.find(a => a.article_id === id);
   if (meta) renderBibHeader(meta);
 
-  $("#btn-pdf").style.display = "flex";
-  $("#search-row").style.display = "flex";
+  $("#search-row").style.display = state.leftPane === "pdf" ? "none" : "flex";
   updateNavState();
 
   renderMarkdown();
@@ -3666,16 +3804,22 @@ async function loadArticle(id) {
 // Only registry-verified provenance earns a pill; human-entered metadata
 // is signaled by the edit affordance alone.
 const PROVENANCE_BADGES = {
-  doi: { label: "✓ from DOI", verified: true },
+  doi: { label: "from DOI", icon: "check", verified: true },
 };
 
 let lastBibMeta = null;
 let bibArticleId = null;
 
+// Author strings come as "Family, Given" or "Given Family".
+function surnameOf(name) {
+  const n = name.trim();
+  return n.includes(",") ? n.split(",")[0].trim() : n.split(/\s+/).pop();
+}
+
 function formatAuthors(authors) {
   if (!authors || !authors.length) return "";
   const families = authors
-    .map(a => typeof a === "string" ? a.trim().split(/\s+/).pop() : (a.family || a.given || ""))
+    .map(a => typeof a === "string" ? surnameOf(a) : (a.family || a.given || ""))
     .filter(Boolean);
   if (families.length === 0) return "";
   if (families.length === 1) return families[0];
@@ -3730,7 +3874,7 @@ function renderBibHeader(meta) {
   const info = PROVENANCE_BADGES[meta.bib_source];
   badge.hidden = !info;
   if (info) {
-    badge.textContent = info.label;
+    badge.innerHTML = (info.icon ? icon(info.icon) + " " : "") + escapeHtml(info.label);
     badge.classList.toggle("verified", info.verified);
   }
   // Locked (doi) records swap the pencil for an unlock affordance — editing
@@ -3738,10 +3882,10 @@ function renderBibHeader(meta) {
   const editBtn = $("#bib-edit-btn");
   editBtn.hidden = false;
   if (editable) {
-    editBtn.innerHTML = "&#9998;";
+    editBtn.innerHTML = icon("pencil", "Edit");
     editBtn.title = "Edit document metadata";
   } else {
-    editBtn.innerHTML = "&#128275;";
+    editBtn.innerHTML = icon("lock-open", "Unlock");
     editBtn.title = "Unlock to edit (saving replaces the registry lock)";
   }
   // Sync is offered wherever a DOI exists and the record isn't already locked.
@@ -3756,7 +3900,7 @@ function applyBibBlock(articleId, block) {
     for (const key of ["title", "year", "journal", "doi", "corporate_author"]) entry[key] = block[key] ?? null;
     entry.authors = block.authors || [];
     entry.bib_source = block.bib_source;
-    populateDropdown();
+    refreshQueue();
   }
   if (articleId === state.currentId) renderBibHeader(block);
 }
@@ -3813,8 +3957,89 @@ $("#bib-sync-btn").addEventListener("click", async () => {
   }
 });
 
-// ── Markdown rendering ──
+// ── Document pane ──
+const PANES = ["rendered", "raw", "pdf"];
+
+function initialLeftPane() {
+  const fromUrl = new URLSearchParams(location.hash.split("?")[1] || "").get("pane");
+  if (PANES.includes(fromUrl)) return fromUrl;
+  try {
+    const saved = localStorage.getItem("litschema.leftPane");
+    if (PANES.includes(saved)) return saved;
+  } catch (_) { /* storage unavailable: use the default */ }
+  return "rendered";
+}
+
+function syncPaneTabs() {
+  document.querySelectorAll("#pane-tabs [data-pane]").forEach(b =>
+    b.setAttribute("aria-selected", String(b.dataset.pane === state.leftPane)));
+}
+
+// The pane actually showing: Rendered falls back to raw lines when the server
+// could not render the document.
+function docPane() {
+  if (state.leftPane === "rendered" && !state.rendered && state.renderError) return "raw";
+  return state.leftPane;
+}
+
+function setLeftPane(pane) {
+  state.leftPane = PANES.includes(pane) ? pane : "rendered";
+  try { localStorage.setItem("litschema.leftPane", state.leftPane); } catch (_) {}
+  syncPaneTabs();
+  if (state.currentId) {
+    $("#search-row").style.display = state.leftPane === "pdf" ? "none" : "flex";
+    history.replaceState(null, "", location.pathname + location.search + docHash(state.currentId));
+  }
+  renderMarkdown();
+  // Search marks and match keys belong to the pane that was replaced.
+  if (state._lastQuery && state.leftPane !== "pdf" && !state.selectedPath) doSearch();
+  if (state.currentId) renderExtractionPanel();
+  if (!state.selectedPath) return;
+  if (state.viewMode === "data" && state.dataMode === "json") selectEvidencePath(state.selectedPath);
+  else selectTableRow(state.selectedPath);
+}
+
 function renderMarkdown() {
+  const panel = $("#panel-left");
+  if (state.leftPane === "pdf") {
+    const src = `/api/pdf/${encodeURIComponent(state.currentId)}`;
+    // Re-rendering on every field click would reload the PDF.
+    if (panel.querySelector(".pdf-frame")?.getAttribute("src") !== src) {
+      panel.innerHTML = `<iframe class="pdf-frame" title="PDF" src="${src}"></iframe>`;
+    }
+    return;
+  }
+  if (state.leftPane === "rendered") {
+    if (state.rendered) return renderRenderedDoc();
+    if (state.renderError) {
+      renderRawLines();
+      panel.insertAdjacentHTML("afterbegin",
+        `<div class="cite-notice">The formatted view isn't available for this document (${escapeHtml(state.renderError)}). Showing raw lines.</div>`);
+      return;
+    }
+  }
+  renderRawLines();
+}
+
+function renderRenderedDoc() {
+  const panel = $("#panel-left");
+  let html = '<div class="rendered"><div class="col">';
+  for (const b of state.rendered.blocks) {
+    const [s, e] = b.lines;
+    if (b.kind === "figure") {
+      const cap = b.caption_html
+        ? `<figcaption class="blk" data-start="${b.caption_lines[0]}" data-end="${b.caption_lines[1]}">${b.caption_html}</figcaption>`
+        : "";
+      const src = `/api/figure/${encodeURIComponent(state.currentId)}/${encodeURIComponent(b.src)}`;
+      html += `<figure class="blk" data-start="${s}" data-end="${e}">${cap}<img loading="lazy" alt="" src="${src}"></figure>`;
+    } else {
+      html += `<div class="blk" data-start="${s}" data-end="${e}">${b.html}</div>`;
+    }
+  }
+  panel.innerHTML = html + "</div></div>";
+}
+
+function renderRawLines() {
   const panel = $("#panel-left");
   if (!state.markdown) {
     panel.innerHTML = '<div class="loading">No markdown available</div>';
@@ -3824,7 +4049,7 @@ function renderMarkdown() {
   let html = '<div class="md-content">';
   for (let i = 0; i < lines.length; i++) {
     const lineNum = i + 1;
-    const rendered = marked.parseInline(lines[i]);
+    const rendered = escapeHtml(lines[i]);
     html += `<div class="md-line" data-line="${lineNum}">`;
     html += `<span class="line-num">${lineNum}</span>`;
     html += rendered || "&nbsp;";
@@ -4413,7 +4638,7 @@ function bulkActionHtml(basePath, scope) {
     : "Verify unreviewed cited fields in this section";
   return `<span class="tv-heading-actions">` +
     `<button class="section-review-toggle${completeClass}${hoverClass}" data-section-action="${action}" data-bulk-source="${scope}" data-path="${basePath}" aria-label="${label}" title="${label}"${disabled}>` +
-    `<span class="section-toggle-icon">&#10003;</span><span class="section-toggle-icon-hover">&#10005;</span>` +
+    `<span class="section-toggle-icon">${icon("check")}</span><span class="section-toggle-icon-hover">${icon("x")}</span>` +
     `</button>` +
     `</span>`;
 }
@@ -4545,9 +4770,9 @@ function buildInlineEditForm(path, value = getValueAtPath(state.extraction, path
   const controlHtml = buildTypedEditControl(path, current, schemaField);
   return `<span class="inline-edit-form" data-path="${path}">` +
     controlHtml +
-    `<button type="button" class="inline-edit-save" data-path="${path}" aria-label="Save edit" title="Save edit">&#10003;</button>` +
-    `<button type="button" class="inline-edit-cancel" data-path="${path}" aria-label="Cancel edit" title="Cancel edit">&#10005;</button>` +
-    `<button type="button" class="inline-edit-remove" data-path="${path}" aria-label="Remove field" title="Remove this field (extraction was wrong to include it)">&#9003;</button>` +
+    `<button type="button" class="inline-edit-save" data-path="${path}" aria-label="Save edit" title="Save edit">${icon("check")}</button>` +
+    `<button type="button" class="inline-edit-cancel" data-path="${path}" aria-label="Cancel edit" title="Cancel edit">${icon("x")}</button>` +
+    `<button type="button" class="inline-edit-remove" data-path="${path}" aria-label="Remove field" title="Remove this field (extraction was wrong to include it)">${icon("delete")}</button>` +
     `</span>`;
 }
 
@@ -4632,12 +4857,12 @@ function buildFieldStatus(path, status) {
     : status === "flagged"
       ? "Edited"
       : "Not reviewed";
-  const icon = status === "verified" ? "&#10003;" : status === "flagged" ? "&#9998;" : "&#9675;";
-  const hoverIcon = status === "verified" ? "&#10005;" : "&#10003;";
+  const mainIcon = icon(status === "verified" ? "check" : status === "flagged" ? "pencil" : "circle");
+  const hoverIcon = icon(status === "verified" ? "x" : "check");
   const statusClass = status || "empty";
   const hoverClass = status === "verified" && !state.suppressClearHoverPaths.has(path) ? " hover-clear-ready" : "";
   return `<button type="button" class="field-status status-${statusClass}${hoverClass}" data-path="${path}" title="${label}" aria-label="${label}">` +
-    `<span class="status-icon-main">${icon}</span><span class="status-icon-hover">${hoverIcon}</span>` +
+    `<span class="status-icon-main">${mainIcon}</span><span class="status-icon-hover">${hoverIcon}</span>` +
     `</button>`;
 }
 
@@ -4647,12 +4872,12 @@ function buildRowEditAction(path, status) {
   if (state.schemaError && status !== "flagged") {
     return `<button type="button" class="row-edit-action" data-path="${path}" disabled` +
       ` aria-label="Editing unavailable" title="This run was extracted with a different` +
-      ` schema, so values cannot be typed against it">&#9998;</button>`;
+      ` schema, so values cannot be typed against it">${icon("pencil")}</button>`;
   }
   if (status === "flagged") {
-    return `<button type="button" class="row-clear-edit-action" data-path="${path}" aria-label="Revert edited value" title="Revert edited value">&#8634;</button>`;
+    return `<button type="button" class="row-clear-edit-action" data-path="${path}" aria-label="Revert edited value" title="Revert edited value">${icon("undo-2")}</button>`;
   }
-  return `<button type="button" class="row-edit-action" data-path="${path}" aria-label="Edit field" title="Edit field">&#9998;</button>`;
+  return `<button type="button" class="row-edit-action" data-path="${path}" aria-label="Edit field" title="Edit field">${icon("pencil")}</button>`;
 }
 
 function buildStatusActions(path, status) {
@@ -4667,8 +4892,14 @@ function buildStatusActions(path, status) {
 function sourceSummaryForPath(path, explicitRanges = null) {
   const ranges = explicitRanges || selectedSourceRanges(path);
   if (!ranges.length) return "No citation";
+  if (docPane() !== "raw") return ranges.length === 1 ? "source" : `${ranges.length} sources`;
   if (ranges.length === 1) return ranges[0];
   return `${ranges.length} cites`;
+}
+
+function sourceCountLabel(sourceLines) {
+  const n = parseSourceLines(sourceLines).length;
+  return n === 1 ? "source" : `${n} sources`;
 }
 
 function buildEvidenceBadge(path, explicitRanges = null) {
@@ -4887,6 +5118,18 @@ function wireJsonEvents(panel) {
 // per cell would bloat the file without adding information. Exact entries win;
 // otherwise the nearest ancestor's evidence applies, marked as inherited so a
 // reviewer can tell row-level evidence from cell-level.
+// The text to look for inside a highlight: what the reasoning says it cited,
+// or the field's value. Enums and booleans are never marked.
+function valueForPath(path) {
+  if (!path) return null;
+  const field = schemaFieldForPath(path);
+  if (field && (field.kind === "boolean" || field.permissible_values)) return null;
+  const entry = reasoningFor(path);
+  const raw = entry && entry.value != null ? entry.value : getValueAtPath(effectiveExtraction(), path);
+  if (raw == null || typeof raw === "object" || typeof raw === "boolean") return null;
+  return String(raw);
+}
+
 function reasoningFor(path) {
   if (!path) return null;
   const exact = state.reasoningByPath[path];
@@ -5070,8 +5313,7 @@ function renderSourceState(nav) {
   const counter = nav.querySelector(".source-counter");
 
   // Clear all highlights
-  document.querySelectorAll(".reasoned-highlight").forEach(el => el.classList.remove("reasoned-highlight"));
-  document.querySelectorAll(".md-line.active").forEach(el => el.classList.remove("active"));
+  clearDocHighlights();
   const table = nav.closest("table");
   if (table) table.querySelectorAll(".cell-selected").forEach(el => el.classList.remove("cell-selected"));
 
@@ -5085,14 +5327,10 @@ function renderSourceState(nav) {
 
   // 1. Highlight range in document
   const [start, end] = entry.range;
-  for (let ln = start; ln <= end; ln++) {
-    const lineEl = document.querySelector(`.md-line[data-line="${ln}"]`);
-    if (lineEl) lineEl.classList.add("reasoned-highlight");
-  }
-  const firstLine = document.querySelector(`.md-line[data-line="${start}"]`);
+  const firstLine = highlightDocRange(start, end, valueForPath(entry.path));
   if (firstLine) {
     firstLine.classList.add("active");
-    firstLine.scrollIntoView({ behavior: "smooth", block: "center" });
+    scrollDocTo(firstLine);
   }
 
   // 2. Highlight matching cell
@@ -5125,8 +5363,7 @@ function resetAllSourceNavs() {
     const total = nav._sourceMap ? nav._sourceMap.length : (nav.dataset.ranges ? nav.dataset.ranges.split(",").length : 0);
     if (counter && total > 0) counter.textContent = `1/${total}`;
   });
-  document.querySelectorAll(".reasoned-highlight").forEach(el => el.classList.remove("reasoned-highlight"));
-  document.querySelectorAll(".md-line.active").forEach(el => el.classList.remove("active"));
+  clearDocHighlights();
   document.querySelectorAll(".cell-selected").forEach(el => el.classList.remove("cell-selected"));
 }
 
@@ -5314,7 +5551,8 @@ function updateSourceEvidenceOverlay() {
   const current = ranges[state.selectedSourceIndex];
   if (cycle) cycle.style.display = ranges.length < 2 ? "none" : "inline-flex";
   indexEl.textContent = `${state.selectedSourceIndex + 1}/${ranges.length}`;
-  lines.textContent = current;
+  // Line numbers mean nothing in the rendered view.
+  lines.textContent = docPane() === "rendered" ? "" : current;
   if (prev) prev.disabled = ranges.length < 2;
   if (next) next.disabled = ranges.length < 2;
 }
@@ -5325,22 +5563,14 @@ function focusSelectedSource(index = state.selectedSourceIndex) {
   state.selectedSourceIndex = (index + ranges.length) % ranges.length;
   updateSourceEvidenceOverlay();
   renderMarkdown();
-  document.querySelectorAll(".reasoned-highlight").forEach(el => el.classList.remove("reasoned-highlight"));
-  document.querySelectorAll(".md-line.active").forEach(el => el.classList.remove("active"));
+  clearDocHighlights();
   const selectedRange = parseSourceLines(ranges[state.selectedSourceIndex])[0];
   if (!selectedRange) return;
   const [start, end] = selectedRange;
-  let firstLine = null;
-  for (let ln = start; ln <= end; ln++) {
-    const lineEl = document.querySelector(`.md-line[data-line="${ln}"]`);
-    if (lineEl) {
-      lineEl.classList.add("reasoned-highlight");
-      if (!firstLine) firstLine = lineEl;
-    }
-  }
+  const firstLine = highlightDocRange(start, end, valueForPath(state.selectedPath));
   if (firstLine) {
     firstLine.classList.add("active");
-    firstLine.scrollIntoView({ behavior: "smooth", block: "center" });
+    scrollDocTo(firstLine);
   }
 }
 
@@ -5463,15 +5693,11 @@ function wireTableEvents(panel) {
           renderMarkdown();
           const allRangesStr = rowSources.join(", ");
           const lineRanges = parseSourceLines(allRangesStr);
-          for (const [s, e2] of lineRanges) {
-            for (let ln = s; ln <= e2; ln++) {
-              const lineEl = document.querySelector(`.md-line[data-line="${ln}"]`);
-              if (lineEl) lineEl.classList.add("reasoned-highlight");
-            }
-          }
+          const cited = valueForPath(rowPath);
+          const firsts = lineRanges.map(([s, e2]) => highlightDocRange(s, e2, cited));
           if (lineRanges.length > 0) {
-            const fl = document.querySelector(`.md-line[data-line="${lineRanges[0][0]}"]`);
-            if (fl) { fl.classList.add("active"); fl.scrollIntoView({ behavior: "smooth", block: "center" }); }
+            const fl = firsts[0];
+            if (fl) { fl.classList.add("active"); scrollDocTo(fl); }
           }
           $("#stat-citations").textContent = `${rowPath}: ${allRangesStr}`;
         }
@@ -5491,15 +5717,11 @@ function wireTableEvents(panel) {
           resetAllSourceNavs();
           const lineRanges = parseSourceLines(sourceLine);
           renderMarkdown();
-          for (const [s, e2] of lineRanges) {
-            for (let ln = s; ln <= e2; ln++) {
-              const lineEl = document.querySelector(`.md-line[data-line="${ln}"]`);
-              if (lineEl) lineEl.classList.add("reasoned-highlight");
-            }
-          }
+          const cited = valueForPath(link.dataset.path);
+          const firsts = lineRanges.map(([s, e2]) => highlightDocRange(s, e2, cited));
           if (lineRanges.length > 0) {
-            const fl = document.querySelector(`.md-line[data-line="${lineRanges[0][0]}"]`);
-            if (fl) { fl.classList.add("active"); fl.scrollIntoView({ behavior: "smooth", block: "center" }); }
+            const fl = firsts[0];
+            if (fl) { fl.classList.add("active"); scrollDocTo(fl); }
           }
           $("#stat-citations").textContent = `${link.dataset.path}: ${sourceLine}`;
         }
@@ -5612,17 +5834,13 @@ function wireTableEvents(panel) {
         if (entry && entry.source_lines) {
           renderMarkdown();
           const lineRanges = parseSourceLines(entry.source_lines);
-          for (const [s, e2] of lineRanges) {
-            for (let ln = s; ln <= e2; ln++) {
-              const lineEl = document.querySelector(`.md-line[data-line="${ln}"]`);
-              if (lineEl) lineEl.classList.add("reasoned-highlight");
-            }
-          }
+          const cited = valueForPath(cellPath);
+          const firsts = lineRanges.map(([s, e2]) => highlightDocRange(s, e2, cited));
           if (lineRanges.length > 0) {
-            const fl = document.querySelector(`.md-line[data-line="${lineRanges[0][0]}"]`);
-            if (fl) { fl.classList.add("active"); fl.scrollIntoView({ behavior: "smooth", block: "center" }); }
+            const fl = firsts[0];
+            if (fl) { fl.classList.add("active"); scrollDocTo(fl); }
           }
-          $("#stat-citations").textContent = `${cellPath}: ${entry.source_lines}`;
+          $("#stat-citations").textContent = docPane() === "raw" ? `${cellPath}: ${entry.source_lines}` : cellPath;
         }
       }
     });
@@ -5667,14 +5885,7 @@ function selectTableRow(path, rangeIndex) {
   const rangesToHighlight = (typeof rangeIndex === "number") ? [lineRanges[rangeIndex]] : lineRanges;
 
   for (const [start, end] of rangesToHighlight) {
-    let sectionFirstLine = null;
-    for (let ln = start; ln <= end; ln++) {
-      const lineEl = document.querySelector(`.md-line[data-line="${ln}"]`);
-      if (lineEl) {
-        lineEl.classList.add("reasoned-highlight");
-        if (!sectionFirstLine) sectionFirstLine = lineEl;
-      }
-    }
+    const sectionFirstLine = highlightDocRange(start, end, valueForPath(path));
     if (sectionFirstLine) {
       state.sections.push({
         firstLine: sectionFirstLine,
@@ -5685,10 +5896,10 @@ function selectTableRow(path, rangeIndex) {
 
   if (state.sections.length > 0) {
     state.sections[0].firstLine.classList.add("active");
-    state.sections[0].firstLine.scrollIntoView({ behavior: "smooth", block: "center" });
+    scrollDocTo(state.sections[0].firstLine);
   }
 
-  let statusMsg = `${path}: ${entry.source_lines}`;
+  let statusMsg = docPane() === "raw" ? `${path}: ${entry.source_lines}` : path;
   if (entry.reasoning) statusMsg += ` \u2014 ${entry.reasoning}`;
   $("#stat-citations").textContent = statusMsg;
 }
@@ -5755,7 +5966,7 @@ function buildLeafHtml(key, value, path) {
   // Source lines (clickable)
   let sourceHtml = "";
   if (entry && entry.source_lines) {
-    sourceHtml = `<span class="match-nav source-link" data-path="${path}">${entry.source_lines}</span>`;
+    sourceHtml = `<span class="match-nav source-link" data-path="${path}">${docPane() === "raw" ? escapeHtml(entry.source_lines) : sourceCountLabel(entry.source_lines)}</span>`;
   }
 
   const annControls = buildAnnotationActions(path, annStatus, { tree: true });
@@ -5799,10 +6010,15 @@ function buildAnnotationActions(path, status, options = {}) {
   const clearDisabled = status ? "" : " disabled";
 
   return `<span class="${classes.join(" ")}" data-path="${path}"${scopeAttr}>` +
-    `<button class="annotation-action${verifyActive}" data-action="verify" data-path="${path}"${scopeAttr} aria-pressed="${status === "verified"}" title="Mark verified">&#10003;</button>` +
-    `<button class="annotation-action${flagActive}" data-action="flag" data-path="${path}"${scopeAttr} aria-pressed="${status === "flagged"}" title="Edit value">&#9998;</button>` +
-    `<button class="annotation-action" data-action="clear" data-path="${path}"${scopeAttr}${clearDisabled} title="Clear review status">&#10005;</button>` +
+    `<button class="annotation-action${verifyActive}" data-action="verify" data-path="${path}"${scopeAttr} aria-pressed="${status === "verified"}" title="Mark verified">${icon("check")}</button>` +
+    `<button class="annotation-action${flagActive}" data-action="flag" data-path="${path}"${scopeAttr} aria-pressed="${status === "flagged"}" title="Edit value">${icon("pencil")}</button>` +
+    `<button class="annotation-action" data-action="clear" data-path="${path}"${scopeAttr}${clearDisabled} title="Clear review status">${icon("x")}</button>` +
     `</span>`;
+}
+
+function icon(name, label = "") {
+  const aria = label ? ` role="img" aria-label="${escapeHtml(label)}"` : ' aria-hidden="true"';
+  return `<svg class="icon"${aria}><use href="/static/icons.svg#${name}"/></svg>`;
 }
 
 function escapeHtml(str) {
@@ -5839,14 +6055,7 @@ function selectLeaf(el) {
   const lineRanges = parseSourceLines(entry.source_lines);
 
   for (const [start, end] of lineRanges) {
-    let sectionFirstLine = null;
-    for (let ln = start; ln <= end; ln++) {
-      const lineEl = document.querySelector(`.md-line[data-line="${ln}"]`);
-      if (lineEl) {
-        lineEl.classList.add("reasoned-highlight");
-        if (!sectionFirstLine) sectionFirstLine = lineEl;
-      }
-    }
+    const sectionFirstLine = highlightDocRange(start, end, valueForPath(path));
     if (sectionFirstLine) {
       state.sections.push({
         firstLine: sectionFirstLine,
@@ -5862,7 +6071,7 @@ function selectLeaf(el) {
     el.after(tooltip);
   }
 
-  let statusMsg = `${path}: ${entry.source_lines}`;
+  let statusMsg = docPane() === "raw" ? `${path}: ${entry.source_lines}` : path;
   if (entry.reasoning) statusMsg += ` \u2014 ${entry.reasoning}`;
   $("#stat-citations").textContent = statusMsg;
 
@@ -5890,11 +6099,11 @@ function selectLeaf(el) {
 }
 
 function scrollToSection() {
-  document.querySelectorAll(".md-line.active").forEach(e => e.classList.remove("active"));
+  document.querySelectorAll("#panel-left .active").forEach(e => e.classList.remove("active"));
 
   const section = state.sections[state.sectionIndex];
   section.firstLine.classList.add("active");
-  section.firstLine.scrollIntoView({ behavior: "smooth", block: "center" });
+  scrollDocTo(section.firstLine);
 
   const counter = document.querySelector(".section-nav .section-counter");
   if (counter) counter.textContent = `${state.sectionIndex + 1}/${state.sections.length}`;
@@ -5904,6 +6113,107 @@ function scrollToSection() {
   let msg = `${path}: ${state.sectionIndex + 1}/${state.sections.length} (${section.label})`;
   if (entry && entry.reasoning) msg += ` \u2014 ${entry.reasoning}`;
   $("#stat-citations").textContent = msg;
+}
+
+// Jumps farther than one viewport scroll instantly; nearer ones animate.
+function scrollDocTo(el) {
+  const pane = $("#panel-left");
+  const r = el.getBoundingClientRect();
+  const p = pane.getBoundingClientRect();
+  const far = Math.abs(r.top + r.height / 2 - (p.top + p.height / 2)) > pane.clientHeight;
+  el.scrollIntoView({ behavior: far ? "auto" : "smooth", block: "center" });
+}
+
+// Every citation highlight goes through these two, so each pane mode
+// (raw lines, rendered) implements highlighting once.
+function clearDocHighlights() {
+  document.querySelectorAll(".reasoned-highlight").forEach(el => el.classList.remove("reasoned-highlight"));
+  document.querySelectorAll("#panel-left .active").forEach(el => el.classList.remove("active"));
+  document.querySelectorAll("#panel-left .val-mark").forEach(unwrapValueMark);
+  document.querySelectorAll("#panel-left td.val-cell").forEach(el => el.classList.remove("val-cell"));
+  $("#cite-notice")?.remove();
+}
+
+// Highlights the lines start..end in the current pane; returns the first
+// highlighted element (or null). `value` is marked inside the highlight when given.
+function highlightDocRange(start, end, value = null) {
+  if (docPane() === "rendered") return highlightRenderedRange(start, end, value);
+  let first = null;
+  for (let ln = start; ln <= end; ln++) {
+    const el = document.querySelector(`.md-line[data-line="${ln}"]`);
+    if (el) { el.classList.add("reasoned-highlight"); first = first || el; }
+  }
+  return first;
+}
+
+// Tables highlight only the cited rows unless the citation covers the whole
+// table; other blocks highlight whole.
+function highlightRenderedRange(start, end, value) {
+  const overlaps = el => +el.dataset.start <= end && +el.dataset.end >= start;
+  const targets = [];
+  for (const blk of document.querySelectorAll("#panel-left .rendered .blk")) {
+    if (!overlaps(blk)) continue;
+    const rows = [...blk.querySelectorAll("tr[data-line]")];
+    if (rows.length) {
+      const hit = rows.filter(r => +r.dataset.line >= start && +r.dataset.line <= end);
+      const whole = hit.length === rows.length;
+      targets.push(...(whole || !hit.length ? [blk] : hit));
+    } else {
+      targets.push(blk);
+    }
+  }
+  if (!targets.length) {
+    const panel = $("#panel-left .rendered");
+    if (panel && !$("#cite-notice")) {
+      panel.insertAdjacentHTML("afterbegin",
+        '<div class="cite-notice" id="cite-notice">The cited lines aren\'t shown in this view. Open Raw lines to see them.</div>');
+    }
+    return null;
+  }
+  for (const t of targets) t.classList.add("reasoned-highlight");
+  if (value) targets.some(t => markValueIn(t, value));
+  return targets[0];
+}
+
+// Numbers match on number boundaries; text matches case-insensitively, 3+ chars.
+function valuePattern(value) {
+  const v = value.trim();
+  if (/^[-−]?\d+(\.\d+)?$/.test(v)) {
+    const body = v.replace(/^[-−]/, "[-−]").replace(".", "\\.");
+    return new RegExp(`(?<![\\d.])${body}(?!\\.?\\d)`);
+  }
+  if (v.length < 3) return null;
+  return new RegExp(v.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+}
+
+// A cell whose whole text is the value gets the fill; otherwise the first
+// match in the text is wrapped in a span.
+function markValueIn(root, value) {
+  const re = valuePattern(value);
+  if (!re) return false;
+  for (const td of root.querySelectorAll("td")) {
+    const text = td.textContent.trim();
+    const m = text.match(re);
+    if (m && m[0].length === text.length) { td.classList.add("val-cell"); return true; }
+  }
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  let node;
+  while ((node = walker.nextNode())) {
+    const m = node.nodeValue.match(re);
+    if (!m) continue;
+    const after = node.splitText(m.index);
+    after.splitText(m[0].length);
+    const span = document.createElement("span");
+    span.className = "val-mark";
+    span.textContent = after.nodeValue;
+    after.replaceWith(span);
+    return true;
+  }
+  return false;
+}
+
+function unwrapValueMark(span) {
+  span.replaceWith(document.createTextNode(span.textContent));
 }
 
 function parseSourceLines(str) {
@@ -5924,12 +6234,18 @@ function parseSourceLines(str) {
 function activateMatch(index, matches) {
   document.querySelectorAll(".md-line.active").forEach(e => e.classList.remove("active"));
 
-  const m = matches[index];
-  const lineEl = document.querySelector(`.md-line[data-line="${m.line}"]`);
-  if (lineEl) {
-    lineEl.classList.add("active");
-    lineEl.scrollIntoView({ behavior: "smooth", block: "center" });
+  const el = searchUnit(matches[index].line);
+  if (el) {
+    el.classList.add("active");
+    scrollDocTo(el);
   }
+}
+
+// The raw line or top-level rendered block a search match key names.
+function searchUnit(key) {
+  return docPane() === "rendered"
+    ? document.querySelector(`#panel-left .rendered .col > .blk[data-start="${key}"]`)
+    : document.querySelector(`.md-line[data-line="${key}"]`);
 }
 
 // ── Keyboard navigation ──
@@ -5974,14 +6290,15 @@ function doSearch() {
   state.searchMatches = [];
   const reSrc = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-  // Walk each rendered .md-line and wrap text matches in <mark class="search-hit">.
-  // Using TreeWalker over text nodes avoids matching inside HTML attributes
-  // and skips the line-number gutter.
-  document.querySelectorAll(".md-line").forEach((lineEl) => {
-    const lineNum = parseInt(lineEl.dataset.line, 10);
-    if (highlightMatchesIn(lineEl, reSrc)) {
-      state.searchMatches.push(lineNum);
-    }
+  // Wrap text matches in <mark class="search-hit"> per raw line or rendered
+  // block. Walking text nodes avoids matching inside HTML attributes and skips
+  // the line-number gutter. Top-level blocks only: figure captions nest.
+  const units = docPane() === "rendered"
+    ? document.querySelectorAll("#panel-left .rendered .col > .blk")
+    : document.querySelectorAll(".md-line");
+  units.forEach((el) => {
+    const key = el.dataset.line || el.dataset.start;
+    if (highlightMatchesIn(el, reSrc)) state.searchMatches.push(key);
   });
 
   state.searchIndex = 0;
@@ -6032,11 +6349,10 @@ function highlightMatchesIn(lineEl, reSrc) {
 function scrollToSearchMatch(index) {
   document.querySelectorAll(".search-hit.current").forEach((e) => e.classList.remove("current"));
   state.searchIndex = index;
-  const lineNum = state.searchMatches[index];
-  const lineEl = document.querySelector(`.md-line[data-line="${lineNum}"]`);
-  if (lineEl) {
-    lineEl.querySelectorAll(".search-hit").forEach((m) => m.classList.add("current"));
-    lineEl.scrollIntoView({ behavior: "smooth", block: "center" });
+  const el = searchUnit(state.searchMatches[index]);
+  if (el) {
+    el.querySelectorAll(".search-hit").forEach((m) => m.classList.add("current"));
+    scrollDocTo(el);
   }
   updateSearchNav();
 }
@@ -6098,20 +6414,6 @@ $("#search-box").addEventListener("keydown", (e) => {
     e.preventDefault(); navigateSearch(1);
   } else if (e.key === "ArrowUp" && state.searchMatches.length > 0) {
     e.preventDefault(); navigateSearch(-1);
-  }
-});
-
-// ── PDF button ──
-$("#btn-pdf").addEventListener("click", () => {
-  if (!state.currentId) return;
-  const meta = state.articles.find(a => a.article_id === state.currentId);
-  // Static deploy (no server) uses DOI; local uses PDF API
-  const isLocalHost = location.hostname === "localhost" || location.hostname === "127.0.0.1";
-  const isStatic = location.protocol === "file:" || !isLocalHost;
-  if (isStatic && meta && meta.doi) {
-    window.open(`https://doi.org/${meta.doi}`, "_blank");
-  } else {
-    window.open(`/api/pdf/${state.currentId}`, "_blank");
   }
 });
 
@@ -6223,8 +6525,7 @@ async function syncCurrentArticleProgress() {
   const article = state.articles.find(a => a.article_id === id);
   if (!article) return;
 
-  const option = $(`#article-select option[value="${CSS.escape(id)}"]`);
-  if (option) option.textContent = articleOptionLabel(article);
+  if (id === state.currentId) updateSwitcherLabel();
   if ($("#overview-route")?.style.display === "block") renderOverview();
   updateReviewWorkspace();
 }
@@ -6259,9 +6560,9 @@ function mergeArticleSummaries(fresh) {
     state.deepGeneration = (state.deepGeneration || 0) + 1;
     if (state.filterFn) {
       // An applied filter is still holding the previous run's matches, and the
-      // dropdown and navigation read from that list.
-      populateDropdown();
-      updateFilterBadge();
+      // switcher and prev/next read from that list.
+      refreshQueue();
+      updateFilterChip();
     }
   }
 }
@@ -6919,6 +7220,7 @@ async function loadSettings() {
   } catch {
     return;
   }
+  $("#app-project").textContent = settingsState.project_name || "";
   $("#toggle-require-reviewer").checked = !!settingsState.require_reviewer;
   renderBackfillRow();
 }

@@ -4,11 +4,30 @@ Status: partially current.
 
 ## Implementation status
 
-Live today: `litschema verify` serving a single-page app with an article
-dropdown, the `?filter=` queue expression, the Audit/Overview toggle for one
-article's extraction, markdown and PDF panes, review editing against the
-version-1 model, and ORCID lookup. Its read API is the `/api/...` surface named
-under API ownership below.
+Live today: `litschema verify` serving a single-page app with a document
+switcher, the `?filter=` queue expression, the Audit/Data toggle for one
+article's extraction, Rendered, Raw lines, and PDF panes, review editing, and
+ORCID lookup. Its read API is the `/api/...` surface named under API ownership
+below.
+
+The app bar reads `litschema / <project>` on every route, with theme and
+settings on the right. A document page adds a navigation group after a
+divider: an Overview button, a document switcher, and previous/next with an
+`n/N` counter. The switcher shows a short citation ("Paessler 2024 · title")
+and opens a searchable list of the queue with each document's status; arrows
+move, Enter opens, Esc closes. Overview and Esc (when no dialog, switcher, or
+inline editor is open and focus is not in a text field) return to the
+overview with its hash query and `?filter=` intact. The Audit/Data toggle sits
+in the review pane's header, beside "Extraction Review".
+The overview has a summary strip, one filter bar, status chips, sortable
+columns including Status and Confidence, and a header that stays visible while
+scrolling. The text filter, status chip, and sort live in the URL hash
+(`#/?q=…&status=…&sort=…&dir=…`), so reload and shared links keep them. The
+filter bar switches between Search (the text filter) and Expression (the
+`?filter=` queue expression, with a live match count; Enter or Apply runs it).
+An applied expression shows as a chip in both modes and combines with the text
+filter; it also governs prev/next on a document. Document pages have no filter
+UI. An article whose run extracted no fields reads "Nothing extracted".
 
 Live today: both routes, the dataset overview with progress aggregation, the
 document review against an explicit active run, deep links that survive reload
@@ -83,11 +102,11 @@ than one. That surface is developed on the `feat/multirun` branch and is not
 specified here.
 
 Each route states where the user is and offers a marked way out. A document
-shows a breadcrumb back to the overview and a persistent control returning to
-it, so leaving never depends on the browser's back button. Controls scoped to a
-document — the article selector, previous/next, and the view-mode toggle — are
-hidden on the overview rather than shown inert, since a visible control implies
-a context the user is not in.
+shows an Overview button in the app bar, and Esc does the same, so leaving
+never depends on the browser's back button. Controls scoped to a document (the
+Overview button, the document switcher, and previous/next) are hidden on the
+overview rather than shown inert, since a visible control implies a context the
+user is not in.
 
 Provenance is reported where it can be acted on. The document view names the
 model that produced the extraction being reviewed — enough context while
@@ -178,6 +197,37 @@ a corrupt review file set `review_error` and make all review counts, progress,
 and completion `null`; the API never reports them as zero. An article without a
 valid active run reports `n_fields = 0`, review counts `0`, progress `0.0`, and
 `is_complete = false`.
+
+### Document pane
+
+The left pane has three tabs: Rendered (the default), Raw lines, and PDF. The
+choice persists per browser and can be set with `pane=` in the hash.
+
+Rendered shows prepared text as paragraphs, headings, tables, and figures from
+`/api/rendered`. Selecting a field highlights the cited paragraph or figure, or
+only the cited rows of a table unless the citation covers the whole table. When
+the extracted value appears verbatim it is marked: a table cell that holds
+exactly the value gets a fill, otherwise the first match in the text gets an
+inline mark. A paraphrased value gets the highlight and no mark. If a citation
+falls outside every rendered block, the pane says so and points to Raw lines.
+Text blocks keep a 64ch measure; tables and figures use the full pane width.
+Jumps farther than one viewport scroll instantly; nearer ones animate.
+
+Line numbers belong to Raw lines. In Rendered, the evidence box and source
+labels name the source ("source", "2 sources") instead of line ranges.
+
+If `/api/rendered` fails, `docPane()` reports Raw lines as the pane in use, so
+the document stays readable and every line-based label follows the pane
+actually shown.
+
+Raw lines shows article.md one numbered line at a time, with HTML shown as
+escaped text. Find in document searches whichever of the two text panes is
+showing.
+
+Known limit: prepared text converted with old pymupdf4llm versions (for
+example erw-lit's April 2026 conversions) splits paragraphs at PDF line
+breaks, so rendered paragraphs can break mid-sentence until the document is
+re-converted (kata `03y2`).
 
 ### Document review
 
@@ -294,7 +344,21 @@ exactly when a reviewer most needs it.
 ## API ownership
 
 The target read surface retains `GET /api/articles`, `/api/markdown/{id}`,
-`/api/pdf/{id}`, `/api/schema/fields`, and optional ORCID lookup. Extraction and
+`/api/pdf/{id}`, `/api/schema/fields`, and optional ORCID lookup.
+
+`GET /api/rendered/{id}` returns `{text_sha256, blocks}`. Each block has a
+`kind`, 1-based inclusive `lines`, and sanitized `html`; table rows carry
+`data-line` with their source line. Figure blocks carry `src` and, when the
+preceding paragraph reads as a caption, `caption_html` and `caption_lines`.
+HTML is sanitized with nh3 against a tag allowlist (text, tables, lists, `a`
+with `href`, `tr` with `data-line`). A missing article.md is 404; a render
+failure is 422, and the client falls back to Raw lines.
+
+`GET /api/figure/{id}/{name}` serves a bare image name (png, jpg, jpeg, webp)
+from the article's `figures/` folder. Anything else, including a path, is 404.
+
+`/api/settings` includes `project_name`, the project directory's name, for the
+top bar. Extraction and
 reasoning reads accept an explicit run ID. Review endpoints follow
 `specs/reviews/spec.md` and always carry a run ID. Project settings are read and written at `/api/settings`; attribution
 backfill posts to its own endpoint. After a review write, the document and
@@ -302,6 +366,11 @@ summary use server-recomputed effective state. Route entry and explicit refresh 
 changes appear without restarting the server. Run mutation endpoints are out of
 scope. Server handlers call Python APIs in process and never shell out to CLI
 commands.
+
+No network at runtime: scripts, styles, fonts (DM Sans and DM Mono as woff2),
+and icons (a Lucide SVG sprite at `/static/icons.svg`) are bundled.
+`tests/test_verifier_static.py` pins that no script or stylesheet loads from a
+remote URL and that Google Fonts and Shoelace stay out.
 
 ## Invariants
 
@@ -323,7 +392,7 @@ Implementation coverage must replace brittle source-substring assertions with:
 - browser behavior on `#/` and `#/doc/{id}`, including direct load, fragment
   query state, filtered next/previous, exclusion of the open article,
   navigation, back/forward, and reload;
-- a marked exit from every document route, breadcrumb linking, and hiding of
+- a marked exit from every document route (Overview button and Esc), and hiding of
   document-scoped controls on the overview;
 - displayed run provenance (model, effort, extraction time) with the opaque
   identifier available but not foregrounded, and its absence for an

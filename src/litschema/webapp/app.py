@@ -46,11 +46,12 @@ from ..reviews import (
     upsert_review,
 )
 from ..schema_resolution import resolve_extraction_schema
+from .render import render_blocks
 from .search import strip_references
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
-app = FastAPI(title="ERW Extraction Verifier")
+app = FastAPI(title="litschema")
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 ORCID_RE = re.compile(r"^\d{4}-\d{4}-\d{4}-\d{3}[0-9X]$")
@@ -774,6 +775,37 @@ async def get_markdown(article_id: str, cfg: CfgDep):
     return {"markdown": strip_references(text)}
 
 
+FIGURE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp"}
+
+
+@app.get("/api/rendered/{article_id}")
+async def get_rendered(article_id: str, cfg: CfgDep):
+    """Prepared text as sanitized blocks with their source line ranges."""
+    path = article_files(cfg, article_id).markdown
+    if not path.exists():
+        raise HTTPException(404, f"No markdown for {article_id}")
+    text = strip_references(path.read_text())
+    try:
+        return render_blocks(text)
+    except Exception as exc:  # the client falls back to raw lines
+        raise HTTPException(422, f"could not render {article_id}: {exc}") from exc
+
+
+@app.get("/api/figure/{article_id}/{name}")
+async def get_figure(article_id: str, name: str, cfg: CfgDep):
+    """Serve one extracted figure from the article's figures/ folder."""
+    folder = (article_files(cfg, article_id).article_dir / "figures").resolve()
+    candidate = (folder / name).resolve()
+    if (
+        Path(name).name != name
+        or candidate.suffix.lower() not in FIGURE_SUFFIXES
+        or candidate.parent != folder
+        or not candidate.is_file()
+    ):
+        raise HTTPException(404, f"No figure {name!r} for {article_id}")
+    return FileResponse(candidate)
+
+
 @app.get("/api/pdf/{article_id}")
 async def get_pdf(article_id: str, cfg: CfgDep):
     """Serve the PDF file for an article."""
@@ -811,6 +843,7 @@ async def get_settings(cfg: CfgDep):
         # which is what makes attribution matter and backfill risky.
         "in_git_repo": shared,
         "unattributed_reviews": _count_unattributed(cfg),
+        "project_name": cfg.project_root.name,
     }
 
 
