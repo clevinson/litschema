@@ -63,6 +63,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 - `agent record-extraction` copies that record into `run.json` as
   `conversion`, and refuses to publish when `article.md` no longer matches the
   record's hash.
+- `init` gitignores prepared text (`article.md`) and extracted figures along
+  with PDFs, since most papers can't be redistributed. Existing
+  projects need `data/papers/*/article.md` and `data/papers/*/figures/` added
+  to `.gitignore` by hand.
 
 ### Changed
 
@@ -73,7 +77,6 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 - `prepare-text` falls back to the canonical `<article-id>.pdf` when the
   manifest's `filename` names a file that isn't in the article directory.
 - pymupdf4llm 1.28.2 (lockfile; the dependency range is unchanged).
-
 - `agent validate-reasoning` and `agent record-extraction` reject reasoning
   entries whose `path` names a field the extraction schema doesn't define.
   The verifier finds evidence by path, so such an entry left its field with no
