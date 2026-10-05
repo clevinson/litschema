@@ -1,0 +1,47 @@
+site_name: litschema
+site_description: Schema-driven literature extraction with line-level citations, provenance, and human review.
+site_url: https://litschema.readthedocs.io/
+repo_url: https://github.com/clevinson/litschema
+repo_name: clevinson/litschema
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  features:
+    - content.code.copy
+    - navigation.sections
+    - navigation.footer
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: white
+      accent: blue
+      toggle:
+        icon: material/brightness-7
+        name: Dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: black
+      accent: blue
+      toggle:
+        icon: material/brightness-4
+        name: Light mode
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.highlight
+  - pymdownx.superfences
+
+nav:
+  - Home: index.md
+  - Quickstart: quickstart.md
+  - Concepts: concepts.md
+  - Reviewing: reviewing.md
+  - File formats: file-formats.md
+  - CLI: cli.md
+  - Specs: https://github.com/clevinson/litschema/tree/main/specs
+  - Changelog: https://github.com/clevinson/litschema/blob/main/CHANGELOG.md

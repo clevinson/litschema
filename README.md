@@ -1,14 +1,26 @@
 # litschema
 
+[![PyPI](https://img.shields.io/pypi/v/litschema)](https://pypi.org/project/litschema/)
+[![Docs](https://readthedocs.org/projects/litschema/badge/?version=latest)](https://litschema.readthedocs.io/)
+
 **Turn a folder of PDFs into a dataset you can defend.**
 
-Extraction gets you structured data. `litschema` gets you structured data where
-every value carries the lines it came from, a record of which model produced
-it, and a human's verdict on whether it's right — because in a systematic
-review or meta-analysis, "the model said so" is not a citation.
+![Reviewing a paper in litschema: cited lines highlighted in the text, extracted values with the grader's confidence](https://raw.githubusercontent.com/clevinson/litschema/main/docs/assets/review.gif)
 
-Everything runs on your machine. The only network calls are optional DOI
-lookups and the verifier's ORCID name resolution.
+Extraction gets you structured data. `litschema` gets you structured data where
+every value carries the lines it came from, how it was derived, a record of
+which model produced it, an independent grader's estimate that it's correct,
+and a human's verdict. In a systematic review or meta-analysis, "the model said
+so" is not a citation.
+
+You define the schema in [LinkML](https://linkml.io). Runs are immutable and
+record the hash of every input. Bibliographic metadata fetched by DOI is
+marked with its source and locked. Documentation:
+[litschema.readthedocs.io](https://litschema.readthedocs.io/).
+
+Everything runs on your machine. Models run through your own Claude Code
+install. The only other network calls are optional DOI lookups and the
+verifier's ORCID name resolution.
 
 ## What you get
 
@@ -19,11 +31,14 @@ data/papers/<article-id>/
   article-metadata.json                  identity + bibliographic block
   <article-id>.pdf
   article.md                             prepared full text
+  prepared-text.json                     how the PDF was converted, hashed
+  figures/                               images from the PDF
   active-run.json                        which extraction is current
   extraction-runs/<run-id>/
     agent-extraction.json                what the document SAYS (schema-valid)
     agent-reasoning.json                 why — per-field evidence, line-cited
     run.json                             inputs hashed, model recorded
+    grades/<grade-id>.json               grader's confidence per value
     review.json                          your verdicts on this run
 ```
 
@@ -31,6 +46,8 @@ Plain JSON on disk, one directory per document, diffable in git. A run is
 immutable once published: its extraction, reasoning, and `run.json` never
 change, so a review written against it stays meaningful forever. Re-extracting
 creates a new run rather than overwriting the old one.
+
+![The overview: status, flags, and review progress per paper](https://raw.githubusercontent.com/clevinson/litschema/main/docs/assets/overview.png)
 
 ## Alpha Software
 
@@ -92,6 +109,7 @@ litschema assemble                 papers-inbox PDFs -> per-article folders (off
 litschema prepare-text <id>|--all  PDF -> article.md (offline)
 litschema meta show|set|sync <id>  bibliographic metadata, provenance-tagged
 litschema validate [target]        validate extractions against the schema
+litschema grade <id>|--all         score each value against its cited lines
 litschema runs list|activate       inspect published runs; choose the active one
 litschema verify [--port 8000]     local review webapp (loopback only)
 litschema export [-f jsonl|csv]    reviewed data as flat files (pandas/R/jq-ready)
@@ -100,9 +118,8 @@ litschema skills install           install the agent skills globally
 litschema agent ...                deterministic steps the extraction skill calls
 ```
 
-There is no `litschema extract`: extraction is judgment work, so it runs as an
-agent skill (`/extract-article <id>`) with the framework checking the output.
-The verb exists only to say so.
+Extraction runs as an agent skill (`/extract-article <id>`), with the
+framework checking the output. A headless `litschema extract` is planned.
 
 ## How it works
 
@@ -112,10 +129,18 @@ minimal manifest. No DOI, bibliography file, or network access is needed to
 reach extraction, and re-dropping the same PDF is a no-op.
 
 **Extraction is agent-executed, framework-checked.** The agent reads only the
-prepared text, writes an extraction plus a line-cited reasoning file, and loops
-until both validate. Validation is closed-world — nothing the schema doesn't
+prepared text and its figures. It writes an extraction plus a reasoning file
+that gives, for each value, the cited lines, a basis (stated, converted,
+normalized, calculated, inferred, or assumed), and a note on how it got the
+value. It loops until both validate. Validation is closed-world — nothing the schema doesn't
 define gets in — and citations must resolve to real lines in the prepared text,
 so a reference to a line that doesn't exist fails rather than shipping.
+
+**Grading is independent.** `litschema grade` gives each value, the
+extractor's basis and note, and the cited lines to a separate model, which
+returns the probability that the value is correct and a one-line issue when
+it's below 0.9. The app sorts flagged values to the top. In an 18-paper pilot,
+85% of stated values scored high, while 29% of inferred values scored low.
 
 **Runs are immutable and provenance-bearing.** Publishing records the SHA-256
 of every input — prepared text, domain context, and the skill that conducted
