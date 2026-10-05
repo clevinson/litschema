@@ -73,9 +73,8 @@ verdict. The basis and note tell you what to check; they are claims, not evidenc
 - Use null only when it cannot be judged: the deciding evidence is a figure you cannot
   read, or there is no citation.
 
-Every grade has an issue. When the confidence is below 0.9 or null, the issue is one
-short line saying what is weak, naming what in the evidence decides it. Otherwise it is
-an empty string.
+Every grade has an issue: one short line saying what is weakest about the value,
+naming what in the evidence decides it. When nothing is weak, say what supports it.
 
 Figure lines appear as [figure image: PATH]. When one is cited, open the image at PATH
 with the Read tool and judge from it.
@@ -93,7 +92,7 @@ GRADE_SCHEMA = {
                 "properties": {
                     "id": {"type": "integer"},
                     "confidence": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
-                    "issue": {"type": "string"},
+                    "issue": {"type": "string", "minLength": 1},
                 },
                 "required": ["id", "confidence", "issue"],
                 "additionalProperties": False,

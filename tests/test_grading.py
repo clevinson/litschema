@@ -170,7 +170,7 @@ def test_rubric_hash_is_the_sha256_of_the_rubric_text() -> None:
     # Pinned: a rubric edit changes which grades count as current, so it
     # must be a deliberate change here too.
     assert grading.RUBRIC_SHA256 == (
-        "sha256:5ff9e95e9d2b609e448aad16332f14e65242de9d2d3903e63d4cd0dd547f2934"
+        "sha256:e958a1eb543517b695d0c03a5c4f732aa0ad217701520bda9b1da297ec1dbe7c"
     )
 
 
@@ -722,6 +722,7 @@ def test_listing_survives_a_corrupt_grade(project, client) -> None:
 
 
 def test_grade_schema_requires_an_issue() -> None:
-    # Optional, the grader left it out for about half the flagged fields.
+    # Asked for only below 0.9, the grader often left it empty.
     item = grading.GRADE_SCHEMA["properties"]["grades"]["items"]
     assert item["required"] == ["id", "confidence", "issue"]
+    assert item["properties"]["issue"]["minLength"] == 1
