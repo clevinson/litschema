@@ -1,9 +1,19 @@
 # Quickstart
 
-You need Python 3.13+, [uv](https://docs.astral.sh/uv/), and a coding-agent
-harness logged in to your account: [Claude Code](https://claude.com/claude-code)
-or [Codex](https://developers.openai.com/codex) today. You can work in its CLI
-or its desktop app; grading calls the CLI, so install that too.
+You need Python 3.13+, [uv](https://docs.astral.sh/uv/), and a coding agent
+logged in to your account.
+
+## Supported coding agents
+
+| Coding agent | Onboarding and extraction | Grading |
+| --- | --- | --- |
+| [Claude Code](https://claude.com/claude-code) | yes | yes (the default) |
+| [Codex](https://developers.openai.com/codex) | yes, piloted on one paper | yes |
+| [pi](https://pi.dev) | coming soon | coming soon |
+
+Onboarding and extraction run as skills in the agent you work in, CLI or
+desktop app. Grading calls the agent's CLI, so install the CLI even if you work
+in the app. The grader doesn't have to be the agent you extract with.
 
 ## Install
 
@@ -36,9 +46,7 @@ PDFs to text, extracts one paper as a pilot so you can adjust the schema, and
 then extracts the rest. To extract one paper by hand, ask for the
 `extract-article` skill with the article id.
 
-Claude Code is tested end to end; Codex has extracted a pilot paper with the
-same skills. Codex blocks network access by default, so DOI lookups fail
-inside it. Run `litschema meta sync --all` from your own terminal afterwards,
+Codex blocks network access by default, so DOI lookups fail inside it. Run `litschema meta sync --all` from your own terminal afterwards,
 or allow network for the session.
 
 ## Grade
