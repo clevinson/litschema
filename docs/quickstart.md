@@ -36,8 +36,10 @@ PDFs to text, extracts one paper as a pilot so you can adjust the schema, and
 then extracts the rest. To extract one paper by hand, ask for the
 `extract-article` skill with the article id.
 
-Claude Code is tested end to end. Codex runs the same skills and commands, but
-its extraction hasn't had a full pilot yet.
+Claude Code is tested end to end; Codex has extracted a pilot paper with the
+same skills. Codex blocks network access by default, so DOI lookups fail
+inside it. Run `litschema meta sync --all` from your own terminal afterwards,
+or allow network for the session.
 
 ## Grade
 

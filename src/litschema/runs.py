@@ -308,14 +308,19 @@ def _hash_file(path: Path, what: str) -> str:
 def _agent_attribution(provider: str | None, model: str | None) -> dict:
     """Attribution is recorded as asserted; unavailable fields are omitted.
 
-    harness/harness_version come from the AI_AGENT env var an agent CLI sets
-    (e.g. ``claude-code_2-1-219_agent``); effort from CLAUDE_EFFORT. The
-    publisher runs inside the agent's shell, so these are genuinely observed
-    even though provider/model are only declared.
+    harness/harness_version come from what the agent CLI sets in its shell:
+    CODEX_VERSION for Codex, AI_AGENT for Claude Code (e.g.
+    ``claude-code_2-1-219_agent``), and effort from CLAUDE_EFFORT. Codex is
+    checked first because it leaves an inherited AI_AGENT in place. The model
+    is only ever declared.
     """
     agent: dict = {}
+    codex = os.environ.get("CODEX_VERSION", "")
     raw = os.environ.get("AI_AGENT", "")
-    if raw:
+    if codex:
+        agent["harness"] = "codex"
+        agent["harness_version"] = codex
+    elif raw:
         parts = raw.rsplit("_", 1)[0]  # drop trailing "_agent"
         harness, _, version = parts.partition("_")
         if harness:
@@ -327,7 +332,7 @@ def _agent_attribution(provider: str | None, model: str | None) -> dict:
     if model:
         agent["model"] = model
     effort = os.environ.get("CLAUDE_EFFORT")
-    if effort:
+    if effort and agent.get("harness") == "claude-code":
         agent["effort"] = effort
     return agent
 

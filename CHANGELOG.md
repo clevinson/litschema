@@ -66,6 +66,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
   get the Codex copy from `litschema skills install --local --force`.
 - Docs, `init`'s next steps, and the onboarding skill name Claude Code and
   Codex instead of Claude Code alone.
+- A run published from a Codex shell records `harness: codex` and its version
+  from `CODEX_VERSION`.
 - `export` help and docs say what it writes: every value with review
   corrections applied, including unreviewed ones. It prints how many articles
   are fully, partly, and not reviewed.
