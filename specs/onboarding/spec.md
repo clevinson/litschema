@@ -9,7 +9,7 @@ later refinement.
 ## Implementation status
 
 Everything below is live: `litschema init`, `skills install`, and the
-`/litschema-onboard` conductor end to end, publishing each extraction as an
+`litschema` skill conductor end to end, publishing each extraction as an
 active run through `agent record-extraction`.
 
 ## First-run path
@@ -17,7 +17,7 @@ active run through `agent record-extraction`.
 ```text
 litschema init <dir>
   → place PDFs in papers-inbox/
-  → /litschema-onboard
+  → litschema skill
   → litschema verify
 ```
 
@@ -49,7 +49,7 @@ managed through config edits and `skills install --project --force`, not re-init
 Templates may be copied as starting material. Onboarding does not configure
 parallel schema versions or import a framework base schema.
 
-## `/litschema-onboard` conductor
+## `litschema` skill conductor
 
 The project-local skill owns the first run. This is a first-time user's first
 contact with the tool, so the conductor's surface is deliberately narrow: one
@@ -76,7 +76,8 @@ internals. Checks that pass are silent.
    conductor publishes each run itself with the model it dispatched, so
    subagents stage and validate only.
 6. **Finish:** run the post-extraction metadata sweep, validation, and status;
-   hand off to `litschema verify`.
+   offer `litschema grade --all` when runs have no grades; hand off to
+   `litschema verify`.
 
 Extraction mechanics belong to `specs/extraction/spec.md`. Run layout and
 activation belong to `specs/article-store/spec.md`. Review behavior belongs to
@@ -113,20 +114,26 @@ manifest directly.
 
 ## Interruption and rerun
 
-Onboarding is resumable. Existing intake artifacts remain, complete published
-runs remain immutable, active selections remain valid, and incomplete staging
-does not appear as a run. Rerunning skips accepted active current-schema work
-and retries missing or error-only articles. It does not create a same-schema
-rerun unless the user explicitly requests that separate workflow.
+Onboarding is resumable, and the skill is the entry point for every later
+session: it reads `litschema status` and starts at the first unfinished phase
+(schema, prepare, pilot, the rest, grading, handoff). Existing intake artifacts
+remain, complete published runs remain immutable, active selections remain
+valid, and incomplete staging does not appear as a run. Rerunning skips
+articles with an active run and retries missing or error-only articles. Once
+any paper is reviewed, the skill refuses schema changes and says the workflow
+isn't supported yet. It does not create a same-schema rerun unless the user
+explicitly requests that separate workflow.
 
 ## Invariants
 
 - PDFs enter through `papers-inbox/`.
-- `/litschema-onboard` remains the first-run conductor.
-- Init is offline, noninteractive, create-only, and never re-initializes.
+- The `litschema` skill remains the conductor, for the first run and reruns.
+- Init is offline, noninteractive, create-only, and never re-initializes. It
+  sets up the coding agents whose config folders exist, or those named with
+  `--agent`.
 - The project has one current schema; Git stores its history.
-- First successful extractions become immutable initial runs with per-article
-  active selection.
+- First successful extractions become immutable runs with per-article active
+  selection.
 - Refinement is not folded into onboarding.
 - Metadata writes use deterministic CLI guards.
 - Interrupted work is resumable without mutating completed runs.
@@ -149,7 +156,7 @@ Implementation coverage must pin:
 - empty-project stop behavior;
 - representative-document schema drafting and approval gate;
 - one-article pilot publication and activation;
-- batch creation and activation of initial runs;
+- batch creation and activation of runs;
 - skip of active current-schema articles and retry of missing/error attempts;
 - interruption before and after publication;
 - bib-metadata CLI use and post-batch sync placement;

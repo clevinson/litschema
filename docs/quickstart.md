@@ -5,13 +5,13 @@ coding agent set up with your subscription or an API key.
 
 ## Supported coding agents
 
-| Coding agent | Onboarding and extraction | Grading |
+| Coding agent | Schema design and extraction | Grading |
 | --- | --- | --- |
 | [Claude Code](https://claude.com/claude-code) | yes | yes |
 | [Codex](https://developers.openai.com/codex) | yes | yes |
 | [pi](https://pi.dev) | coming soon | coming soon |
 
-Onboarding and extraction run as skills in Claude Code or Codex, in the
+Schema design and extraction run as skills in Claude Code or Codex, in the
 terminal or the desktop app. Grading runs the `claude` or `codex` command, so
 it must be on your PATH even if you work in a desktop app. You can grade with
 a different coding agent than the one that extracted.
@@ -43,13 +43,14 @@ Copy your PDFs into `papers-inbox/`.
 
 ## Draft a schema and extract
 
-Open the project in Claude Code or Codex and run the onboarding skill:
-`/litschema-onboard` in Claude Code, `$litschema-onboard` in Codex. Asking it
-to "set up litschema" works too.
+Open the project in Claude Code or Codex and run the `litschema` skill:
+`/litschema` in Claude Code, `$litschema` in Codex. Asking it to "set up
+litschema" works too.
 
-It reads a few of your papers, drafts a LinkML schema with you, converts the
-PDFs to text, extracts one paper as a pilot so you can adjust the schema, and
-then extracts the rest. To extract one paper by hand, ask for the
+It reads a few of your papers, designs a LinkML schema with you, prepares each
+PDF's text (a cached first step that's skipped once done), extracts one paper
+as a pilot so you can adjust the schema, and then extracts the rest. Run it
+again to add papers or continue; it picks up from where the project stands. To extract one paper by hand, ask for the
 `extract-article` skill with the article id.
 
 ## Grade
