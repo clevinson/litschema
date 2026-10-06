@@ -47,7 +47,8 @@ VERDICT_BANDS = {
     "unsupported": "low",
     "cannot_verify": "cannot_verify",
 }
-STRIPPED_ENV = ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL")
+#: Variables that make `claude` bill the API instead of the logged-in account.
+API_BILLING_ENV = ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN")
 CLAUDE_TIMEOUT_S = 1800
 
 CONTEXT_LINES = 2
@@ -349,10 +350,13 @@ def build_prompt(
 # ── the claude CLI ──────────────────────────────────────────────────────────
 
 
-def grader_env(environ: dict[str, str] | None = None) -> dict[str, str]:
-    """The environment without API credentials, so claude uses the logged-in account."""
+def api_billing_notice(environ: dict[str, str] | None = None) -> str | None:
+    """A note naming the shell variable that will bill the API, if one is set."""
     source = os.environ if environ is None else environ
-    return {k: v for k, v in source.items() if k not in STRIPPED_ENV}
+    names = [name for name in API_BILLING_ENV if source.get(name)]
+    if not names:
+        return None
+    return f"{' and '.join(names)} {'is' if len(names) == 1 else 'are'} set, so claude bills the API for grading"
 
 
 def claude_executable() -> str:
@@ -387,7 +391,7 @@ _VERSION_RE = re.compile(r"\d+\.\d+(?:\.\d+)?\S*")
 def harness_version(executable: str) -> str | None:
     """The first version number `<cli> --version` prints."""
     proc = subprocess.run(
-        [executable, "--version"], capture_output=True, text=True, env=grader_env(), timeout=60
+        [executable, "--version"], capture_output=True, text=True, timeout=60
     )
     match = _VERSION_RE.search(proc.stdout) if proc.returncode == 0 else None
     return match.group(0) if match else None
@@ -424,7 +428,6 @@ def run_claude(executable: str, model: str, prompt: str, article_dir: Path) -> d
             claude_command(executable, model, article_dir),
             input=prompt,
             cwd=article_dir,
-            env=grader_env(),
             capture_output=True,
             text=True,
             timeout=CLAUDE_TIMEOUT_S,
