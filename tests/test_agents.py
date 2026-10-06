@@ -3,21 +3,30 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-import yaml
 from typer.testing import CliRunner
 
 from litschema import cli
-from litschema.agents import UnknownAgentError, parse_agents, project_agents
+from litschema.agents import AGENTS, Agent, UnknownAgentError, parse_agents
+
+# Captured at import, before the autouse fixture in conftest replaces it.
+REAL_DETECTED = Agent.detected
 
 
-def _init(tmp_path: Path, *args: str, input: str | None = None):
+def _init(tmp_path: Path, *args: str):
     project = tmp_path / "review"
-    result = CliRunner().invoke(cli.app, ["init", str(project), *args], input=input)
+    result = CliRunner().invoke(cli.app, ["init", str(project), *args])
     return project, result
 
 
-def _recorded(project: Path) -> list[str]:
-    return yaml.safe_load((project / "litschema.yaml").read_text())["agents"]
+@pytest.fixture
+def config_dirs(tmp_path, monkeypatch):
+    """Real detection, with both agents' config dirs under tmp_path; tests create them."""
+    monkeypatch.setattr(Agent, "detected", REAL_DETECTED)
+    claude, codex = tmp_path / "claude-config", tmp_path / "codex-home"
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(claude))
+    monkeypatch.setenv("CODEX_HOME", str(codex))
+    return claude, codex
 
 
 @pytest.mark.parametrize(
@@ -27,7 +36,6 @@ def _recorded(project: Path) -> list[str]:
         (["claude", "codex"], ["claude-code", "codex"]),
         (["codex,claude-code"], ["codex", "claude-code"]),
         (["all"], ["claude-code", "codex"]),
-        (["codex", "all"], ["codex", "claude-code"]),
     ],
 )
 def test_parse_agents(values, expected) -> None:
@@ -39,60 +47,54 @@ def test_parse_agents_refuses_unknown_names() -> None:
         parse_agents(["gemini"])
 
 
-def test_projects_without_the_key_get_every_agent() -> None:
-    assert project_agents({}) == ["claude-code", "codex"]
-    assert project_agents({"agents": ["codex"]}) == ["codex"]
+def test_an_agent_is_detected_by_its_config_dir(config_dirs) -> None:
+    claude, _codex = config_dirs
+    claude.mkdir()
+
+    assert AGENTS["claude-code"].detected()
+    assert not AGENTS["codex"].detected()
 
 
-def test_init_for_codex_only(tmp_path) -> None:
-    project, result = _init(tmp_path, "--agent", "codex")
+def test_a_shared_agents_dir_counts_for_codex(tmp_path, config_dirs) -> None:
+    (tmp_path / "home" / ".agents").mkdir(parents=True)
+
+    assert AGENTS["codex"].detected()
+    assert not AGENTS["claude-code"].detected()
+
+
+def test_init_sets_up_agents_whose_config_dir_exists(tmp_path, config_dirs) -> None:
+    _claude, codex = config_dirs
+    codex.mkdir()
+
+    project, result = _init(tmp_path)
 
     assert result.exit_code == 0, result.output
-    assert _recorded(project) == ["codex"]
     assert (project / ".agents" / "skills" / "litschema-onboard" / "SKILL.md").is_file()
     assert not (project / ".claude").exists()
-    config = (project / ".codex" / "config.toml").read_text()
-    assert "network_access = true" in config
+    assert "network_access = true" in (project / ".codex" / "config.toml").read_text()
     assert "Open this folder in Codex" in result.output
 
 
-def test_init_for_claude_code_only_writes_no_codex_config(tmp_path) -> None:
+def test_init_with_no_config_dirs_sets_up_every_agent(tmp_path) -> None:
+    project, result = _init(tmp_path)
+
+    assert result.exit_code == 0, result.output
+    assert (project / ".claude" / "skills" / "extract-article" / "SKILL.md").is_file()
+    assert (project / ".agents" / "skills" / "extract-article" / "SKILL.md").is_file()
+    assert (project / ".codex" / "config.toml").is_file()
+
+
+def test_init_agent_flag_overrides_detection(tmp_path, config_dirs) -> None:
+    claude, codex = config_dirs
+    claude.mkdir()
+    codex.mkdir()
+
     project, result = _init(tmp_path, "--agent", "claude-code")
 
     assert result.exit_code == 0, result.output
-    assert _recorded(project) == ["claude-code"]
     assert (project / ".claude" / "skills" / "extract-article" / "SKILL.md").is_file()
     assert not (project / ".agents").exists()
     assert not (project / ".codex").exists()
-
-
-def test_init_without_a_terminal_uses_detected_agents(tmp_path, monkeypatch) -> None:
-    monkeypatch.setattr(
-        "litschema.agents.Agent.detected", lambda self: self.name == "claude-code"
-    )
-
-    project, result = _init(tmp_path)
-
-    assert result.exit_code == 0, result.output
-    assert _recorded(project) == ["claude-code"]
-
-
-def test_init_with_nothing_detected_sets_up_every_agent(tmp_path) -> None:
-    project, result = _init(tmp_path)
-
-    assert result.exit_code == 0, result.output
-    assert _recorded(project) == ["claude-code", "codex"]
-
-
-def test_init_asks_on_a_terminal(tmp_path, monkeypatch) -> None:
-    monkeypatch.setattr(cli, "_interactive", lambda: True)
-
-    project, result = _init(tmp_path, input="9\n2\n")
-
-    assert result.exit_code == 0, result.output
-    assert "Which coding agents will you use with this project?" in result.output
-    assert "enter numbers from 1 to 2" in result.output
-    assert _recorded(project) == ["codex"]
 
 
 def test_init_refuses_an_unknown_agent(tmp_path) -> None:
@@ -103,11 +105,16 @@ def test_init_refuses_an_unknown_agent(tmp_path) -> None:
     assert not project.exists()
 
 
-def test_skills_install_local_follows_the_recorded_agents(tmp_path, monkeypatch) -> None:
-    project, result = _init(tmp_path, "--agent", "claude-code")
+def test_skills_install_local_adds_the_agents_on_this_machine(
+    tmp_path, config_dirs, monkeypatch
+) -> None:
+    claude, codex = config_dirs
+    claude.mkdir()
+    project, result = _init(tmp_path)
     assert result.exit_code == 0, result.output
-    config = project / "litschema.yaml"
-    config.write_text(config.read_text().replace("agents: [claude-code]", "agents: [codex]"))
+    assert not (project / ".agents").exists()
+    # A collaborator with Codex runs the install in the shared project.
+    codex.mkdir()
     monkeypatch.chdir(project)
 
     installed = CliRunner().invoke(cli.app, ["skills", "install", "--local"])

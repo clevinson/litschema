@@ -1,17 +1,16 @@
-"""The coding agents a project is set up for, and the files each one needs.
+"""The coding agents litschema sets a project up for, and the files each one needs.
 
-`init` records the choice as `agents:` in litschema.yaml; `skills install
---local` reads it back.
+An agent is set up when its config directory exists, as roborev does:
+`$CLAUDE_CONFIG_DIR` or `~/.claude` for Claude Code, `$CODEX_HOME` or `~/.codex`
+for Codex. `~/.agents` also counts for Codex's project folder, `.agents/skills`,
+since other agents read it too.
 """
 
 from __future__ import annotations
 
 import os
-import shutil
 from dataclasses import dataclass
 from pathlib import Path
-
-AGENTS_KEY = "agents"
 
 CODEX_CONFIG = """\
 # Written by litschema init. Lets Codex reach the network in this project so
@@ -26,22 +25,23 @@ class Agent:
     name: str
     label: str
     skills_dir: Path
-    command: str
     config_dir_env: str
     config_dir_default: str
+    also_detected_by: tuple[str, ...] = ()
 
     def detected(self) -> bool:
         config_dir = os.environ.get(self.config_dir_env) or Path.home() / self.config_dir_default
-        return shutil.which(self.command) is not None or Path(config_dir).exists()
+        return Path(config_dir).is_dir() or any(
+            (Path.home() / marker).is_dir() for marker in self.also_detected_by
+        )
 
 
 AGENTS = {
     "claude-code": Agent(
-        "claude-code", "Claude Code", Path(".claude") / "skills", "claude",
-        "CLAUDE_CONFIG_DIR", ".claude",
+        "claude-code", "Claude Code", Path(".claude") / "skills", "CLAUDE_CONFIG_DIR", ".claude",
     ),
     "codex": Agent(
-        "codex", "Codex", Path(".agents") / "skills", "codex", "CODEX_HOME", ".codex",
+        "codex", "Codex", Path(".agents") / "skills", "CODEX_HOME", ".codex", (".agents",),
     ),
 }
 ALIASES = {"claude": "claude-code"}
@@ -75,12 +75,11 @@ def detected_agents() -> list[str]:
     return [name for name, agent in AGENTS.items() if agent.detected()]
 
 
-def project_agents(raw: dict) -> list[str]:
-    """The project's recorded agents; every agent for projects that predate the key."""
-    value = raw.get(AGENTS_KEY)
-    if not isinstance(value, list):
-        return list(AGENTS)
-    return [name for name in AGENTS if name in value]
+def agents_to_set_up(explicit: list[str] | None = None) -> list[str]:
+    """--agent values, else the agents with a config directory, else all of them."""
+    if explicit:
+        return parse_agents(explicit)
+    return detected_agents() or list(AGENTS)
 
 
 def write_agent_config(project: Path, agents: list[str]) -> list[Path]:

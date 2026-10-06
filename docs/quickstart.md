@@ -29,12 +29,14 @@ litschema init my-review
 cd my-review
 ```
 
-`init` asks which coding agents you'll use, with the ones it finds on your
-machine selected, and records them as `agents:` in `litschema.yaml`. It
-installs the skills where each agent looks: `.claude/skills/` for Claude Code,
-`.agents/skills/` for Codex. For Codex it also writes `.codex/config.toml`,
-which allows network access in this project so DOI lookups work. In a script,
-pass `--agent claude-code`, `--agent codex`, or `--agent all`.
+`init` sets the project up for each coding agent whose config folder exists
+on your machine: `~/.claude` for Claude Code, `~/.codex` or `~/.agents` for
+Codex (or `$CLAUDE_CONFIG_DIR` and `$CODEX_HOME`). It installs the skills where
+each agent looks, `.claude/skills/` or `.agents/skills/`. For Codex it also
+writes `.codex/config.toml`, which allows network access in this project so DOI
+lookups work. Pass `--agent claude-code`, `--agent codex`, or `--agent all` to
+choose. A collaborator with a different agent runs
+`litschema skills install --local` in the project to add theirs.
 
 `init` also writes a starter schema and pins the project to the installed
 litschema version; commands refuse to run under any other version until you

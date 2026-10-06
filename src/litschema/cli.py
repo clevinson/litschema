@@ -262,37 +262,14 @@ def _project_skill_destinations(project: Path, agents: list[str] | None = None) 
     return [root / AGENTS[name].skills_dir for name in agents]
 
 
-def _interactive() -> bool:
-    return sys.stdin.isatty()
-
-
 def _choose_agents(explicit: list[str] | None) -> list[str]:
-    """--agent values, else a prompt on a terminal, else the detected agents."""
-    from .agents import AGENTS, UnknownAgentError, detected_agents, parse_agents
+    from .agents import UnknownAgentError, agents_to_set_up
 
     try:
-        if explicit:
-            return parse_agents(explicit)
+        return agents_to_set_up(explicit)
     except UnknownAgentError as exc:
         typer.secho(f"{CROSS} {exc}", fg=typer.colors.RED)
         raise typer.Exit(code=2) from None
-    names = list(AGENTS)
-    default = detected_agents() or names
-    if not _interactive():
-        return default
-    typer.echo("Which coding agents will you use with this project?")
-    for index, name in enumerate(names, start=1):
-        found = " (found on this machine)" if name in detected_agents() else ""
-        typer.echo(f"  {index}) {AGENTS[name].label}{found}")
-    while True:
-        answer = typer.prompt(
-            "Numbers, comma-separated",
-            default=",".join(str(names.index(n) + 1) for n in default),
-        )
-        picks = [part.strip() for part in answer.split(",") if part.strip()]
-        if picks and all(p.isdigit() and 1 <= int(p) <= len(names) for p in picks):
-            return [names[int(p) - 1] for p in dict.fromkeys(picks)]
-        typer.echo(f"  enter numbers from 1 to {len(names)}, like 1,2")
 
 
 def _install_skill_dirs(
@@ -1161,8 +1138,8 @@ def skills_install(
     local: bool = typer.Option(
         False,
         "--local",
-        help="Install into the current project, for the agents listed under `agents:` "
-        "in litschema.yaml (.claude/skills for Claude Code, .agents/skills for Codex)",
+        help="Install into the current project for each agent whose config directory "
+        "exists (.claude/skills for Claude Code, .agents/skills for Codex)",
     ),
     experimental: bool = typer.Option(
         False, "--experimental", help="Also install experimental skills"
@@ -1176,14 +1153,10 @@ def skills_install(
         raise typer.Exit(code=2)
 
     if local:
-        import yaml
-
-        from .agents import project_agents, write_agent_config
+        from .agents import agents_to_set_up, write_agent_config
 
         root = Path.cwd()
-        config = root / "litschema.yaml"
-        raw = yaml.safe_load(config.read_text()) if config.is_file() else {}
-        agents = project_agents(raw if isinstance(raw, dict) else {})
+        agents = agents_to_set_up()
         destinations = _project_skill_destinations(root, agents)
         for path in write_agent_config(root, agents):
             typer.echo(f"{CHECK} wrote {path.relative_to(root)} (network on for DOI lookups)")
@@ -1528,7 +1501,7 @@ def init(
         None,
         "--agent",
         help="Coding agent to set up: claude-code, codex, or all (repeatable). "
-        "Asks when omitted on a terminal; otherwise uses the agents found on this machine.",
+        "Default: every agent whose config directory exists (~/.claude; ~/.codex or ~/.agents).",
     ),
     no_skills: bool = typer.Option(
         False, "--no-skills", help="Skip installing agent skills into the project"
@@ -1582,7 +1555,7 @@ def init(
             )
             raise typer.Exit(code=2)
 
-    from .agents import AGENTS, AGENTS_KEY, write_agent_config
+    from .agents import AGENTS, write_agent_config
 
     agents = _choose_agents(agent)
 
@@ -1600,10 +1573,6 @@ def init(
         'article_store_dir: "data/papers"\n'
         'paper_inbox_dir: "papers-inbox"\n'
         f'{PIN_KEY}: "{installed_version()}"\n'
-        "\n"
-        "# Coding agents this project is set up for: skills and config are\n"
-        "# installed for these. Re-run `litschema skills install --local` after editing.\n"
-        f"{AGENTS_KEY}: [{', '.join(agents)}]\n"
     )
     _write_draft_schema(project)
     _ensure_gitignore_entries(project)
