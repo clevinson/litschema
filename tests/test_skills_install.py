@@ -19,11 +19,11 @@ def test_skills_install_uses_bundled_skills_without_project_config(tmp_path, mon
 
     assert result.exit_code == 0, result.output
     assert (tmp_path / ".claude" / "skills" / "extract-article" / "SKILL.md").is_file()
-    assert (tmp_path / ".claude" / "skills" / "litschema-onboard" / "SKILL.md").is_file()
+    assert (tmp_path / ".claude" / "skills" / "litschema" / "SKILL.md").is_file()
     assert not (tmp_path / ".claude" / "skills" / "litschema-assemble" / "SKILL.md").exists()
     assert not (tmp_path / ".claude" / "skills" / "litschema-builder" / "SKILL.md").exists()
     assert "/extract-article" in result.output
-    assert "/litschema-onboard" in result.output
+    assert "/litschema" in result.output
     assert "/litschema-assemble" not in result.output
     assert "/litschema-builder" not in result.output
     assert "/validate-articles" not in result.output
@@ -76,8 +76,8 @@ def test_skills_install_local_uses_project_claude_skills_dir(tmp_path, monkeypat
 
     assert result.exit_code == 0, result.output
     assert (project / ".claude" / "skills" / "extract-article" / "SKILL.md").is_file()
-    assert (project / ".claude" / "skills" / "litschema-onboard" / "SKILL.md").is_file()
-    assert (project / ".agents" / "skills" / "litschema-onboard" / "SKILL.md").is_file()
+    assert (project / ".claude" / "skills" / "litschema" / "SKILL.md").is_file()
+    assert (project / ".agents" / "skills" / "litschema" / "SKILL.md").is_file()
     assert not (project / ".claude" / "skills" / "litschema-assemble" / "SKILL.md").exists()
     assert not (project / ".claude" / "skills" / "litschema-builder" / "SKILL.md").exists()
     assert not (tmp_path / "home" / ".claude" / "skills").exists()
@@ -125,12 +125,12 @@ def test_bundled_skills_are_included_in_wheel() -> None:
 
     bundled = cli._packaged_skills_dir()
     assert bundled.joinpath("extract-article", "SKILL.md").is_file()
-    assert bundled.joinpath("litschema-onboard", "SKILL.md").is_file()
+    assert bundled.joinpath("litschema", "SKILL.md").is_file()
     assert not bundled.joinpath("litschema-assemble", "SKILL.md").exists()
 
 
 def test_onboard_and_extract_skills_delegate_deterministic_pipeline_steps() -> None:
-    onboard = (REPO_ROOT / "skills" / "litschema-onboard" / "SKILL.md").read_text()
+    onboard = (REPO_ROOT / "skills" / "litschema" / "SKILL.md").read_text()
     extract = (REPO_ROOT / "skills" / "extract-article" / "SKILL.md").read_text()
 
     assert "litschema assemble" in onboard
@@ -158,7 +158,7 @@ def test_extract_skill_backfills_bib_metadata_via_meta_cli() -> None:
 
 
 def test_onboard_skill_sweeps_registry_sync_after_batch() -> None:
-    onboard = (REPO_ROOT / "skills" / "litschema-onboard" / "SKILL.md").read_text()
+    onboard = (REPO_ROOT / "skills" / "litschema" / "SKILL.md").read_text()
 
     # The batch sweep runs AFTER extraction (DOIs enter blocks via extraction
     # backfill), not at intake where fresh repos have none.
@@ -168,7 +168,7 @@ def test_onboard_skill_sweeps_registry_sync_after_batch() -> None:
 
 
 def test_skill_setup_gates_run_the_path_cli_and_stop_on_version_mismatch() -> None:
-    onboard = (REPO_ROOT / "skills" / "litschema-onboard" / "SKILL.md").read_text()
+    onboard = (REPO_ROOT / "skills" / "litschema" / "SKILL.md").read_text()
     extract = (REPO_ROOT / "skills" / "extract-article" / "SKILL.md").read_text()
 
     for skill in (onboard, extract):
@@ -189,7 +189,7 @@ def test_skill_setup_gates_run_the_path_cli_and_stop_on_version_mismatch() -> No
 
 def test_onboard_teaches_inlining_for_nested_repeating_structures() -> None:
     """The trap is prevented where schemas are authored, not only detected later."""
-    onboard = (REPO_ROOT / "skills" / "litschema-onboard" / "SKILL.md").read_text()
+    onboard = (REPO_ROOT / "skills" / "litschema" / "SKILL.md").read_text()
 
     assert "inlined_as_list: true" in onboard
     # Stated in the schema-drafting phase, before validation runs.
