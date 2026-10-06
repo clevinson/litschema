@@ -365,3 +365,38 @@ def harvest(
     return stats
 
 
+def sync_pending(cfg: LitSchemaConfig, *, email: str | None = None) -> dict:
+    """Fetch metadata for DOIs an agent recorded but couldn't look up.
+
+    Only `auto` metadata with a DOI and no cached response is fetched, so manual
+    edits and already-synced articles are never touched. Stops at the first
+    network failure: offline, every other lookup would fail the same way.
+    """
+    cache_dir = harvest_cache_dir(cfg, "openalex")
+    stats = {"synced": 0, "not_found": 0, "offline": False}
+    for metadata_path in sorted(iter_metadata_paths(cfg)):
+        article_id = metadata_path.parent.name
+        manifest = article_files(cfg, article_id).read_metadata()
+        if read_bib_metadata(manifest).get("bib_source") != "auto":
+            continue
+        doi = _manifest_doi(manifest)
+        if not doi or (cache_dir / f"{doi_to_slug(doi)}.json").exists():
+            continue
+        try:
+            raw = fetch_openalex(doi, email=email)
+        except RegistryUnavailableError:
+            stats["offline"] = True
+            break
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        out_path = cache_dir / f"{doi_to_slug(doi)}.json"
+        if raw is None:
+            stats["not_found"] += 1
+            out_path.write_text(json.dumps({"doi": doi, "error": "not_found"}))
+            continue
+        extracted = extract_metadata(raw)
+        extracted["_source_doi"] = doi
+        if _enrich_article(cfg, article_id, extracted):
+            out_path.write_text(json.dumps(extracted, indent=2, ensure_ascii=False))
+            stats["synced"] += 1
+        time.sleep(RATE_LIMIT_DELAY)
+    return stats

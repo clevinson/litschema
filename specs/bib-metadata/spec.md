@@ -83,6 +83,12 @@ framework.)
   `manual`; `--refresh` re-fetches past cached responses and `not_found`
   markers. Transient registry failures are counted (`errors`) and never
   cached, so affected articles stay retryable.
+- `litschema verify` start: in a background thread, fetches metadata for
+  articles whose block is `auto` with a DOI and no cached response (DOIs an
+  agent recorded but couldn't look up, e.g. in a sandbox without network). It
+  never touches `manual` or already-synced articles, stops at the first
+  transient failure, and prints how many it fetched or that OpenAlex was
+  unreachable.
 
 **HTTP API** (verify webapp; in-process library calls, never the CLI):
 

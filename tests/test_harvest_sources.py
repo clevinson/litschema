@@ -441,3 +441,74 @@ def test_harvest_applies_cached_response_without_fetching(tmp_path: Path, monkey
     )
     assert manifest["bib_metadata"]["title"] == "OpenAlex title"
     assert manifest["bib_metadata"]["bib_source"] == "doi"
+
+
+def test_sync_pending_fetches_only_unsynced_auto_dois(tmp_path: Path, monkeypatch) -> None:
+    cfg = _cfg(tmp_path)
+    _write_manifest(cfg, "pending", {"id": "pending", "bib_metadata": {
+        "doi": "10.1234/pending", "bib_source": "auto"}})
+    _write_manifest(cfg, "manual", {"id": "manual", "bib_metadata": {
+        "doi": "10.1234/manual", "bib_source": "manual"}})
+    _write_manifest(cfg, "no-doi", {"id": "no-doi", "bib_metadata": {
+        "title": "x", "bib_source": "auto"}})
+    _write_manifest(cfg, "done", {"id": "done", "bib_metadata": {
+        "doi": "10.1234/done", "bib_source": "auto"}})
+    cache = openalex_harvest.harvest_cache_dir(cfg, "openalex")
+    cache.mkdir(parents=True)
+    (cache / f"{openalex_harvest.doi_to_slug('10.1234/done')}.json").write_text("{}")
+    fetched = []
+    monkeypatch.setattr(openalex_harvest.time, "sleep", lambda _: None)
+    monkeypatch.setattr(
+        openalex_harvest, "fetch_openalex",
+        lambda doi, email=None: fetched.append(doi) or _fake_fetch(doi),
+    )
+
+    stats = openalex_harvest.sync_pending(cfg)
+
+    assert fetched == ["10.1234/pending"]
+    assert stats == {"synced": 1, "not_found": 0, "offline": False}
+    block = article_files(cfg, "pending").read_metadata()["bib_metadata"]
+    assert block["title"] == "OpenAlex title"
+    # A second start has nothing to do.
+    assert openalex_harvest.sync_pending(cfg)["synced"] == 0
+    assert fetched == ["10.1234/pending"]
+
+
+def test_sync_pending_stops_at_the_first_network_failure(tmp_path: Path, monkeypatch) -> None:
+    cfg = _cfg(tmp_path)
+    for name in ("a", "b"):
+        _write_manifest(cfg, name, {"id": name, "bib_metadata": {
+            "doi": f"10.1234/{name}", "bib_source": "auto"}})
+    calls = []
+
+    def offline(doi, email=None):
+        calls.append(doi)
+        raise openalex_harvest.RegistryUnavailableError("offline")
+
+    monkeypatch.setattr(openalex_harvest, "fetch_openalex", offline)
+
+    stats = openalex_harvest.sync_pending(cfg)
+
+    assert stats["offline"] is True
+    assert len(calls) == 1
+    # Nothing cached, so the next start retries.
+    assert not openalex_harvest.harvest_cache_dir(cfg, "openalex").exists() or not any(
+        openalex_harvest.harvest_cache_dir(cfg, "openalex").iterdir()
+    )
+
+
+def test_verify_start_reports_the_dois_it_synced(tmp_path: Path, monkeypatch, capsys) -> None:
+    from litschema import cli
+
+    results = iter([
+        {"synced": 2, "not_found": 0, "offline": False},
+        {"synced": 0, "not_found": 0, "offline": True},
+    ])
+    monkeypatch.setattr(openalex_harvest, "sync_pending", lambda cfg: next(results))
+
+    cli._sync_pending_dois(_cfg(tmp_path))
+    cli._sync_pending_dois(_cfg(tmp_path))
+
+    out = capsys.readouterr().out
+    assert "fetched metadata for 2 DOI(s) from OpenAlex" in out
+    assert "DOI lookups skipped: OpenAlex is unreachable" in out
