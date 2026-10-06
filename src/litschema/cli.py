@@ -1577,7 +1577,7 @@ def init(
     )
     if onboard_available:
         typer.echo(
-            "  3. Open this folder in your agent (Claude Code, Codex, or their desktop apps)"
+            "  3. Open this folder in your coding agent (Claude Code or Codex, CLI or app)"
         )
         typer.echo(
             "     and ask it to run the litschema-onboard skill: it drafts your schema with"

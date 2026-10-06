@@ -1,9 +1,9 @@
 # Quickstart
 
-You need Python 3.13+, [uv](https://docs.astral.sh/uv/), and a coding agent
-logged in to your account: [Claude Code](https://claude.com/claude-code) or
-[Codex](https://developers.openai.com/codex), in the terminal or the desktop
-app.
+You need Python 3.13+, [uv](https://docs.astral.sh/uv/), and a coding-agent
+harness logged in to your account: [Claude Code](https://claude.com/claude-code)
+or [Codex](https://developers.openai.com/codex) today. You can work in its CLI
+or its desktop app; grading calls the CLI, so install that too.
 
 ## Install
 

@@ -21,9 +21,9 @@ it:
 
 ![Reviewing one paper: the rendered text with cited lines highlighted, and the extracted fields with the grader's confidence](assets/audit.png)
 
-Everything runs on your machine. Models run through the coding agent you
-already use, [Claude Code](https://claude.com/claude-code) or
-[Codex](https://developers.openai.com/codex), under your own login. The only
+Everything runs on your machine, using the coding-agent harnesses you already
+have ([Claude Code](https://claude.com/claude-code) or
+[Codex](https://developers.openai.com/codex) today) under your own login. The only
 other network calls are optional DOI lookups.
 
 !!! warning "Alpha software"
