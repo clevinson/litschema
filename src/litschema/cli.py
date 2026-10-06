@@ -398,9 +398,29 @@ def verify(
     ),
 ):
     project = _require_project(ctx)
+    import threading
+
     from .webapp import app as webapp_app
 
+    threading.Thread(target=_sync_pending_dois, args=(project.config,), daemon=True).start()
     webapp_app.run_app(project.config, port=port, open_browser=open_browser)
+
+
+def _sync_pending_dois(cfg) -> None:
+    """Look up DOIs that extraction recorded but couldn't fetch, e.g. offline."""
+    from .ingest import openalex_harvest
+
+    try:
+        stats = openalex_harvest.sync_pending(cfg)
+    except Exception:
+        import logging
+
+        logging.getLogger(__name__).exception("DOI sync on verify start failed")
+        return
+    if stats["synced"]:
+        typer.echo(f"{CHECK} fetched metadata for {stats['synced']} DOI(s) from OpenAlex")
+    if stats["offline"]:
+        typer.echo(f"{DIM}DOI lookups skipped: OpenAlex is unreachable{RESET}")
 
 
 @app.command(

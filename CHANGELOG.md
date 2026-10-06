@@ -53,6 +53,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ### Added
 
+- `litschema verify` looks up DOIs that extraction recorded but couldn't fetch
+  (for example offline or in a sandbox without network) when it starts. It
+  only touches agent-written metadata, never your edits, and stops quietly
+  when OpenAlex is unreachable.
 - `litschema grade` can run through Codex (`codex exec`) with GPT models as
   well as Claude Code. Pin the harness and model with `models.grade` in
   `litschema.yaml`; `--harness` and `--model` override it. `init` writes
