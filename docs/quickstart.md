@@ -58,8 +58,11 @@ that have the most flags. See [Reviewing](reviewing.md).
 ## Export
 
 ```bash
-litschema export -f csv -o reviewed.csv
+litschema export -f csv -o data.csv --audit-output audit.jsonl
 ```
 
 The export applies your corrections and drops removed values. It writes JSONL
-by default, or CSV for pandas or R.
+by default, or CSV for pandas or R. It includes values you haven't reviewed.
+`audit.jsonl` has one record per paper: run, model, DOI, review status
+(`complete`, `partial`, or `unreviewed`), grade flags, and your review entries.
+Join it to the data on `article_id`.
