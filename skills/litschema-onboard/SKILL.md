@@ -150,7 +150,7 @@ Tell the user in one line when their papers are in and ready.
 
 1. Pick ONE of the papers you skimmed. Extract it with the extract-article
    skill (its SKILL.md lives under `.claude/skills/` or `.agents/skills/` in
-   the project, or the same folders in the home directory for global installs;
+   the project, or `~/.claude/skills/` or `~/.codex/skills/` for global installs;
    it handles the extraction, reasoning, and validation mechanics). If you dispatch it as a subagent, you
    publish the result yourself — see Phase D.2 for why and how.
 2. Offer to open the review app (one question): "Want me to launch the review

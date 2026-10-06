@@ -370,16 +370,18 @@ def resolve_skill_file(cfg: LitSchemaConfig, override: Path | None = None) -> Pa
     candidates = [
         cfg.project_root / ".claude" / "skills" / "extract-article" / "SKILL.md",
         cfg.project_root / ".agents" / "skills" / "extract-article" / "SKILL.md",
-        Path.home() / ".claude" / "skills" / "extract-article" / "SKILL.md",
-        Path.home() / ".agents" / "skills" / "extract-article" / "SKILL.md",
+        Path(os.environ.get("CLAUDE_CONFIG_DIR") or Path.home() / ".claude")
+        / "skills" / "extract-article" / "SKILL.md",
+        Path(os.environ.get("CODEX_HOME") or Path.home() / ".codex")
+        / "skills" / "extract-article" / "SKILL.md",
     ]
     for candidate in candidates:
         if candidate.is_file():
             return candidate
     raise RunPublishError(
         "cannot resolve the conducting skill file; pass --skill-file "
-        "(looked for extract-article/SKILL.md under .claude/skills and .agents/skills "
-        "in the project and home)"
+        "(looked for extract-article/SKILL.md in the project's .claude/skills and "
+        ".agents/skills, then the global Claude Code and Codex skill dirs)"
     )
 
 

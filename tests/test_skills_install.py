@@ -60,7 +60,7 @@ def test_skills_install_agent_both_creates_global_destinations(tmp_path, monkeyp
 
     assert result.exit_code == 0, result.output
     assert (tmp_path / ".claude" / "skills" / "extract-article" / "SKILL.md").is_file()
-    assert (tmp_path / ".agents" / "skills" / "extract-article" / "SKILL.md").is_file()
+    assert (tmp_path / ".codex" / "skills" / "extract-article" / "SKILL.md").is_file()
 
 
 def test_skills_install_local_uses_project_claude_skills_dir(tmp_path, monkeypatch) -> None:

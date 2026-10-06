@@ -238,13 +238,14 @@ def _skill_sources(*, experimental: bool = False) -> list[Path]:
 
 def _agent_skill_destinations(agent: str) -> list[Path]:
     home = Path.home()
-    destinations = {
-        "claude": home / ".claude" / "skills",
-        "codex": home / ".agents" / "skills",
+    config_dirs = {
+        "claude": Path(os.environ.get("CLAUDE_CONFIG_DIR") or home / ".claude"),
+        "codex": Path(os.environ.get("CODEX_HOME") or home / ".codex"),
     }
+    destinations = {name: path / "skills" for name, path in config_dirs.items()}
     agent = agent.lower()
     if agent == "auto":
-        return [path for name, path in destinations.items() if (home / f".{name}").exists()]
+        return [destinations[name] for name, path in config_dirs.items() if path.exists()]
     if agent == "both":
         return [destinations["claude"], destinations["codex"]]
     if agent in destinations:
