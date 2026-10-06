@@ -76,7 +76,7 @@ def fake_claude(tmp_path: Path, monkeypatch) -> Path:
     log = tmp_path / "claude-calls.jsonl"
     monkeypatch.setenv("PATH", f"{bin_dir}:/usr/bin:/bin")
     monkeypatch.setenv("FAKE_CLAUDE_LOG", str(log))
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-should-not-leak")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
     monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://example.invalid")
     return log
 
@@ -322,18 +322,20 @@ def test_reported_model_comes_from_model_usage(model_usage, expected) -> None:
     assert grading.reported_model({"modelUsage": model_usage}) == expected
 
 
-def test_grader_env_strips_api_credentials() -> None:
-    env = grading.grader_env(
-        {
-            "ANTHROPIC_API_KEY": "k",
-            "ANTHROPIC_AUTH_TOKEN": "t",
-            "ANTHROPIC_BASE_URL": "u",
-            "ANTHROPIC_MODEL": "kept",
-            "HOME": "/home/x",
-        }
-    )
-
-    assert env == {"ANTHROPIC_MODEL": "kept", "HOME": "/home/x"}
+@pytest.mark.parametrize(
+    ("env", "expected"),
+    [
+        ({}, None),
+        ({"ANTHROPIC_BASE_URL": "u"}, None),
+        ({"ANTHROPIC_API_KEY": "k"}, "ANTHROPIC_API_KEY is set, so claude bills the API for grading"),
+        (
+            {"ANTHROPIC_API_KEY": "k", "ANTHROPIC_AUTH_TOKEN": "t"},
+            "ANTHROPIC_API_KEY and ANTHROPIC_AUTH_TOKEN are set, so claude bills the API for grading",
+        ),
+    ],
+)
+def test_api_billing_notice(env, expected) -> None:
+    assert grading.api_billing_notice(env) == expected
 
 
 # ── storage ─────────────────────────────────────────────────────────────────
@@ -449,7 +451,7 @@ def test_grade_writes_a_grade_beside_the_run(project, fake_claude) -> None:
     }
 
 
-def test_grade_invokes_claude_without_api_credentials(project, fake_claude) -> None:
+def test_grade_invokes_claude_with_the_shell_credentials(project, fake_claude) -> None:
     assert _grade(project, ARTICLE, "--model", "claude-haiku-4-5").exit_code == 0
 
     [call] = _calls(fake_claude)
@@ -466,9 +468,8 @@ def test_grade_invokes_claude_without_api_credentials(project, fake_claude) -> N
     assert args[args.index("--add-dir") + 1] == article_dir
     assert "--bare" not in args
     assert Path(call["cwd"]).resolve() == Path(article_dir)
-    assert not {"ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL"} & set(
-        call["env"]
-    )
+    # The grader runs with the user's credentials, like extraction does.
+    assert {"ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL"} <= set(call["env"])
 
 
 def test_grade_run_option_grades_a_named_run(project, fake_claude) -> None:
@@ -887,3 +888,19 @@ def test_codex_without_a_model_exits_2(project, fake_codex) -> None:
 
     assert result.exit_code == 2
     assert "needs a model" in result.output
+
+
+def test_grade_notes_when_claude_will_bill_the_api(project, fake_claude) -> None:
+    result = _grade(project, ARTICLE)
+
+    assert result.exit_code == 0
+    assert "note: ANTHROPIC_API_KEY is set, so claude bills the API for grading" in result.output
+
+
+def test_codex_grading_prints_no_anthropic_note(project, fake_codex, monkeypatch) -> None:
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+
+    result = _grade(project, ARTICLE, "--harness", "codex", "--model", "gpt-x")
+
+    assert result.exit_code == 0, result.output
+    assert "bills the API" not in result.output

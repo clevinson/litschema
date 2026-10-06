@@ -53,7 +53,9 @@ models:
     model: gpt-6-astra
 ```
 
-`--harness` and `--model` override the pin for one run.
+`--harness` and `--model` override the pin for one run. The grader pays the way
+your agent does: your subscription, or an API key or gateway set in your
+shell, in which case `grade` says so before it starts.
 
 ## Review
 
