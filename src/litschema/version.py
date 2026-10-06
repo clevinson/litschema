@@ -17,6 +17,9 @@ from urllib.parse import unquote, urlparse
 from .config import LitSchemaConfig
 
 PIN_KEY = "litschema_version"
+#: Where agents look for project skills: Claude Code, then Codex and others
+#: that read `.agents/skills`.
+PROJECT_SKILL_DIRS = (Path(".claude") / "skills", Path(".agents") / "skills")
 SKILL_STAMP_KEY = "litschema_version"
 VERSION_MISMATCH_EXIT_CODE = 3
 
@@ -151,15 +154,16 @@ def check_project(cfg: LitSchemaConfig, skill_names: list[str]) -> VersionCheck:
             f"{cfg.config_path.name}, then run `litschema skills install --local --force`"
         )
 
-    skills_dir = cfg.project_root / ".claude" / "skills"
     stale = []
-    for name in skill_names:
-        skill_md = skills_dir / name / "SKILL.md"
-        # Symlinked installs track the package itself; only copies can drift.
-        if (skills_dir / name).is_symlink() or not skill_md.is_file():
-            continue
-        if read_skill_stamp(skill_md) != pin:
-            stale.append(name)
+    for relative in PROJECT_SKILL_DIRS:
+        skills_dir = cfg.project_root / relative
+        for name in skill_names:
+            skill_md = skills_dir / name / "SKILL.md"
+            # Symlinked installs track the package itself; only copies can drift.
+            if (skills_dir / name).is_symlink() or not skill_md.is_file():
+                continue
+            if read_skill_stamp(skill_md) != pin and name not in stale:
+                stale.append(name)
     if stale:
         errors.append(
             f"project skills ({', '.join(stale)}) don't match litschema {pin}; "

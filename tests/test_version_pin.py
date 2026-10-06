@@ -119,9 +119,10 @@ def test_unpinned_project_warns_and_runs(tmp_path) -> None:
     assert "has no litschema_version" in result.stderr
 
 
-def test_stale_project_skills_stop_until_reinstalled(tmp_path, monkeypatch) -> None:
+@pytest.mark.parametrize("skills_dir", [".claude", ".agents"])
+def test_stale_project_skills_stop_until_reinstalled(tmp_path, monkeypatch, skills_dir) -> None:
     project = _init(tmp_path)
-    skill_md = project / ".claude" / "skills" / "extract-article" / "SKILL.md"
+    skill_md = project / skills_dir / "skills" / "extract-article" / "SKILL.md"
     stamp_skill(skill_md, "0.0.1")
 
     result = _run(project, "status")

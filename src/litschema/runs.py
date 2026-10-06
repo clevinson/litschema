@@ -369,14 +369,17 @@ def resolve_skill_file(cfg: LitSchemaConfig, override: Path | None = None) -> Pa
         return override
     candidates = [
         cfg.project_root / ".claude" / "skills" / "extract-article" / "SKILL.md",
+        cfg.project_root / ".agents" / "skills" / "extract-article" / "SKILL.md",
         Path.home() / ".claude" / "skills" / "extract-article" / "SKILL.md",
+        Path.home() / ".agents" / "skills" / "extract-article" / "SKILL.md",
     ]
     for candidate in candidates:
         if candidate.is_file():
             return candidate
     raise RunPublishError(
         "cannot resolve the conducting skill file; pass --skill-file "
-        "(looked for .claude/skills/extract-article/SKILL.md in the project and home)"
+        "(looked for extract-article/SKILL.md under .claude/skills and .agents/skills "
+        "in the project and home)"
     )
 
 

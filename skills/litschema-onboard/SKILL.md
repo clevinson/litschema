@@ -149,9 +149,9 @@ Tell the user in one line when their papers are in and ready.
 ## Phase C — pilot (one paper first)
 
 1. Pick ONE of the papers you skimmed. Extract it with the extract-article
-   skill (its SKILL.md lives under `.claude/skills/` for project-local
-   installs or `~/.claude/skills/` for global ones; it handles the extraction,
-   reasoning, and validation mechanics). If you dispatch it as a subagent, you
+   skill (its SKILL.md lives under `.claude/skills/` or `.agents/skills/` in
+   the project, or the same folders in the home directory for global installs;
+   it handles the extraction, reasoning, and validation mechanics). If you dispatch it as a subagent, you
    publish the result yourself — see Phase D.2 for why and how.
 2. Offer to open the review app (one question): "Want me to launch the review
    app for you, or start it yourself?" — options roughly **"Launch it"** /
@@ -176,7 +176,7 @@ Tell the user in one line when their papers are in and ready.
    (`litschema runs list` shows nothing for them), or whose active run is an
    error marker — failed papers are retried, not counted as done.
 2. Extract each via the extract-article skill. Dispatch each paper as its own
-   subagent (Task tool) when available so your context stays small; otherwise
+   subagent when your harness supports them so your context stays small; otherwise
    run sequentially. A few in flight at most.
 
    **You publish, not the subagent.** Tell each subagent explicitly that a
@@ -212,8 +212,8 @@ Tell the user, briefly:
   header shows what each paper IS (verified when fetched by DOI, editable
   otherwise); the body is per-field accept / edit / sign-off of what it SAYS.
 - Optional: `litschema grade --all` has a second model check each value
-  against its cited lines (it uses their `claude` login; add
-  `--model claude-haiku-4-5` for a cheap pass). The app then lists flagged
+  against its cited lines (it runs through their own agent CLI login;
+  `--model` picks a cheaper model). The app then lists flagged
   fields first in each paper and counts them on the overview.
 - Their dataset lives in `data/papers/<id>/`, in git, reproducible.
 - Re-running this later is safe — finished work is skipped.

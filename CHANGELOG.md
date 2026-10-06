@@ -60,6 +60,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ### Changed
 
+- `init` and `skills install --local` put the skills in `.agents/skills/` as
+  well as `.claude/skills/`, so Codex finds them in the project. `skills
+  install --agent codex` now writes `~/.agents/skills/`, where Codex reads
+  global skills. The version pin checks both project copies. Existing projects
+  get the Codex copy from `litschema skills install --local --force`.
+- Docs, `init`'s next steps, and the onboarding skill name Claude Code and
+  Codex instead of Claude Code alone.
 - `export` help and docs say what it writes: every value with review
   corrections applied, including unreviewed ones. It prints how many articles
   are fully, partly, and not reviewed.

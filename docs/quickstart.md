@@ -1,7 +1,9 @@
 # Quickstart
 
-You need Python 3.13+, [uv](https://docs.astral.sh/uv/), and
-[Claude Code](https://claude.com/claude-code) logged in to your account.
+You need Python 3.13+, [uv](https://docs.astral.sh/uv/), and a coding agent
+logged in to your account: [Claude Code](https://claude.com/claude-code) or
+[Codex](https://developers.openai.com/codex), in the terminal or the desktop
+app.
 
 ## Install
 
@@ -18,23 +20,24 @@ cd my-review
 ```
 
 `init` writes `litschema.yaml`, a starter schema, and the agent skills into
-`.claude/skills/`. It also pins the project to the installed litschema version;
+`.claude/skills/` (Claude Code) and `.agents/skills/` (Codex). It also pins the project to the installed litschema version;
 commands refuse to run under any other version until you edit the pin.
 
 Copy your PDFs into `papers-inbox/`.
 
 ## Draft a schema and extract
 
-Open Claude Code in the project and run the onboarding skill:
-
-```text
-/litschema-onboard
-```
+Open the project folder in your agent and run the onboarding skill:
+`/litschema-onboard` in Claude Code, `$litschema-onboard` in Codex. Asking it
+to "set up litschema" works too.
 
 It reads a few of your papers, drafts a LinkML schema with you, converts the
 PDFs to text, extracts one paper as a pilot so you can adjust the schema, and
-then extracts the rest. To extract one paper by hand, run
-`/extract-article <article-id>`.
+then extracts the rest. To extract one paper by hand, ask for the
+`extract-article` skill with the article id.
+
+Claude Code is tested end to end. Codex runs the same skills and commands, but
+its extraction hasn't had a full pilot yet.
 
 ## Grade
 

@@ -23,6 +23,7 @@ def test_init_scaffolds_standalone_project(tmp_path) -> None:
     assert not (project / "data" / "sources" / "articles.csv").exists()
     assert (project / "papers-inbox").is_dir()
     assert (project / ".claude" / "skills" / "extract-article" / "SKILL.md").is_file()
+    assert (project / ".agents" / "skills" / "extract-article" / "SKILL.md").is_file()
     gitignore = (project / ".gitignore").read_text()
     assert "papers-inbox/*.pdf" in gitignore
     assert "papers-inbox/.processed/*.pdf" in gitignore
@@ -240,7 +241,7 @@ def test_init_no_skills_opts_out(tmp_path) -> None:
     # the install step comes first, the slash command only after it.
     assert "litschema skills install --local" in result.output
     assert result.output.index("skills install --local") < result.output.index(
-        "/litschema-onboard"
+        "litschema-onboard skill"
     )
 
 
