@@ -43,7 +43,7 @@ litschema grade --all
 ```
 
 A second model scores each value against its cited lines, once per paper,
-through a coding agent you already have (Claude Code or Codex). To pin the
+through a configurable coding agent (Claude Code or Codex). To pin the
 grader to a specific harness and model, set it in `litschema.yaml`:
 
 ```yaml
