@@ -30,14 +30,15 @@ Code or Codex), paid by your own subscription or API key.
 uv tool install litschema
 litschema init my-review && cd my-review
 # copy PDFs into papers-inbox/, open the folder in your coding agent,
-# and run the litschema-onboard skill
+# and run the litschema skill
 litschema grade --all        # a second model scores every value
 litschema verify             # review in your browser
 litschema export -f csv -o data.csv --audit-output audit.jsonl
 ```
 
-The onboarding skill drafts a schema with you from your own papers, extracts
-one paper as a pilot so you can adjust it, then extracts the rest. The
+The `litschema` skill designs a schema with you from your own papers, extracts
+one paper as a pilot so you can adjust it, then extracts the rest. Run it again
+any time to add papers or pick up where you left off. The
 [quickstart](https://litschema.readthedocs.io/en/latest/quickstart/) walks
 through each step.
 
