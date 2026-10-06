@@ -78,3 +78,10 @@ with `tree_root: true`. Validation is closed-world: litschema rejects any field
 the schema doesn't define. `litschema mcp` (experimental) builds a DuckDB
 database from the schema and the reviewed data and serves it read-only over
 MCP.
+
+## Known limits
+
+Tables that a PDF stores as images arrive as figures, so a value from one cites
+the figure rather than a row. The
+[changelog](https://github.com/clevinson/litschema/blob/main/CHANGELOG.md)
+lists the rest for each release.
