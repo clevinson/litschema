@@ -66,10 +66,10 @@ run beside the old one. PDFs and the text converted from them stay out of git.
 
 - **The agent extracts; litschema checks.** Validation rejects fields your
   schema doesn't define and citations to lines that don't exist.
-- **A second model grades** each value against its cited lines. You can pin
-  the grader to a specific harness and model. In an 18-paper pilot, 85% of stated values scored 0.9 or
-  higher and 29% of inferred values scored below 0.6. The review app shows
-  flagged values first.
+- **A second model grades** each value against its cited lines, and the review
+  app shows flagged values first. You can pin the grader to a specific harness
+  and model. In an 18-paper pilot, 85% of stated values scored 0.9 or higher
+  and 29% of inferred values scored below 0.6.
 - **You review in a local app.** Each verify, correction, or removal is one
   entry in `review.json`, so the git diff is the audit log.
 - **Export** writes the values with your corrections, plus one provenance
