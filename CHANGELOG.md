@@ -53,6 +53,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ### Added
 
+- `litschema grade` can run through Codex (`codex exec`) with GPT models as
+  well as Claude Code. Pin the harness and model with `models.grade` in
+  `litschema.yaml`; `--harness` and `--model` override it. `init` writes
+  Claude Code with Sonnet. Codex needs a model set, gets cited figures as
+  attached images, and records usage but no cost.
 - `litschema export --audit-output PATH` writes one JSONL record per article:
   DOI, run, model, litschema version, schema hash, review status (`complete`,
   `partial`, `unreviewed`) with counts, the current grade's flags, and the
@@ -60,10 +65,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ### Changed
 
+- The grading rubric no longer names Claude Code's Read tool, so its hash
+  changed: `grade --all` regrades runs graded before this release.
 - `export` help and docs say what it writes: every value with review
   corrections applied, including unreviewed ones. It prints how many articles
   are fully, partly, and not reviewed.
-  
+
 ### Fixed
 
 - The version-pin error suggests `uv tool install litschema==<pin>` only when

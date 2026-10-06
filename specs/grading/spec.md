@@ -34,7 +34,8 @@ by `specs/verifier/spec.md`.
 ## Command
 
 ```
-litschema grade <article_id> | --all [--run <run-id>] [--model <model>] [--force] [--concurrency N]
+litschema grade <article_id> | --all [--run <run-id>] [--harness claude-code|codex]
+  [--model <model>] [--force] [--concurrency N]
 ```
 
 - WHEN an article id is given THEN its active run is graded, or the run named by
@@ -46,8 +47,19 @@ litschema grade <article_id> | --all [--run <run-id>] [--model <model>] [--force
   reported) under the same rubric hash. `--force` grades those too. Articles
   without an active run and error-marker runs are skipped.
 - An article id and `--all` together, neither, or `--run` with `--all` exit 2.
-- `--model` defaults to `claude-sonnet-5`; `--model claude-haiku-4-5` is a
-  cheap pass. `--concurrency` (default 2) is the number of runs graded at once.
+- The harness and model come from `--harness` and `--model`, then
+  `models.grade` in `litschema.yaml`, then `claude-code` with
+  `claude-sonnet-5`. A `models.grade.model` applies only to the harness it is
+  configured with. `codex` has no default model; without one the command exits
+  2. An unknown harness exits 2. `--concurrency` (default 2) is the number of
+  runs graded at once.
+
+```yaml
+models:
+  grade:
+    harness: codex        # or claude-code
+    model: gpt-6-astra
+```
 - The verb enforces the project's version pin like every project verb.
 - Exit 0 when every requested run was graded with every field graded; 1
   otherwise, naming the articles that were not fully graded.
@@ -57,7 +69,11 @@ estimate, and wall time; `--all` ends with a total.
 
 ## The grader call
 
-One `claude -p` call per run, through the user's own Claude Code install:
+One call per run, through the user's own agent CLI and its login.
+
+### claude-code
+
+
 
 ```
 claude -p "Grade the fields described on stdin." --model <model>
@@ -69,13 +85,31 @@ claude -p "Grade the fields described on stdin." --model <model>
 The prompt goes on stdin; the working directory is the article directory.
 `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, and `ANTHROPIC_BASE_URL` are
 removed from the child environment so the call uses the logged-in account.
-`--bare` is never passed. A missing `claude` on PATH exits 1 with install
-instructions. A non-zero exit, `is_error: true`, output that is not JSON, or a
+`--bare` is never passed. A non-zero exit, `is_error: true`, output that is not JSON, or a
 result with no usable grades fails that run and writes nothing.
 
-The grade records the harness version from `claude --version` and the model
-from the result's `modelUsage`: the entry with the most output tokens, using its
-`canonicalModel` when present.
+The grade records the model from the result's `modelUsage`: the entry with
+the most output tokens, using its `canonicalModel` when present.
+
+### codex
+
+```
+codex exec --model <model> --sandbox read-only --cd <article dir>
+  --skip-git-repo-check --ephemeral --ignore-user-config --ignore-rules
+  --output-schema <GRADE_SCHEMA file> --output-last-message <reply file>
+  --json [--image=<figure>...] -
+```
+
+The prompt goes on stdin. Cited figure images are attached with `--image`.
+Usage comes from the `turn.completed` event; there is no cost estimate. Codex
+doesn't report the model, so `grader.model` is null and `--all` matches on the
+requested model. A non-zero exit, a `turn.failed` or `error` event, or a reply
+that is not JSON fails the run and writes nothing.
+
+### Both
+
+The grade records `grader.harness` and the version `<cli> --version` prints. A
+missing CLI on PATH exits 1 with install instructions.
 
 ## Evidence
 
@@ -92,7 +126,8 @@ The prompt holds the rubric, then one block per reasoning entry, numbered from
   lines of context either side trimmed to 300 characters, gaps shown as `...`,
   at most 40 lines per field and a note of how many more were hidden;
 - a cited figure line (`![](figures/NAME)`) replaced by the image's absolute
-  path, which the grader opens with Read, or marked missing;
+  path, which the grader opens (Claude Code with Read; Codex gets it attached),
+  or marked missing;
 - a note when a citation points past the end of the document, and
   `(no citation)` when there is none.
 
@@ -169,7 +204,8 @@ has no grade of its own.
 ## Out of scope
 
 Changing extractions; choosing between runs or comparing models; calibrating
-the grader against human reviews; grading with agents other than Claude Code.
+the grader against human reviews; grading with agent CLIs other than Claude Code
+and Codex; grading through an API key or gateway.
 
 ## Test obligations
 
@@ -180,7 +216,7 @@ the prompt, with the extractor's basis and note; parsing with missing, extra,
 repeated, invalid, and null-confidence grades; band thresholds and the
 version-1 verdict mapping; the
 reported model; credential stripping; newest-grade selection, stale and corrupt
-grades; and the command end to end against a fake `claude` placed first on
-PATH: the stored record, the exact flags and environment, `--run`, `--all`
+grades; settings precedence and refusals; and the command end to end against a fake
+`claude` or `codex` placed first on PATH: the stored record, the exact flags and environment, `--run`, `--all`
 skipping and `--force`, regrading after a stale grade, ungraded fields, failed
 calls, a missing `claude`, bad selections, and the version pin.

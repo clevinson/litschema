@@ -137,8 +137,9 @@ it loops until both validate. Validation is closed-world: litschema rejects any
 field the schema doesn't define and any citation to a line that doesn't exist.
 
 **A second model grades.** `litschema grade` gives a separate model each value,
-the extractor's basis and note, and the cited lines. It returns the
-probability that the value is correct, with a one-line issue below 0.9. The
+the extractor's basis and note, and the cited lines, through a coding agent you
+already have. It returns the probability that the value is correct, with a
+one-line issue below 0.9. The
 review app puts flagged values first. In an 18-paper pilot, 85% of stated
 values scored 0.9 or higher; 29% of inferred values scored below 0.6.
 

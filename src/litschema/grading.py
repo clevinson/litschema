@@ -17,6 +17,7 @@ import os
 import re
 import shutil
 import subprocess
+import tempfile
 import time
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -31,6 +32,9 @@ GRADE_VERSION = 2
 READABLE_VERSIONS = (1, 2)
 GRADES_DIRNAME = "grades"
 DEFAULT_MODEL = "claude-sonnet-5"
+#: The agent CLIs litschema can grade through, and each one's default model.
+HARNESSES = {"claude-code": DEFAULT_MODEL, "codex": None}
+DEFAULT_HARNESS = "claude-code"
 
 #: Lower bounds of the confidence bands; below `check` is `low`.
 BANDS = {"high": 0.9, "check": 0.6}
@@ -77,7 +81,7 @@ Every grade has an issue: one short line saying what is weakest about the value,
 naming what in the evidence decides it. When nothing is weak, say what supports it.
 
 Figure lines appear as [figure image: PATH]. When one is cited, open the image at PATH
-with the Read tool and judge from it.
+and judge from it.
 Do not use outside knowledge of the paper. Return one grade per field id."""
 
 RUBRIC_SHA256 = "sha256:" + hashlib.sha256(RUBRIC.encode()).hexdigest()
@@ -108,8 +112,47 @@ class GradeError(Exception):
     """A run could not be graded; nothing was written."""
 
 
-class ClaudeNotFoundError(GradeError):
+class HarnessNotFoundError(GradeError):
+    """The grading CLI is not on PATH."""
+
+
+class ClaudeNotFoundError(HarnessNotFoundError):
     """The `claude` CLI is not on PATH."""
+
+
+class GraderConfigError(ValueError):
+    """`models.grade` names an unknown harness or no model."""
+
+
+@dataclass(frozen=True)
+class GraderSettings:
+    harness: str
+    model: str
+
+
+def grader_settings(
+    cfg: LitSchemaConfig, *, harness: str | None = None, model: str | None = None
+) -> GraderSettings:
+    """Command-line options, then `models.grade` in litschema.yaml, then the defaults."""
+    models = cfg.raw.get("models") or {}
+    block = models.get("grade") if isinstance(models, dict) else None
+    block = block or {}
+    if not isinstance(models, dict) or not isinstance(block, dict):
+        raise GraderConfigError("`models.grade` in litschema.yaml must be a mapping")
+    harness = harness or block.get("harness") or DEFAULT_HARNESS
+    if harness not in HARNESSES:
+        raise GraderConfigError(
+            f"unknown grading harness {harness!r}; expected one of: {', '.join(HARNESSES)}"
+        )
+    # A model set for another harness would be passed to the wrong CLI.
+    configured = block.get("model") if (block.get("harness") or DEFAULT_HARNESS) == harness else None
+    model = model or configured or HARNESSES[harness]
+    if not model:
+        raise GraderConfigError(
+            f"grading with {harness} needs a model: set `models.grade.model` in "
+            "litschema.yaml or pass --model"
+        )
+    return GraderSettings(harness=harness, model=str(model))
 
 
 class GradeCorruptError(Exception):
@@ -323,11 +366,31 @@ def claude_executable() -> str:
 
 
 def claude_version(executable: str) -> str | None:
+    return harness_version(executable)
+
+
+def harness_executable(harness: str) -> str:
+    if harness == "claude-code":
+        return claude_executable()
+    path = shutil.which("codex")
+    if path is None:
+        raise HarnessNotFoundError(
+            "codex is not on PATH; install the Codex CLI "
+            "(https://developers.openai.com/codex/cli) and run `codex login`"
+        )
+    return path
+
+
+_VERSION_RE = re.compile(r"\d+\.\d+(?:\.\d+)?\S*")
+
+
+def harness_version(executable: str) -> str | None:
+    """The first version number `<cli> --version` prints."""
     proc = subprocess.run(
         [executable, "--version"], capture_output=True, text=True, env=grader_env(), timeout=60
     )
-    words = proc.stdout.split()
-    return words[0] if proc.returncode == 0 and words else None
+    match = _VERSION_RE.search(proc.stdout) if proc.returncode == 0 else None
+    return match.group(0) if match else None
 
 
 def claude_command(executable: str, model: str, article_dir: Path) -> list[str]:
@@ -383,6 +446,107 @@ def run_claude(executable: str, model: str, prompt: str, article_dir: Path) -> d
     return result
 
 
+@dataclass
+class GraderReply:
+    """What one grading call returned, the same for every harness."""
+
+    structured: object
+    model: str | None
+    usage: dict
+
+
+def codex_command(
+    executable: str, model: str, article_dir: Path, schema: Path, out: Path, images: list[Path]
+) -> list[str]:
+    return [
+        executable,
+        "exec",
+        "--model",
+        model,
+        "--sandbox",
+        "read-only",
+        "--cd",
+        str(article_dir),
+        "--skip-git-repo-check",
+        "--ephemeral",
+        "--ignore-user-config",
+        "--ignore-rules",
+        "--output-schema",
+        str(schema),
+        "--output-last-message",
+        str(out),
+        "--json",
+        *(f"--image={path}" for path in images),
+        "-",
+    ]
+
+
+def run_codex(
+    executable: str, model: str, prompt: str, article_dir: Path, images: list[Path]
+) -> GraderReply:
+    """Run one grading call through `codex exec` and return its structured reply."""
+    with tempfile.TemporaryDirectory(prefix="litschema-grade-") as tmp:
+        schema = Path(tmp) / "schema.json"
+        schema.write_text(json.dumps(GRADE_SCHEMA))
+        out = Path(tmp) / "reply.json"
+        try:
+            proc = subprocess.run(
+                codex_command(executable, model, article_dir, schema, out, images),
+                input=prompt,
+                cwd=article_dir,
+                capture_output=True,
+                text=True,
+                timeout=CLAUDE_TIMEOUT_S,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise GradeError(f"codex did not finish within {CLAUDE_TIMEOUT_S}s") from exc
+        usage: dict = {}
+        error = None
+        for line in proc.stdout.splitlines():
+            try:
+                event = json.loads(line)
+            except ValueError:
+                continue
+            if not isinstance(event, dict):
+                continue
+            if event.get("type") == "turn.completed" and isinstance(event.get("usage"), dict):
+                usage = event["usage"]
+            elif event.get("type") in ("error", "turn.failed"):
+                error = event.get("message") or (event.get("error") or {}).get("message")
+        if proc.returncode != 0 or error:
+            detail = str(error or proc.stderr or proc.stdout).strip()[-500:]
+            raise GradeError(f"codex reported an error: {detail}")
+        try:
+            structured = json.loads(out.read_text())
+        except (OSError, ValueError):
+            raise GradeError("codex returned no JSON reply") from None
+    return GraderReply(
+        structured=structured,
+        model=None,
+        usage={
+            "input_tokens": int(usage.get("input_tokens") or 0),
+            "output_tokens": int(usage.get("output_tokens") or 0),
+            "cache_read_input_tokens": int(usage.get("cached_input_tokens") or 0),
+            "cache_creation_input_tokens": int(usage.get("cache_write_input_tokens") or 0),
+            "cost_estimate_usd": None,
+        },
+    )
+
+
+def cited_figures(targets: list[GradeTarget], lines: list[str], article_dir: Path) -> list[Path]:
+    """Figure images on cited lines, for harnesses that take images as attachments."""
+    found: list[Path] = []
+    for target in targets:
+        for n in cited_lines(target.source_lines):
+            if not 1 <= n <= len(lines):
+                continue
+            for match in _FIGURE_RE.finditer(lines[n - 1]):
+                path = article_dir / match.group(1)
+                if path.is_file() and path not in found:
+                    found.append(path)
+    return found
+
+
 def reported_model(result: dict) -> str | None:
     """The model that did the work: the modelUsage entry with the most output."""
     usage = result.get("modelUsage")
@@ -397,15 +561,14 @@ def reported_model(result: dict) -> str | None:
     return name
 
 
-def parse_grades(result: dict, targets: list[GradeTarget]) -> tuple[list[dict], list[str]]:
+def parse_grades(structured: object, targets: list[GradeTarget]) -> tuple[list[dict], list[str]]:
     """Graded fields in target order, and the paths the grader skipped.
 
     Unknown ids and repeats of an id are ignored; the first grade per id wins.
     """
-    structured = result.get("structured_output")
     grades = structured.get("grades") if isinstance(structured, dict) else None
     if not isinstance(grades, list):
-        raise GradeError("claude returned no structured grades")
+        raise GradeError("the grader returned no structured grades")
     by_id: dict[int, dict] = {}
     for grade in grades:
         if not isinstance(grade, dict):
@@ -436,7 +599,7 @@ def parse_grades(result: dict, targets: list[GradeTarget]) -> tuple[list[dict], 
             entry["issue"] = issue
         fields.append(entry)
     if not fields:
-        raise GradeError("claude graded none of the fields")
+        raise GradeError("the grader graded none of the fields")
     return fields, ungraded
 
 
@@ -573,12 +736,12 @@ def grade_run(
     cfg: LitSchemaConfig,
     run: RunFiles,
     *,
-    model: str,
+    grader: GraderSettings,
     executable: str,
     harness_version: str | None,
     descriptions: dict[str, str] | None = None,
 ) -> GradeOutcome:
-    """Grade one run with `claude -p` and store the result beside it."""
+    """Grade one run through the configured agent CLI and store the result beside it."""
     started = time.monotonic()
     if not run.reasoning.is_file():
         raise GradeError(f"{run.run_id} has no agent-reasoning.json")
@@ -594,8 +757,19 @@ def grade_run(
         descriptions = slot_descriptions(cfg)
     prompt = build_prompt(targets, lines, descriptions, article_dir)
 
-    result = run_claude(executable, model, prompt, article_dir)
-    fields, ungraded = parse_grades(result, targets)
+    model = grader.model
+    if grader.harness == "codex":
+        reply = run_codex(
+            executable, model, prompt, article_dir, cited_figures(targets, lines, article_dir)
+        )
+    else:
+        result = run_claude(executable, model, prompt, article_dir)
+        reply = GraderReply(
+            structured=result.get("structured_output"),
+            model=reported_model(result),
+            usage=_usage(result),
+        )
+    fields, ungraded = parse_grades(reply.structured, targets)
     record = {
         "version": GRADE_VERSION,
         "grade_id": new_run_id(),
@@ -603,10 +777,10 @@ def grade_run(
         "run_id": run.run_id,
         "created_at": datetime.now(UTC).isoformat(timespec="seconds"),
         "grader": {
-            "harness": "claude-code",
+            "harness": grader.harness,
             "harness_version": harness_version,
             "requested_model": model,
-            "model": reported_model(result),
+            "model": reply.model,
             "rubric_sha256": RUBRIC_SHA256,
             "bands": dict(BANDS),
             "litschema_version": installed_version(),
@@ -614,7 +788,7 @@ def grade_run(
         "inputs": hashes,
         "fields": fields,
         "ungraded": ungraded,
-        "usage": _usage(result),
+        "usage": reply.usage,
     }
     path = write_grade(run, record)
     return GradeOutcome(run=run, record=record, path=path, seconds=time.monotonic() - started)
