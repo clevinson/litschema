@@ -42,10 +42,9 @@ then extracts the rest. To extract one paper by hand, run
 litschema grade --all
 ```
 
-The grader is a second model that scores each value against its cited lines.
-It runs once per paper through a coding-agent harness you already have
-installed (Claude Code or Codex today). You can pin the grader to a specific
-harness and model in `litschema.yaml`:
+A second model scores each value against its cited lines, once per paper,
+through a coding agent you already have (Claude Code or Codex). To pin the
+grader to a specific harness and model, set it in `litschema.yaml`:
 
 ```yaml
 models:

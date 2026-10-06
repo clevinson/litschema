@@ -405,7 +405,7 @@ def verify(
 
 @app.command(
     help="Grade extraction runs against their cited evidence with a second model, run "
-    "through a coding-agent harness. Pin the harness and model with `models.grade` in "
+    "through Claude Code or Codex. Pin the harness and model with `models.grade` in "
     "litschema.yaml."
 )
 def grade(

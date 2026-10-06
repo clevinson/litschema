@@ -53,11 +53,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ### Added
 
-- `litschema grade` runs through a choice of coding-agent harness: Claude Code,
-  or now Codex (`codex exec`) with GPT models. Pin the harness and model with
-  `models.grade` in `litschema.yaml`; `--harness` and `--model` override it. `init` writes
-  `models.grade` with Claude Code and Sonnet. Codex needs a model set; it gets
-  cited figures attached as images and records usage but no cost.
+- `litschema grade` can run through Codex (`codex exec`) with GPT models as
+  well as Claude Code. Pin the harness and model with `models.grade` in
+  `litschema.yaml`; `--harness` and `--model` override it. `init` writes
+  Claude Code with Sonnet. Codex needs a model set, gets cited figures as
+  attached images, and records usage but no cost.
 - `litschema export --audit-output PATH` writes one JSONL record per article:
   DOI, run, model, litschema version, schema hash, review status (`complete`,
   `partial`, `unreviewed`) with counts, the current grade's flags, and the
