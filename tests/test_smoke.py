@@ -568,7 +568,7 @@ def test_ci_imports_the_public_surface_from_the_built_wheel() -> None:
     # wheel stands up without the dev group.
     assert "--isolated --no-project" in workflow
     assert "import litschema.analysis" in workflow
-    assert "litschema-onboard" in workflow  # bundled skills ship
+    assert "litschema" in workflow  # bundled skills ship
 
 
 def test_every_module_the_workflows_import_still_exists() -> None:

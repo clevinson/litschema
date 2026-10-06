@@ -60,6 +60,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ### Changed
 
+- The `litschema-onboard` skill is now `litschema` (`/litschema` in Claude
+  Code, `$litschema` in Codex). It starts from wherever the project stands:
+  schema design on a first run, then preparing and extracting new papers,
+  grading, and review. In existing projects, run
+  `litschema skills install --project --force` and delete the old
+  `litschema-onboard` skill folders.
 - `init` and `skills install --project` set the project up for each coding agent
   whose config folder exists, as roborev does: `~/.claude` (or
   `$CLAUDE_CONFIG_DIR`) for Claude Code, `~/.codex` (or `$CODEX_HOME`) or
