@@ -404,8 +404,9 @@ def verify(
 
 
 @app.command(
-    help="Grade extraction runs against their cited evidence with a second model, through "
-    "the Claude Code or Codex CLI. Set the default with `models.grade` in litschema.yaml."
+    help="Grade extraction runs against their cited evidence with a second model, run "
+    "through a coding-agent harness. Pin the harness and model with `models.grade` in "
+    "litschema.yaml."
 )
 def grade(
     ctx: typer.Context,
