@@ -20,6 +20,7 @@ data/papers/<article-id>/
 
 It's all plain JSON, so you can diff it in git. You can commit everything
 except the PDFs, text, and figures, which the default `.gitignore` excludes.
+See [What goes in git](git.md).
 
 ## Runs never change
 
