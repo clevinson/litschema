@@ -1,7 +1,7 @@
 # Quickstart
 
 You need Python 3.13+, [uv](https://docs.astral.sh/uv/), and a coding agent
-logged in to your account.
+set up with your subscription or an API key.
 
 ## Supported coding agents
 

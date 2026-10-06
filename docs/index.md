@@ -23,7 +23,7 @@ it:
 
 Everything runs on your machine, through the coding agents you already have
 ([Claude Code](https://claude.com/claude-code) or
-[Codex](https://developers.openai.com/codex)) under your own login. See
+[Codex](https://developers.openai.com/codex)), paid by your own subscription or API key. See
 [supported coding agents](quickstart.md#supported-coding-agents). The only
 other network calls are optional DOI lookups.
 
