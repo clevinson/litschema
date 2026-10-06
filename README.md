@@ -17,9 +17,9 @@ litschema extracts structured data from scientific papers into a
 - a second model's probability that it's correct;
 - your verdict, once you've reviewed it.
 
-It runs on your machine. Models run through your own Claude Code install; the
-only other network calls are optional DOI lookups and ORCID name lookups in
-the review app. Docs: [litschema.readthedocs.io](https://litschema.readthedocs.io/).
+It runs on your machine, through the coding agents you already have (Claude
+Code or Codex) under your own login; the only other network calls are
+optional DOI lookups and ORCID name lookups in the review app. Docs: [litschema.readthedocs.io](https://litschema.readthedocs.io/).
 
 ## What you get
 
@@ -71,16 +71,18 @@ it's tracked.
 ```bash
 litschema init my-project       # scaffold a project
                                 # copy PDFs into papers-inbox/
-/litschema-onboard              # agent: drafts your schema, pilots, extracts
+                                # ask your agent for litschema-onboard:
+                                #   it drafts your schema, pilots, extracts
 litschema grade --all           # a second model scores every value
 litschema verify                # you: review what was extracted
 litschema export                # values with your corrections
 ```
 
-`init` installs the `/litschema-onboard` skill into `.claude/skills/`. It
-drafts a LinkML schema with you from your own papers, converts the PDFs,
-extracts one paper as a pilot so you can adjust the schema, then extracts the
-rest.
+`init` installs the litschema-onboard skill where Claude Code
+(`.claude/skills/`) and Codex (`.agents/skills/`) look for skills. Run it with
+`/litschema-onboard` in Claude Code or `$litschema-onboard` in Codex. It drafts
+a LinkML schema with you from your own papers, converts the PDFs, extracts one
+paper as a pilot so you can adjust the schema, then extracts the rest.
 
 ## Install
 
@@ -120,8 +122,8 @@ litschema skills install           install the agent skills
 litschema agent ...                steps the extraction skill calls
 ```
 
-Extraction runs as an agent skill (`/extract-article <id>`), and litschema
-checks what the agent writes. A headless `litschema extract` is planned.
+Extraction runs as an agent skill (`extract-article`), and litschema checks
+what the agent writes. A headless `litschema extract` is planned.
 
 ## How it works
 

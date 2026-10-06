@@ -19,7 +19,7 @@ litschema agent ...                deterministic steps the extraction skill call
 
 Run `litschema <command> --help` for the options.
 
-Extraction runs as an agent skill (`/extract-article <id>`), and litschema
+Extraction runs as an agent skill (`extract-article`), and litschema
 validates and publishes what the agent writes. A headless `litschema extract`
 is planned.
 

@@ -27,6 +27,7 @@ from .project import Project
 from .schema_resolution import extraction_schema_path
 from .version import (
     PIN_KEY,
+    PROJECT_SKILL_DIRS,
     VERSION_MISMATCH_EXIT_CODE,
     check_project,
     installed_version,
@@ -237,13 +238,14 @@ def _skill_sources(*, experimental: bool = False) -> list[Path]:
 
 def _agent_skill_destinations(agent: str) -> list[Path]:
     home = Path.home()
-    destinations = {
-        "claude": home / ".claude" / "skills",
-        "codex": home / ".codex" / "skills",
+    config_dirs = {
+        "claude": Path(os.environ.get("CLAUDE_CONFIG_DIR") or home / ".claude"),
+        "codex": Path(os.environ.get("CODEX_HOME") or home / ".codex"),
     }
+    destinations = {name: path / "skills" for name, path in config_dirs.items()}
     agent = agent.lower()
     if agent == "auto":
-        return [path for name, path in destinations.items() if (home / f".{name}").exists()]
+        return [destinations[name] for name, path in config_dirs.items() if path.exists()]
     if agent == "both":
         return [destinations["claude"], destinations["codex"]]
     if agent in destinations:
@@ -251,8 +253,9 @@ def _agent_skill_destinations(agent: str) -> list[Path]:
     raise typer.BadParameter("--agent must be one of: auto, claude, codex, both")
 
 
-def _project_skill_destination(project: Path) -> Path:
-    return project.expanduser().resolve() / ".claude" / "skills"
+def _project_skill_destinations(project: Path) -> list[Path]:
+    root = project.expanduser().resolve()
+    return [root / relative for relative in PROJECT_SKILL_DIRS]
 
 
 def _install_skill_dirs(
@@ -1119,7 +1122,9 @@ def skills_install(
         "auto", "--agent", help="Agent destination: auto, claude, codex, or both"
     ),
     local: bool = typer.Option(
-        False, "--local", help="Install into the current directory's .claude/skills"
+        False,
+        "--local",
+        help="Install into the current directory's .claude/skills and .agents/skills",
     ),
     experimental: bool = typer.Option(
         False, "--experimental", help="Also install experimental skills"
@@ -1133,7 +1138,7 @@ def skills_install(
         raise typer.Exit(code=2)
 
     if local:
-        destinations = [_project_skill_destination(Path.cwd())]
+        destinations = _project_skill_destinations(Path.cwd())
     else:
         destinations = _agent_skill_destinations(agent)
         if not destinations:
@@ -1154,9 +1159,9 @@ def skills_install(
     if installed == 0:
         typer.echo("No skills installed.")
     else:
-        typer.echo("\nAvailable as slash-commands in agents that read installed skills:")
+        typer.echo("\nAsk your agent to use them by name (Claude Code: /name, Codex: $name):")
         for skill_dir in skill_sources:
-            typer.echo(f"  /{skill_dir.name}")
+            typer.echo(f"  {skill_dir.name}")
 
 
 # ── Status + doctor (new) ──────────────────────────────────────────────────
@@ -1335,7 +1340,7 @@ def doctor(ctx: typer.Context):
                 f"`{finding['identifier']}` references"
             )
 
-    # Skills check — project-local .claude/skills/ is the init default;
+    # Skills check — project-local skill dirs are the init default;
     # global installs are the alternative. Only litschema's bundled skills
     # count: unrelated skills living in the same directories are not a green
     # light for this project.
@@ -1350,7 +1355,9 @@ def doctor(ctx: typer.Context):
             if p.is_dir() and p.name in bundled and (p / "SKILL.md").exists()
         ]
 
-    installed = _bundled_in(cfg.project_root / ".claude" / "skills")
+    installed = [
+        name for relative in PROJECT_SKILL_DIRS for name in _bundled_in(cfg.project_root / relative)
+    ]
     where = "project-local"
     if not installed:
         where = "global"
@@ -1364,7 +1371,7 @@ def doctor(ctx: typer.Context):
     else:
         typer.echo(
             f"{WARN} litschema agent skills not installed "
-            "(looked in ./.claude/skills and the global skill dirs)"
+            "(looked in ./.claude/skills, ./.agents/skills, and the global skill dirs)"
         )
         issues.append(
             "run `litschema skills install --local` from the project "
@@ -1538,21 +1545,27 @@ def init(
     _ensure_gitignore_entries(project)
 
     if not no_skills:
-        count, messages = _install_skill_dirs(
-            _skill_sources(),
-            _project_skill_destination(project),
-            copy=True,
-            force=False,
-            overwrite_hint="run 'litschema skills install --local --force' "
-            "from inside the project to replace",
-        )
-        for message in messages:
-            typer.echo(message)
+        count = 0
+        for destination in _project_skill_destinations(project):
+            installed, messages = _install_skill_dirs(
+                _skill_sources(),
+                destination,
+                copy=True,
+                force=False,
+                overwrite_hint="run 'litschema skills install --local --force' "
+                "from inside the project to replace",
+            )
+            count = max(count, installed)
+            for message in messages:
+                typer.echo(message)
         if count:
-            typer.echo(f"{CHECK} installed {count} agent skill(s) into .claude/skills/")
+            typer.echo(
+                f"{CHECK} installed {count} agent skill(s) into .claude/skills/ and .agents/skills/"
+            )
 
-    onboard_available = (
-        _project_skill_destination(project).joinpath("litschema-onboard", "SKILL.md").exists()
+    onboard_available = any(
+        destination.joinpath("litschema-onboard", "SKILL.md").exists()
+        for destination in _project_skill_destinations(project)
     )
     typer.echo(f"{CHECK} initialized litschema project at {project}")
     typer.echo("\nNext steps:")
@@ -1564,14 +1577,17 @@ def init(
     )
     if onboard_available:
         typer.echo(
-            "  3. Open this project in your agent (e.g. `claude`) and run /litschema-onboard"
+            "  3. Open this folder in your coding agent (Claude Code or Codex, CLI or app)"
         )
-        typer.echo("     to draft your schema with you, convert the PDFs, and extract your papers")
+        typer.echo(
+            "     and ask it to run the litschema-onboard skill: it drafts your schema with"
+        )
+        typer.echo("     you, converts the PDFs, and extracts your papers")
     else:
         typer.echo(
             "  3. Install agent skills (`litschema skills install --local` from the project),"
         )
-        typer.echo("     then open the project in your agent and run /litschema-onboard")
+        typer.echo("     then open the folder in your agent and ask for the litschema-onboard skill")
     typer.echo("  4. `litschema verify` any time to review what's been extracted")
 
 

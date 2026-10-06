@@ -21,9 +21,11 @@ it:
 
 ![Reviewing one paper: the rendered text with cited lines highlighted, and the extracted fields with the grader's confidence](assets/audit.png)
 
-Everything runs on your machine. Models run through your own
-[Claude Code](https://claude.com/claude-code) install. The only other network
-calls are optional DOI lookups.
+Everything runs on your machine, through the coding agents you already have
+([Claude Code](https://claude.com/claude-code) or
+[Codex](https://developers.openai.com/codex)) under your own login. See
+[supported coding agents](quickstart.md#supported-coding-agents). The only
+other network calls are optional DOI lookups.
 
 !!! warning "Alpha software"
     File formats can change before 1.0. Each release lists its breaking

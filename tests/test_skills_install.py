@@ -77,6 +77,7 @@ def test_skills_install_local_uses_project_claude_skills_dir(tmp_path, monkeypat
     assert result.exit_code == 0, result.output
     assert (project / ".claude" / "skills" / "extract-article" / "SKILL.md").is_file()
     assert (project / ".claude" / "skills" / "litschema-onboard" / "SKILL.md").is_file()
+    assert (project / ".agents" / "skills" / "litschema-onboard" / "SKILL.md").is_file()
     assert not (project / ".claude" / "skills" / "litschema-assemble" / "SKILL.md").exists()
     assert not (project / ".claude" / "skills" / "litschema-builder" / "SKILL.md").exists()
     assert not (tmp_path / "home" / ".claude" / "skills").exists()

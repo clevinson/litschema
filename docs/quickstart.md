@@ -1,7 +1,19 @@
 # Quickstart
 
-You need Python 3.13+, [uv](https://docs.astral.sh/uv/), and
-[Claude Code](https://claude.com/claude-code) logged in to your account.
+You need Python 3.13+, [uv](https://docs.astral.sh/uv/), and a coding agent
+logged in to your account.
+
+## Supported coding agents
+
+| Coding agent | Onboarding and extraction | Grading |
+| --- | --- | --- |
+| [Claude Code](https://claude.com/claude-code) | yes | yes (the default) |
+| [Codex](https://developers.openai.com/codex) | yes, piloted on one paper | yes |
+| [pi](https://pi.dev) | coming soon | coming soon |
+
+Onboarding and extraction run as skills in the agent you work in, CLI or
+desktop app. Grading calls the agent's CLI, so install the CLI even if you work
+in the app. The grader doesn't have to be the agent you extract with.
 
 ## Install
 
@@ -18,23 +30,24 @@ cd my-review
 ```
 
 `init` writes `litschema.yaml`, a starter schema, and the agent skills into
-`.claude/skills/`. It also pins the project to the installed litschema version;
+`.claude/skills/` (Claude Code) and `.agents/skills/` (Codex). It also pins the project to the installed litschema version;
 commands refuse to run under any other version until you edit the pin.
 
 Copy your PDFs into `papers-inbox/`.
 
 ## Draft a schema and extract
 
-Open Claude Code in the project and run the onboarding skill:
-
-```text
-/litschema-onboard
-```
+Open the project folder in your agent and run the onboarding skill:
+`/litschema-onboard` in Claude Code, `$litschema-onboard` in Codex. Asking it
+to "set up litschema" works too.
 
 It reads a few of your papers, drafts a LinkML schema with you, converts the
 PDFs to text, extracts one paper as a pilot so you can adjust the schema, and
-then extracts the rest. To extract one paper by hand, run
-`/extract-article <article-id>`.
+then extracts the rest. To extract one paper by hand, ask for the
+`extract-article` skill with the article id.
+
+Codex blocks network access by default, so DOI lookups fail inside it. Run `litschema meta sync --all` from your own terminal afterwards,
+or allow network for the session.
 
 ## Grade
 
