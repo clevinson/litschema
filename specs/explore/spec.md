@@ -8,15 +8,13 @@ authority for runs, reviews, or schema history.
 
 ## Implementation status
 
-Live today: `litschema export --format jsonl|csv [--output PATH]` over the
-article-root extractions with review overrides applied, plus the frozen DuckDB
+Live today: `litschema export --format jsonl|csv [--output PATH]
+[--audit-output PATH]`. Data output is the all-data view. The audit sidecar is
+live with the provenance and summary keys below. Also live: the frozen DuckDB
 store and the `litschema mcp` server and its three tools.
 
-Pending: the view split. `--view all|audited` and `--audit-output` do not exist,
-so there is no audited-data projection and no compact audit sidecar — and
-therefore no export-side carry-through of the human-origin distinction that
-`specs/reviews/spec.md` records on an `add`. Per-article active runs, which the
-record resolution below assumes, now exist. Tracked by `bmwn`.
+Pending: `--view audited`, so there is no audited-data projection yet. Tracked
+by `bmwn`.
 
 ## Record resolution
 
@@ -76,8 +74,28 @@ remove-only articles are included:
 ```json
 {
   "article_id": "beerling-2024",
+  "doi": "10.1038/s41586-020-2448-9",
   "run_id": "01J2Q4Y7Y9K0M3T6W8X1Z5A9BC",
   "schema_hash": "sha256:…",
+  "extraction": {
+    "provider": "anthropic",
+    "model": "claude-opus-5-5",
+    "litschema_version": "0.1.2",
+    "created_at": "2026-10-05T15:41:12+00:00"
+  },
+  "review": {
+    "status": "partial",
+    "n_fields": 40,
+    "n_reviewed": 12,
+    "n_verified": 10,
+    "n_overridden": 2
+  },
+  "grade": {
+    "grade_id": "01M46C…",
+    "model": "claude-opus-5-5",
+    "flagged": 5,
+    "high": 35, "check": 3, "low": 1, "cannot_verify": 1
+  },
   "fields": {
     "experiments[0]": {},
     "experiments[0].ph": {
@@ -89,6 +107,16 @@ remove-only articles are included:
   }
 }
 ```
+
+Each key comes from one place. `doi` comes from the article's
+`bib_metadata`. `run_id`, `schema_hash`, and `extraction` come from the active
+run's `run.json`, never from the installed litschema. `review` counts leaves as
+the verifier does (`review_progress`, identifier slots excluded): `unreviewed`
+when none are reviewed, `complete` when all are, `partial` otherwise. `grade`
+counts bands from the run's current grade (`specs/grading/spec.md`); `flagged`
+is check + low + cannot_verify. A value the store doesn't hold is `null`: no
+DOI, no recorded model, or no current grade. A corrupt review or grade fails
+the export.
 
 `fields` is the canonical stored review frontier from
 `specs/reviews/spec.md`. Export never expands parent coverage into redundant

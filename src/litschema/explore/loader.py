@@ -240,31 +240,31 @@ def build_store(
     )
 
 
-def load_reviewed_records(
-    cfg: LitSchemaConfig,
-    id_slot: str | None = None,
-) -> tuple[list[dict], int, int]:
-    """The reviewed truth, one dict per article with a valid extraction.
+@dataclass
+class ReviewedRecord:
+    """One article's active run with its review overlay applied."""
+
+    article_id: str
+    run: Any
+    fields: dict[str, dict]
+    data: dict
+
+
+def iter_reviewed_records(cfg: LitSchemaConfig, id_slot: str | None = None):
+    """Yield a `ReviewedRecord` per article with a valid active extraction.
 
     Error-marked extractions are skipped; review overrides are applied
     (including the ``__remove__`` sentinel); when ``id_slot`` is given and
     absent from a record it is backfilled from the article directory name.
-    Returns ``(records, reviews_applied, overrides_applied)``. This is the
-    single definition of "reviewed records" shared by the explore store and
-    ``litschema export``.
+    This is the single definition of "reviewed records" shared by the explore
+    store and ``litschema export``.
     """
     from ..articles import iter_metadata_paths
-    from ..runs import BrokenActiveRunError, active_run, is_error_marker
+    from ..runs import active_run, is_error_marker
 
-    records: list[dict] = []
-    reviews_applied = 0
-    overrides_applied = 0
     for metadata_path in iter_metadata_paths(cfg):
         article_id = metadata_path.parent.name
-        try:
-            run = active_run(article_files(cfg, article_id))
-        except BrokenActiveRunError:
-            raise
+        run = active_run(article_files(cfg, article_id))
         if run is None:
             continue
         raw = json.loads(run.extraction.read_text())
@@ -276,15 +276,33 @@ def load_reviewed_records(
         # a corrupt review must not silently degrade to raw values.
         fields = read_reviews(run)
         data = effective_extraction(run, fields) if fields else raw
-        if fields:
-            reviews_applied += 1
-            overrides_applied += sum(1 for e in fields.values() if e.get("override"))
         # Honor either an in-record id or fall back to the directory name when
         # the schema's id_slot isn't `article_id`.
         if id_slot and id_slot not in data:
             data[id_slot] = article_id
-        records.append(data)
+        yield ReviewedRecord(article_id, run, fields, data)
+
+
+def load_reviewed_records(
+    cfg: LitSchemaConfig,
+    id_slot: str | None = None,
+) -> tuple[list[dict], int, int]:
+    """Returns ``(records, reviews_applied, overrides_applied)``."""
+    records: list[dict] = []
+    reviews_applied = 0
+    overrides_applied = 0
+    for item in iter_reviewed_records(cfg, id_slot):
+        if item.fields:
+            reviews_applied += 1
+            overrides_applied += sum(1 for e in item.fields.values() if e.get("override"))
+        records.append(item.data)
     return records, reviews_applied, overrides_applied
 
 
-__all__ = ["LoadSummary", "build_store", "load_reviewed_records"]
+__all__ = [
+    "LoadSummary",
+    "ReviewedRecord",
+    "build_store",
+    "iter_reviewed_records",
+    "load_reviewed_records",
+]

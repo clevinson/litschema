@@ -51,6 +51,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+### Added
+
+- `litschema export --audit-output PATH` writes one JSONL record per article:
+  DOI, run, model, litschema version, schema hash, review status (`complete`,
+  `partial`, `unreviewed`) with counts, the current grade's flags, and the
+  review entries. Data rows keep the schema's shape.
+
+### Changed
+
+- `export` help and docs say what it writes: every value with review
+  corrections applied, including unreviewed ones. It prints how many articles
+  are fully, partly, and not reviewed.
+
 ## [0.1.2] — 2026-10-05
 
 ### Breaking changes
