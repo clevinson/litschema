@@ -20,6 +20,8 @@ PIN_KEY = "litschema_version"
 SKILL_STAMP_KEY = "litschema_version"
 VERSION_MISMATCH_EXIT_CODE = 3
 
+# Final releases and pre-releases; dev and local builds never reach PyPI.
+_RELEASE_RE = re.compile(r"\d+(\.\d+)*((a|b|rc)\d+)?(\.post\d+)?")
 _STAMP_RE = re.compile(rf"^{SKILL_STAMP_KEY}:\s*\"?([^\"\n]+?)\"?\s*$", re.MULTILINE)
 
 
@@ -80,6 +82,11 @@ def _home_relative(path: str) -> str:
     return "~" + path[len(home) :] if path.startswith(home) else path
 
 
+def is_release(version: str) -> bool:
+    """True for a version PyPI could serve."""
+    return _RELEASE_RE.fullmatch(version) is not None
+
+
 def project_pin(cfg: LitSchemaConfig) -> str | None:
     value = cfg.raw.get(PIN_KEY)
     return str(value) if value is not None else None
@@ -130,10 +137,18 @@ def check_project(cfg: LitSchemaConfig, skill_names: list[str]) -> VersionCheck:
 
     errors = []
     if running != pin:
+        if is_release(pin):
+            use_pin = f"  Use the pinned release:  uv tool install litschema=={pin} --force"
+        else:
+            use_pin = (
+                f"  {pin} is a development build, not on PyPI; reinstall it from the "
+                "checkout or commit it came from"
+            )
         errors.append(
             f"this project is pinned to litschema {pin}; you're running {version_line()}\n"
-            f"  Run the pinned version:  uv tool install litschema=={pin} --force\n"
-            f'  Or move the project up:  set {PIN_KEY}: "{running}" in {cfg.config_path.name}'
+            f"{use_pin}\n"
+            f'  Or pin the project to {running}:  set {PIN_KEY}: "{running}" in '
+            f"{cfg.config_path.name}, then run `litschema skills install --local --force`"
         )
 
     skills_dir = cfg.project_root / ".claude" / "skills"

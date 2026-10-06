@@ -91,7 +91,8 @@ litschema --version
 
 `init` pins each project to the installed version (`litschema_version` in
 `litschema.yaml`), and commands refuse to run under any other. To move a
-project to a new release, install it and edit the pin.
+project to another version, install it, edit the pin, and run
+`litschema skills install --local --force`.
 
 To try an unreleased commit or work on litschema itself:
 

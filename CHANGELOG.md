@@ -63,6 +63,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 - `export` help and docs say what it writes: every value with review
   corrections applied, including unreviewed ones. It prints how many articles
   are fully, partly, and not reviewed.
+  
+### Fixed
+
+- The version-pin error suggests `uv tool install litschema==<pin>` only when
+  the pin is a release. For a dev-build pin it says the build isn't on PyPI.
+  Its other option now works in either direction and includes the skills
+  reinstall, so the skills check doesn't stop the next command.
 
 ## [0.1.2] — 2026-10-05
 

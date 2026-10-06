@@ -10,6 +10,7 @@ from litschema import cli
 from litschema.version import (
     VERSION_MISMATCH_EXIT_CODE,
     installed_version,
+    is_release,
     parse_direct_url,
     read_skill_stamp,
     stamp_skill,
@@ -78,6 +79,34 @@ def test_mismatched_pin_stops_every_project_command(tmp_path) -> None:
         assert "pinned to litschema 0.0.1" in result.stderr
         assert installed_version() in result.stderr
         assert "uv tool install litschema==0.0.1" in result.stderr
+        assert "skills install --local --force" in result.stderr
+
+
+def test_dev_pin_does_not_suggest_pypi(tmp_path) -> None:
+    project = _init(tmp_path)
+    _set_pin(project, "0.1.2.dev36+g647a7f8f1")
+
+    result = _run(project, "status")
+
+    assert result.exit_code == VERSION_MISMATCH_EXIT_CODE
+    assert "uv tool install" not in result.stderr
+    assert "development build, not on PyPI" in result.stderr
+    assert f'set litschema_version: "{installed_version()}"' in result.stderr
+
+
+@pytest.mark.parametrize(
+    ("version", "release"),
+    [
+        ("0.1.2", True),
+        ("1.0.0rc1", True),
+        ("0.1.2.post1", True),
+        ("0.1.3.dev0", False),
+        ("0.1.2.dev36+g647a7f8f1", False),
+        ("0.1.2+local", False),
+    ],
+)
+def test_is_release(version, release) -> None:
+    assert is_release(version) is release
 
 
 def test_unpinned_project_warns_and_runs(tmp_path) -> None:
