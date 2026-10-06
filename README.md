@@ -74,7 +74,7 @@ litschema init my-project       # scaffold a project
 /litschema-onboard              # agent: drafts your schema, pilots, extracts
 litschema grade --all           # a second model scores every value
 litschema verify                # you: review what was extracted
-litschema export                # the reviewed data
+litschema export                # values with your corrections
 ```
 
 `init` installs the `/litschema-onboard` skill into `.claude/skills/`. It
@@ -114,7 +114,7 @@ litschema validate [target]        validate extractions against the schema
 litschema grade <id>|--all         score each value against its cited lines
 litschema runs list|activate       list published runs; choose the active one
 litschema verify [--port 8000]     local review app (loopback only)
-litschema export [-f jsonl|csv]    reviewed data as flat files
+litschema export [-f jsonl|csv]    values with corrections, plus an audit file
 litschema mcp                      DuckDB store served over MCP (experimental)
 litschema skills install           install the agent skills
 litschema agent ...                steps the extraction skill calls
@@ -157,8 +157,11 @@ beside its cited lines. You verify, correct, or remove it, and each action
 writes one entry to the run's `review.json`. The diff of that file is the
 audit log.
 
-**Export the reviewed data.** `export` writes the extractions with your
-corrections applied, as JSONL or CSV. `mcp` (experimental) loads them into a
+**Export with provenance.** `export` writes every value with your
+corrections applied, as JSONL or CSV, including values nobody has reviewed yet.
+`--audit-output` writes one record per paper beside it: the run, model, DOI,
+schema hash, how many fields you reviewed, the grader's flags, and your review
+entries. `mcp` (experimental) loads them into a
 DuckDB database built from your schema and serves it read-only. Both skip
 runs that failed extraction, so they agree.
 

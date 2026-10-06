@@ -585,8 +585,10 @@ def mcp(
 
 
 @app.command(
-    help="Export the reviewed extractions, with overrides applied and error markers "
-    "skipped, as JSONL (default) or CSV, to stdout or --output."
+    help="Export every extracted value, with review corrections applied and error "
+    "markers skipped, as JSONL (default) or CSV, to stdout or --output. Unreviewed "
+    "values are included; --audit-output writes each article's run, model, DOI, "
+    "review status, and grade flags as JSONL."
 )
 def export(
     ctx: typer.Context,
@@ -594,8 +596,17 @@ def export(
     output: Path | None = typer.Option(
         None, "--output", "-o", help="Write to a file instead of stdout"
     ),
+    audit_output: Path | None = typer.Option(
+        None,
+        "--audit-output",
+        help="Also write one provenance and review record per article (JSONL)",
+    ),
 ):
+    from contextlib import ExitStack
+
     from .export import FORMATS, export_records
+    from .grading import GradeCorruptError
+    from .reviews import ReviewCorruptError
 
     if fmt not in FORMATS:
         typer.secho(
@@ -605,19 +616,39 @@ def export(
         raise typer.Exit(code=2)
     cfg = _require_project(ctx).config
     try:
-        if output is not None:
-            with output.open("w", newline="") as handle:
-                count, with_overrides = export_records(cfg, fmt, handle)
-        else:
-            count, with_overrides = export_records(cfg, fmt, sys.stdout)
-    except (FileNotFoundError, ValueError) as exc:
+        with ExitStack() as stack:
+            out = (
+                stack.enter_context(output.open("w", newline=""))
+                if output is not None
+                else sys.stdout
+            )
+            audit = (
+                stack.enter_context(audit_output.open("w"))
+                if audit_output is not None
+                else None
+            )
+            summary = export_records(cfg, fmt, out, audit)
+    except (FileNotFoundError, ValueError, GradeCorruptError, ReviewCorruptError) as exc:
         typer.secho(f"{CROSS} {exc}", fg=typer.colors.RED)
         raise typer.Exit(code=2) from exc
     typer.echo(
-        f"{CHECK} exported {count} record(s) ({with_overrides} with review overrides)"
+        f"{CHECK} exported {summary.records} record(s)"
         + (f" → {output}" if output is not None else ""),
         err=True,
     )
+    typer.echo(
+        f"  review: {summary.complete} complete, {summary.partial} partial, "
+        f"{summary.unreviewed} unreviewed; {summary.with_overrides} with corrections",
+        err=True,
+    )
+    if audit_output is not None:
+        typer.echo(f"  audit → {audit_output}", err=True)
+    elif summary.partial or summary.unreviewed:
+        typer.echo(
+            f"{DIM}  unreviewed values are included; --audit-output writes each "
+            f"article's review status{RESET}",
+            err=True,
+        )
 
 
 # Docs serving is intentionally *not* a `litschema` CLI command — it's a
