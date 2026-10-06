@@ -5,8 +5,8 @@ A litschema project is meant to live in a git repository. `init` writes a
 
 **Committed:**
 
-- `litschema.yaml`, your schema, `domain_context.md`, `.claude/skills/`, and
-  `.agents/skills/`
+- `litschema.yaml`, your schema, `domain_context.md`, and the agent files
+  `init` wrote: `.claude/skills/`, `.agents/skills/`, `.codex/config.toml`
 - per paper: `article-metadata.json`, `prepared-text.json`, `active-run.json`
 - per run: the extraction, reasoning, `run.json`, grades, and `review.json`
 

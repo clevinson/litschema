@@ -29,9 +29,16 @@ litschema init my-review
 cd my-review
 ```
 
-`init` writes `litschema.yaml`, a starter schema, and the agent skills into
-`.claude/skills/` (Claude Code) and `.agents/skills/` (Codex). It also pins the project to the installed litschema version;
-commands refuse to run under any other version until you edit the pin.
+`init` asks which coding agents you'll use, with the ones it finds on your
+machine selected, and records them as `agents:` in `litschema.yaml`. It
+installs the skills where each agent looks: `.claude/skills/` for Claude Code,
+`.agents/skills/` for Codex. For Codex it also writes `.codex/config.toml`,
+which allows network access in this project so DOI lookups work. In a script,
+pass `--agent claude-code`, `--agent codex`, or `--agent all`.
+
+`init` also writes a starter schema and pins the project to the installed
+litschema version; commands refuse to run under any other version until you
+edit the pin.
 
 Copy your PDFs into `papers-inbox/`.
 
@@ -45,9 +52,6 @@ It reads a few of your papers, drafts a LinkML schema with you, converts the
 PDFs to text, extracts one paper as a pilot so you can adjust the schema, and
 then extracts the rest. To extract one paper by hand, ask for the
 `extract-article` skill with the article id.
-
-Codex blocks network access by default, so DOI lookups fail inside it. Run `litschema meta sync --all` from your own terminal afterwards,
-or allow network for the session.
 
 ## Grade
 

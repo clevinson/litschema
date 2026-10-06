@@ -253,9 +253,46 @@ def _agent_skill_destinations(agent: str) -> list[Path]:
     raise typer.BadParameter("--agent must be one of: auto, claude, codex, both")
 
 
-def _project_skill_destinations(project: Path) -> list[Path]:
+def _project_skill_destinations(project: Path, agents: list[str] | None = None) -> list[Path]:
+    from .agents import AGENTS
+
     root = project.expanduser().resolve()
-    return [root / relative for relative in PROJECT_SKILL_DIRS]
+    if agents is None:
+        return [root / relative for relative in PROJECT_SKILL_DIRS]
+    return [root / AGENTS[name].skills_dir for name in agents]
+
+
+def _interactive() -> bool:
+    return sys.stdin.isatty()
+
+
+def _choose_agents(explicit: list[str] | None) -> list[str]:
+    """--agent values, else a prompt on a terminal, else the detected agents."""
+    from .agents import AGENTS, UnknownAgentError, detected_agents, parse_agents
+
+    try:
+        if explicit:
+            return parse_agents(explicit)
+    except UnknownAgentError as exc:
+        typer.secho(f"{CROSS} {exc}", fg=typer.colors.RED)
+        raise typer.Exit(code=2) from None
+    names = list(AGENTS)
+    default = detected_agents() or names
+    if not _interactive():
+        return default
+    typer.echo("Which coding agents will you use with this project?")
+    for index, name in enumerate(names, start=1):
+        found = " (found on this machine)" if name in detected_agents() else ""
+        typer.echo(f"  {index}) {AGENTS[name].label}{found}")
+    while True:
+        answer = typer.prompt(
+            "Numbers, comma-separated",
+            default=",".join(str(names.index(n) + 1) for n in default),
+        )
+        picks = [part.strip() for part in answer.split(",") if part.strip()]
+        if picks and all(p.isdigit() and 1 <= int(p) <= len(names) for p in picks):
+            return [names[int(p) - 1] for p in dict.fromkeys(picks)]
+        typer.echo(f"  enter numbers from 1 to {len(names)}, like 1,2")
 
 
 def _install_skill_dirs(
@@ -1124,7 +1161,8 @@ def skills_install(
     local: bool = typer.Option(
         False,
         "--local",
-        help="Install into the current directory's .claude/skills and .agents/skills",
+        help="Install into the current project, for the agents listed under `agents:` "
+        "in litschema.yaml (.claude/skills for Claude Code, .agents/skills for Codex)",
     ),
     experimental: bool = typer.Option(
         False, "--experimental", help="Also install experimental skills"
@@ -1138,7 +1176,17 @@ def skills_install(
         raise typer.Exit(code=2)
 
     if local:
-        destinations = _project_skill_destinations(Path.cwd())
+        import yaml
+
+        from .agents import project_agents, write_agent_config
+
+        root = Path.cwd()
+        config = root / "litschema.yaml"
+        raw = yaml.safe_load(config.read_text()) if config.is_file() else {}
+        agents = project_agents(raw if isinstance(raw, dict) else {})
+        destinations = _project_skill_destinations(root, agents)
+        for path in write_agent_config(root, agents):
+            typer.echo(f"{CHECK} wrote {path.relative_to(root)} (network on for DOI lookups)")
     else:
         destinations = _agent_skill_destinations(agent)
         if not destinations:
@@ -1476,6 +1524,12 @@ def _ensure_gitignore_entries(project: Path) -> None:
 @app.command(help="Scaffold a new litschema project.")
 def init(
     domain: Path = typer.Argument(..., help="Project directory to create"),
+    agent: list[str] | None = typer.Option(
+        None,
+        "--agent",
+        help="Coding agent to set up: claude-code, codex, or all (repeatable). "
+        "Asks when omitted on a terminal; otherwise uses the agents found on this machine.",
+    ),
     no_skills: bool = typer.Option(
         False, "--no-skills", help="Skip installing agent skills into the project"
     ),
@@ -1517,6 +1571,8 @@ def init(
         "data",
         "data/papers",
         "papers-inbox",
+        ".codex",
+        ".codex/config.toml",
     ):
         if project.joinpath(entry).is_symlink():
             typer.secho(
@@ -1525,6 +1581,10 @@ def init(
                 fg=typer.colors.RED,
             )
             raise typer.Exit(code=2)
+
+    from .agents import AGENTS, AGENTS_KEY, write_agent_config
+
+    agents = _choose_agents(agent)
 
     project.mkdir(parents=True, exist_ok=True)
     project.joinpath("schema").mkdir(exist_ok=True)
@@ -1540,13 +1600,19 @@ def init(
         'article_store_dir: "data/papers"\n'
         'paper_inbox_dir: "papers-inbox"\n'
         f'{PIN_KEY}: "{installed_version()}"\n'
+        "\n"
+        "# Coding agents this project is set up for: skills and config are\n"
+        "# installed for these. Re-run `litschema skills install --local` after editing.\n"
+        f"{AGENTS_KEY}: [{', '.join(agents)}]\n"
     )
     _write_draft_schema(project)
     _ensure_gitignore_entries(project)
+    for path in write_agent_config(project, agents):
+        typer.echo(f"{CHECK} wrote {path.relative_to(project)} (network on for DOI lookups)")
 
     if not no_skills:
         count = 0
-        for destination in _project_skill_destinations(project):
+        for destination in _project_skill_destinations(project, agents):
             installed, messages = _install_skill_dirs(
                 _skill_sources(),
                 destination,
@@ -1559,9 +1625,8 @@ def init(
             for message in messages:
                 typer.echo(message)
         if count:
-            typer.echo(
-                f"{CHECK} installed {count} agent skill(s) into .claude/skills/ and .agents/skills/"
-            )
+            where = " and ".join(f"{AGENTS[name].skills_dir}/" for name in agents)
+            typer.echo(f"{CHECK} installed {count} agent skill(s) into {where}")
 
     onboard_available = any(
         destination.joinpath("litschema-onboard", "SKILL.md").exists()
@@ -1576,9 +1641,8 @@ def init(
         " during onboarding)"
     )
     if onboard_available:
-        typer.echo(
-            "  3. Open this folder in your coding agent (Claude Code or Codex, CLI or app)"
-        )
+        labels = " or ".join(AGENTS[name].label for name in agents)
+        typer.echo(f"  3. Open this folder in {labels} (CLI or app)")
         typer.echo(
             "     and ask it to run the litschema-onboard skill: it drafts your schema with"
         )

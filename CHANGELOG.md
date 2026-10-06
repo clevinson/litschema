@@ -60,10 +60,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ### Changed
 
-- `init` and `skills install --local` put the skills in `.agents/skills/` as
-  well as `.claude/skills/`, so Codex finds them in the project. Global
-  installs honor `$CLAUDE_CONFIG_DIR` and `$CODEX_HOME`. The version pin checks both project copies. Existing projects
-  get the Codex copy from `litschema skills install --local --force`.
+- `init` asks which coding agents the project is for (Claude Code, Codex),
+  with the ones found on the machine selected, and records them as `agents:`
+  in `litschema.yaml`; `--agent` answers in scripts. Skills go where each agent
+  looks: `.claude/skills/` for Claude Code, `.agents/skills/` for Codex. For
+  Codex, `init` also writes `.codex/config.toml` allowing network access so DOI
+  lookups work. `skills install --local` follows `agents:`; projects without
+  it get both, from `litschema skills install --local --force`. The version pin
+  checks every project copy. Global installs honor `$CLAUDE_CONFIG_DIR` and
+  `$CODEX_HOME`.
 - Docs, `init`'s next steps, and the onboarding skill name Claude Code and
   Codex instead of Claude Code alone.
 - A run published from a Codex shell records `harness: codex` and its version
