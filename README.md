@@ -7,82 +7,80 @@
 
 ![Reviewing a paper in litschema: cited lines highlighted in the text, extracted values with the grader's confidence](https://raw.githubusercontent.com/clevinson/litschema/main/docs/assets/review.gif)
 
-Extraction gets you structured data. `litschema` gets you structured data where
-every value carries the lines it came from, how it was derived, a record of
-which model produced it, an independent grader's estimate that it's correct,
-and a human's verdict. In a systematic review or meta-analysis, "the model said
-so" is not a citation.
+litschema extracts structured data from scientific papers into a
+[LinkML](https://linkml.io) schema you write. Every value comes with:
 
-You define the schema in [LinkML](https://linkml.io). Runs are immutable and
-record the hash of every input. Bibliographic metadata fetched by DOI is
-marked with its source and locked. Documentation:
-[litschema.readthedocs.io](https://litschema.readthedocs.io/).
+- the lines of the paper it came from;
+- how it was derived (stated, converted, normalized, calculated, inferred, or
+  assumed);
+- the model and inputs that produced it, hashed;
+- a second model's probability that it's correct;
+- your verdict, once you've reviewed it.
 
-Everything runs on your machine. Models run through your own Claude Code
-install. The only other network calls are optional DOI lookups and the
-verifier's ORCID name resolution.
+It runs on your machine. Models run through your own Claude Code install; the
+only other network calls are optional DOI lookups and ORCID name lookups in
+the review app. Docs: [litschema.readthedocs.io](https://litschema.readthedocs.io/).
 
 ## What you get
 
-For each document, three artifacts that stay in step:
+One folder per paper:
 
 ```text
 data/papers/<article-id>/
-  article-metadata.json                  identity + bibliographic block
   <article-id>.pdf
-  article.md                             prepared full text
+  article-metadata.json                  identity and bibliographic metadata
+  article.md                             prepared text
   prepared-text.json                     how the PDF was converted, hashed
   figures/                               images from the PDF
-  active-run.json                        which extraction is current
+  active-run.json                        which run is current
   extraction-runs/<run-id>/
-    agent-extraction.json                what the document SAYS (schema-valid)
-    agent-reasoning.json                 why — per-field evidence, line-cited
-    run.json                             inputs hashed, model recorded
-    grades/<grade-id>.json               grader's confidence per value
-    review.json                          your verdicts on this run
+    agent-extraction.json                the values, valid against your schema
+    agent-reasoning.json                 per value: cited lines, basis, note
+    run.json                             input hashes and the model
+    grades/<grade-id>.json               the grader's confidence per value
+    review.json                          your verdicts
 ```
 
-Plain JSON on disk, one directory per document, diffable in git. The PDF,
-`article.md`, and extracted figures are gitignored by default, since most
-papers can't be redistributed; `prepare-text` regenerates the text from the
-PDF. A run is
-immutable once published: its extraction, reasoning, and `run.json` never
-change, so a review written against it stays meaningful forever. Re-extracting
-creates a new run rather than overwriting the old one.
+It's plain JSON, so you can diff it in git. The default `.gitignore` leaves
+out the PDF, `article.md`, and figures, since most papers can't be
+redistributed; `prepare-text` rebuilds them from the PDF. A published run
+never changes, so a review of it stays valid. Re-extracting adds a new run
+beside the old one.
 
 ![The overview: status, flags, and review progress per paper](https://raw.githubusercontent.com/clevinson/litschema/main/docs/assets/overview.png)
 
-## Alpha Software
+## Alpha software
 
-**litschema is early software. Extracted data may need regenerating
-when updating litschema versions.**
+**litschema is early software. You may need to regenerate extracted data when
+you update it.**
 
-One limit qualifies the line-level citations promised above: PDF conversion
-collapses some tables onto a single line, so a citation into a table can name
-the table but not the row. This matters most for measurement-heavy schemas.
+Tables that a PDF stores as images arrive as figures, so a value from one cites
+the figure rather than a row.
 
-Each release documents its breaking changes and known limits in the
-[CHANGELOG.md](https://github.com/clevinson/litschema/blob/main/CHANGELOG.md).
+The [changelog](https://github.com/clevinson/litschema/blob/main/CHANGELOG.md)
+lists each release's breaking changes and known limits.
 
 ## Specs
 
-The [specs](https://github.com/clevinson/litschema/blob/main/specs/README.md) describe what is currently implemented; anything
-deferred says so and names where it is tracked.
+The [specs](https://github.com/clevinson/litschema/blob/main/specs/README.md)
+describe what's implemented now. Anything deferred says so and links to where
+it's tracked.
 
 ## The flow
 
 ```bash
 litschema init my-project       # scaffold a project
-                                # drop PDFs into papers-inbox/
-/litschema-onboard              # agent: drafts your schema, extracts, pilots
-litschema verify                # you: check what was extracted
-litschema export                # the reviewed data, ready for analysis
+                                # copy PDFs into papers-inbox/
+/litschema-onboard              # agent: drafts your schema, pilots, extracts
+litschema grade --all           # a second model scores every value
+litschema verify                # you: review what was extracted
+litschema export                # the reviewed data
 ```
 
-`/litschema-onboard` is a bundled agent skill, installed into `.claude/skills/`
-by `init`. It interviews you to draft a LinkML schema from your own papers,
-runs intake, extracts one article as a pilot so you can course-correct, then
-batches the rest.
+`init` installs the `/litschema-onboard` skill into `.claude/skills/`. It
+drafts a LinkML schema with you from your own papers, converts the PDFs,
+extracts one paper as a pilot so you can adjust the schema, then extracts the
+rest.
 
 ## Install
 
@@ -91,85 +89,81 @@ uv tool install litschema      # or: pip install litschema
 litschema --version
 ```
 
-`init` pins each project to the version that created it (`litschema_version`
-in `litschema.yaml`), and commands refuse to run under any other. To move a
+`init` pins each project to the installed version (`litschema_version` in
+`litschema.yaml`), and commands refuse to run under any other. To move a
 project to a new release, install it and edit the pin.
 
-To try an unreleased tag or work on litschema itself:
+To try an unreleased commit or work on litschema itself:
 
 ```bash
-uv tool install "litschema @ git+https://github.com/clevinson/litschema@v0.1.1" --force
-uv tool install --editable path/to/litschema --force   # edits take effect immediately
+uv tool install "litschema @ git+https://github.com/clevinson/litschema@main" --force
+uv tool install --editable path/to/litschema --force   # edits apply immediately
 ```
 
 ## Commands
 
 ```bash
 litschema init <dir>               scaffold a project; installs agent skills locally
-litschema doctor                   diagnose config, schema, and skill installation
+litschema doctor                   check config, schema, and skill installation
 litschema status                   counts: inbox, articles, runs, reviews
 litschema assemble                 papers-inbox PDFs -> per-article folders (offline)
-litschema prepare-text <id>|--all  PDF -> article.md (offline)
+litschema prepare-text <id>|--all  PDF -> article.md and figures (offline)
 litschema meta show|set|sync <id>  bibliographic metadata, provenance-tagged
 litschema validate [target]        validate extractions against the schema
 litschema grade <id>|--all         score each value against its cited lines
-litschema runs list|activate       inspect published runs; choose the active one
-litschema verify [--port 8000]     local review webapp (loopback only)
-litschema export [-f jsonl|csv]    reviewed data as flat files (pandas/R/jq-ready)
+litschema runs list|activate       list published runs; choose the active one
+litschema verify [--port 8000]     local review app (loopback only)
+litschema export [-f jsonl|csv]    reviewed data as flat files
 litschema mcp                      DuckDB store served over MCP (experimental)
-litschema skills install           install the agent skills globally
-litschema agent ...                deterministic steps the extraction skill calls
+litschema skills install           install the agent skills
+litschema agent ...                steps the extraction skill calls
 ```
 
-Extraction runs as an agent skill (`/extract-article <id>`), with the
-framework checking the output. A headless `litschema extract` is planned.
+Extraction runs as an agent skill (`/extract-article <id>`), and litschema
+checks what the agent writes. A headless `litschema extract` is planned.
 
 ## How it works
 
-**Intake is offline and content-addressed.** `assemble` derives a stable
-article id from each PDF's filename, moves the PDF into the store, and writes a
-minimal manifest. No DOI, bibliography file, or network access is needed to
-reach extraction, and re-dropping the same PDF is a no-op.
+**Intake is offline.** `assemble` derives an article id from each PDF's
+filename, moves the PDF into the store, and writes a minimal manifest. You
+need no DOI, bibliography file, or network access to reach extraction, and
+dropping the same PDF twice does nothing.
 
-**Extraction is agent-executed, framework-checked.** The agent reads only the
-prepared text and its figures. It writes an extraction plus a reasoning file
-that gives, for each value, the cited lines, a basis (stated, converted,
-normalized, calculated, inferred, or assumed), and a note on how it got the
-value. It loops until both validate. Validation is closed-world — nothing the schema doesn't
-define gets in — and citations must resolve to real lines in the prepared text,
-so a reference to a line that doesn't exist fails rather than shipping.
+**The agent extracts; litschema checks.** The agent reads only the prepared
+text and its figures. It writes the values and a reasoning file that gives, for
+each value, the cited lines, a basis, and a note on how it got the value, and
+it loops until both validate. Validation is closed-world: litschema rejects any
+field the schema doesn't define and any citation to a line that doesn't exist.
 
-**Grading is independent.** `litschema grade` gives each value, the
-extractor's basis and note, and the cited lines to a separate model, which
-returns the probability that the value is correct and a one-line issue when
-it's below 0.9. The app sorts flagged values to the top. In an 18-paper pilot,
-85% of stated values scored high, while 29% of inferred values scored low.
+**A second model grades.** `litschema grade` gives a separate model each value,
+the extractor's basis and note, and the cited lines. It returns the
+probability that the value is correct, with a one-line issue below 0.9. The
+review app puts flagged values first. In an 18-paper pilot, 85% of stated
+values scored 0.9 or higher; 29% of inferred values scored below 0.6.
 
-**Runs are immutable and provenance-bearing.** Publishing records the SHA-256
-of every input — prepared text, domain context, and the skill that conducted
-the extraction — alongside the schema hash and what produced it. Reproduction
-data is computed by the publisher; attribution is recorded as asserted, since
-an agent cannot verify its own model. Nothing is overwritten.
+**Runs record their inputs.** Publishing a run records the SHA-256 of the
+prepared text, the domain context, the extraction skill, and the schema, plus
+the litschema version and the conversion settings. The model name is recorded
+as the agent reports it.
 
-**Bibliographic metadata is provenance-locked.** Values fetched from a DOI
-registry are marked and locked; machine-written values may be upgraded but
-human edits are never overwritten without explicit consent. Documents with no
-DOI flow through unchanged.
+**DOI metadata is locked.** Bibliographic fields fetched from a DOI registry
+are marked with their source and locked. Machine-written values can be
+upgraded, and litschema never overwrites your edits without asking. Papers
+without a DOI work the same way.
 
-**Review is field-by-field and git-native.** `litschema verify` shows every
-extracted value beside its cited source lines, with the model and effort that
-produced it. You verify a value, correct it, or remove it — one entry per
-field, stored inside the run it reviews. Diffs of `review.json` are the audit
-log. Because a run's payload can never change, a review never goes stale.
+**Review is per field and lives in git.** `litschema verify` shows each value
+beside its cited lines. You verify, correct, or remove it, and each action
+writes one entry to the run's `review.json`. The diff of that file is the
+audit log.
 
-**Use the reviewed truth.** `export` writes the review-applied extractions as
-JSONL or CSV for pandas, R, or jq. `mcp` (experimental) derives a DuckDB
-database from your schema and serves it read-only. Both apply overrides and
-skip error markers, so they agree.
+**Export the reviewed data.** `export` writes the extractions with your
+corrections applied, as JSONL or CSV. `mcp` (experimental) loads them into a
+DuckDB database built from your schema and serves it read-only. Both skip
+runs that failed extraction, so they agree.
 
 ## Project layout
 
-- `src/litschema/` — package code and CLI
-- `specs/` — capability specs and decision logs; start at `specs/README.md`
-- `skills/` — the agent-facing extraction and onboarding instructions
-- `tests/` — framework tests and small project fixtures
+- `src/litschema/`: package code and CLI
+- `specs/`: capability specs and decision logs; start at `specs/README.md`
+- `skills/`: the extraction and onboarding instructions for agents
+- `tests/`: framework tests and small project fixtures

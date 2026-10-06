@@ -8,7 +8,7 @@ Notable changes to litschema, newest first.
 when you update it.**
 
 Until version 1.0, an update can change the format of the files litschema
-writes — the extraction JSON, the review file, the metadata manifest. When that
+writes: the extraction JSON, the review file, the metadata manifest. When that
 happens, litschema does not convert your old files. It expects you to
 re-run the step that produced them, which is why every step is repeatable from
 your PDFs.
@@ -34,8 +34,8 @@ Changes that affect someone *using* litschema: new capability, changed
 behaviour, removed surface, fixed defect. Anything implemented and then
 reverted before a release does not appear.
 
-Work with no user-visible effect — refactors, test and build infrastructure,
-performance — is listed under **Internal**, kept separate so the sections above
+Work with no user-visible effect (refactors, test and build infrastructure,
+performance) is listed under **Internal**, kept separate so the sections above
 stay readable as a record of what changed for you. It is here because this
 project asks people to trust extracted data, and how the thing is tested and
 kept honest is part of that case.
@@ -43,7 +43,7 @@ kept honest is part of that case.
 Specs follow the same rule. A spec edit is listed only when it changes what the
 product does or admits; correcting a spec to match code that never moved is
 bookkeeping, not a release note. Where a spec described unbuilt behaviour, that
-belongs under **Known limits** rather than **Removed** — nothing anyone relied
+belongs under **Known limits** rather than **Removed**, since nothing anyone relied
 on went away.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
