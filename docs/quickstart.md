@@ -42,9 +42,19 @@ then extracts the rest. To extract one paper by hand, run
 litschema grade --all
 ```
 
-The grader is a separate `claude -p` call per paper. It scores each value
-against its cited lines. Sonnet costs about $0.20 a paper;
-`--model claude-haiku-4-5` costs less.
+The grader is a separate model, called once per paper through the Claude Code
+or Codex CLI. It scores each value against its cited lines. `init` sets it to
+Claude Sonnet (about $0.20 a paper) in `litschema.yaml`; to grade with a GPT
+model through Codex instead:
+
+```yaml
+models:
+  grade:
+    harness: codex
+    model: gpt-6-astra
+```
+
+`--harness` and `--model` override it for one run.
 
 ## Review
 

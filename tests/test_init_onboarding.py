@@ -38,6 +38,7 @@ def test_init_scaffolds_standalone_project(tmp_path) -> None:
     assert "extraction_schema_file: \"extraction.yaml\"" in (project / "litschema.yaml").read_text()
     assert "paper_inbox_dir: \"papers-inbox\"" in (project / "litschema.yaml").read_text()
     assert "document_profile" not in (project / "litschema.yaml").read_text()
+    assert cfg.raw["models"] == {"grade": {"harness": "claude-code", "model": "claude-sonnet-5"}}
     schema = (project / "schema" / "extraction.yaml").read_text()
     assert "article_id:" in schema
     assert "confidence:" not in schema

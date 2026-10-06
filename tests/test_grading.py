@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import shutil
 import sys
 from pathlib import Path
@@ -170,7 +171,7 @@ def test_rubric_hash_is_the_sha256_of_the_rubric_text() -> None:
     # Pinned: a rubric edit changes which grades count as current, so it
     # must be a deliberate change here too.
     assert grading.RUBRIC_SHA256 == (
-        "sha256:e958a1eb543517b695d0c03a5c4f732aa0ad217701520bda9b1da297ec1dbe7c"
+        "sha256:247cdfadefc4c49d0a9b9fa5b7884a7e275cd75b9bdcd24ad8159cdc9023a2dd"
     )
 
 
@@ -231,7 +232,7 @@ def test_parse_keeps_known_ids_and_lists_missing_ones() -> None:
         }
     }
 
-    fields, ungraded = grading.parse_grades(result, _targets(6))
+    fields, ungraded = grading.parse_grades(result["structured_output"], _targets(6))
 
     assert fields == [
         {"path": "f0", "confidence": 1.0},
@@ -296,7 +297,7 @@ def test_a_grade_uses_the_bands_it_was_stored_with() -> None:
 )
 def test_parse_refuses_a_result_that_grades_nothing(result) -> None:
     with pytest.raises(grading.GradeError):
-        grading.parse_grades(result, _targets(2))
+        grading.parse_grades(result.get("structured_output"), _targets(2))
 
 
 @pytest.mark.parametrize(
@@ -726,3 +727,163 @@ def test_grade_schema_requires_an_issue() -> None:
     item = grading.GRADE_SCHEMA["properties"]["grades"]["items"]
     assert item["required"] == ["id", "confidence", "issue"]
     assert item["properties"]["issue"]["minLength"] == 1
+
+
+# ── settings and the codex harness ──────────────────────────────────────────
+
+FAKE_CODEX = """#!{python}
+import json, os, re, sys
+args = sys.argv[1:]
+if args == ["--version"]:
+    print("codex-cli 0.154.0")
+    sys.exit(0)
+prompt = sys.stdin.read()
+with open(os.environ["FAKE_CODEX_LOG"], "a") as fh:
+    fh.write(json.dumps({{"args": args, "cwd": os.getcwd(), "prompt": prompt}}) + "\\n")
+if os.environ.get("FAKE_CODEX_MODE") == "error":
+    print(json.dumps({{"type": "turn.failed", "error": {{"message": "model not found"}}}}))
+    sys.exit(1)
+schema = json.load(open(args[args.index("--output-schema") + 1]))
+assert schema["required"] == ["grades"]
+ids = [int(n) for n in re.findall(r"^### Field (\\d+):", prompt, re.M)]
+grades = [{{"id": i, "confidence": 0.95 if i else 0.4, "issue": f"field {{i}}"}} for i in ids]
+with open(args[args.index("--output-last-message") + 1], "w") as fh:
+    json.dump({{"grades": grades}}, fh)
+print(json.dumps({{"type": "thread.started", "thread_id": "t"}}))
+print(json.dumps({{"type": "turn.completed", "usage": {{"input_tokens": 100,
+    "cached_input_tokens": 60, "output_tokens": 7}}}}))
+"""
+
+
+@pytest.fixture
+def fake_codex(tmp_path: Path, monkeypatch) -> Path:
+    bin_dir = tmp_path / "codex-bin"
+    bin_dir.mkdir()
+    script = bin_dir / "codex"
+    script.write_text(FAKE_CODEX.format(python=sys.executable))
+    script.chmod(0o755)
+    log = tmp_path / "codex-calls.jsonl"
+    monkeypatch.setenv("PATH", f"{bin_dir}:/usr/bin:/bin")
+    monkeypatch.setenv("FAKE_CODEX_LOG", str(log))
+    return log
+
+
+def _set_models(project: Path, block: str) -> None:
+    config = project / "litschema.yaml"
+    config.write_text(config.read_text() + "\n" + block)
+
+
+@pytest.mark.parametrize(
+    ("block", "options", "expected"),
+    [
+        ("", {}, ("claude-code", "claude-sonnet-5")),
+        ("models:\n  grade:\n    model: claude-haiku-4-5\n", {}, ("claude-code", "claude-haiku-4-5")),
+        (
+            "models:\n  grade:\n    harness: codex\n    model: gpt-x\n",
+            {},
+            ("codex", "gpt-x"),
+        ),
+        (
+            "models:\n  grade:\n    harness: codex\n    model: gpt-x\n",
+            {"model": "gpt-y"},
+            ("codex", "gpt-y"),
+        ),
+        # A model configured for one harness is not passed to another.
+        (
+            "models:\n  grade:\n    harness: codex\n    model: gpt-x\n",
+            {"harness": "claude-code"},
+            ("claude-code", "claude-sonnet-5"),
+        ),
+    ],
+)
+def test_grader_settings_precedence(project, block, options, expected) -> None:
+    _set_models(project, block)
+    cfg = load_config(project / "litschema.yaml", reload=True)
+
+    settings = grading.grader_settings(cfg, **options)
+
+    assert (settings.harness, settings.model) == expected
+
+
+@pytest.mark.parametrize(
+    ("block", "options", "message"),
+    [
+        ("", {"harness": "gemini"}, "unknown grading harness 'gemini'"),
+        ("", {"harness": "codex"}, "needs a model: set `models.grade.model`"),
+        ("models: [grade]\n", {}, "must be a mapping"),
+    ],
+)
+def test_grader_settings_refuse_bad_config(project, block, options, message) -> None:
+    _set_models(project, block)
+    cfg = load_config(project / "litschema.yaml", reload=True)
+
+    with pytest.raises(grading.GraderConfigError, match=re.escape(message)):
+        grading.grader_settings(cfg, **options)
+
+
+def test_grade_with_codex_from_the_config(project, fake_codex) -> None:
+    _set_models(project, "models:\n  grade:\n    harness: codex\n    model: gpt-x\n")
+
+    result = _grade(project, ARTICLE)
+
+    assert result.exit_code == 0, result.output + result.stderr
+    [call] = _calls(fake_codex)
+    args = call["args"]
+    article_dir = str((project / "data" / "papers" / ARTICLE).resolve())
+    assert args[0] == "exec" and args[-1] == "-"
+    assert args[args.index("--model") + 1] == "gpt-x"
+    assert args[args.index("--sandbox") + 1] == "read-only"
+    assert args[args.index("--cd") + 1] == article_dir
+    assert {"--ephemeral", "--ignore-user-config", "--skip-git-repo-check", "--json"} <= set(args)
+    [path] = list(grading.grades_dir(_run(project)).glob("*.json"))
+    record = json.loads(path.read_text())
+    assert record["grader"]["harness"] == "codex"
+    assert record["grader"]["harness_version"] == "0.154.0"
+    assert record["grader"]["requested_model"] == "gpt-x"
+    assert record["grader"]["model"] is None
+    assert record["fields"][0] == {"path": "site_name", "confidence": 0.4, "issue": "field 0"}
+    assert record["usage"] == {
+        "input_tokens": 100,
+        "output_tokens": 7,
+        "cache_read_input_tokens": 60,
+        "cache_creation_input_tokens": 0,
+        "cost_estimate_usd": None,
+    }
+    # --all skips it on the requested model.
+    assert grading.has_current_grade(_run(project), "gpt-x")
+
+
+def test_codex_gets_cited_figures_as_images(project, fake_codex) -> None:
+    article = project / "data" / "papers" / ARTICLE
+    lines = (article / "article.md").read_text().split("\n")
+    (article / "figures").mkdir(exist_ok=True)
+    (article / "figures" / "fig1.png").write_bytes(b"png")
+    lines[0] = "![](figures/fig1.png)"
+    (article / "article.md").write_text("\n".join(lines))
+    reasoning_path = _run(project).reasoning
+    reasoning = json.loads(reasoning_path.read_text())
+    reasoning["fields"][0]["source_lines"] = "L1"
+    reasoning_path.write_text(json.dumps(reasoning))
+
+    result = _grade(project, ARTICLE, "--harness", "codex", "--model", "gpt-x")
+
+    assert result.exit_code == 0, result.output + result.stderr
+    [call] = _calls(fake_codex)
+    assert f"--image={(article / 'figures' / 'fig1.png').resolve()}" in call["args"]
+
+
+def test_a_failed_codex_call_writes_nothing(project, fake_codex, monkeypatch) -> None:
+    monkeypatch.setenv("FAKE_CODEX_MODE", "error")
+
+    result = _grade(project, ARTICLE, "--harness", "codex", "--model", "gpt-x")
+
+    assert result.exit_code == 1
+    assert "codex reported an error: model not found" in result.output
+    assert not grading.grades_dir(_run(project)).exists()
+
+
+def test_codex_without_a_model_exits_2(project, fake_codex) -> None:
+    result = _grade(project, ARTICLE, "--harness", "codex")
+
+    assert result.exit_code == 2
+    assert "needs a model" in result.output

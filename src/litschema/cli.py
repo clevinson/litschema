@@ -403,13 +403,21 @@ def verify(
     webapp_app.run_app(project.config, port=port, open_browser=open_browser)
 
 
-@app.command(help="Grade extraction runs against their cited evidence with claude -p.")
+@app.command(
+    help="Grade extraction runs against their cited evidence with a second model, through "
+    "the Claude Code or Codex CLI. Set the default with `models.grade` in litschema.yaml."
+)
 def grade(
     ctx: typer.Context,
     article_id: str | None = typer.Argument(None, help="Article to grade"),
     all_articles: bool = typer.Option(False, "--all", help="Grade every article's active run."),
     run_id: str | None = typer.Option(None, "--run", help="Grade this run instead of the active one."),
-    model: str | None = typer.Option(None, "--model", help="Grader model (default claude-sonnet-5)."),
+    harness: str | None = typer.Option(
+        None, "--harness", help="claude-code or codex (default: models.grade.harness, else claude-code)."
+    ),
+    model: str | None = typer.Option(
+        None, "--model", help="Grader model (default: models.grade.model, else claude-sonnet-5)."
+    ),
     force: bool = typer.Option(False, "--force", help="With --all, regrade runs that already have a grade."),
     concurrency: int = typer.Option(2, "--concurrency", min=1, help="Runs graded at once."),
 ):
@@ -426,7 +434,12 @@ def grade(
         raise typer.Exit(code=2)
     project = _require_project(ctx)
     cfg = project.config
-    model = model or grading.DEFAULT_MODEL
+    try:
+        grader = grading.grader_settings(cfg, harness=harness, model=model)
+    except grading.GraderConfigError as exc:
+        typer.secho(f"{CROSS} {exc}", fg=typer.colors.RED)
+        raise typer.Exit(code=2) from None
+    model = grader.model
 
     failures: list[str] = []
     runs = []
@@ -467,11 +480,11 @@ def grade(
         typer.echo("nothing to grade")
         raise typer.Exit(code=1 if failures else 0)
     try:
-        executable = grading.claude_executable()
-    except grading.ClaudeNotFoundError as exc:
+        executable = grading.harness_executable(grader.harness)
+    except grading.HarnessNotFoundError as exc:
         typer.secho(f"{CROSS} {exc}", fg=typer.colors.RED)
         raise typer.Exit(code=1) from None
-    harness_version = grading.claude_version(executable)
+    harness_version = grading.harness_version(executable)
     descriptions = grading.slot_descriptions(cfg)
 
     def one(run):
@@ -479,7 +492,7 @@ def grade(
             return grading.grade_run(
                 cfg,
                 run,
-                model=model,
+                grader=grader,
                 executable=executable,
                 harness_version=harness_version,
                 descriptions=descriptions,
@@ -1533,6 +1546,13 @@ def init(
         'article_store_dir: "data/papers"\n'
         'paper_inbox_dir: "papers-inbox"\n'
         f'{PIN_KEY}: "{installed_version()}"\n'
+        "\n"
+        "# Which agent CLI and model each step uses.\n"
+        "# harness: claude-code (Claude Code CLI) or codex (Codex CLI).\n"
+        "models:\n"
+        "  grade:\n"
+        "    harness: claude-code\n"
+        "    model: claude-sonnet-5\n"
     )
     _write_draft_schema(project)
     _ensure_gitignore_entries(project)
