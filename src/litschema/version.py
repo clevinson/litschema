@@ -151,7 +151,7 @@ def check_project(cfg: LitSchemaConfig, skill_names: list[str]) -> VersionCheck:
             f"this project is pinned to litschema {pin}; you're running {version_line()}\n"
             f"{use_pin}\n"
             f'  Or pin the project to {running}:  set {PIN_KEY}: "{running}" in '
-            f"{cfg.config_path.name}, then run `litschema skills install --local --force`"
+            f"{cfg.config_path.name}, then run `litschema skills install --project --force`"
         )
 
     stale = []
@@ -167,6 +167,6 @@ def check_project(cfg: LitSchemaConfig, skill_names: list[str]) -> VersionCheck:
     if stale:
         errors.append(
             f"project skills ({', '.join(stale)}) don't match litschema {pin}; "
-            "run `litschema skills install --local --force` from the project root"
+            "run `litschema skills install --project --force` from the project root"
         )
     return VersionCheck(errors=errors, warnings=[])

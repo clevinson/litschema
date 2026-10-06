@@ -38,7 +38,7 @@ Init asks no questions and is scriptable. It refuses a file target, refuses any
 directory already containing `litschema.yaml`, and refuses a nonempty
 non-project directory unless `--force` is given. `--force` permits creation
 alongside existing files but never overwrites them. Existing projects are
-managed through config edits and `skills install --local --force`, not re-init.
+managed through config edits and `skills install --project --force`, not re-init.
 
 Templates may be copied as starting material. Onboarding does not configure
 parallel schema versions or import a framework base schema.

@@ -34,9 +34,10 @@ on your machine: `~/.claude` for Claude Code, `~/.codex` or `~/.agents` for
 Codex (or `$CLAUDE_CONFIG_DIR` and `$CODEX_HOME`). It installs the skills where
 each agent looks, `.claude/skills/` or `.agents/skills/`. For Codex it also
 writes `.codex/config.toml`, which allows network access in this project so DOI
-lookups work. Pass `--agent claude-code`, `--agent codex`, or `--agent all` to
-choose. A collaborator with a different agent runs
-`litschema skills install --local` in the project to add theirs.
+lookups work. If it finds neither, it asks you to choose with
+`--agent claude-code`, `--agent codex`, or `--agent all`, which also overrides
+detection. The skills are gitignored; each person runs
+`litschema skills install --project` for their own agent.
 
 `init` also writes a starter schema and pins the project to the installed
 litschema version; commands refuse to run under any other version until you

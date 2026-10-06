@@ -44,10 +44,14 @@ AGENTS = {
         "codex", "Codex", Path(".agents") / "skills", "CODEX_HOME", ".codex", (".agents",),
     ),
 }
-ALIASES = {"claude": "claude-code"}
+ALIASES = {"claude": "claude-code", "both": "all"}
 
 
 class UnknownAgentError(ValueError):
+    pass
+
+
+class NoAgentFoundError(ValueError):
     pass
 
 
@@ -76,10 +80,16 @@ def detected_agents() -> list[str]:
 
 
 def agents_to_set_up(explicit: list[str] | None = None) -> list[str]:
-    """--agent values, else the agents with a config directory, else all of them."""
+    """--agent values, else the agents whose config directory exists."""
     if explicit:
         return parse_agents(explicit)
-    return detected_agents() or list(AGENTS)
+    found = detected_agents()
+    if not found:
+        raise NoAgentFoundError(
+            "no Claude Code or Codex config found (~/.claude, ~/.codex, ~/.agents); "
+            "pass --agent claude-code, --agent codex, or --agent all"
+        )
+    return found
 
 
 def write_agent_config(project: Path, agents: list[str]) -> list[Path]:

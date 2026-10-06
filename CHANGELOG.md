@@ -63,10 +63,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 - `init` and `skills install --local` set the project up for each coding agent
   whose config folder exists, as roborev does: `~/.claude` (or
   `$CLAUDE_CONFIG_DIR`) for Claude Code, `~/.codex` (or `$CODEX_HOME`) or
-  `~/.agents` for Codex; both when neither is found. `--agent` chooses
-  explicitly. Skills go where each agent looks: `.claude/skills/` for Claude
+  `~/.agents` for Codex. When it finds neither, it asks for `--agent`, which
+  also overrides detection. Skills go where each agent looks: `.claude/skills/` for Claude
   Code, `.agents/skills/` for Codex. For Codex, `init` also writes
-  `.codex/config.toml` allowing network access so DOI lookups work. The version pin
+  `.codex/config.toml` allowing network access so DOI lookups work.
+- `skills install --local` is now `skills install --project` (`--local` still
+  works), matching the project/user scopes other agent tools use.
+- Project skills are gitignored: the pinned litschema version already fixes
+  their text, and each collaborator installs them for their own agent. In
+  existing projects, run `git rm -r --cached` on `.claude/skills/<skill>` and
+  `.agents/skills/<skill>` for litschema's skills to stop tracking them. The version pin
   checks every project copy. Global installs honor `$CLAUDE_CONFIG_DIR` and
   `$CODEX_HOME`.
 - Docs, `init`'s next steps, and the onboarding skill name Claude Code and

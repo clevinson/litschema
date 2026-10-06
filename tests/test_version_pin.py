@@ -79,7 +79,7 @@ def test_mismatched_pin_stops_every_project_command(tmp_path) -> None:
         assert "pinned to litschema 0.0.1" in result.stderr
         assert installed_version() in result.stderr
         assert "uv tool install litschema==0.0.1" in result.stderr
-        assert "skills install --local --force" in result.stderr
+        assert "skills install --project --force" in result.stderr
 
 
 def test_dev_pin_does_not_suggest_pypi(tmp_path) -> None:
@@ -128,7 +128,7 @@ def test_stale_project_skills_stop_until_reinstalled(tmp_path, monkeypatch, skil
     result = _run(project, "status")
     assert result.exit_code == VERSION_MISMATCH_EXIT_CODE
     assert "extract-article" in result.stderr
-    assert "skills install --local --force" in result.stderr
+    assert "skills install --project --force" in result.stderr
 
     monkeypatch.chdir(project)
     reinstall = CliRunner().invoke(cli.app, ["skills", "install", "--local", "--force"])

@@ -75,13 +75,29 @@ def test_init_sets_up_agents_whose_config_dir_exists(tmp_path, config_dirs) -> N
     assert "Open this folder in Codex" in result.output
 
 
-def test_init_with_no_config_dirs_sets_up_every_agent(tmp_path) -> None:
+def test_init_with_no_config_dirs_asks_for_agent(tmp_path, config_dirs) -> None:
+    project, result = _init(tmp_path)
+
+    assert result.exit_code == 2
+    assert "pass --agent claude-code, --agent codex, or --agent all" in result.output
+    assert not project.exists()
+
+
+def test_init_no_skills_needs_no_agent(tmp_path, config_dirs) -> None:
+    project, result = _init(tmp_path, "--no-skills", "--agent", "all")
+
+    assert result.exit_code == 0, result.output
+    assert not (project / ".claude").exists()
+
+
+def test_init_gitignores_litschema_skills(tmp_path) -> None:
     project, result = _init(tmp_path)
 
     assert result.exit_code == 0, result.output
-    assert (project / ".claude" / "skills" / "extract-article" / "SKILL.md").is_file()
-    assert (project / ".agents" / "skills" / "extract-article" / "SKILL.md").is_file()
-    assert (project / ".codex" / "config.toml").is_file()
+    gitignore = (project / ".gitignore").read_text().splitlines()
+    assert ".claude/skills/extract-article/" in gitignore
+    assert ".agents/skills/extract-article/" in gitignore
+    assert ".claude/skills/" not in gitignore  # the user's own skills stay trackable
 
 
 def test_init_agent_flag_overrides_detection(tmp_path, config_dirs) -> None:
@@ -117,7 +133,7 @@ def test_skills_install_local_adds_the_agents_on_this_machine(
     codex.mkdir()
     monkeypatch.chdir(project)
 
-    installed = CliRunner().invoke(cli.app, ["skills", "install", "--local"])
+    installed = CliRunner().invoke(cli.app, ["skills", "install", "--project"])
 
     assert installed.exit_code == 0, installed.output
     assert (project / ".agents" / "skills" / "extract-article" / "SKILL.md").is_file()

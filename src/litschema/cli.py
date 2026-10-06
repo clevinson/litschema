@@ -263,11 +263,11 @@ def _project_skill_destinations(project: Path, agents: list[str] | None = None) 
 
 
 def _choose_agents(explicit: list[str] | None) -> list[str]:
-    from .agents import UnknownAgentError, agents_to_set_up
+    from .agents import NoAgentFoundError, UnknownAgentError, agents_to_set_up
 
     try:
         return agents_to_set_up(explicit)
-    except UnknownAgentError as exc:
+    except (UnknownAgentError, NoAgentFoundError) as exc:
         typer.secho(f"{CROSS} {exc}", fg=typer.colors.RED)
         raise typer.Exit(code=2) from None
 
@@ -1133,13 +1133,15 @@ def agent_record_extraction(
 )
 def skills_install(
     agent: str = typer.Option(
-        "auto", "--agent", help="Agent destination: auto, claude, codex, or both"
+        "auto", "--agent", help="Agent: auto (detected), claude-code, codex, or all"
     ),
-    local: bool = typer.Option(
+    project_scope: bool = typer.Option(
         False,
+        "--project",
         "--local",
         help="Install into the current project for each agent whose config directory "
-        "exists (.claude/skills for Claude Code, .agents/skills for Codex)",
+        "exists (.claude/skills for Claude Code, .agents/skills for Codex). "
+        "--local is the old name.",
     ),
     experimental: bool = typer.Option(
         False, "--experimental", help="Also install experimental skills"
@@ -1152,11 +1154,12 @@ def skills_install(
         typer.secho("no bundled skills found", fg=typer.colors.RED)
         raise typer.Exit(code=2)
 
-    if local:
-        from .agents import agents_to_set_up, write_agent_config
+    if project_scope:
+        from .agents import write_agent_config
 
         root = Path.cwd()
-        agents = agents_to_set_up()
+        agents = _choose_agents([agent] if agent != "auto" else None)
+        _ensure_gitignore_entries(root, _skill_gitignore_entries())
         destinations = _project_skill_destinations(root, agents)
         for path in write_agent_config(root, agents):
             typer.echo(f"{CHECK} wrote {path.relative_to(root)} (network on for DOI lookups)")
@@ -1395,7 +1398,7 @@ def doctor(ctx: typer.Context):
             "(looked in ./.claude/skills, ./.agents/skills, and the global skill dirs)"
         )
         issues.append(
-            "run `litschema skills install --local` from the project "
+            "run `litschema skills install --project` from the project "
             "(or `litschema skills install` for a global install)"
         )
 
@@ -1465,9 +1468,19 @@ def _write_draft_schema(project: Path) -> None:
         )
 
 
-def _ensure_gitignore_entries(project: Path) -> None:
-    gitignore_path = project / ".gitignore"
+def _skill_gitignore_entries() -> list[str]:
     entries = [
+        "# litschema's agent skills: `litschema skills install --project` installs",
+        "# them for the pinned version.",
+    ]
+    for relative in PROJECT_SKILL_DIRS:
+        entries += [f"{relative.as_posix()}/{skill.name}/" for skill in _skill_sources()]
+    return entries
+
+
+def _ensure_gitignore_entries(project: Path, entries: list[str] | None = None) -> None:
+    gitignore_path = project / ".gitignore"
+    entries = entries or [
         ".venv/",
         ".litschema/",
         "papers-inbox/*.pdf",
@@ -1478,6 +1491,7 @@ def _ensure_gitignore_entries(project: Path) -> None:
         "data/papers/*/article.md",
         "data/papers/*/figures/",
         ".DS_Store",
+        *_skill_gitignore_entries(),
     ]
     if not gitignore_path.exists():
         gitignore_path.write_text("\n".join(entries) + "\n")
@@ -1522,7 +1536,7 @@ def init(
         typer.secho(
             f"{CROSS} {project} is already a litschema project (litschema.yaml exists). "
             "Edit litschema.yaml directly, or run "
-            "'litschema skills install --local --force' from inside the project "
+            "'litschema skills install --project --force' from inside the project "
             "to refresh skills",
             fg=typer.colors.RED,
         )
@@ -1587,7 +1601,7 @@ def init(
                 destination,
                 copy=True,
                 force=False,
-                overwrite_hint="run 'litschema skills install --local --force' "
+                overwrite_hint="run 'litschema skills install --project --force' "
                 "from inside the project to replace",
             )
             count = max(count, installed)
@@ -1618,7 +1632,7 @@ def init(
         typer.echo("     you, converts the PDFs, and extracts your papers")
     else:
         typer.echo(
-            "  3. Install agent skills (`litschema skills install --local` from the project),"
+            "  3. Install agent skills (`litschema skills install --project` from the project),"
         )
         typer.echo("     then open the folder in your agent and ask for the litschema-onboard skill")
     typer.echo("  4. `litschema verify` any time to review what's been extracted")

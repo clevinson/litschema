@@ -47,7 +47,7 @@ def test_init_scaffolds_standalone_project(tmp_path) -> None:
     assert f"cd {project}" in result.output
     assert "/litschema-onboard" in result.output
     assert "/litschema-assemble" not in result.output
-    assert "litschema skills install --local" not in result.output
+    assert "litschema skills install --project" not in result.output
     assert "litschema convert" not in result.output
     assert "/litschema-builder" not in result.output
     assert "papers-inbox/" in result.output
@@ -239,8 +239,8 @@ def test_init_no_skills_opts_out(tmp_path) -> None:
     assert not (project / ".claude").exists()
     # Next steps must not advertise a slash command that was not installed:
     # the install step comes first, the slash command only after it.
-    assert "litschema skills install --local" in result.output
-    assert result.output.index("skills install --local") < result.output.index(
+    assert "litschema skills install --project" in result.output
+    assert result.output.index("skills install --project") < result.output.index(
         "litschema-onboard skill"
     )
 
