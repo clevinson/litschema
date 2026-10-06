@@ -60,7 +60,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ### Changed
 
-- `init` and `skills install --local` set the project up for each coding agent
+- `init` and `skills install --project` set the project up for each coding agent
   whose config folder exists, as roborev does: `~/.claude` (or
   `$CLAUDE_CONFIG_DIR`) for Claude Code, `~/.codex` (or `$CODEX_HOME`) or
   `~/.agents` for Codex. When it finds neither, it asks for `--agent`, which
