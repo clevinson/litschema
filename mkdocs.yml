@@ -42,6 +42,7 @@ nav:
   - Concepts: concepts.md
   - Reviewing: reviewing.md
   - File formats: file-formats.md
+  - Data and security: data-and-security.md
   - CLI: cli.md
   - Specs: https://github.com/clevinson/litschema/tree/main/specs
   - Changelog: https://github.com/clevinson/litschema/blob/main/CHANGELOG.md
