@@ -24,8 +24,7 @@ it:
 Everything runs on your machine, through the coding agents you already have
 ([Claude Code](https://claude.com/claude-code) or
 [Codex](https://developers.openai.com/codex)), paid by your own subscription or API key. See
-[supported coding agents](quickstart.md#supported-coding-agents). The only
-other network calls are optional DOI lookups.
+[supported coding agents](quickstart.md#supported-coding-agents).
 
 !!! warning "Alpha software"
     File formats can change before 1.0. Each release lists its breaking
