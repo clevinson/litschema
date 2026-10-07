@@ -45,7 +45,7 @@ def test_init_scaffolds_standalone_project(tmp_path) -> None:
     assert "reasoning:" not in schema
     assert "Next steps" in result.output
     assert f"cd {project}" in result.output
-    assert "/litschema-onboard" in result.output
+    assert "/litschema" in result.output
     assert "/litschema-assemble" not in result.output
     assert "litschema skills install --project" not in result.output
     assert "litschema convert" not in result.output
@@ -226,7 +226,7 @@ def test_init_installs_skills_project_locally(tmp_path) -> None:
 
     assert result.exit_code == 0
     assert (project / ".claude" / "skills" / "extract-article" / "SKILL.md").is_file()
-    assert (project / ".claude" / "skills" / "litschema-onboard" / "SKILL.md").is_file()
+    assert (project / ".claude" / "skills" / "litschema" / "SKILL.md").is_file()
 
 
 def test_init_no_skills_opts_out(tmp_path) -> None:
@@ -243,7 +243,7 @@ def test_init_no_skills_opts_out(tmp_path) -> None:
     # the install step comes first, the slash command only after it.
     assert "litschema skills install --project" in result.output
     assert result.output.index("skills install --project") < result.output.index(
-        "litschema-onboard skill"
+        "run the litschema skill"
     )
 
 
