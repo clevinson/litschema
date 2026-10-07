@@ -1,7 +1,8 @@
 # What goes in git
 
 A litschema project is meant to live in a git repository. `init` writes a
-`.gitignore` that keeps the papers out and everything you made in.
+A litschema project is meant to live in a git repository. `init` writes a
+`.gitignore` for keeping paper PDFs, article.md, and figures out of the commit history.
 
 **Committed:**
 
