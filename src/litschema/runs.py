@@ -379,6 +379,7 @@ def resolve_skill_file(cfg: LitSchemaConfig, override: Path | None = None) -> Pa
         / "skills" / "extract-article" / "SKILL.md",
         Path(os.environ.get("CODEX_HOME") or Path.home() / ".codex")
         / "skills" / "extract-article" / "SKILL.md",
+        Path.home() / ".agents" / "skills" / "extract-article" / "SKILL.md",
     ]
     for candidate in candidates:
         if candidate.is_file():

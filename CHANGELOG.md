@@ -72,9 +72,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 - Project skills are gitignored: the pinned litschema version already fixes
   their text, and each collaborator installs them for their own agent. In
   existing projects, run `git rm -r --cached` on `.claude/skills/<skill>` and
-  `.agents/skills/<skill>` for litschema's skills to stop tracking them. The version pin
-  checks every project copy. Global installs honor `$CLAUDE_CONFIG_DIR` and
-  `$CODEX_HOME`.
+  `.agents/skills/<skill>` for litschema's skills to stop tracking them. The
+  version pin checks every project copy.
+- Global installs honor `$CLAUDE_CONFIG_DIR` and `$CODEX_HOME`. For Codex they
+  use `~/.codex/skills`, or `~/.agents/skills` when only `~/.agents` exists.
+- When a project already has a `.codex/config.toml` without network access,
+  `init` and `skills install --project` leave it alone and warn that DOI
+  lookups will fail inside Codex.
 - Docs, `init`'s next steps, and the onboarding skill name Claude Code and
   Codex instead of Claude Code alone.
 - A run published from a Codex shell records `harness: codex` and its version

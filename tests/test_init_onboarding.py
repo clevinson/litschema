@@ -181,7 +181,9 @@ def test_doctor_ignores_unrelated_skills(tmp_path, monkeypatch) -> None:
     unrelated = project / ".claude" / "skills" / "totally-unrelated"
     unrelated.mkdir(parents=True)
     unrelated.joinpath("SKILL.md").write_text("something else\n")
-    monkeypatch.setattr(cli, "_agent_skill_destinations", lambda agent: [])
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.delenv("CLAUDE_CONFIG_DIR", raising=False)
+    monkeypatch.delenv("CODEX_HOME", raising=False)
     monkeypatch.chdir(project)
 
     result = runner.invoke(cli.app, ["--config", str(project / "litschema.yaml"), "doctor"])

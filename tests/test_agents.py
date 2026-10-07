@@ -138,3 +138,66 @@ def test_skills_install_local_adds_the_agents_on_this_machine(
     assert installed.exit_code == 0, installed.output
     assert (project / ".agents" / "skills" / "extract-article" / "SKILL.md").is_file()
     assert (project / ".codex" / "config.toml").is_file()
+
+
+def test_global_install_uses_the_shared_agents_dir_without_codex(
+    tmp_path, config_dirs, monkeypatch
+) -> None:
+    shared = tmp_path / "home" / ".agents"
+    shared.mkdir(parents=True)
+
+    result = CliRunner().invoke(cli.app, ["skills", "install", "--agent", "codex"])
+
+    assert result.exit_code == 0, result.output
+    assert (shared / "skills" / "extract-article" / "SKILL.md").is_file()
+    assert not (tmp_path / "codex-home").exists()
+
+
+def test_global_install_prefers_the_codex_dir_when_it_exists(tmp_path, config_dirs) -> None:
+    _claude, codex = config_dirs
+    codex.mkdir()
+    (tmp_path / "home" / ".agents").mkdir(parents=True)
+
+    result = CliRunner().invoke(cli.app, ["skills", "install"])
+
+    assert result.exit_code == 0, result.output
+    assert (codex / "skills" / "extract-article" / "SKILL.md").is_file()
+    assert not (tmp_path / "home" / ".agents" / "skills").exists()
+
+
+def test_global_install_with_nothing_detected_asks_for_agent(config_dirs) -> None:
+    result = CliRunner().invoke(cli.app, ["skills", "install"])
+
+    assert result.exit_code == 2
+    assert "pass --agent" in result.output
+
+
+@pytest.mark.parametrize(
+    ("config", "warned"),
+    [
+        ('model = "gpt-x"\n', True),
+        ("[sandbox_workspace_write]\nnetwork_access = false\n", True),
+        ("[sandbox_workspace_write]\nnetwork_access = true\n", False),
+    ],
+)
+def test_an_existing_codex_config_is_kept_and_checked(tmp_path, config, warned) -> None:
+    project = tmp_path / "review"
+    (project / ".codex").mkdir(parents=True)
+    (project / ".codex" / "config.toml").write_text(config)
+
+    result = CliRunner().invoke(cli.app, ["init", str(project), "--force", "--agent", "codex"])
+
+    assert result.exit_code == 0, result.output
+    assert (project / ".codex" / "config.toml").read_text() == config
+    assert ("doesn't allow network access" in result.output) is warned
+
+
+def test_doctor_runs_with_no_agent_detected(tmp_path, config_dirs, monkeypatch) -> None:
+    project, result = _init(tmp_path, "--agent", "codex")
+    assert result.exit_code == 0, result.output
+    monkeypatch.chdir(project)
+
+    doctor = CliRunner().invoke(cli.app, ["doctor"])
+
+    assert "Traceback" not in doctor.output
+    assert "litschema agent skills installed (project-local)" in doctor.output

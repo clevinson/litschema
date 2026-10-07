@@ -105,13 +105,13 @@ def test_skills_install_auto_requires_existing_agent_config(tmp_path, monkeypatc
     from litschema import cli
 
     monkeypatch.delenv("LITSCHEMA_CONFIG", raising=False)
-    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr("litschema.agents.Agent.detected", lambda self: False)
 
     result = CliRunner().invoke(cli.app, ["skills", "install"])
 
     assert result.exit_code == 2, result.output
-    assert "no Claude Code or Codex config directory found" in result.output
-    assert "--agent claude" in result.output
+    assert "no Claude Code or Codex config found" in result.output
+    assert "--agent claude-code" in result.output
 
 
 def test_bundled_skills_are_included_in_wheel() -> None:

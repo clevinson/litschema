@@ -9,6 +9,7 @@ since other agents read it too.
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -29,11 +30,21 @@ class Agent:
     config_dir_default: str
     also_detected_by: tuple[str, ...] = ()
 
+    def config_dir(self) -> Path:
+        return Path(os.environ.get(self.config_dir_env) or Path.home() / self.config_dir_default)
+
     def detected(self) -> bool:
-        config_dir = os.environ.get(self.config_dir_env) or Path.home() / self.config_dir_default
-        return Path(config_dir).is_dir() or any(
+        return self.config_dir().is_dir() or any(
             (Path.home() / marker).is_dir() for marker in self.also_detected_by
         )
+
+    def global_skills_dir(self) -> Path:
+        """The agent's own skills dir; a shared ~/.agents when that's all there is."""
+        if not self.config_dir().is_dir():
+            for marker in self.also_detected_by:
+                if (Path.home() / marker).is_dir():
+                    return Path.home() / marker / "skills"
+        return self.config_dir() / "skills"
 
 
 AGENTS = {
@@ -90,6 +101,19 @@ def agents_to_set_up(explicit: list[str] | None = None) -> list[str]:
             "pass --agent claude-code, --agent codex, or --agent all"
         )
     return found
+
+
+def codex_network_note(project: Path, agents: list[str]) -> str | None:
+    """A warning when the project's own Codex config leaves network off."""
+    path = project / ".codex" / "config.toml"
+    if "codex" not in agents or not path.is_file():
+        return None
+    if re.search(r"^\s*network_access\s*=\s*true\b", path.read_text(), re.MULTILINE):
+        return None
+    return (
+        ".codex/config.toml doesn't allow network access, so DOI lookups fail inside "
+        "Codex; `litschema verify` fetches them when it starts"
+    )
 
 
 def write_agent_config(project: Path, agents: list[str]) -> list[Path]:

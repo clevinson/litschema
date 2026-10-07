@@ -237,20 +237,20 @@ def _skill_sources(*, experimental: bool = False) -> list[Path]:
 
 
 def _agent_skill_destinations(agent: str) -> list[Path]:
-    home = Path.home()
-    config_dirs = {
-        "claude": Path(os.environ.get("CLAUDE_CONFIG_DIR") or home / ".claude"),
-        "codex": Path(os.environ.get("CODEX_HOME") or home / ".codex"),
-    }
-    destinations = {name: path / "skills" for name, path in config_dirs.items()}
-    agent = agent.lower()
-    if agent == "auto":
-        return [destinations[name] for name, path in config_dirs.items() if path.exists()]
-    if agent == "both":
-        return [destinations["claude"], destinations["codex"]]
-    if agent in destinations:
-        return [destinations[agent]]
-    raise typer.BadParameter("--agent must be one of: auto, claude, codex, both")
+    from .agents import AGENTS
+
+    names = _choose_agents([agent] if agent != "auto" else None)
+    return [AGENTS[name].global_skills_dir() for name in names]
+
+
+def _write_agent_config(project: Path, agents: list[str]) -> None:
+    from .agents import codex_network_note, write_agent_config
+
+    for path in write_agent_config(project, agents):
+        typer.echo(f"{CHECK} wrote {path.relative_to(project)} (network on for DOI lookups)")
+    note = codex_network_note(project, agents)
+    if note:
+        typer.secho(f"{WARN} {note}", fg=typer.colors.YELLOW)
 
 
 def _project_skill_destinations(project: Path, agents: list[str] | None = None) -> list[Path]:
@@ -1155,23 +1155,13 @@ def skills_install(
         raise typer.Exit(code=2)
 
     if project_scope:
-        from .agents import write_agent_config
-
         root = Path.cwd()
         agents = _choose_agents([agent] if agent != "auto" else None)
         _ensure_gitignore_entries(root, _skill_gitignore_entries())
         destinations = _project_skill_destinations(root, agents)
-        for path in write_agent_config(root, agents):
-            typer.echo(f"{CHECK} wrote {path.relative_to(root)} (network on for DOI lookups)")
+        _write_agent_config(root, agents)
     else:
         destinations = _agent_skill_destinations(agent)
-        if not destinations:
-            typer.secho(
-                "no Claude Code or Codex config directory found; use "
-                "`--agent claude`, `--agent codex`, `--agent both`, or `--local`",
-                fg=typer.colors.RED,
-            )
-            raise typer.Exit(code=2)
 
     installed = 0
     for destination in destinations:
@@ -1385,8 +1375,10 @@ def doctor(ctx: typer.Context):
     where = "project-local"
     if not installed:
         where = "global"
-        for skills_dir in _agent_skill_destinations("auto"):
-            installed.extend(_bundled_in(skills_dir))
+        from .agents import AGENTS
+
+        for known in AGENTS.values():
+            installed.extend(_bundled_in(known.global_skills_dir()))
     if installed:
         typer.echo(
             f"{CHECK} litschema agent skills installed ({where}): "
@@ -1569,7 +1561,7 @@ def init(
             )
             raise typer.Exit(code=2)
 
-    from .agents import AGENTS, write_agent_config
+    from .agents import AGENTS
 
     agents = _choose_agents(agent)
 
@@ -1590,8 +1582,7 @@ def init(
     )
     _write_draft_schema(project)
     _ensure_gitignore_entries(project)
-    for path in write_agent_config(project, agents):
-        typer.echo(f"{CHECK} wrote {path.relative_to(project)} (network on for DOI lookups)")
+    _write_agent_config(project, agents)
 
     if not no_skills:
         count = 0
