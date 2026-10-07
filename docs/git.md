@@ -6,7 +6,7 @@ A litschema project is meant to live in a git repository. `init` writes a
 **Committed:**
 
 - `litschema.yaml`, your schema, `domain_context.md`, and
-  `.codex/config.toml` if `init` wrote one
+  `.codex/config.toml` (if using codex)
 - per paper: `article-metadata.json`, `prepared-text.json`, `active-run.json`
 - per run: the extraction, reasoning, `run.json`, grades, and `review.json`
 
@@ -17,7 +17,7 @@ A litschema project is meant to live in a git repository. `init` writes a
   PDF
 - `.litschema/`, the cache that `mcp` and the agent's schema files use
 - litschema's skills in `.claude/skills/` and `.agents/skills/`, which
-  `litschema skills install --project` installs for the pinned version
+  `litschema skills install --project` installs
 
 Most papers can't be redistributed, so the repository stays shareable. A
 collaborator installs the pinned litschema version, runs
