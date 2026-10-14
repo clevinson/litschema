@@ -23,6 +23,7 @@ def test_init_scaffolds_standalone_project(tmp_path) -> None:
     assert not (project / "data" / "sources" / "articles.csv").exists()
     assert (project / "papers-inbox").is_dir()
     assert (project / ".claude" / "skills" / "extract-article" / "SKILL.md").is_file()
+    assert (project / ".agents" / "skills" / "extract-article" / "SKILL.md").is_file()
     gitignore = (project / ".gitignore").read_text()
     assert "papers-inbox/*.pdf" in gitignore
     assert "papers-inbox/.processed/*.pdf" in gitignore
@@ -47,7 +48,7 @@ def test_init_scaffolds_standalone_project(tmp_path) -> None:
     assert f"cd {project}" in result.output
     assert "/litschema-onboard" in result.output
     assert "/litschema-assemble" not in result.output
-    assert "litschema skills install --local" not in result.output
+    assert "litschema skills install --project" not in result.output
     assert "litschema convert" not in result.output
     assert "/litschema-builder" not in result.output
     assert "papers-inbox/" in result.output
@@ -181,7 +182,9 @@ def test_doctor_ignores_unrelated_skills(tmp_path, monkeypatch) -> None:
     unrelated = project / ".claude" / "skills" / "totally-unrelated"
     unrelated.mkdir(parents=True)
     unrelated.joinpath("SKILL.md").write_text("something else\n")
-    monkeypatch.setattr(cli, "_agent_skill_destinations", lambda agent: [])
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.delenv("CLAUDE_CONFIG_DIR", raising=False)
+    monkeypatch.delenv("CODEX_HOME", raising=False)
     monkeypatch.chdir(project)
 
     result = runner.invoke(cli.app, ["--config", str(project / "litschema.yaml"), "doctor"])
@@ -239,9 +242,9 @@ def test_init_no_skills_opts_out(tmp_path) -> None:
     assert not (project / ".claude").exists()
     # Next steps must not advertise a slash command that was not installed:
     # the install step comes first, the slash command only after it.
-    assert "litschema skills install --local" in result.output
-    assert result.output.index("skills install --local") < result.output.index(
-        "/litschema-onboard"
+    assert "litschema skills install --project" in result.output
+    assert result.output.index("skills install --project") < result.output.index(
+        "litschema-onboard skill"
     )
 
 

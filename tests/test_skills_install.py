@@ -77,6 +77,7 @@ def test_skills_install_local_uses_project_claude_skills_dir(tmp_path, monkeypat
     assert result.exit_code == 0, result.output
     assert (project / ".claude" / "skills" / "extract-article" / "SKILL.md").is_file()
     assert (project / ".claude" / "skills" / "litschema-onboard" / "SKILL.md").is_file()
+    assert (project / ".agents" / "skills" / "litschema-onboard" / "SKILL.md").is_file()
     assert not (project / ".claude" / "skills" / "litschema-assemble" / "SKILL.md").exists()
     assert not (project / ".claude" / "skills" / "litschema-builder" / "SKILL.md").exists()
     assert not (tmp_path / "home" / ".claude" / "skills").exists()
@@ -104,13 +105,13 @@ def test_skills_install_auto_requires_existing_agent_config(tmp_path, monkeypatc
     from litschema import cli
 
     monkeypatch.delenv("LITSCHEMA_CONFIG", raising=False)
-    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr("litschema.agents.Agent.detected", lambda self: False)
 
     result = CliRunner().invoke(cli.app, ["skills", "install"])
 
     assert result.exit_code == 2, result.output
-    assert "no Claude Code or Codex config directory found" in result.output
-    assert "--agent claude" in result.output
+    assert "no Claude Code or Codex config found" in result.output
+    assert "--agent claude-code" in result.output
 
 
 def test_bundled_skills_are_included_in_wheel() -> None:
