@@ -486,6 +486,9 @@ def grade(
         typer.secho(f"{CROSS} {exc}", fg=typer.colors.RED)
         raise typer.Exit(code=1) from None
     harness_version = grading.harness_version(executable)
+    notice = grading.api_billing_notice() if grader.harness == "claude-code" else None
+    if notice:
+        typer.echo(f"{DIM}note: {notice}{RESET}")
     descriptions = grading.slot_descriptions(cfg)
 
     def one(run):

@@ -65,6 +65,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ### Changed
 
+- The Claude Code grader no longer removes `ANTHROPIC_API_KEY`,
+  `ANTHROPIC_AUTH_TOKEN`, or `ANTHROPIC_BASE_URL` from its environment. It
+  pays the way your `claude` does, like extraction, so API-key and gateway
+  users can grade. `grade` prints a note when a key will bill the API.
 - The grading rubric no longer names Claude Code's Read tool, so its hash
   changed: `grade --all` regrades runs graded before this release.
 - `export` help and docs say what it writes: every value with review

@@ -83,8 +83,11 @@ claude -p "Grade the fields described on stdin." --model <model>
 ```
 
 The prompt goes on stdin; the working directory is the article directory.
-`ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, and `ANTHROPIC_BASE_URL` are
-removed from the child environment so the call uses the logged-in account.
+The call inherits the user's environment, so it pays the way their `claude`
+does: the logged-in account, or `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`,
+or a gateway in `ANTHROPIC_BASE_URL` when set. When `ANTHROPIC_API_KEY` or
+`ANTHROPIC_AUTH_TOKEN` is set, `grade` prints a note that grading bills the
+API.
 `--bare` is never passed. A non-zero exit, `is_error: true`, output that is not JSON, or a
 result with no usable grades fails that run and writes nothing.
 
@@ -215,7 +218,7 @@ and citations past the end; the rubric hash; slot descriptions and values in
 the prompt, with the extractor's basis and note; parsing with missing, extra,
 repeated, invalid, and null-confidence grades; band thresholds and the
 version-1 verdict mapping; the
-reported model; credential stripping; newest-grade selection, stale and corrupt
+reported model; the API billing note; newest-grade selection, stale and corrupt
 grades; settings precedence and refusals; and the command end to end against a fake
 `claude` or `codex` placed first on PATH: the stored record, the exact flags and environment, `--run`, `--all`
 skipping and `--force`, regrading after a stale grade, ungraded fields, failed
