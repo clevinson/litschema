@@ -14,7 +14,7 @@ release ships).
 - `specs/` — normative capability contracts; see `specs/README.md` for the
   convention. **Read a capability's `spec.md` before changing its surface,
   and update the spec in the same change if behavior moves.**
-- `skills/` — bundled agent skills (`extract-article`, `litschema-onboard`)
+- `skills/` — bundled agent skills (`litschema`, `extract-article`)
   installed into user projects via `litschema skills install`
 
 ## Commands
