@@ -85,7 +85,7 @@ jobs:
           skills = resources.files("litschema") / "skills"
           names = sorted(p.name for p in skills.iterdir() if (p / "SKILL.md").is_file())
           assert "extract-article" in names, names
-          assert "litschema-onboard" in names, names
+          assert "litschema" in names, names
           print("bundled skills:", ", ".join(names))
           EOF
 
