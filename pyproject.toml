@@ -2,7 +2,7 @@
 name = "litschema"
 dynamic = ["version"]
 description = "Schema-driven, agentic extraction of structured data from scientific literature. LinkML-native, local-first, with bundled agent skills."
-requires-python = ">=3.13"
+requires-python = ">=3.13,<3.14"
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
