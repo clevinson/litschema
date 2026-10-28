@@ -65,8 +65,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ### Changed
 
-- litschema requires Python 3.13. `onnxruntime`, which PDF conversion needs,
-  has no wheels for 3.15 yet, and uv picks the newest Python it can.
+- litschema requires Python 3.13 or 3.14. `onnxruntime`, which PDF conversion
+  needs, has no wheels for 3.15 yet, and uv picks the newest Python it can.
 - The Claude Code grader no longer removes `ANTHROPIC_API_KEY`,
   `ANTHROPIC_AUTH_TOKEN`, or `ANTHROPIC_BASE_URL` from its environment. It
   pays the way your `claude` does, like extraction, so API-key and gateway
