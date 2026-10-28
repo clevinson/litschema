@@ -1,20 +1,25 @@
 ---
-name: litschema-onboard
-description: "Guided first-run onboarding for a litschema project: draft the extraction schema with the user, assemble their PDFs, run a pilot extraction, extract the full collection, and hand off to the verifier. Use when a user wants to set up, onboard, or start extracting in a litschema project."
+name: litschema
+description: "Run a litschema project from wherever it stands: design or revise the extraction schema with the user, prepare and extract their papers (one pilot first), grade the values, and hand off to review. Use when a user wants to set up, continue, add papers to, or check on a litschema project."
 context: fork
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep, Task
 ---
 
-# litschema onboarding conductor
+# litschema conductor
 
-You take a first-time user from "PDFs in the inbox" to "verifier open on
-extracted data" in one conversation. The deterministic steps are CLI calls;
-your job is the judgment between them — drafting the schema with the user and
-checking extraction quality.
+You take a user from "PDFs in the inbox" to "review app open on extracted
+data", starting from wherever their project stands. The deterministic steps
+are CLI calls; your job is the judgment between them: designing the schema
+with the user and checking extraction quality.
+
+Extraction has two layers. Preparing a paper's text (`prepare-text`) is the
+first: close to deterministic, cached, and skipped when already done. Reading
+that text into the schema is the second, and it's where the user's judgment
+comes in.
 
 ## Voice — read this first
 
-This is someone's first contact with litschema. Keep the surface tiny.
+This may be someone's first contact with litschema. Keep the surface tiny.
 
 - **One question per message.** Never batch questions. Ask, wait for the
   answer, then ask the next one.
@@ -50,7 +55,24 @@ Before your first message:
 
    Any later command that exits 3 means the same thing: stop and relay it.
 
-## Phase 0 — welcome and what's in the inbox (your first message)
+## Where are we? (silent)
+
+Read the `litschema status` output from the pre-check and pick the first that
+applies. Phases run in order from there; don't redo finished ones.
+
+- **No schema yet** (`schema/extraction.yaml` defines only the scaffold's
+  `DraftExtraction.article_id`): first run. Start at Phase 0.
+- **A schema, and papers in `papers-inbox/` or articles with no active run:**
+  say in one line how many papers are new or unextracted, then go to Phase B.
+  If no paper has a run yet, the pilot (Phase C) comes next; otherwise skip to
+  Phase D.
+- **Every paper extracted:** offer grading if runs have no grade, then Phase E.
+- **The user asked for something specific** (add papers, re-extract one, or
+  revise the schema before anything is reviewed): do that phase, then return
+  here. Changing the schema after papers are reviewed is a separate workflow
+  litschema doesn't support yet; say so in one line.
+
+## Phase 0 — welcome and what's in the inbox (first run only)
 
 1. **Welcome (2–3 sentences, plain language).** The reader is a researcher or
    policy/NGO professional working through a large body of literature —
@@ -139,7 +161,7 @@ If `schema/extraction.yaml` already defines real fields beyond the scaffold
 6. **Confirm.** Show the user the field list — name, type, one-line meaning —
    and iterate until they're happy.
 
-## Phase B — intake
+## Phase B — prepare (the first layer of extraction)
 
 1. Run `litschema assemble`.
 2. Run `litschema prepare-text --all`.
@@ -157,7 +179,7 @@ Tell the user in one line when their papers are in and ready.
    app for you, or start it yourself?" — options roughly **"Launch it"** /
    **"I'll launch it on my own."**
    - **Launch it:** run `litschema verify` as a background process
-     (non-blocking, so onboarding keeps going). It serves on loopback and opens
+     (non-blocking, so the session keeps going). It serves on loopback and opens
      the user's browser at http://localhost:8000 (pass `--port` if 8000 is
      taken). Leave it running for the rest of the session — don't stop it.
    - **They'll start it:** give them the command once (`litschema verify`) and move on.

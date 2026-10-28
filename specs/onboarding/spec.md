@@ -8,7 +8,7 @@ later refinement.
 
 ## Implementation status
 
-Live today: `litschema init`, `skills install`, and the `/litschema-onboard`
+Live today: `litschema init`, `skills install`, and the `litschema` skill
 conductor end to end, writing extractions to the article-root layout.
 
 Pending: run-shaped extraction output. Steps 4 and 5 below publish `initial`
@@ -21,7 +21,7 @@ user-facing flow does not otherwise change.
 ```text
 litschema init <dir>
   → place PDFs in papers-inbox/
-  → /litschema-onboard
+  → litschema skill
   → litschema verify
 ```
 
@@ -43,7 +43,7 @@ managed through config edits and `skills install --project --force`, not re-init
 Templates may be copied as starting material. Onboarding does not configure
 parallel schema versions or import a framework base schema.
 
-## `/litschema-onboard` conductor
+## `litschema` skill conductor
 
 The project-local skill owns the first run. This is a first-time user's first
 contact with the tool, so the conductor's surface is deliberately narrow: one
@@ -106,7 +106,9 @@ manifest directly.
 
 ## Interruption and rerun
 
-Onboarding is resumable. Existing intake artifacts remain, complete published
+Onboarding is resumable, and the skill is the entry point for every later
+session: it reads `litschema status` and starts at the first unfinished phase
+(schema, prepare, pilot, the rest, grading, handoff). Existing intake artifacts remain, complete published
 runs remain immutable, active selections remain valid, and incomplete staging
 does not appear as a run. Rerunning skips accepted active current-schema work
 and retries missing or error-only articles. It does not create a same-schema
@@ -115,8 +117,10 @@ rerun unless the user explicitly requests that separate workflow.
 ## Invariants
 
 - PDFs enter through `papers-inbox/`.
-- `/litschema-onboard` remains the first-run conductor.
-- Init is offline, noninteractive, create-only, and never re-initializes.
+- The `litschema` skill remains the conductor, for the first run and reruns.
+- Init is offline, noninteractive, create-only, and never re-initializes. It
+  sets up the coding agents whose config folders exist, or those named with
+  `--agent`.
 - The project has one current schema; Git stores its history.
 - First successful extractions become immutable initial runs with per-article
   active selection.
