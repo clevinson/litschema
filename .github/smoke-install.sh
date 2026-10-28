@@ -10,7 +10,8 @@ uv tool install "$WHEEL"
 litschema --version
 
 cd "$WORK"
-litschema init smoke
+# A runner has no ~/.claude or ~/.codex, so name the agents.
+litschema init smoke --agent all
 cd smoke
 litschema status
 

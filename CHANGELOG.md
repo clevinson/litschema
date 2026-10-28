@@ -65,12 +65,37 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ### Changed
 
+- litschema requires Python 3.13 or 3.14. `onnxruntime`, which PDF conversion
+  needs, has no wheels for 3.15 yet, and uv picks the newest Python it can.
 - The Claude Code grader no longer removes `ANTHROPIC_API_KEY`,
   `ANTHROPIC_AUTH_TOKEN`, or `ANTHROPIC_BASE_URL` from its environment. It
   pays the way your `claude` does, like extraction, so API-key and gateway
   users can grade. `grade` prints a note when a key will bill the API.
 - The grading rubric no longer names Claude Code's Read tool, so its hash
   changed: `grade --all` regrades runs graded before this release.
+- `init` and `skills install --project` set the project up for each coding agent
+  whose config folder exists, as roborev does: `~/.claude` (or
+  `$CLAUDE_CONFIG_DIR`) for Claude Code, `~/.codex` (or `$CODEX_HOME`) or
+  `~/.agents` for Codex. When it finds neither, it asks for `--agent`, which
+  also overrides detection. Skills go where each agent looks: `.claude/skills/` for Claude
+  Code, `.agents/skills/` for Codex. For Codex, `init` also writes
+  `.codex/config.toml` allowing network access so DOI lookups work.
+- `skills install --local` is now `skills install --project` (`--local` still
+  works), matching the project/user scopes other agent tools use.
+- Project skills are gitignored: the pinned litschema version already fixes
+  their text, and each collaborator installs them for their own agent. In
+  existing projects, run `git rm -r --cached` on `.claude/skills/<skill>` and
+  `.agents/skills/<skill>` for litschema's skills to stop tracking them. The
+  version pin checks every project copy.
+- Global installs honor `$CLAUDE_CONFIG_DIR` and `$CODEX_HOME`. For Codex they
+  use `~/.codex/skills`, or `~/.agents/skills` when only `~/.agents` exists.
+- When a project already has a `.codex/config.toml` without network access,
+  `init` and `skills install --project` leave it alone and warn that DOI
+  lookups will fail inside Codex.
+- Docs, `init`'s next steps, and the onboarding skill name Claude Code and
+  Codex instead of Claude Code alone.
+- A run published from a Codex shell records `harness: codex` and its version
+  from `CODEX_VERSION`.
 - `export` help and docs say what it writes: every value with review
   corrections applied, including unreviewed ones. It prints how many articles
   are fully, partly, and not reviewed.
