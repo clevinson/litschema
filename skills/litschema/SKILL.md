@@ -235,7 +235,7 @@ Tell the user, briefly:
   otherwise); the body is per-field accept / edit / sign-off of what it SAYS.
 - Optional: `litschema grade --all` has a second model check each value
   against its cited lines (it runs through their own agent CLI login;
-  `--model` picks a cheaper model). The app then lists flagged
+  `--model` picks a cheaper model). The review app then lists flagged
   fields first in each paper and counts them on the overview.
 - Their dataset lives in `data/papers/<id>/`, in git, reproducible.
 - Re-running this later is safe — finished work is skipped.

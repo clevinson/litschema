@@ -1190,7 +1190,7 @@ def skills_install(
     if installed == 0:
         typer.echo("No skills installed.")
     else:
-        typer.echo("\nAsk your agent to use them by name (Claude Code: /name, Codex: $name):")
+        typer.echo("\nRun them by name (Claude Code: /name, Codex: $name):")
         for skill_dir in skill_sources:
             typer.echo(f"  {skill_dir.name}")
 
@@ -1640,7 +1640,7 @@ def init(
     )
     if onboard_available:
         labels = " or ".join(AGENTS[name].label for name in agents)
-        typer.echo(f"  3. Open this folder in {labels} (CLI or app)")
+        typer.echo(f"  3. Open this folder in {labels} (terminal or desktop app)")
         typer.echo(
             "     and run the litschema skill (/litschema in Claude Code, $litschema in Codex):"
         )
@@ -1649,7 +1649,7 @@ def init(
         typer.echo(
             "  3. Install agent skills (`litschema skills install --project` from the project),"
         )
-        typer.echo("     then open the folder in your agent and run the litschema skill")
+        typer.echo("     then open the folder in Claude Code or Codex and run the litschema skill")
     typer.echo("  4. `litschema verify` any time to review what's been extracted")
 
 
