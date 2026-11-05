@@ -64,14 +64,15 @@ run beside the old one. PDFs and the text converted from them stay out of git.
 
 ## How it works
 
-- **The agent extracts; litschema checks.** Validation rejects fields your
-  schema doesn't define and citations to lines that don't exist.
+- **The coding agent extracts; litschema checks.** Validation rejects fields
+  your schema doesn't define and citations to lines that don't exist.
 - **A second model grades** each value against its cited lines, and the review
-  app shows flagged values first. You can pin the grader to a specific harness
-  and model. In an 18-paper pilot, 85% of stated values scored 0.9 or higher
+  app shows flagged values first. You can choose the grader's harness and
+  model. In an 18-paper pilot, 85% of stated values scored 0.9 or higher
   and 29% of inferred values scored below 0.6.
-- **You review in a local app.** Each verify, correction, or removal is one
-  entry in `review.json`, so the git diff is the audit log.
+- **You review in your browser.** The review app runs locally and records each
+  verify, correction, or removal as one entry in `review.json`, so the git diff
+  is the audit log.
 - **Export** writes the values with your corrections, plus one provenance
   record per paper: DOI, run, model, review status, and grade flags.
 
@@ -86,12 +87,15 @@ the [CLI reference](https://litschema.readthedocs.io/en/latest/cli/). The
 [specs](https://github.com/clevinson/litschema/blob/main/specs/README.md) are
 the contract for what's implemented.
 
+## Upgrading
+
+`init` pins each project to the installed litschema version
+(`litschema_version` in `litschema.yaml`), and commands refuse to run under any
+other. To upgrade a project, install the new version, edit the pin, and run
+`litschema skills install --project --force`.
+
 ## Development
 
 ```bash
 uv tool install --editable path/to/litschema --force
 ```
-
-Each project pins the litschema version it runs with (`litschema_version` in
-`litschema.yaml`). To move it, install the version you want, edit the pin, and
-run `litschema skills install --project --force`.
