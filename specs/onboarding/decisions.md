@@ -194,3 +194,22 @@ install source that produced each run.
 **Rejected:** a compatible-range pin, which would let a patch release change a
 format unnoticed before 1.0; and keeping `uv run litschema` for projects with a
 `pyproject.toml`, a second resolution rule the pin makes unnecessary.
+
+## 2026-10-06 — One `litschema` skill that resumes from project state (supersedes "first-run only" in refinement/decisions.md, 2026-07-14)
+
+**Context:** "onboarding" read as a one-time tour of the tool, but the skill
+does the research work itself: designing a schema from the user's papers, a
+pilot extraction, then the batch. Users come back to it after adding papers or
+revising the schema, and a first-run-only conductor left them nothing to run.
+
+**Decision:** rename `litschema-onboard` to `litschema` (`/litschema` in
+Claude Code, `$litschema` in Codex). It reads `litschema status` and starts at
+the first unfinished phase: schema design, prepare, pilot, the rest, grading,
+handoff. Text preparation is the first, nearly deterministic and cacheable
+layer of extraction rather than a separate preprocessing step. Changing the
+schema after any paper is reviewed stays out of scope; that is refinement, and
+the skill says so.
+
+**Rejected:** "preprocessing and extraction" as the name for the work, which
+undersells schema design and suggests text conversion only; "schema
+co-design", accurate but awkward in the README's table.
