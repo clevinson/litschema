@@ -47,7 +47,8 @@ exact string, and exits 3 on a mismatch. The message names both versions, the
 install command for the pinned one, and the edit that moves the project up.
 Moving a project to a new release is a deliberate edit to `litschema.yaml`.
 
-The same check covers skills copied into `<project>/.claude/skills/`. Each
+The same check covers skills copied into `<project>/.claude/skills/` and
+`<project>/.agents/skills/`. Each
 copy carries the litschema version that installed it in its frontmatter
 (`litschema_version`), and a copy whose stamp differs from the pin also exits
 3, naming `litschema skills install --project --force`. Symlinked skills track

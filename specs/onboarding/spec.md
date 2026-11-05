@@ -30,6 +30,16 @@ Init creates `litschema.yaml`, `domain_context.md`, the one current
 project-local agent skills unless `--no-skills` is given. The draft schema has
 one minimal local `tree_root: true` class.
 
+Init and `skills install --project` set the project up for each coding agent
+whose config directory exists: `$CLAUDE_CONFIG_DIR` or `~/.claude` for Claude
+Code, `$CODEX_HOME`, `~/.codex` or `~/.agents` for Codex. `--agent claude-code`,
+`--agent codex` or `--agent all` overrides detection; when no agent is found and
+none is given, the command exits 2 and asks for `--agent`. Skills go to
+`.claude/skills/` for Claude Code and `.agents/skills/` for Codex, and are
+gitignored. For Codex, init also writes `.codex/config.toml` with network
+access on so DOI lookups work; an existing `.codex/config.toml` without it is
+left alone with a warning.
+
 Init asks no questions and is scriptable. It refuses a file target, refuses any
 directory already containing `litschema.yaml`, and refuses a nonempty
 non-project directory unless `--force` is given. `--force` permits creation
