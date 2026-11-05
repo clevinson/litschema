@@ -1,7 +1,8 @@
 # What goes in git
 
 A litschema project is meant to live in a git repository. `init` writes a
-`.gitignore` for keeping paper PDFs, article.md, and figures out of the commit history.
+`.gitignore` for keeping paper PDFs, `article.md`, and figures out of the
+commit history.
 
 **Committed:**
 
@@ -22,8 +23,9 @@ A litschema project is meant to live in a git repository. `init` writes a
 Most papers can't be redistributed, so the repository stays shareable. A
 collaborator installs the pinned litschema version, runs
 `litschema skills install --project` for their agent, adds their own copies of
-the PDFs, and runs `litschema prepare-text --all`. `prepared-text.json` records the hashes of the
-PDF and the text, so you can both check you're reading the same thing.
+the PDFs, and runs `litschema prepare-text --all`. `prepared-text.json`
+records the hashes of the PDF and the text, so you can both check you're
+reading the same thing.
 
 Before you make the repository public, keep in mind that extracted values,
 the extractor's notes, and the grader's issues can quote short passages from

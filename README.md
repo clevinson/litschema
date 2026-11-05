@@ -17,8 +17,9 @@ litschema extracts structured data from scientific papers into a
 - a second model's probability that it's correct;
 - your verdict, once you've reviewed it.
 
-It runs on your machine, through a configured coding agent (Claude
-Code or Codex), paid by your own subscription or API key. Docs: [litschema.readthedocs.io](https://litschema.readthedocs.io/).
+It runs on your machine, through a configured coding agent (Claude Code or
+Codex), paid by your own subscription or API key.
+Docs: [litschema.readthedocs.io](https://litschema.readthedocs.io/).
 
 ## What you get
 
@@ -62,16 +63,16 @@ lists each release's breaking changes and known limits.
 ## Specs
 
 The [specs](https://github.com/clevinson/litschema/blob/main/specs/README.md)
-describe what's implemented now. Anything deferred says so and links to where
-it's tracked.
+describe what's implemented now. Anything not built yet says so.
 
 ## The flow
 
 ```bash
 litschema init my-project       # scaffold a project
                                 # copy PDFs into papers-inbox/
-                                # ask your agent for litschema-onboard:
-                                #   it drafts your schema, pilots, extracts
+                                # in Claude Code or Codex, run
+                                #   litschema-onboard: it drafts your
+                                #   schema, pilots, extracts
 litschema grade --all           # a second model scores every value
 litschema verify                # you: review what was extracted
 litschema export                # values with your corrections

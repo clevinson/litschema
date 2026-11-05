@@ -1,7 +1,7 @@
 # Quickstart
 
-Litschema requires Python 3.13+, [uv](https://docs.astral.sh/uv/), and a coding agent
-set up with your subscription or an API key.
+Litschema requires Python 3.13+, [uv](https://docs.astral.sh/uv/), and a
+coding agent set up with your subscription or an API key.
 
 ## Supported coding agents
 
@@ -11,9 +11,10 @@ set up with your subscription or an API key.
 | [Codex](https://developers.openai.com/codex) | yes | yes |
 | [pi](https://pi.dev) | coming soon | coming soon |
 
-Onboarding and extraction run as skills in the agent you work in, CLI or
-desktop app. Grading calls the agent's CLI, so install the CLI even if you work
-in the app. The grader doesn't have to be the agent you extract with.
+Onboarding and extraction run as skills in Claude Code or Codex, in the
+terminal or the desktop app. Grading runs the `claude` or `codex` command, so
+it must be on your PATH even if you work in a desktop app. You can grade with
+a different coding agent than the one that extracted.
 
 ## Install
 
@@ -29,20 +30,20 @@ litschema init my-review
 cd my-review
 ```
 
-`init` sets the project up for the configured coding agents: `~/.claude` for Claude Code, `~/.codex` or `~/.agents` for
-Codex (or `$CLAUDE_CONFIG_DIR` and `$CODEX_HOME`). It installs the skills in the relevant `.claude/skills/` or `.agents/skills/` folder. For Codex it also
-writes `.codex/config.toml`, which allows network access in this project so DOI
-lookups work.
+`init` sets the project up for each configured coding agent and installs its
+skills in `.claude/skills/` (Claude Code) or `.agents/skills/` (Codex). For
+Codex it also writes `.codex/config.toml`, which allows network access so DOI
+lookups work. To choose agents yourself, pass `--agent`; see
+[coding agents](cli.md#coding-agents).
 
 `init` also writes a starter schema and pins the project to the installed
-litschema version; commands refuse to run under any other version until you
-edit the pin.
+litschema version.
 
 Copy your PDFs into `papers-inbox/`.
 
 ## Draft a schema and extract
 
-Open the project folder in your agent and run the onboarding skill:
+Open the project in Claude Code or Codex and run the onboarding skill:
 `/litschema-onboard` in Claude Code, `$litschema-onboard` in Codex. Asking it
 to "set up litschema" works too.
 
@@ -58,8 +59,8 @@ litschema grade --all
 ```
 
 A second model scores each value against its cited lines, once per paper,
-through a configurable coding agent (Claude Code or Codex). To pin the
-grader to a specific harness and model, set it in `litschema.yaml`:
+through a configurable coding agent (Claude Code or Codex). To choose the
+grader's harness and model, set them in `litschema.yaml`:
 
 ```yaml
 models:
@@ -68,9 +69,9 @@ models:
     model: gpt-6-astra
 ```
 
-`--harness` and `--model` override the pin for one run. The grader pays the way
-your agent does: your subscription, or an API key or gateway set in your
-shell, in which case `grade` says so before it starts.
+`--harness` and `--model` override that setting for one run. The grader is
+billed like the coding agent it runs: your subscription, or an API key or
+gateway set in your shell, in which case `grade` says so before it starts.
 
 ## Review
 

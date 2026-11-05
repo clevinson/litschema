@@ -23,6 +23,14 @@ Extraction runs as an agent skill (`extract-article`), and litschema
 validates and publishes what the agent writes. A headless `litschema extract`
 is planned.
 
+## Coding agents
+
+`init` and `skills install --project` set up each coding agent whose config
+folder exists: `~/.claude` (or `$CLAUDE_CONFIG_DIR`) for Claude Code, and
+`~/.codex` (or `$CODEX_HOME`) or `~/.agents` for Codex. If neither exists, they
+stop and ask for `--agent`. Pass `--agent claude-code`, `--agent codex` or
+`--agent all` to choose.
+
 ## Exit codes
 
 `0` success, `1` failure, `2` usage error, `3` the project's
