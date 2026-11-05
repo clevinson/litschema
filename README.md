@@ -17,9 +17,9 @@ litschema extracts structured data from scientific papers into a
 - a second model's probability that it's correct;
 - your verdict, once you've reviewed it.
 
-It runs on your machine. Models run through your own Claude Code install; the
-only other network calls are optional DOI lookups and ORCID name lookups in
-the review app. Docs: [litschema.readthedocs.io](https://litschema.readthedocs.io/).
+It runs on your machine, through a configured coding agent (Claude Code or
+Codex), paid by your own subscription or API key.
+Docs: [litschema.readthedocs.io](https://litschema.readthedocs.io/).
 
 ## What you get
 
@@ -63,24 +63,26 @@ lists each release's breaking changes and known limits.
 ## Specs
 
 The [specs](https://github.com/clevinson/litschema/blob/main/specs/README.md)
-describe what's implemented now. Anything deferred says so and links to where
-it's tracked.
+describe what's implemented now. Anything not built yet says so.
 
 ## The flow
 
 ```bash
 litschema init my-project       # scaffold a project
                                 # copy PDFs into papers-inbox/
-/litschema-onboard              # agent: drafts your schema, pilots, extracts
+                                # in Claude Code or Codex, run
+                                #   litschema-onboard: it drafts your
+                                #   schema, pilots, extracts
 litschema grade --all           # a second model scores every value
 litschema verify                # you: review what was extracted
 litschema export                # values with your corrections
 ```
 
-`init` installs the `/litschema-onboard` skill into `.claude/skills/`. It
-drafts a LinkML schema with you from your own papers, converts the PDFs,
-extracts one paper as a pilot so you can adjust the schema, then extracts the
-rest.
+`init` installs the litschema-onboard skill where Claude Code
+(`.claude/skills/`) and Codex (`.agents/skills/`) look for skills. Run it with
+`/litschema-onboard` in Claude Code or `$litschema-onboard` in Codex. It drafts
+a LinkML schema with you from your own papers, converts the PDFs, extracts one
+paper as a pilot so you can adjust the schema, then extracts the rest.
 
 ## Install
 
@@ -92,7 +94,7 @@ litschema --version
 `init` pins each project to the installed version (`litschema_version` in
 `litschema.yaml`), and commands refuse to run under any other. To move a
 project to another version, install it, edit the pin, and run
-`litschema skills install --local --force`.
+`litschema skills install --project --force`.
 
 To try an unreleased commit or work on litschema itself:
 
@@ -120,8 +122,8 @@ litschema skills install           install the agent skills
 litschema agent ...                steps the extraction skill calls
 ```
 
-Extraction runs as an agent skill (`/extract-article <id>`), and litschema
-checks what the agent writes. A headless `litschema extract` is planned.
+Extraction runs as an agent skill (`extract-article`), and litschema checks
+what the agent writes. A headless `litschema extract` is planned.
 
 ## How it works
 

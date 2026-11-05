@@ -1,7 +1,20 @@
 # Quickstart
 
-You need Python 3.13+, [uv](https://docs.astral.sh/uv/), and
-[Claude Code](https://claude.com/claude-code) logged in to your account.
+Litschema requires Python 3.13+, [uv](https://docs.astral.sh/uv/), and a
+coding agent set up with your subscription or an API key.
+
+## Supported coding agents
+
+| Coding agent | Onboarding and extraction | Grading |
+| --- | --- | --- |
+| [Claude Code](https://claude.com/claude-code) | yes | yes |
+| [Codex](https://developers.openai.com/codex) | yes | yes |
+| [pi](https://pi.dev) | coming soon | coming soon |
+
+Onboarding and extraction run as skills in Claude Code or Codex, in the
+terminal or the desktop app. Grading runs the `claude` or `codex` command, so
+it must be on your PATH even if you work in a desktop app. You can grade with
+a different coding agent than the one that extracted.
 
 ## Install
 
@@ -17,24 +30,27 @@ litschema init my-review
 cd my-review
 ```
 
-`init` writes `litschema.yaml`, a starter schema, and the agent skills into
-`.claude/skills/`. It also pins the project to the installed litschema version;
-commands refuse to run under any other version until you edit the pin.
+`init` sets the project up for each configured coding agent and installs its
+skills in `.claude/skills/` (Claude Code) or `.agents/skills/` (Codex). For
+Codex it also writes `.codex/config.toml`, which allows network access so DOI
+lookups work. To choose agents yourself, pass `--agent`; see
+[coding agents](cli.md#coding-agents).
+
+`init` also writes a starter schema and pins the project to the installed
+litschema version.
 
 Copy your PDFs into `papers-inbox/`.
 
 ## Draft a schema and extract
 
-Open Claude Code in the project and run the onboarding skill:
-
-```text
-/litschema-onboard
-```
+Open the project in Claude Code or Codex and run the onboarding skill:
+`/litschema-onboard` in Claude Code, `$litschema-onboard` in Codex. Asking it
+to "set up litschema" works too.
 
 It reads a few of your papers, drafts a LinkML schema with you, converts the
 PDFs to text, extracts one paper as a pilot so you can adjust the schema, and
-then extracts the rest. To extract one paper by hand, run
-`/extract-article <article-id>`.
+then extracts the rest. To extract one paper by hand, ask for the
+`extract-article` skill with the article id.
 
 ## Grade
 
@@ -43,8 +59,8 @@ litschema grade --all
 ```
 
 A second model scores each value against its cited lines, once per paper,
-through a configurable coding agent (Claude Code or Codex). To pin the
-grader to a specific harness and model, set it in `litschema.yaml`:
+through a configurable coding agent (Claude Code or Codex). To choose the
+grader's harness and model, set them in `litschema.yaml`:
 
 ```yaml
 models:
@@ -53,9 +69,9 @@ models:
     model: gpt-6-astra
 ```
 
-`--harness` and `--model` override the pin for one run. The grader pays the way
-your agent does: your subscription, or an API key or gateway set in your
-shell, in which case `grade` says so before it starts.
+`--harness` and `--model` override that setting for one run. The grader is
+billed like the coding agent it runs: your subscription, or an API key or
+gateway set in your shell, in which case `grade` says so before it starts.
 
 ## Review
 

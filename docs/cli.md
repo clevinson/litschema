@@ -19,9 +19,17 @@ litschema agent ...                deterministic steps the extraction skill call
 
 Run `litschema <command> --help` for the options.
 
-Extraction runs as an agent skill (`/extract-article <id>`), and litschema
+Extraction runs as an agent skill (`extract-article`), and litschema
 validates and publishes what the agent writes. A headless `litschema extract`
 is planned.
+
+## Coding agents
+
+`init` and `skills install --project` set up each coding agent whose config
+folder exists: `~/.claude` (or `$CLAUDE_CONFIG_DIR`) for Claude Code, and
+`~/.codex` (or `$CODEX_HOME`) or `~/.agents` for Codex. If neither exists, they
+stop and ask for `--agent`. Pass `--agent claude-code`, `--agent codex` or
+`--agent all` to choose.
 
 ## Exit codes
 
