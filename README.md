@@ -17,7 +17,7 @@ litschema extracts structured data from scientific papers into a
 - a second model's probability that it's correct;
 - your verdict, once you've reviewed it.
 
-It runs on your machine, through the coding agents you already have (Claude
+It runs on your machine, through a configured coding agent (Claude
 Code or Codex), paid by your own subscription or API key. Docs: [litschema.readthedocs.io](https://litschema.readthedocs.io/).
 
 ## What you get

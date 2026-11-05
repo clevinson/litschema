@@ -1,14 +1,14 @@
 # Quickstart
 
-You need Python 3.13+, [uv](https://docs.astral.sh/uv/), and a coding agent
+Litschema requires Python 3.13+, [uv](https://docs.astral.sh/uv/), and a coding agent
 set up with your subscription or an API key.
 
 ## Supported coding agents
 
 | Coding agent | Onboarding and extraction | Grading |
 | --- | --- | --- |
-| [Claude Code](https://claude.com/claude-code) | yes | yes (the default) |
-| [Codex](https://developers.openai.com/codex) | yes, piloted on one paper | yes |
+| [Claude Code](https://claude.com/claude-code) | yes | yes |
+| [Codex](https://developers.openai.com/codex) | yes | yes |
 | [pi](https://pi.dev) | coming soon | coming soon |
 
 Onboarding and extraction run as skills in the agent you work in, CLI or
@@ -29,8 +29,7 @@ litschema init my-review
 cd my-review
 ```
 
-`init` sets the project up for each coding agent whose config folder exists
-on your machine: `~/.claude` for Claude Code, `~/.codex` or `~/.agents` for
+`init` sets the project up for the configured coding agents: `~/.claude` for Claude Code, `~/.codex` or `~/.agents` for
 Codex (or `$CLAUDE_CONFIG_DIR` and `$CODEX_HOME`). It installs the skills in the relevant `.claude/skills/` or `.agents/skills/` folder. For Codex it also
 writes `.codex/config.toml`, which allows network access in this project so DOI
 lookups work.

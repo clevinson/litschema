@@ -21,7 +21,7 @@ it:
 
 ![Reviewing one paper: the rendered text with cited lines highlighted, and the extracted fields with the grader's confidence](assets/audit.png)
 
-Everything runs on your machine, through the coding agents you already have
+Everything runs on your machine through a coding agent / harness such as
 ([Claude Code](https://claude.com/claude-code) or
 [Codex](https://developers.openai.com/codex)), paid by your own subscription or API key. See
 [supported coding agents](quickstart.md#supported-coding-agents).
