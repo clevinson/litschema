@@ -10,8 +10,8 @@ name: publish
 #        workflow: publish.yml   environment: pypi
 #   2. Create the `pypi` environment in the repository settings.
 #
-# Dispatch it from the release tag. Restore a tag trigger once PyPI is set up
-# (kata 0f2h).
+# Dispatch it from the release tag. A tag trigger stays off until releases
+# should publish on tag.
 on:
   workflow_dispatch:
 

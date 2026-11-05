@@ -1,6 +1,6 @@
 # Capability: article store
 
-Status: partially current.
+Status: current.
 
 The on-disk source of truth is one directory per document under
 `data/papers/<article-id>/`. This spec owns article identity, immutable
@@ -20,11 +20,8 @@ staged artifacts, computes the reproduction hashes, publishes atomically, and
 activates complete non-error runs. Every consumer (verifier, export, validate,
 status) resolves articles through the active run.
 
-Live today also: `runs list` and `runs activate`.
-
-Pending: `review.json` placement. The layout below shows it inside the run
-directory, but the version-1 review model still lives at the article root; it
-moves into the run with reviews v2 (`2gd1`).
+Live today also: `runs list` and `runs activate`, and `review.json` inside
+each run directory as the layout below shows.
 
 ## Layout
 

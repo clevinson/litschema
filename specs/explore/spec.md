@@ -13,8 +13,7 @@ Live today: `litschema export --format jsonl|csv [--output PATH]
 live with the provenance and summary keys below. Also live: the frozen DuckDB
 store and the `litschema mcp` server and its three tools.
 
-Pending: `--view audited`, so there is no audited-data projection yet. Tracked
-by `bmwn`.
+Pending: `--view audited`, so there is no audited-data projection yet.
 
 ## Record resolution
 

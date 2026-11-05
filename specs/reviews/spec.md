@@ -19,6 +19,10 @@ controlling entry — the exact one, else the nearest stored ancestor — so
 container coverage behaves the same on screen as it does in the store. Export,
 the explore store, and progress aggregation read v2 as well.
 
+Pending: carrying the human-origin mark of an `add` to consumers, both in the
+verifier and in the export audit sidecar (see the `add` op under Effective
+state and overlay).
+
 ## Stored model
 
 Each run may contain `review.json`:
@@ -155,7 +159,7 @@ recorded as human-origin and stays distinguishable from an agent value a human
 merely confirmed: the `add` op is itself the record, since no other op can
 produce a value the extraction never had. Carrying that distinction to
 consumers — rendering it in the verifier, and emitting it in the export audit
-sidecar — is not built; see kata `ncw4` and `bmwn`.
+sidecar — is not built.
 
 ## Canonical hierarchy
 

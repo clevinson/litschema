@@ -17,8 +17,8 @@ specs/
   `partially current`, `approved target`, or `draft`. `current` describes
   shipped behavior. `partially current` means some of the contract ships today
   and some does not; the spec must then carry an **Implementation status**
-  section naming the boundary and the issue tracking the rest, so a reader never
-  has to guess which half they are reading. `approved target` records an
+  section naming the boundary in plain words, so a reader never has to guess
+  which half they are reading. `approved target` records an
   accepted behavior change before implementation; its implementation and tests
   may lag, but competing current prose must be removed. `draft` is not
   approved. Behavioral requirements use WHEN/THEN phrasing where precision
@@ -93,6 +93,11 @@ ships the code. The status line and that section are the primary signal of
 what works. They are maintained as the code moves, not at release
 boundaries.
 
+Status describes the code in the same commit. A branch that changes
+behavior updates its specs on that branch, so `main` and `feat/multirun` each
+describe themselves. Specs don't cite issue-tracker IDs; the issue points at
+the spec section it changes, and the change that ships it updates the status.
+
 ## For agents
 
 Read the capability's `spec.md` (and skim `decisions.md`) before modifying any
@@ -114,5 +119,4 @@ proposals, the rest of the `runs` CLI (`trash`/`restore`/`purge`), the
 verifier `#/runs` route and refinement metrics, and run selection beyond
 publish-activates. It is developed spec-first.
 
-Export views (`--view audited` and the audit sidecar) don't depend on
-multirun.
+`export --view audited` doesn't depend on multirun.

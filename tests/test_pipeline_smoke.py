@@ -213,10 +213,10 @@ def test_every_fixture_citation_resolves_to_real_content() -> None:
     This fixture was hand-authored, and its first version had `source_lines`
     written by eye rather than read off the file: two citations landed on a
     blank line one past the sentence they meant. That is the same failure mode
-    `21c4` exists to catch, sitting inside the fixture that work would be
-    tested against.
+    as the blank-line citations seen in a real corpus, sitting inside the
+    fixture that work would be tested against.
 
-    This is also a working miniature of the check `21c4` proposes — every
+    This is also a working miniature of a stricter citation check — every
     `L<n>` in range, ranges well-ordered, and at least one cited line carrying
     content — which is why it is worth having even before that lands.
     """

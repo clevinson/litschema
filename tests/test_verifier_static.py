@@ -595,7 +595,7 @@ def test_inline_edit_has_typed_inputs_and_remove_affordance() -> None:
     assert "removeInlineEdit" in html
 
 
-# ── routes (ka84) ────────────────────────────────────────────────────────────
+# ── routes ───────────────────────────────────────────────────────────────────
 
 
 def test_verifier_exposes_overview_and_document_routes() -> None:

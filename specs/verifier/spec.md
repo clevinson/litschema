@@ -34,8 +34,7 @@ document review against an explicit active run, deep links that survive reload
 and the back button, and explicit surfacing of a corrupt review file.
 
 Pending: any UI for supplying omitted values. The `add` op works end to end
-through the API; the document view exposes no affordance for it. Tracked in
-kata `ncw4`, which holds the requirements.
+through the API; the document view exposes no affordance for it.
 
 Browser coverage lives in `tests/browser_verify_flow.py`, which drives the real
 click path and asserts both what lands in `review.json` and what the page
@@ -227,7 +226,8 @@ showing.
 Known limit: prepared text converted with old pymupdf4llm versions (for
 example erw-lit's April 2026 conversions) splits paragraphs at PDF line
 breaks, so rendered paragraphs can break mid-sentence until the document is
-re-converted (kata `03y2`).
+re-converted with the current converter (`litschema prepare-text <id>
+--force`).
 
 ### Document review
 
@@ -294,8 +294,7 @@ human-supplied values.
 
 That UI is deliberately unspecified here rather than specified-and-unbuilt.
 Its requirements, including why added values must render distinctly from
-uncited extracted ones, are held in kata `ncw4` and return to this spec when
-the affordance ships.
+uncited extracted ones, return to this spec when the affordance ships.
 
 ## Queue filter trust boundary
 
