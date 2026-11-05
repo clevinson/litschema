@@ -194,8 +194,7 @@ person who has to deal with it.
 Deleting runs — trash, restore, and purge — is deliberately absent. A
 superseded run stays on disk, inert but selectable, and nothing in this
 release removes one. That lifecycle, along with reprocessing a corpus after a
-schema change, is developed on the `feat/multirun` branch and is not specified
-here.
+schema change, is planned multirun work and is not specified here.
 
 ## Manifest and intake
 

@@ -91,8 +91,8 @@ version a project runs is the user's decision.
 
 Onboarding establishes a project and its first active runs. Changing an
 established schema and reprocessing a reviewed corpus is a future, separate
-workflow (refinement, developed on `feat/multirun`); the onboarding skill must
-not grow into it.
+workflow (refinement, planned for 0.2.0); the onboarding skill must not grow
+into it.
 
 ## Source metadata
 

@@ -252,8 +252,8 @@ or invalid-path file is `corrupt`. Corrupt state is never treated as empty:
 Because a review binds to one immutable run, rerunning an article will one day
 need its reviews carried forward conservatively — copied only where the source
 meaning and target mapping are proven, with everything unproven left for a
-human. That reconciliation workflow is developed on the `feat/multirun` branch
-and is deliberately not specified here. Re-extraction does create a further
+human. That reconciliation workflow is planned multirun work and is
+deliberately not specified here. Re-extraction does create a further
 run and activate it, and `runs activate` can select between published runs;
 what is absent is carrying reviews across them. Run-bound storage is what makes
 that possible later without changing this format.

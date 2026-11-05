@@ -96,9 +96,8 @@ One application shell exposes two route-level pages:
 | `#/doc/{article-id}` | one document's active-run review |
 
 The hash-route shell is also where future run-level visibility will hang — a
-route showing an article's runs and their states once articles can have more
-than one. That surface is developed on the `feat/multirun` branch and is not
-specified here.
+route showing each article's runs and their states. That surface is planned
+multirun work and is not specified here.
 
 Each route states where the user is and offers a marked way out. A document
 shows an Overview button in the app bar, and Esc does the same, so leaving

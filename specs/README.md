@@ -39,8 +39,7 @@ specs/
   inputs;
 - `reviews`: stored and effective review state and hierarchy;
 - `onboarding`: first-run flow;
-- `refinement`: deferred; a conceptual stub here, specified on
-  `feat/multirun`;
+- `refinement`: planned for 0.2.0, not started; a conceptual stub;
 - `explore`: export views, audit sidecars, DuckDB, and MCP;
 - `verifier`: web routes, read surfaces, and frontend constraints;
 - `grading`: the independent grader, its rubric, and stored grades;
@@ -94,8 +93,7 @@ what works. They are maintained as the code moves, not at release
 boundaries.
 
 Status describes the code in the same commit. A branch that changes
-behavior updates its specs on that branch, so `main` and `feat/multirun` each
-describe themselves. Specs don't cite issue-tracker IDs; the issue points at
+behavior updates its specs on that branch, so each branch describes itself. Specs don't cite issue-tracker IDs; the issue points at
 the spec section it changes, and the change that ships it updates the status.
 
 ## For agents
@@ -112,11 +110,12 @@ at the repo root, not here.
 
 0.1.x shipped the run-shaped on-disk format (`extraction-runs/<run-id>/`,
 `run.json`, `active-run.json`), run-bound reviews, the review app, grading,
-and PyPI publishing. Multirun targets 0.2.0 on `feat/multirun`: everything that
-exists because an article can have more than one meaningful run. That covers
+and PyPI publishing. Multirun is planned for 0.2.0 and not started: everything
+that exists because an article can have more than one meaningful run. That covers
 the refinement capability and `/litschema-refine`, review reconciliation and
 proposals, the rest of the `runs` CLI (`trash`/`restore`/`purge`), the
 verifier `#/runs` route and refinement metrics, and run selection beyond
-publish-activates. It is developed spec-first.
+publish-activates. It will be developed spec-first; the reasoning so far is in
+`refinement/decisions.md`.
 
 `export --view audited` doesn't depend on multirun.
