@@ -55,7 +55,7 @@ def test_init_pins_the_running_version_and_stamps_skills(tmp_path) -> None:
     assert f'litschema_version: "{installed_version()}"' in (
         project / "litschema.yaml"
     ).read_text()
-    for skill in ("extract-article", "litschema-onboard"):
+    for skill in ("extract-article", "litschema"):
         skill_md = project / ".claude" / "skills" / skill / "SKILL.md"
         assert read_skill_stamp(skill_md) == installed_version()
 

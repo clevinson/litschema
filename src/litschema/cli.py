@@ -1190,7 +1190,7 @@ def skills_install(
     if installed == 0:
         typer.echo("No skills installed.")
     else:
-        typer.echo("\nAsk your agent to use them by name (Claude Code: /name, Codex: $name):")
+        typer.echo("\nRun them by name (Claude Code: /name, Codex: $name):")
         for skill_dir in skill_sources:
             typer.echo(f"  {skill_dir.name}")
 
@@ -1627,7 +1627,7 @@ def init(
             typer.echo(f"{CHECK} installed {count} agent skill(s) into {where}")
 
     onboard_available = any(
-        destination.joinpath("litschema-onboard", "SKILL.md").exists()
+        destination.joinpath("litschema", "SKILL.md").exists()
         for destination in _project_skill_destinations(project)
     )
     typer.echo(f"{CHECK} initialized litschema project at {project}")
@@ -1636,20 +1636,20 @@ def init(
     typer.echo("  2. Drop PDFs into papers-inbox/")
     typer.echo(
         "     (documents with DOIs get bibliographic metadata synced automatically"
-        " during onboarding)"
+        " during extraction)"
     )
     if onboard_available:
         labels = " or ".join(AGENTS[name].label for name in agents)
-        typer.echo(f"  3. Open this folder in {labels} (CLI or app)")
+        typer.echo(f"  3. Open this folder in {labels} (terminal or desktop app)")
         typer.echo(
-            "     and ask it to run the litschema-onboard skill: it drafts your schema with"
+            "     and run the litschema skill (/litschema in Claude Code, $litschema in Codex):"
         )
-        typer.echo("     you, converts the PDFs, and extracts your papers")
+        typer.echo("     it designs your schema with you, then prepares and extracts your papers")
     else:
         typer.echo(
             "  3. Install agent skills (`litschema skills install --project` from the project),"
         )
-        typer.echo("     then open the folder in your agent and ask for the litschema-onboard skill")
+        typer.echo("     then open the folder in Claude Code or Codex and run the litschema skill")
     typer.echo("  4. `litschema verify` any time to review what's been extracted")
 
 

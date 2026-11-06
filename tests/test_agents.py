@@ -69,7 +69,7 @@ def test_init_sets_up_agents_whose_config_dir_exists(tmp_path, config_dirs) -> N
     project, result = _init(tmp_path)
 
     assert result.exit_code == 0, result.output
-    assert (project / ".agents" / "skills" / "litschema-onboard" / "SKILL.md").is_file()
+    assert (project / ".agents" / "skills" / "litschema" / "SKILL.md").is_file()
     assert not (project / ".claude").exists()
     assert "network_access = true" in (project / ".codex" / "config.toml").read_text()
     assert "Open this folder in Codex" in result.output

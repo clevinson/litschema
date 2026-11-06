@@ -9,7 +9,7 @@ later refinement.
 ## Implementation status
 
 Everything below is live: `litschema init`, `skills install`, and the
-`/litschema-onboard` conductor end to end, publishing each extraction as an
+`litschema` skill conductor end to end, publishing each extraction as an
 active run through `agent record-extraction`.
 
 ## First-run path
@@ -17,7 +17,7 @@ active run through `agent record-extraction`.
 ```text
 litschema init <dir>
   → place PDFs in papers-inbox/
-  → /litschema-onboard
+  → litschema skill
   → litschema verify
 ```
 
@@ -49,12 +49,30 @@ managed through config edits and `skills install --project --force`, not re-init
 Templates may be copied as starting material. Onboarding does not configure
 parallel schema versions or import a framework base schema.
 
-## `/litschema-onboard` conductor
+## `litschema` skill conductor
 
-The project-local skill owns the first run. This is a first-time user's first
-contact with the tool, so the conductor's surface is deliberately narrow: one
-question per message, no framework vocabulary, and no narration of setup or
-internals. Checks that pass are silent.
+The project-local skill owns the first run and every later request. This is a
+first-time user's first contact with the tool, so the conductor's default
+surface is narrow: one question per message, no framework vocabulary, and no
+narration of setup or internals. Checks that pass are silent. When the user
+names commands or files, the conductor answers in those terms.
+
+The conductor routes by the user's request first and project state second:
+
+- A loose request ("get started") resumes at the first unfinished phase below.
+- A specific task that fits the order runs directly; a missing prerequisite is
+  named in one line and offered first.
+- A task that departs from the order gets one message stating what litschema
+  is built to do, the concrete consequence, and any narrower alternative, then
+  one confirming question. On confirmation the conductor proceeds without
+  raising it again. It asks why only when the answer would change the action.
+- A request that breaks an integrity rule is declined with the supported
+  route: no hand-edits to published runs (corrections are review overrides),
+  no publishing an extraction that failed validation, no subagent publishing
+  or model the conductor didn't choose, and no invented values or citations.
+
+The conductor states consequences as facts and does not use persuasive
+language.
 
 0. **Silent pre-check:** confirm `litschema.yaml` exists, then run
    `litschema status` (see Running the CLI). A pass is silent. A missing
@@ -76,7 +94,8 @@ internals. Checks that pass are silent.
    conductor publishes each run itself with the model it dispatched, so
    subagents stage and validate only.
 6. **Finish:** run the post-extraction metadata sweep, validation, and status;
-   hand off to `litschema verify`.
+   offer `litschema grade --all` when runs have no grades; hand off to
+   `litschema verify`.
 
 Extraction mechanics belong to `specs/extraction/spec.md`. Run layout and
 activation belong to `specs/article-store/spec.md`. Review behavior belongs to
@@ -101,7 +120,7 @@ version a project runs is the user's decision.
 
 Onboarding establishes a project and its first active runs. Changing an
 established schema and reprocessing a reviewed corpus is a future, separate
-workflow (refinement, planned for 0.2.0); the onboarding skill must not grow
+workflow (refinement, planned for 0.2.0); the `litschema` skill must not grow
 into it.
 
 ## Source metadata
@@ -113,21 +132,31 @@ manifest directly.
 
 ## Interruption and rerun
 
-Onboarding is resumable. Existing intake artifacts remain, complete published
-runs remain immutable, active selections remain valid, and incomplete staging
-does not appear as a run. Rerunning skips accepted active current-schema work
-and retries missing or error-only articles. It does not create a same-schema
-rerun unless the user explicitly requests that separate workflow.
+Onboarding is resumable, and the skill is the entry point for every later
+session: it reads `litschema status` and starts at the first unfinished phase
+(schema, prepare, pilot, the rest, grading, handoff). Existing intake artifacts
+remain, complete published runs remain immutable, active selections remain
+valid, and incomplete staging does not appear as a run. Rerunning skips
+articles with an active run and retries missing or error-only articles. A
+schema change after review is a departure from the order: the conductor says
+that every run becomes stale and that re-extracted runs start without the
+existing reviews, which stay on the old runs, and proceeds if the user
+confirms. It does not create a same-schema rerun unless the user asks.
 
 ## Invariants
 
 - PDFs enter through `papers-inbox/`.
-- `/litschema-onboard` remains the first-run conductor.
-- Init is offline, noninteractive, create-only, and never re-initializes.
+- The `litschema` skill remains the conductor, for the first run and reruns.
+- Init is offline, noninteractive, create-only, and never re-initializes. It
+  sets up the coding agents whose config folders exist, or those named with
+  `--agent`.
 - The project has one current schema; Git stores its history.
-- First successful extractions become immutable initial runs with per-article
-  active selection.
-- Refinement is not folded into onboarding.
+- First successful extractions become immutable runs with per-article active
+  selection.
+- Refinement is not folded into onboarding: the conductor never carries
+  reviews between runs.
+- The user's request decides what the conductor does, except where an
+  integrity rule applies.
 - Metadata writes use deterministic CLI guards.
 - Interrupted work is resumable without mutating completed runs.
 
@@ -139,18 +168,17 @@ Implementation coverage must pin:
 - exact scaffold paths, one current schema, local skills, and copied-template
   behavior without a framework base import;
 - offline assemble and prepare-text;
-- silent pre-check: missing-config stop, and no `status`/`doctor`/CLI
-  resolution before the welcome message;
-- dev-override approval: matching hash used silently, missing or stale hash
-  prompting the user, recording after confirmation, and revocation when the
-  override file changes;
+- silent pre-check: missing-config stop, `litschema status` before the welcome
+  message, and a stop that relays exit 127 or 3 unchanged;
+- request routing: loose requests resume, out-of-order requests get one notice
+  and proceed on confirmation, and integrity rules hold when the user insists;
 - conductor voice constraints: one question per message, no framework
   vocabulary in user-facing text, and no narration of passing checks;
 - empty-project stop behavior;
 - representative-document schema drafting and approval gate;
 - one-article pilot publication and activation;
-- batch creation and activation of initial runs;
-- skip of active current-schema articles and retry of missing/error attempts;
+- batch creation and activation of runs;
+- skip of articles with an active run and retry of missing/error attempts;
 - interruption before and after publication;
 - bib-metadata CLI use and post-batch sync placement;
 - handoff to the verifier;
