@@ -39,6 +39,7 @@ data/papers/<article-id>/
       agent-reasoning.json
       run.json
       review.json
+      schema/
 ```
 
 `ArticleFiles` is the sole article-id-to-path chokepoint. Article IDs and run
@@ -72,6 +73,7 @@ they cannot become active. Partial directories are never runs.
   "created_at": "2026-07-26T18:04:11Z",
 
   "schema_hash": "sha256:9f2a…",
+  "schema_files": ["extraction.yaml", "base.yaml"],
 
   "inputs": {
     "prepared_text": "sha256:c41d…",
@@ -106,6 +108,15 @@ they cannot become active. Partial directories are never runs.
   }
 }
 ```
+
+`schema_files` names the copies under the run's `schema/` directory: every
+file `schema_hash` covers, the configured schema and the project files it
+imports, by its path relative to the schema directory (file name alone for a
+file outside it). A hash cannot be read back; the copies keep an old run
+interpretable after the project schema changes, so its values can still be
+validated and typed against the schema they were extracted with. Publication
+fails when a schema file cannot be copied. Runs published before 0.1.3 have
+neither the key nor the directory.
 
 `conversion` is optional. The publisher copies it from the article's
 `prepared-text.json` (see Text preparation), dropping the `figures` list and
@@ -206,7 +217,9 @@ the directory, and atomically replace the file.
 
 `litschema assemble` remains offline. It slugifies the PDF filename stem,
 uses `article` for an empty slug, treats identical bytes as an idempotent
-re-drop, and gives different bytes that collide a short content-hash suffix.
+re-drop whatever the filename (the same PDF under a new name reports the
+article that already holds it), and gives different bytes that collide a short
+content-hash suffix.
 Each successful PDF moves to `<article-id>/<article-id>.pdf`, receives a
 manifest, and seeds automatic title metadata. Re-drops move to
 `papers-inbox/.processed/`. A bad PDF is counted and left in the inbox while
@@ -315,8 +328,10 @@ Implementation coverage must pin:
   tolerance of an unreadable `run.json`;
 - missing active selection as a normal unextracted state and broken selection
   as an integrity failure;
-- assemble idempotence, collision handling, offline operation, and atomic
-  manifests;
+- assemble idempotence, including the same bytes under another filename,
+  collision handling, offline operation, and atomic manifests;
+- `schema_files` and the `schema/` copies written at publication, byte-equal
+  to the project schema files;
 - prepare-text on a real PDF: recorded options, repeated and small images
   dropped, refs rewritten, `<mark>` stripped, record hashes, `--force`
   replacing `figures/`, flat-mode paths, and the canonical-PDF fallback;

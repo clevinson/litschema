@@ -45,7 +45,11 @@ classes:
     description: Evidence and basis for one extracted field value.
     attributes:
       path:
-        description: jq-style path to the extracted field, starting with a dot.
+        description: >-
+          Path to the extracted field from the extraction root, with no
+          leading dot: property names joined by dots and array positions in
+          brackets, such as experiments[0].ph. A leading dot is accepted for
+          older runs.
         required: true
       value:
         description: Extracted value rendered as text for cross-reference.

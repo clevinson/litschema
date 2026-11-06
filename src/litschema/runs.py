@@ -23,7 +23,7 @@ from pathlib import Path
 
 from .articles import ArticleFiles
 from .config import LitSchemaConfig
-from .schema_resolution import schema_hash
+from .schema_resolution import schema_closure_paths, schema_hash
 from .version import install_source, installed_version
 
 logger = logging.getLogger(__name__)
@@ -116,8 +116,96 @@ class RunFiles:
     def review(self) -> Path:
         return self.run_dir / "review.json"
 
+    @property
+    def schema_dir(self) -> Path:
+        """The schema files this run was extracted against, copied at publish."""
+        return self.run_dir / "schema"
+
     def read_run_json(self) -> dict:
         return json.loads(self.run_json.read_text())
+
+
+@dataclass(frozen=True)
+class RunDrift:
+    """How a run stands against the project as it is now.
+
+    Each field is a reason, or None when nothing moved. Both are warnings, not
+    errors: the run is readable either way. `schema` means the project schema
+    no longer matches the hash the run records, so columns derived from today's
+    schema may not fit the run's values. `source` means `article.md` differs
+    from the text the run cites, so its line numbers may point at other lines.
+    """
+
+    schema: str | None
+    source: str | None
+
+    @property
+    def any(self) -> bool:
+        return bool(self.schema or self.source)
+
+
+def _recorded(run: RunFiles) -> dict:
+    try:
+        record = run.read_run_json()
+    except (OSError, ValueError):
+        return {}
+    return record if isinstance(record, dict) else {}
+
+
+def schema_drift(cfg: LitSchemaConfig, run: RunFiles, *, current: str | None = None) -> str | None:
+    """Why the project schema no longer matches this run, or None.
+
+    ``current`` lets a caller hash the schema once for a whole project. A run
+    that records no hash, or a schema that cannot be hashed, is reported as
+    drift too: the match cannot be shown, which is the claim this check makes.
+    """
+    if current is None:
+        try:
+            current = schema_hash(cfg)
+        except OSError as exc:
+            return f"the project's extraction schema cannot be read: {exc}"
+    recorded = _recorded(run).get("schema_hash")
+    if not isinstance(recorded, str) or not recorded.strip():
+        return f"run {run.run_id} records no usable schema hash"
+    if recorded != current:
+        return (
+            f"run {run.run_id} was extracted against a different schema "
+            f"({recorded[:14]}…, now {current[:14]}…)"
+        )
+    return None
+
+
+def source_drift(files: ArticleFiles, run: RunFiles) -> str | None:
+    """Why `article.md` is no longer the text this run cites, or None.
+
+    None when the article has no `article.md` (nothing to compare against) or
+    the run records no prepared-text hash. Those are gaps a reviewer can see;
+    a changed text under valid-looking citations is the one they cannot.
+    """
+    inputs = _recorded(run).get("inputs")
+    recorded = inputs.get("prepared_text") if isinstance(inputs, dict) else None
+    if not isinstance(recorded, str) or not recorded.strip():
+        return None
+    try:
+        current = _hash_file(files.markdown, "prepared text")
+    except RunPublishError:
+        return None
+    if current != recorded:
+        return (
+            f"article.md changed after run {run.run_id} was extracted "
+            f"({recorded[:14]}… then, {current[:14]}… now); its line citations may "
+            f"point at other lines"
+        )
+    return None
+
+
+def run_drift(
+    cfg: LitSchemaConfig, files: ArticleFiles, run: RunFiles, *, current_schema: str | None = None
+) -> RunDrift:
+    return RunDrift(
+        schema=schema_drift(cfg, run, current=current_schema),
+        source=source_drift(files, run),
+    )
 
 
 def run_files(files: ArticleFiles, run_id: str) -> RunFiles:
@@ -337,6 +425,28 @@ def _agent_attribution(provider: str | None, model: str | None) -> dict:
     return agent
 
 
+def _schema_copies(cfg: LitSchemaConfig) -> list[tuple[str, Path]]:
+    """``(name, source)`` for each schema file the run keeps a copy of.
+
+    The run records `schema_hash`, but a hash cannot be read back. Copying the
+    files the hash covers keeps an old run interpretable after the project
+    schema moves on: its values can be validated and typed against the schema
+    they were extracted with. Names are paths relative to the schema directory
+    where possible, so a multi-file schema keeps its layout; a file outside the
+    directory is kept by its file name, the same key the hash uses.
+    """
+    copies = []
+    for path in schema_closure_paths(cfg):
+        try:
+            name = path.resolve().relative_to(cfg.schema_dir.resolve()).as_posix()
+        except ValueError:
+            name = path.name
+        if not path.is_file():
+            raise RunPublishError(f"cannot copy schema file {path}: it does not exist")
+        copies.append((name, path))
+    return copies
+
+
 def _conversion_block(files: ArticleFiles, text_sha256: str) -> dict | None:
     """The article's prepared-text.json as a run.json block, or None if absent.
 
@@ -441,12 +551,14 @@ def publish_run(
         "skill": _hash_file(resolve_skill_file(cfg, skill_file), "skill"),
     }
     conversion = _conversion_block(files, inputs["prepared_text"])
+    schema_copies = _schema_copies(cfg)
     record = {
         "version": RUN_JSON_VERSION,
         "run_id": new_run_id(),
         "article_id": files.article_id,
         "created_at": created_at,
         "schema_hash": schema_hash(cfg),
+        "schema_files": [name for name, _path in schema_copies],
         "inputs": inputs,
         "agent": _agent_attribution(provider, model),
         "litschema": {"version": installed_version(), **install_source().as_record()},
@@ -461,6 +573,10 @@ def publish_run(
         shutil.copy2(staged_extraction, staging / "agent-extraction.json")
         if staged_reasoning.is_file():
             shutil.copy2(staged_reasoning, staging / "agent-reasoning.json")
+        for name, path in schema_copies:
+            target = staging / "schema" / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(path, target)
         (staging / "run.json").write_text(json.dumps(record, indent=2, sort_keys=True) + "\n")
         os.replace(staging, run.run_dir)
     except OSError:

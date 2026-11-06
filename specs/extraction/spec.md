@@ -1,6 +1,6 @@
 # Capability: extraction
 
-Status: partially current.
+Status: current.
 
 The agent-mediated pipeline turns prepared text into a complete immutable run:
 schema-valid structured data, line-cited reasoning, and honest run provenance.
@@ -15,14 +15,13 @@ bundled `extract-article` skill, and run publication — `agent
 record-extraction` is the deterministic publisher (validate, hash, publish
 atomically, activate).
 
-Pending: the canonical path dialect in the extractor. The path parser and
-review paths use the no-leading-dot form the Reasoning section below states,
-and accept a leading dot on input. The bundled `extract-article` skill still
-writes jq-style paths with a leading dot (`.experiments[0].ph`).
+The bundled skill writes the canonical path form (`experiments[0].ph`, no
+leading dot); the parser and review paths still accept a leading dot, so runs
+written before 0.1.3 stay valid.
 
-`litschema extract` remains a deliberate stub that directs users to the bundled
-skill — extraction requires an agent CLI, not a provider API key. Making it a
-provider-native orchestrator is not scheduled.
+`litschema extract` is a deliberate stub that directs users to the bundled
+skill. Making it the conductor, one isolated worker per article run through a
+coding agent and published by litschema, is planned and not started.
 
 ## Runtime schema context
 
@@ -60,7 +59,7 @@ extractor got it. It has required `fields`. Each field entry has `path`,
 `source_lines`, and `basis`, and may carry `value` text and a `note`:
 
 ```json
-{"path": ".latitude", "value": "6.87", "source_lines": "L6",
+{"path": "latitude", "value": "6.87", "source_lines": "L6",
  "basis": "converted", "note": "Converted 6°52' N to decimal degrees."}
 ```
 

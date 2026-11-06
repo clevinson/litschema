@@ -443,8 +443,9 @@ def _article_progress(files: ArticleFiles, run) -> dict:
         "review_error": None,
         "schema_error": None,
         "schema_drift": None,
+        "source_drift": None,
     }
-    reported = ("review_error", "schema_error", "schema_drift")
+    reported = ("review_error", "schema_error", "schema_drift", "source_drift")
     if run is None:
         return empty
 
@@ -461,17 +462,30 @@ def _article_progress(files: ArticleFiles, run) -> dict:
             **extra,
         }
 
+    from ..runs import source_drift as _source_drift
+
+    # Source drift is reported whatever else is wrong: a reviewer reading
+    # citations against text the run never saw needs to know first.
+    source_drift = _source_drift(files, run)
     schema_error, schema_drift = _schema_status(files, run)
     if schema_error is not None:
-        return unknown("schema_error", schema_error)
+        return unknown("schema_error", schema_error, source_drift=source_drift)
     # Drift is reported alongside real counts, not instead of them. The run is
     # fully readable; only editing it is gated, and that gate lives on the
     # write path where the risk actually is.
     try:
         progress = review_progress(run, exclude=_identifier_paths(files, run))
     except ReviewCorruptError as exc:
-        return unknown("review_error", str(exc), schema_drift=schema_drift)
-    return {**progress, "review_error": None, "schema_error": None, "schema_drift": schema_drift}
+        return unknown(
+            "review_error", str(exc), schema_drift=schema_drift, source_drift=source_drift
+        )
+    return {
+        **progress,
+        "review_error": None,
+        "schema_error": None,
+        "schema_drift": schema_drift,
+        "source_drift": source_drift,
+    }
 
 
 #: LinkML scalar range -> editor "kind" reported by /api/schema/fields.
@@ -795,14 +809,30 @@ async def sync_bibliography(article_id: str, cfg: CfgDep):
     return block
 
 
+def _active_source_drift(files: ArticleFiles) -> str | None:
+    """Why the article's text is not what its active run cites, or None.
+
+    An article with no active run, or a broken pointer, has no run to drift
+    from; the listing reports the pointer problem itself.
+    """
+    from ..runs import BrokenActiveRunError, active_run, source_drift
+
+    try:
+        run = active_run(files)
+    except BrokenActiveRunError:
+        return None
+    return None if run is None else source_drift(files, run)
+
+
 @app.get("/api/markdown/{article_id}")
 async def get_markdown(article_id: str, cfg: CfgDep):
-    """Return raw markdown text for an article."""
-    path = article_files(cfg, article_id).markdown
+    """Return raw markdown text for an article, and whether its active run cites it."""
+    files = article_files(cfg, article_id)
+    path = files.markdown
     if not path.exists():
         raise HTTPException(404, f"No markdown for {article_id}")
     text = path.read_text()
-    return {"markdown": strip_references(text)}
+    return {"markdown": strip_references(text), "source_drift": _active_source_drift(files)}
 
 
 FIGURE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp"}
@@ -810,15 +840,21 @@ FIGURE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp"}
 
 @app.get("/api/rendered/{article_id}")
 async def get_rendered(article_id: str, cfg: CfgDep):
-    """Prepared text as sanitized blocks with their source line ranges."""
-    path = article_files(cfg, article_id).markdown
+    """Prepared text as sanitized blocks with their source line ranges.
+
+    `source_drift` says when this text is not the one the active run cites, so
+    the client can warn before a reviewer reads line numbers against it.
+    """
+    files = article_files(cfg, article_id)
+    path = files.markdown
     if not path.exists():
         raise HTTPException(404, f"No markdown for {article_id}")
     text = strip_references(path.read_text())
     try:
-        return render_blocks(text)
+        rendered = render_blocks(text)
     except Exception as exc:  # the client falls back to raw lines
         raise HTTPException(422, f"could not render {article_id}: {exc}") from exc
+    return {**rendered, "source_drift": _active_source_drift(files)}
 
 
 @app.get("/api/figure/{article_id}/{name}")

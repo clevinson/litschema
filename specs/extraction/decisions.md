@@ -49,3 +49,20 @@ observed); having the conductor pass the model down for the subagent to echo
 back, which reintroduces the same substitution opportunity one step later;
 and parsing the harness transcript to recover the true model, already rejected
 for depending on an undocumented internal format.
+
+
+## 2026-11-05 — The skill writes canonical paths
+
+**Context:** reviews v2 and the path parser settled on `experiments[0].ph`
+with no leading dot (2026-07-07), accepting a leading dot on input so older
+reasoning stayed valid. The bundled `extract-article` skill kept teaching the
+jq-style `.experiments[0].ph`, so every new run was written in the old dialect
+and the spec carried a standing Pending note.
+
+**Decision:** the skill's examples and rule use the canonical form. The parser
+keeps accepting a leading dot: runs are immutable, and the published ones
+written in the old form stay valid without a rewrite.
+
+**Rejected:** rejecting a leading dot in `validate-reasoning`, which would
+invalidate published runs for a formatting difference the parser already
+absorbs.

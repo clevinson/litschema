@@ -22,10 +22,12 @@ from .config import LitSchemaConfig
 from .explore.loader import ReviewedRecord, _derive_columns, _identifier_slot, iter_reviewed_records
 from .grading import BAND_NAMES, FLAG_BANDS, band_counts, current_grade
 from .reviews import effective_extraction, review_progress
+from .runs import RunDrift, run_drift
 from .schema_resolution import (
     ResolvedExtractionSchema,
     identifier_leaf_paths,
     resolve_extraction_schema,
+    schema_hash,
 )
 
 FORMATS = ("jsonl", "csv")
@@ -38,20 +40,58 @@ class ExportSummary:
     complete: int = 0
     partial: int = 0
     unreviewed: int = 0
+    schema_drift: int = 0
+    source_drift: int = 0
+    stale_articles: list[str] = field(default_factory=list)
     audit: list[dict] = field(default_factory=list)
 
 
+class StaleRunsError(Exception):
+    """Some active runs no longer match the project; nothing was written.
+
+    A run extracted against an older schema loses values in a CSV shaped by
+    today's schema, and a reviewer's correction with them, with no column to
+    land in. A run whose `article.md` changed cites lines that may now say
+    something else. Export refuses both unless told to go ahead.
+    """
+
+    def __init__(self, summary: ExportSummary):
+        self.summary = summary
+        shown = ", ".join(summary.stale_articles[:5])
+        more = len(summary.stale_articles) - 5
+        if more > 0:
+            shown += f" and {more} more"
+        super().__init__(
+            f"{len(summary.stale_articles)} active run(s) no longer match the project: "
+            f"{summary.schema_drift} extracted against an older schema, "
+            f"{summary.source_drift} whose article.md changed since extraction "
+            f"({shown}). Re-extract them, or pass --allow-stale to export anyway; "
+            f"--audit-output marks each stale article."
+        )
+
+
 def export_records(
-    cfg: LitSchemaConfig, fmt: str, out: TextIO, audit_out: TextIO | None = None
+    cfg: LitSchemaConfig,
+    fmt: str,
+    out: TextIO,
+    audit_out: TextIO | None = None,
+    *,
+    allow_stale: bool = False,
 ) -> ExportSummary:
-    """Write the records to ``out`` and, when given, one audit record per article."""
+    """Write the records to ``out`` and, when given, one audit record per article.
+
+    Drift is checked for every article before anything is written, so a
+    refusal leaves both files untouched.
+    """
     schema = resolve_extraction_schema(cfg)
     id_slot = _identifier_slot(schema.view, schema.root_class)
     items = list(iter_reviewed_records(cfg, id_slot=id_slot))
+    current_schema = schema_hash(cfg)
 
     summary = ExportSummary(records=len(items))
     for item in items:
-        audit = audit_record(schema, item)
+        drift = run_drift(cfg, item.run.article, item.run, current_schema=current_schema)
+        audit = audit_record(schema, item, drift)
         if item.fields and any(e.get("override") for e in item.fields.values()):
             summary.with_overrides += 1
         status = audit["review"]["status"]
@@ -61,7 +101,16 @@ def export_records(
             summary.partial += 1
         else:
             summary.unreviewed += 1
+        if drift.schema:
+            summary.schema_drift += 1
+        if drift.source:
+            summary.source_drift += 1
+        if drift.any:
+            summary.stale_articles.append(item.article_id)
         summary.audit.append(audit)
+
+    if summary.stale_articles and not allow_stale:
+        raise StaleRunsError(summary)
 
     if fmt == "jsonl":
         for item in items:
@@ -92,21 +141,27 @@ def _write_csv(schema: ResolvedExtractionSchema, records: list[dict], out: TextI
         writer.writerow(row)
 
 
-def audit_record(schema: ResolvedExtractionSchema, item: ReviewedRecord) -> dict:
+def audit_record(
+    schema: ResolvedExtractionSchema, item: ReviewedRecord, drift: RunDrift | None = None
+) -> dict:
     """Where one article's values came from and how far review got.
 
     Missing provenance is null, never a default: a run without a recorded model
-    or an article without a DOI says so.
+    or an article without a DOI says so. ``drift`` names why the run no longer
+    matches the project, or holds None for both when it does.
     """
     run = item.run
     run_json = run.read_run_json()
     agent = run_json.get("agent") or {}
     bib = read_bib_metadata(run.article.read_metadata())
+    if drift is None:
+        drift = RunDrift(schema=None, source=None)
     return {
         "article_id": item.article_id,
         "doi": bib.get("doi"),
         "run_id": run.run_id,
         "schema_hash": run_json.get("schema_hash"),
+        "drift": {"schema": drift.schema, "source": drift.source},
         "extraction": {
             "provider": agent.get("provider"),
             "model": agent.get("model"),

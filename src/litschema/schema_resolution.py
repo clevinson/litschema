@@ -97,6 +97,15 @@ def clear_schema_memo() -> None:
     _HASH_MEMO.clear()
 
 
+def schema_closure_paths(cfg: LitSchemaConfig) -> list[Path]:
+    """The project schema files that make up its identity: entry plus imports.
+
+    The same closure `schema_hash` digests, so a copy of these files
+    reproduces the hash a run records.
+    """
+    return list(_closure_paths(extraction_schema_path(cfg)))
+
+
 def extraction_schema_path(cfg: LitSchemaConfig) -> Path:
     """Resolve the extraction schema file path from config.
 

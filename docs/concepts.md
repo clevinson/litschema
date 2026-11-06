@@ -27,9 +27,15 @@ See [What goes in git](git.md).
 Re-extracting a paper creates a new run beside the old one; nothing gets
 overwritten. `run.json` records the SHA-256 of the prepared text, the domain
 context, the prompt (skill), and the schema, plus the model, effort, and
-litschema version that produced the run. Publishing refuses if `article.md` no
-longer matches the conversion record. A review belongs to one run, so it can't
-go stale.
+litschema version that produced the run, and a copy of the schema files.
+Publishing refuses if `article.md` no longer matches the conversion record. A
+review belongs to one run, so it can't go stale.
+
+The project can move on from a run: the schema changes, or `article.md` is
+re-converted. litschema reports both. The review app marks the article and
+`status` counts it; `export` refuses to write until you pass `--allow-stale`,
+because a CSV shaped by the new schema has no column for an old value, and
+old line citations may name other lines. Re-extracting is the fix.
 
 ## How each value was extracted
 
