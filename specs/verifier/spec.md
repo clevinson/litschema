@@ -347,7 +347,7 @@ because the file cannot distinguish afterwards.
 When the active run has a current grade (`specs/grading/spec.md`), the verifier
 shows it beside the extractor's evidence. A field's grade is its own entry,
 else the nearest ancestor's, the same resolution evidence uses. The band comes
-from the server (`band` on each field of `/api/grades`), so the app and
+from the server (`band` on each field of `/api/grades`), so the review app and
 `litschema grade` use the same thresholds.
 
 - Audit table: the Source cell carries a small band label. High shows nothing;

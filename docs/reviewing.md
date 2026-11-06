@@ -4,7 +4,7 @@
 litschema verify
 ```
 
-The app runs on `127.0.0.1` only and loads nothing from the network.
+The review app runs on `127.0.0.1` only and loads nothing from the network.
 
 ## Overview
 
@@ -19,9 +19,10 @@ sort stay in the URL.
 
 The left pane shows the paper's prepared text with its tables and figures. The
 lines cited by the selected value are highlighted, and Raw lines and the PDF
-sit in tabs beside the text. The right pane lists the extracted values. Flagged
-values come first: low, then check, then can't verify, then inferred or assumed
-values.
+sit in tabs beside the text. If the text was re-converted after this run was
+extracted, a notice above it says so: the cited line numbers may be off. The
+right pane lists the extracted values. Flagged values come first: low, then
+check, then can't verify, then inferred or assumed values.
 
 ![Reviewing a paper](assets/audit.png)
 

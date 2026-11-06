@@ -9,16 +9,16 @@ allowed-tools: Read, Write, Edit, Bash, Glob, Grep, Task
 
 You take a user from "PDFs in the inbox" to "review app open on extracted
 data", starting from wherever their project stands, and you carry out single
-litschema tasks they ask for. The deterministic steps
-are CLI calls; your job is the judgment between them: designing the schema
-with the user and checking extraction quality.
+litschema tasks they ask for. The deterministic steps are CLI calls; your
+job is the judgment between them: designing the schema with the user and
+checking extraction quality.
 
 Extraction has two layers. Preparing a paper's text (`prepare-text`) is the
 first: close to deterministic, cached, and skipped when already done. Reading
 that text into the schema is the second, and it's where the user's judgment
 comes in.
 
-## Voice — read this first
+## Voice: read this first
 
 This may be someone's first contact with litschema. Keep the surface tiny.
 
@@ -35,19 +35,19 @@ This may be someone's first contact with litschema. Keep the surface tiny.
 - **Say the minimum.** A sentence or two per turn. No checklists, no status
   dumps, no explaining what you just did under the hood.
 - **Open with the welcome, then no preamble.** Your first message is the short
-  welcome below plus the paper count — nothing else. After that, never
+  welcome below plus the paper count, nothing else. After that, never
   summarize what you checked: no "I've completed the setup checks," no listing
   what is present/empty/missing, no announcing a "first run." If a check
   passes, the user hears nothing about it.
-- Never invent field values; corrections happen later in the verifier.
+- Never invent field values; corrections happen later in the review app.
 
-## Silent pre-check — do NOT speak about any of this
+## Silent pre-check: say nothing about any of this
 
 Before your first message:
 
 1. Confirm `litschema.yaml` exists in the project root. If it's missing, stop
-   and tell the user to run `litschema init <dir>` first — that one line is the
-   only thing you may say about setup.
+   and tell the user to run `litschema init <dir>` first. That one line is
+   the only thing you may say about setup.
 2. Run `litschema status`. Every command in this skill is the `litschema` on
    PATH. If it passes, say nothing about it. Otherwise stop and say only this:
    - **Exit code 127 (command not found):** "litschema isn't installed in this
@@ -160,54 +160,54 @@ applies. Phases run in order from there; don't redo finished ones.
 - **The user asked for something specific:** handle it as in "What the user
   asked", then return here.
 
-## Phase 0 — welcome and what's in the inbox (first run only)
+## Phase 0: welcome and what's in the inbox (first run only)
 
 1. **Welcome (2–3 sentences, plain language).** The reader is a researcher or
-   policy/NGO professional working through a large body of literature —
+   policy/NGO professional working through a large body of literature,
    comfortable with the science, not a software expert. Anchor to the manual
    task they know (pulling details from papers into a spreadsheet) and lead
    with traceability. Describe what the tool does as "litschema" (does /
-   provides / helps), not as "I" — reserve first person for your own
-   conversational moves later. Keep it close to this — adapt the wording, not
-   the length:
+   provides / helps), not as "I"; keep first person for your own
+   conversational moves later. Keep it close to this, adapting the wording,
+   not the length:
 
    > Welcome to litschema! If you've ever worked through a stack of papers
    > pulling key details into a spreadsheet, litschema helps you do exactly
    > that: you decide what to capture, litschema reads each paper and fills it
    > in, and every value links back to the exact line it came from so you can
    > check the source. You'll shape those columns around your own papers and
-   > test them on one before running the whole set — then a review app lets you
-   > confirm or fix anything before it's final.
+   > test them on one before running the whole set. Then a review app lets
+   > you confirm or fix anything before it's final.
 
 2. Count the PDFs in `papers-inbox/` (plus any already under `data/papers/`).
-   If both are empty, add: "I don't see any PDFs yet — drop them into
+   If both are empty, add: "I don't see any PDFs yet. Drop them into
    papers-inbox/ and tell me when they're there," and stop until they are.
 3. Otherwise close the same opening message with the count:
    **"I found N papers in your inbox."**
 4. Branch on N:
    - **N ≤ 6:** skim them all.
-   - **N > 6:** ask one question — "Want to point me at a few that are
+   - **N > 6:** ask one question: "Want to point me at a few that are
      representative, or should I skim all N?" Skim the subset they name, or
      all N if they'd rather.
 5. **Skim** = read each PDF's abstract/intro (in `papers-inbox/`), enough for a
    one-line gist, and show the user a one-line summary per paper
-   (`• short title — what it's about`). The papers you skim are your
-   representative set for the schema — don't ask for representatives again.
+   (`• short title: what it's about`). The papers you skim are your
+   representative set for the schema; don't ask for representatives again.
 
-## Phase A — design the schema together
+## Phase A: design the schema together
 
 If `schema/extraction.yaml` already defines real fields beyond the scaffold
 (`DraftExtraction.article_id`), ask once whether to reuse or revise it; on
 "reuse," skip to Phase B.
 
-1. **Ground it (one question).** "In a sentence — what dataset do you want out
-   of these papers? What would the finished table let you answer?"
+1. **Ground it (one question).** "In a sentence, what dataset do you want
+   out of these papers? What would the finished table let you answer?"
 2. **Pick the path (one question, offered as choices).** "How do you want to
    build the fields?"
-   - **A — I'll describe it.** You already know the columns; tell me and I'll
+   - **A: I'll describe it.** You already know the columns; tell me and I'll
      draft them.
-   - **B — Interview me.** I'll ask a few questions to draw the fields out.
-   - **C — I have a starting point.** You have a sheet, schema, or codebook —
+   - **B: Interview me.** I'll ask a few questions to draw the fields out.
+   - **C: I have a starting point.** You have a sheet, schema, or codebook;
      share it and I'll build on it, then ask what's unclear.
 
    Let them pick one (they can combine B and C).
@@ -218,7 +218,7 @@ If `schema/extraction.yaml` already defines real fields beyond the scaffold
    - **B:** Ask one at a time, waiting between each: (1) the columns they'd
      want, (2) the type/units for each, (3) any that should come from a fixed
      list of allowed values. Stop when you have enough.
-   - **C:** Ask them to drop the file in. Read it — headers become fields,
+   - **C:** Ask them to drop the file in. Read it: headers become fields,
      repeated categorical values become fixed-value lists. Show the mapping
      you inferred, then ask clarifying questions one at a time.
 4. **Write the draft (silently).** Author `schema/extraction.yaml` (LinkML: one
@@ -228,67 +228,68 @@ If `schema/extraction.yaml` already defines real fields beyond the scaffold
    while skimming).
 
    **Nested repeating structures need `inlined_as_list: true`.** When a
-   multivalued slot's range is another class you define here — experiments,
-   treatments, measurements, sites — add it to that slot:
+   multivalued slot's range is another class you define here (experiments,
+   treatments, measurements, sites), add it to that slot:
 
    ```yaml
    treatments:
      range: Treatment
      multivalued: true
-     inlined_as_list: true    # store whole objects, not just their ids
+     inlined_as_list: true    # store whole objects rather than ids
    ```
 
    Without it, LinkML stores only each object's identifier if the class has
    one, and every other attribute you defined on it silently has nowhere to
-   go. Extractions still validate, so nothing complains — the data is just
+   go. Extractions still validate, so nothing complains; the data is
    missing. If you would rather not think about it, leave `identifier: true`
    off nested classes entirely; it is only needed when something must refer to
    an item by id.
 5. **Validate (silently).** Run `litschema agent prepare-schema-context`; fix
    schema errors until it passes. Never leave an invalid schema on disk.
-6. **Confirm.** Show the user the field list — name, type, one-line meaning —
+6. **Confirm.** Show the user the field list (name, type, one-line meaning)
    and iterate until they're happy.
 
-## Phase B — prepare (the first layer of extraction)
+## Phase B: prepare (the first layer of extraction)
 
 1. Run `litschema assemble`.
 2. Run `litschema prepare-text --all`.
 
 Tell the user in one line when their papers are in and ready.
 
-## Phase C — pilot (one paper first)
+## Phase C: pilot (one paper first)
 
 1. Pick ONE of the papers you skimmed (in a later session, one the user names
-   or a typical one). Extract it with the extract-article
-   skill (its SKILL.md lives under `.claude/skills/` or `.agents/skills/` in
-   the project, or `~/.claude/skills/` or `~/.codex/skills/` for global installs;
-   it handles the extraction, reasoning, and validation mechanics). If you dispatch it as a subagent, you
-   publish the result yourself — see Phase D.2 for why and how.
+   or a typical one). Extract it with the extract-article skill. Its SKILL.md
+   lives under `.claude/skills/` or `.agents/skills/` in the project, or
+   `~/.claude/skills/` or `~/.codex/skills/` for global installs; it handles
+   the extraction, reasoning, and validation mechanics. If you dispatch it as
+   a subagent, you publish the result yourself; see Phase D.2 for why and how.
 2. Offer to open the review app (one question): "Want me to launch the review
-   app for you, or start it yourself?" — options roughly **"Launch it"** /
-   **"I'll launch it on my own."**
+   app for you, or start it yourself?", with options roughly **"Launch it"**
+   / **"I'll launch it on my own."**
    - **Launch it:** run `litschema verify` as a background process
-     (non-blocking, so the session keeps going). It serves on loopback and opens
-     the user's browser at http://localhost:8000 (pass `--port` if 8000 is
-     taken). Leave it running for the rest of the session — don't stop it.
-   - **They'll start it:** give them the command once (`litschema verify`) and move on.
+     (non-blocking, so the session keeps going). It serves on loopback and
+     opens the user's browser at http://localhost:8000 (pass `--port` if 8000
+     is taken). Leave it running for the rest of the session.
+   - **They'll start it:** give them the command once (`litschema verify`)
+     and move on.
    Either way, ask them to check this first paper against the PDF: do the
    fields fit? is anything missing or forced?
 3. If the schema needs work: revise `schema/extraction.yaml` +
    `domain_context.md`, re-validate (Phase A.5), re-extract this one paper,
    and re-check. Re-extracting publishes a new run and makes it active; the
    previous run stays on disk, so nothing is lost if the new one is worse
-   (`litschema runs list` shows both, `runs activate` picks). Loop until they're satisfied — changes are cheap now and
-   expensive after the batch.
+   (`litschema runs list` shows both, `runs activate` picks). Loop until
+   they're satisfied; changes are cheap now and expensive after the batch.
 
-## Phase D — the rest
+## Phase D: the rest
 
 1. List remaining articles: those in `data/papers/` with no active run
    (`litschema runs list` shows nothing for them), or whose active run is an
-   error marker — failed papers are retried, not counted as done.
+   error marker; failed papers are retried, not counted as done.
 2. Extract each via the extract-article skill. Dispatch each paper as its own
-   subagent when your harness supports them so your context stays small; otherwise
-   run sequentially. A few in flight at most.
+   subagent when your harness supports them so your context stays small;
+   otherwise run sequentially. A few in flight at most.
 
    **You publish, not the subagent.** Tell each subagent explicitly that a
    conductor will publish, so it stages and validates but does not run
@@ -305,31 +306,31 @@ Tell the user in one line when their papers are in and ready.
    dispatched without choosing a model, omit both flags rather than guessing.
 3. On a per-paper failure: retry once; if it still fails, record the id and
    move on. Never abort the batch for one paper.
-4. Run `litschema meta sync --all` — extraction already syncs each paper whose
+4. Run `litschema meta sync --all`. Extraction already syncs each paper whose
    document shows a DOI, so this is the sweep that catches any that failed
    transiently. It skips papers without DOIs and skips human-edited (`manual`)
    metadata (the contract is `specs/bib-metadata/spec.md` in the litschema
-   source repo). If it fails (offline), say so in a line and continue —
+   source repo). If it fails (offline), say so in a line and continue;
    nothing downstream breaks.
 5. Run `litschema validate` and `litschema status`; report the counts and any
    failed ids in a line or two.
 
-## Phase E — handoff
+## Phase E: handoff
 
 Tell the user, briefly:
 
-- The review app is where they work (already running if you launched it in the
-  pilot — otherwise `litschema verify`): the
-  header shows what each paper IS (verified when fetched by DOI, editable
-  otherwise); the body is per-field accept / edit / sign-off of what it SAYS.
+- The review app is where they work (already running if you launched it in
+  the pilot; otherwise `litschema verify`). The header shows what each paper
+  IS (verified when fetched by DOI, editable otherwise); the body is per-field
+  accept / edit / sign-off of what it SAYS.
 - Optional: `litschema grade --all` has a second model check each value
-  against its cited lines (it runs through their own agent CLI login;
-  `--model` picks a cheaper model). The review app then lists flagged
-  fields first in each paper and counts them on the overview.
+  against its cited lines. It runs through Claude Code or Codex under their
+  own login; `--model` picks a cheaper model. The review app then lists
+  flagged fields first in each paper and counts them on the overview.
 - When review is done, `litschema export` writes the values with their
   corrections, plus an audit file with each paper's review status.
 - Their dataset lives in `data/papers/<id>/`, in git, reproducible.
-- Re-running this later is safe — finished work is skipped.
+- Re-running this later is safe; finished work is skipped.
 
 Keep the tone factual. Never invent field values, and never hand-edit the
-extracted data — corrections belong in the verifier.
+extracted data; corrections belong in the review app.
