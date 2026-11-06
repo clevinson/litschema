@@ -24,7 +24,8 @@ Bands are derived from `confidence`, never stored per field:
 
 The thresholds live in `litschema.grading.BANDS` and are copied into each
 grade's `grader.bands`; readers use the grade's own `bands` when present, so a
-report and the app agree on an old grade after the thresholds move. Flags are
+report and the review app agree on an old grade after the thresholds move.
+Flags are
 `check`, `low`, and `cannot_verify`.
 
 Runs and the active pointer are owned by `specs/article-store/spec.md`; the

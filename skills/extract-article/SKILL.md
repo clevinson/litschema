@@ -57,7 +57,7 @@ to `data/papers/{article_id}/agent-extraction.json`.
 
 **CRITICAL: Extract ONLY from the markdown file provided and the figures it links. Do NOT use any information from memory files, conversation context, prior knowledge about this paper, or other articles. Every extracted value must come from the text of this specific paper.**
 
-Extract ONLY non-bibliographic fields. Bibliographic fields (title, DOI, year, authors, publisher, journal, abstract, keywords) are source metadata — what the document IS, not what it SAYS — and are handled by the backfill step at the end of this skill, never by the schema extraction.
+Extract ONLY non-bibliographic fields. Bibliographic fields (title, DOI, year, authors, publisher, journal, abstract, keywords) are source metadata (what the document IS, not what it SAYS). The backfill step at the end of this skill handles them, never the schema extraction.
 
 ## Figures
 
@@ -70,7 +70,7 @@ article directory first if needed.
 
 The output must conform to the extraction schema. Include `article_id` when the schema requires it. Do not add top-level `confidence` or `reasoning` fields unless the project schema explicitly defines them; extraction rationale belongs in `agent-reasoning.json`.
 
-**Missing values:** Omit keys entirely when the paper does not mention them. Do not use `null` or empty arrays — just leave the key out. Downstream consumers handle missing keys defensively.
+**Missing values:** Omit the key when the paper does not mention the value. Do not write `null` or an empty array in its place.
 
 ## Output 2: Extraction Reasoning
 
@@ -142,7 +142,7 @@ litschema agent record-extraction {article_id}
 This consumes the two staged files into an immutable run directory
 (`data/papers/{article_id}/extraction-runs/<run-id>/`), records the schema and
 input hashes in `run.json`, and activates the run (`active-run.json`). If it
-exits nonzero, read the error — publication refuses to proceed rather than
+exits nonzero, read the error; publication refuses to proceed rather than
 recording an incomplete run.
 
 **Never pass `--model` or `--provider` describing yourself.** You cannot
@@ -154,15 +154,15 @@ one is a false record that nothing downstream can detect.
 
 ## Backfill Bibliographic Metadata
 
-After recording provenance, backfill what the document IS (as opposed to what it
-SAYS — the extraction above). The contract is defined in
+After recording provenance, backfill what the document IS (as opposed to what
+it SAYS, the extraction above). The contract is defined in
 `specs/bib-metadata/spec.md` in the litschema source repository (it is not
 copied into user projects); everything you need is below. Two rules apply
 throughout: never edit `article-metadata.json` by hand, and never invent
 values not visible in the document.
 
 1. Check the document's front matter / title page for a printed DOI.
-2. **DOI found — registry first.** Record it and lock from the registry in
+2. **DOI found: registry first.** Record it and lock from the registry in
    one guarded command; do NOT transcribe bibliography yet:
 
    ```bash
@@ -175,15 +175,15 @@ values not visible in the document.
      DOI is recorded and a later sweep will retry the lock; continue to
      step 3 so the record has readable metadata meanwhile.
    - Error starts with **refusing:** (the metadata is human-edited or
-     registry-locked) → that is the guard working. STOP — skip step 3 as
+     registry-locked) → that is the guard working. STOP; skip step 3 as
      well, and do NOT retry with `--force`. The existing metadata outranks
      your reading.
    - Error says **not a valid DOI** → re-check your transcription against the
      document and retry once; if it still fails, treat the document as having
      no usable DOI and go to step 3 (without `--doi`).
 3. **No DOI on the document, or the sync half failed.** Transcribe the
-   bibliographic fields you can see — title, authors OR corporate author,
-   year, journal/venue if applicable — and write them in one guarded command
+   bibliographic fields you can see (title, authors OR corporate author,
+   year, journal/venue if applicable) and write them in one guarded command
    (include only the options you have values for):
 
    ```bash

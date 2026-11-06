@@ -10,9 +10,9 @@ One entry per extracted value. `note` is required unless `basis` is `stated`.
 ```json
 {
   "fields": [
-    {"path": ".site_name", "value": "Nsukka Research Farm",
+    {"path": "site_name", "value": "Nsukka Research Farm",
      "source_lines": "L5", "basis": "stated"},
-    {"path": ".latitude", "value": "6.87", "source_lines": "L6",
+    {"path": "latitude", "value": "6.87", "source_lines": "L6",
      "basis": "converted", "note": "Converted 6°52' N to decimal degrees."}
   ]
 }
