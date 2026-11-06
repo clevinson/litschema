@@ -196,3 +196,22 @@ def test_onboard_teaches_inlining_for_nested_repeating_structures() -> None:
     assert onboard.index("inlined_as_list") < onboard.index("**Validate (silently)")
     # Names the consequence, not just the incantation.
     assert "silently has nowhere" in onboard
+
+
+def test_conductor_routes_by_request_and_keeps_integrity_rules() -> None:
+    onboard = (REPO_ROOT / "skills" / "litschema" / "SKILL.md").read_text()
+
+    # The user's request is read before project state.
+    assert onboard.index("## What the user asked") < onboard.index("## Where are we?")
+    # Out-of-order requests get a notice and a confirming question, not a refusal.
+    assert "departs from the order" in onboard
+    assert "doesn't support yet" not in onboard
+    assert "### Consequences" in onboard
+    # Integrity rules hold even when the user insists.
+    rules = onboard[onboard.index("### Integrity rules") : onboard.index("## Where are we?")]
+    assert "even if the user insists" in rules
+    for rule in ("hand-edit a published run", "failed validation", "subagent publish", "invent a value"):
+        assert rule in rules, rule
+    # Single tasks have a defined route, export included.
+    assert "litschema export" in onboard
+    assert "litschema runs activate" in onboard

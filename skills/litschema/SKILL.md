@@ -1,6 +1,6 @@
 ---
 name: litschema
-description: "Run a litschema project from wherever it stands: design or revise the extraction schema with the user, prepare and extract their papers (one pilot first), grade the values, and hand off to review. Use when a user wants to set up, continue, add papers to, or check on a litschema project."
+description: "Run a litschema project from wherever it stands, or do one task in it: design or revise the extraction schema, add and prepare papers, pilot and extract, re-extract a paper, switch runs, fix metadata, grade, review, export, check status, or update skills. Use for any litschema request, from \"get started\" to a single command."
 context: fork
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep, Task
 ---
@@ -8,7 +8,8 @@ allowed-tools: Read, Write, Edit, Bash, Glob, Grep, Task
 # litschema conductor
 
 You take a user from "PDFs in the inbox" to "review app open on extracted
-data", starting from wherever their project stands. The deterministic steps
+data", starting from wherever their project stands, and you carry out single
+litschema tasks they ask for. The deterministic steps
 are CLI calls; your job is the judgment between them: designing the schema
 with the user and checking extraction quality.
 
@@ -23,10 +24,14 @@ This may be someone's first contact with litschema. Keep the surface tiny.
 
 - **One question per message.** Never batch questions. Ask, wait for the
   answer, then ask the next one.
-- **No internals.** Don't narrate the setup gate. Don't say "CLI",
+- **No internals by default.** Don't narrate the setup gate. Don't say "CLI",
   "tree_root", "LinkML", "manifest", "provenance", "prepare-text", "assemble",
   or file paths to the user. Talk about their papers, the fields they want,
   and the table they'll get.
+- **Match the user.** If they name commands, files or flags, answer in those
+  terms.
+- **Inform, don't persuade.** Say what litschema is built to do and what
+  happens otherwise. No "strongly recommend", "best practice" or "you should".
 - **Say the minimum.** A sentence or two per turn. No checklists, no status
   dumps, no explaining what you just did under the hood.
 - **Open with the welcome, then no preamble.** Your first message is the short
@@ -50,10 +55,95 @@ Before your first message:
    - **Exit code 3 (version mismatch):** the project pins a different
      litschema version, or its skills are out of date. Show the message exactly
      as printed. Do not edit `litschema.yaml`, reinstall litschema, or
-     reinstall skills yourself; which version a project runs is the user's
-     decision.
+     reinstall skills on your own initiative; which version a project runs is
+     the user's decision. If they ask you to change it, do (see the task
+     table).
 
    Any later command that exits 3 means the same thing: stop and relay it.
+
+## What the user asked
+
+Route by the user's request first, project state second.
+
+- **A loose request** ("get started", "use litschema", "keep going"): go to
+  "Where are we?" below and continue from the first unfinished phase.
+- **A specific task:** find it in the table. Do it if it fits the order. If
+  something it needs is missing, say what in one line and offer to do that
+  first.
+- **A task that departs from the order:** send one message with what litschema
+  is built to do at this point, what happens if they go ahead (see
+  Consequences), and the narrower alternative if there is one. Then ask one
+  question to confirm. Ask why only when the answer would change what you do.
+  If they confirm, do it and don't raise the point again.
+- **A request that breaks an integrity rule:** decline, say which guarantee
+  it protects, and give the supported route.
+
+### The order litschema is built for
+
+1. Design the schema (Phase A).
+2. Prepare the papers' text (Phase B).
+3. Pilot one paper and revise the schema until it fits (Phase C).
+4. Extract the rest (Phase D).
+5. Grade.
+6. Review in the review app.
+7. Export.
+
+Schema revisions belong in steps 1 to 3. New papers can join at any point:
+prepare them, then extract them on the current schema.
+
+### Tasks
+
+| Task | How | Needs first |
+| --- | --- | --- |
+| Design or revise the schema | Phase A | nothing; after review, see Consequences |
+| Add papers | `litschema assemble`, then `litschema prepare-text --all`; extract the new ones (Phase D) | a schema |
+| Pilot one paper | Phase C | prepared text |
+| Extract the rest | Phase D | a pilot the user has checked |
+| Re-extract one paper | the extract-article skill; if a subagent runs it, publish as in Phase D.2 | prepared text |
+| Switch a paper's active run | `litschema runs list <id>`, then `litschema runs activate <id> <run-id>` | two or more runs |
+| Fix bibliographic metadata | `litschema meta sync <id>` from the DOI, or `litschema meta set <id> --source manual` with the fields the user gives | an assembled paper |
+| Grade | `litschema grade --all`, or `litschema grade <id>` | published runs |
+| Review | `litschema verify` | published runs |
+| Export | `litschema export -f csv -o data.csv --audit-output audit.jsonl` | published runs |
+| Check where things stand | `litschema status` | nothing |
+| Update skills | `litschema skills install --project --force` | nothing |
+| Change the litschema version | install that version, set `litschema_version` in `litschema.yaml`, then update skills | the user's request |
+
+### Consequences
+
+State these as facts when a request departs from the order.
+
+- **Schema change after any paper is reviewed:** every published run becomes
+  stale. Re-extracting creates new runs without the existing reviews, which
+  stay attached to the old runs; carrying reviews forward isn't built yet.
+  Nothing is deleted.
+- **Schema change after the batch, before review:** every published run
+  becomes stale, and each paper needs re-extracting to use the new fields.
+- **Batch without a pilot:** a schema problem repeats in every paper and is
+  fixed by re-extracting all of them.
+- **Review before grading:** works, but the review app has no flags to put
+  doubtful values first.
+- **Export before review is finished:** the export includes unreviewed
+  values; the audit file marks each paper's review status.
+- **Re-extracting a reviewed paper:** the new run becomes active without the
+  reviews. The old run keeps them, and `litschema runs activate` switches back.
+- **Changing the litschema version:** commands and skills then run under that
+  version. The changelog lists breaking changes for the versions in between.
+
+### Integrity rules
+
+These hold even if the user insists. Each protects the claim that every value
+traces to its source and to a person who checked it.
+
+- **Never hand-edit a published run** (extraction, reasoning, `run.json`,
+  grades, `review.json`). Corrections go in the review app, which records them
+  as overrides; new values come from re-extracting.
+- **Never publish an extraction that failed validation.** Fix it and validate
+  again, or record the paper as failed.
+- **Never let a subagent publish, and never name a model you didn't choose**
+  (Phase D.2).
+- **Never invent a value or a citation.** A value the paper doesn't support
+  stays out; the user can add it in the review app.
 
 ## Where are we? (silent)
 
@@ -67,10 +157,8 @@ applies. Phases run in order from there; don't redo finished ones.
   If no paper has a run yet, the pilot (Phase C) comes next; otherwise skip to
   Phase D.
 - **Every paper extracted:** offer grading if runs have no grade, then Phase E.
-- **The user asked for something specific** (add papers, re-extract one, or
-  revise the schema before anything is reviewed): do that phase, then return
-  here. Changing the schema after papers are reviewed is a separate workflow
-  litschema doesn't support yet; say so in one line.
+- **The user asked for something specific:** handle it as in "What the user
+  asked", then return here.
 
 ## Phase 0 — welcome and what's in the inbox (first run only)
 
@@ -170,7 +258,8 @@ Tell the user in one line when their papers are in and ready.
 
 ## Phase C — pilot (one paper first)
 
-1. Pick ONE of the papers you skimmed. Extract it with the extract-article
+1. Pick ONE of the papers you skimmed (in a later session, one the user names
+   or a typical one). Extract it with the extract-article
    skill (its SKILL.md lives under `.claude/skills/` or `.agents/skills/` in
    the project, or `~/.claude/skills/` or `~/.codex/skills/` for global installs;
    it handles the extraction, reasoning, and validation mechanics). If you dispatch it as a subagent, you
@@ -237,6 +326,8 @@ Tell the user, briefly:
   against its cited lines (it runs through their own agent CLI login;
   `--model` picks a cheaper model). The review app then lists flagged
   fields first in each paper and counts them on the overview.
+- When review is done, `litschema export` writes the values with their
+  corrections, plus an audit file with each paper's review status.
 - Their dataset lives in `data/papers/<id>/`, in git, reproducible.
 - Re-running this later is safe — finished work is skipped.
 

@@ -206,10 +206,31 @@ revising the schema, and a first-run-only conductor left them nothing to run.
 Claude Code, `$litschema` in Codex). It reads `litschema status` and starts at
 the first unfinished phase: schema design, prepare, pilot, the rest, grading,
 handoff. Text preparation is the first, nearly deterministic and cacheable
-layer of extraction rather than a separate preprocessing step. Changing the
-schema after any paper is reviewed stays out of scope; that is refinement, and
-the skill says so.
+layer of extraction rather than a separate preprocessing step.
 
 **Rejected:** "preprocessing and extraction" as the name for the work, which
 undersells schema design and suggests text conversion only; "schema
 co-design", accurate but awkward in the README's table.
+
+## 2026-11-05 — The user's request routes the conductor; integrity rules hold
+
+**Context:** the first `litschema` skill draft refused any schema change once a
+paper was reviewed and covered only three named requests. Users ask for single
+tasks (export, re-extract one paper, switch runs, fix metadata) and sometimes
+want to work out of the usual order for reasons the conductor can't see.
+
+**Decision:** the user's request comes first. A loose request resumes from
+project state as before. A task that fits the order runs directly. A task that
+departs from it gets one factual message (what litschema is built to do, the
+concrete consequence, any narrower alternative) and one confirming question,
+and then the conductor does what the user decides. Four integrity rules hold
+even if the user insists, because each protects the claim that every value
+traces to its source: no hand-edits to published runs, no publishing an
+extraction that failed validation, no subagent publishing or model the
+conductor didn't choose, no invented values or citations. The skill carries a
+task table so single requests have a defined route (Cory).
+
+**Rejected:** keeping the hard refusal, which blocks a legitimate choice whose
+cost is known and recoverable; letting the user override integrity rules,
+which would produce records that look valid and aren't; persuasive wording,
+since the conductor informs and the user decides.

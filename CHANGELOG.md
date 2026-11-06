@@ -79,6 +79,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
   grading, and review. In existing projects, run
   `litschema skills install --project --force` and delete the old
   `litschema-onboard` skill folders.
+- The `litschema` skill follows the user's request. A task that departs from
+  the usual order (a schema change after review, a batch without a pilot) gets
+  one message on what happens and a confirming question, then the skill does
+  what the user decides. It still refuses to hand-edit published runs, publish
+  an extraction that failed validation, or invent values.
 - `init` and `skills install --project` set the project up for each coding agent
   whose config folder exists, as roborev does: `~/.claude` (or
   `$CLAUDE_CONFIG_DIR`) for Claude Code, `~/.codex` (or `$CODEX_HOME`) or
