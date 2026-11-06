@@ -121,8 +121,23 @@ def _in_git_repo(start: Path) -> bool:
 
     Checked by walking for `.git` rather than shelling out, so a project
     without Git never pays for a subprocess — and needs no `git` on PATH.
+    Honors `GIT_CEILING_DIRECTORIES` the way git does: the walk stops before
+    entering a listed directory, so a test project under a temp dir inside
+    some larger checkout is not mistaken for part of that checkout.
     """
-    return any((candidate / ".git").exists() for candidate in [start, *start.parents])
+    if (start / ".git").exists():
+        return True
+    ceilings = {
+        Path(entry).resolve()
+        for entry in os.environ.get("GIT_CEILING_DIRECTORIES", "").split(os.pathsep)
+        if entry
+    }
+    for parent in start.parents:
+        if parent.resolve() in ceilings:
+            return False
+        if (parent / ".git").exists():
+            return True
+    return False
 
 
 def _count_files(path: Path, pattern: str = "*") -> int:
@@ -635,10 +650,16 @@ def export(
         "--audit-output",
         help="Also write one provenance and review record per article (JSONL)",
     ),
+    allow_stale: bool = typer.Option(
+        False,
+        "--allow-stale",
+        help="Export runs extracted against an older schema, or whose article.md "
+        "changed since extraction, instead of refusing",
+    ),
 ):
     from contextlib import ExitStack
 
-    from .export import FORMATS, export_records
+    from .export import FORMATS, StaleRunsError, export_records
     from .grading import GradeCorruptError
     from .reviews import ReviewCorruptError
 
@@ -661,7 +682,15 @@ def export(
                 if audit_output is not None
                 else None
             )
-            summary = export_records(cfg, fmt, out, audit)
+            summary = export_records(cfg, fmt, out, audit, allow_stale=allow_stale)
+    except StaleRunsError as exc:
+        # Nothing was written; remove the empty files the ExitStack opened so
+        # a refused export leaves no half-truth behind.
+        for path in (output, audit_output):
+            if path is not None and path.is_file() and path.stat().st_size == 0:
+                path.unlink()
+        typer.secho(f"{CROSS} {exc}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=2) from exc
     except (FileNotFoundError, ValueError, GradeCorruptError, ReviewCorruptError) as exc:
         typer.secho(f"{CROSS} {exc}", fg=typer.colors.RED)
         raise typer.Exit(code=2) from exc
@@ -675,6 +704,14 @@ def export(
         f"{summary.unreviewed} unreviewed; {summary.with_overrides} with corrections",
         err=True,
     )
+    if summary.stale_articles:
+        typer.secho(
+            f"{WARN} stale: {len(summary.stale_articles)} article(s) exported anyway: "
+            f"{summary.schema_drift} on an older schema (values with no column in "
+            f"today's CSV are dropped), {summary.source_drift} with a changed article.md",
+            fg=typer.colors.YELLOW,
+            err=True,
+        )
     if audit_output is not None:
         typer.echo(f"  audit → {audit_output}", err=True)
     elif summary.partial or summary.unreviewed:
@@ -1204,7 +1241,7 @@ def status(ctx: typer.Context):
     cfg = project.config
 
     from .reviews import ReviewCorruptError, read_reviews
-    from .runs import BrokenActiveRunError, active_run, iter_run_ids
+    from .runs import BrokenActiveRunError, active_run, iter_run_ids, source_drift
     from .schema_resolution import schema_hash as _schema_hash
 
     metadata = len(list(iter_metadata_paths(cfg)))
@@ -1213,6 +1250,7 @@ def status(ctx: typer.Context):
     live_runs = 0
     active_runs = 0
     current_schema_active = 0
+    changed_text = 0
     broken_pointers = 0
     reviewed_articles = 0
     review_entries = 0
@@ -1237,6 +1275,8 @@ def status(ctx: typer.Context):
                 current_schema_active += 1
         except (OSError, ValueError):
             pass
+        if source_drift(files, run):
+            changed_text += 1
         # Reviews bind to a run, so they must be counted through one. Globbing
         # the old article-root path reported 0 unconditionally, which reads as
         # "no review work yet" rather than "this counter is broken".
@@ -1273,6 +1313,11 @@ def status(ctx: typer.Context):
     typer.echo(f"runs:        {live_runs} published")
     typer.echo(f"active:      {active_runs} articles with an active run")
     typer.echo(f"current:     {current_schema_active} active runs on the current schema")
+    if changed_text:
+        typer.echo(
+            f"{WARN} changed:     {changed_text} active runs whose article.md changed "
+            f"since extraction; their line citations may be off"
+        )
     if broken_pointers:
         typer.echo(f"{CROSS} broken:      {broken_pointers} broken active-run pointers")
     typer.echo(

@@ -53,6 +53,22 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ### Added
 
+- `litschema export` refuses to write when an active run no longer matches the
+  project: extracted against an older schema, or citing an `article.md` that
+  changed since. The message names the articles. `--allow-stale` exports
+  anyway and prints both counts, and the audit sidecar's new `drift` key says
+  why each article is stale. Before this, a renamed slot made export exit 0
+  with the value and its reviewer correction missing from the CSV.
+- The review app marks articles whose `article.md` changed after their run
+  was extracted, in the overview and above the document, since their line
+  citations may point at other lines now. `/api/articles`, `/api/markdown` and
+  `/api/rendered` carry `source_drift`. `litschema status` reports the count.
+- Each published run keeps a copy of the schema it was extracted with under
+  `extraction-runs/<run-id>/schema/`, listed in `run.json` as `schema_files`,
+  so an old run stays interpretable after the project schema changes.
+- `litschema assemble` recognises the same PDF under another filename and
+  reports the article that already holds it, instead of creating a second
+  article with the same content hash.
 - `litschema grade` can run through Codex (`codex exec`) with GPT models as
   well as Claude Code. Pin the harness and model with `models.grade` in
   `litschema.yaml`; `--harness` and `--model` override it. `init` writes
@@ -65,6 +81,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ### Changed
 
+- The `extract-article` skill writes reasoning paths in the canonical form,
+  `experiments[0].ph` with no leading dot. Older runs with a leading dot stay
+  valid.
 - litschema requires Python 3.13 or 3.14. `onnxruntime`, which PDF conversion
   needs, has no wheels for 3.15 yet, and uv picks the newest Python it can.
 - The Claude Code grader no longer removes `ANTHROPIC_API_KEY`,

@@ -264,9 +264,15 @@ def test_doctor_recognizes_project_local_skills(tmp_path, monkeypatch) -> None:
     assert "skills not installed" not in result.output
 
 
-def test_doctor_reports_unattributed_reviews_only_inside_a_repo(tmp_path: Path) -> None:
+def test_doctor_reports_unattributed_reviews_only_inside_a_repo(
+    tmp_path: Path, monkeypatch
+) -> None:
     """A repo implies the work may be shared; outside one, anonymous is normal."""
     import json as _json
+
+    # The temp dir may itself sit inside a checkout; git's own ceiling variable
+    # keeps the walk from finding that repository.
+    monkeypatch.setenv("GIT_CEILING_DIRECTORIES", str(tmp_path))
 
     from typer.testing import CliRunner
 
@@ -301,3 +307,27 @@ def test_doctor_reports_unattributed_reviews_only_inside_a_repo(tmp_path: Path) 
     inside = runner.invoke(cli.app, args)
     assert "1 review entries have no reviewer" in inside.output
     assert "may be shared" in inside.output
+
+
+def test_in_git_repo_stops_at_a_ceiling_directory(tmp_path: Path, monkeypatch) -> None:
+    """`GIT_CEILING_DIRECTORIES` works as it does for git: the walk stops there.
+
+    Two tests asserted "not in a repo" for a temp project and failed whenever
+    the temp dir sat inside some larger checkout. The ceiling is the fix git
+    itself offers for that situation.
+    """
+    from litschema.cli import _in_git_repo
+
+    outer = tmp_path / "outer"
+    project = outer / "work" / "project"
+    project.mkdir(parents=True)
+    (outer / ".git").mkdir()
+
+    monkeypatch.delenv("GIT_CEILING_DIRECTORIES", raising=False)
+    assert _in_git_repo(project) is True
+
+    monkeypatch.setenv("GIT_CEILING_DIRECTORIES", str(outer / "work"))
+    assert _in_git_repo(project) is False
+
+    (project / ".git").mkdir()
+    assert _in_git_repo(project) is True  # a repo below the ceiling still counts

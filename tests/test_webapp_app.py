@@ -835,7 +835,10 @@ def test_backfill_attributes_only_anonymous_entries(tmp_path) -> None:
     assert fields["ph"]["reviewer"] == "0000-0001-5109-3700"  # untouched
 
 
-def test_settings_reports_repo_context_for_the_backfill_warning(tmp_path) -> None:
+def test_settings_reports_repo_context_for_the_backfill_warning(tmp_path, monkeypatch) -> None:
+    # The temp dir may itself sit inside a checkout; git's own ceiling variable
+    # keeps the walk from finding that repository.
+    monkeypatch.setenv("GIT_CEILING_DIRECTORIES", str(tmp_path))
     cfg = _config_project(tmp_path)
     client = _client(cfg)
 
@@ -991,3 +994,56 @@ def test_unknown_annotation_fields_are_rejected_not_ignored(tmp_path) -> None:
     # Nothing was recorded by either attempt.
     listing = client.get(f"/api/annotations/a/{run_id}").json()
     assert listing["annotations"] == []
+
+
+# ── source text that changed after the run was extracted ─────────────────────
+
+
+def test_changed_article_text_is_reported_as_source_drift(tmp_path) -> None:
+    """Old citations shown against new text, with no warning, is the bug.
+
+    The run records the hash of the article.md it was extracted from. When the
+    file no longer matches, every route a reviewer reads line numbers through
+    says so: the listing, the rendered text, and the raw markdown. Counts stay
+    real; the run is still readable, only its line numbers are suspect.
+    """
+    from .helpers import publish_test_run
+
+    cfg = _project_cfg(tmp_path)
+    _write_manifest(cfg, "a", {"id": "a"})
+    paper = cfg.article_store_dir / "a"
+    (paper / "article.md").write_text("# A\n\nThe cited text.\n")
+    publish_test_run(paper, {"article_id": "a", "title": "T", "ph": 6.1})
+    client = _client(cfg)
+
+    before = {x["article_id"]: x for x in client.get("/api/articles").json()["articles"]}["a"]
+    assert before["source_drift"] is None
+    assert client.get("/api/rendered/a").json()["source_drift"] is None
+    assert client.get("/api/markdown/a").json()["source_drift"] is None
+
+    (paper / "article.md").write_text("# A\n\nRe-converted: different lines now.\n")
+
+    entry = {x["article_id"]: x for x in client.get("/api/articles").json()["articles"]}["a"]
+    assert "article.md changed after run" in entry["source_drift"]
+    assert entry["schema_drift"] is None
+    assert entry["n_fields"] == 2  # counts survive; only the line numbers are suspect
+    rendered = client.get("/api/rendered/a").json()
+    assert "article.md changed after run" in rendered["source_drift"]
+    assert rendered["blocks"]
+    assert "article.md changed after run" in client.get("/api/markdown/a").json()["source_drift"]
+
+
+def test_source_drift_is_null_without_a_run_or_without_text(tmp_path) -> None:
+    cfg = _project_cfg(tmp_path)
+    _write_manifest(cfg, "no-run", {"id": "no-run"})
+    (cfg.article_store_dir / "no-run" / "article.md").write_text("text\n")
+    _write_manifest(cfg, "no-text", {"id": "no-text"})
+    from .helpers import publish_test_run
+
+    publish_test_run(cfg.article_store_dir / "no-text", {"article_id": "no-text", "title": "T"})
+    client = _client(cfg)
+
+    entries = {x["article_id"]: x for x in client.get("/api/articles").json()["articles"]}
+    assert entries["no-run"]["source_drift"] is None
+    assert entries["no-text"]["source_drift"] is None
+    assert client.get("/api/rendered/no-run").json()["source_drift"] is None

@@ -220,8 +220,10 @@ def test_export_audit_counts_grade_flags(tmp_path: Path) -> None:
     from litschema.runs import active_run
 
     project = _project(tmp_path)
-    paper = _write_article(project, "smith-2024", {"article_id": "smith-2024", "sample_size": 1})
-    (paper / "article.md").write_text("text\n")
+    paper = project / "data" / "papers" / "smith-2024"
+    paper.mkdir(parents=True)
+    (paper / "article.md").write_text("text\n")  # before the run, so the run cites it
+    _write_article(project, "smith-2024", {"article_id": "smith-2024", "sample_size": 1})
     cfg = load_config(project / "litschema.yaml", reload=True)
     run = active_run(article_files(cfg, "smith-2024"))
     write_grade(run, {
@@ -255,3 +257,114 @@ def test_export_is_deterministic_and_hints_at_audit(tmp_path: Path) -> None:
 
     assert first.output == second.output
     assert "--audit-output" in first.output
+
+
+# ── stale runs: an older schema or a changed article.md ──────────────────────
+
+
+def _export(project: Path, tmp_path: Path, *extra: str):
+    return runner.invoke(
+        cli.app,
+        [
+            "--config", str(project / "litschema.yaml"),
+            "export", "--format", "csv", "--output", str(tmp_path / "out.csv"),
+            "--audit-output", str(tmp_path / "audit.jsonl"), *extra,
+        ],
+    )
+
+
+def test_export_refuses_a_run_extracted_against_an_older_schema(tmp_path: Path) -> None:
+    """A CSV shaped by today's schema has no column for yesterday's slot.
+
+    Renaming `country` to `study_country` made export exit 0 with an empty
+    `study_country` column and no `country` column: the value and a reviewer's
+    correction were gone and nothing said so. Refusing is the default; the
+    flag is the user saying they know.
+    """
+    from .helpers import publish_test_run
+
+    project = _project(tmp_path)
+    paper = project / "data" / "papers" / "old"
+    paper.mkdir(parents=True)
+    (paper / "article-metadata.json").write_text(json.dumps({"id": "old"}))
+    publish_test_run(
+        paper,
+        {"article_id": "old", "study_type": "field_trial", "country": "Kenya"},
+        schema_hash="sha256:the-schema-before-the-rename",
+    )
+    _write_article(project, "fresh", {"article_id": "fresh", "study_type": "field_trial"})
+
+    refused = _export(project, tmp_path)
+
+    assert refused.exit_code == 2, refused.output
+    assert "1 extracted against an older schema" in refused.output
+    assert "old" in refused.output
+    assert "--allow-stale" in refused.output
+    # Nothing half-written: a refused export leaves no files behind.
+    assert not (tmp_path / "out.csv").exists()
+    assert not (tmp_path / "audit.jsonl").exists()
+
+    allowed = _export(project, tmp_path, "--allow-stale")
+
+    assert allowed.exit_code == 0, allowed.output
+    assert "stale: 1 article(s) exported anyway" in allowed.output
+    audit = {r["article_id"]: r for r in map(json.loads, (tmp_path / "audit.jsonl").read_text().splitlines())}
+    assert "different schema" in audit["old"]["drift"]["schema"]
+    assert audit["old"]["drift"]["source"] is None
+    assert audit["fresh"]["drift"] == {"schema": None, "source": None}
+
+
+def test_export_refuses_a_run_whose_article_text_changed(tmp_path: Path) -> None:
+    """Line citations index into the text the run was extracted from.
+
+    Re-converting or editing article.md after the run leaves every `L<n>`
+    pointing somewhere else. The run records the hash of the text it saw, so
+    the mismatch is checkable; before this nothing checked it.
+    """
+    from .helpers import publish_test_run
+
+    project = _project(tmp_path)
+    paper = project / "data" / "papers" / "moved"
+    paper.mkdir(parents=True)
+    (paper / "article-metadata.json").write_text(json.dumps({"id": "moved"}))
+    (paper / "article.md").write_text("# Moved\n\nThe text the run cited.\n")
+    publish_test_run(paper, {"article_id": "moved", "study_type": "field_trial"})
+
+    assert _export(project, tmp_path).exit_code == 0
+
+    (paper / "article.md").write_text("# Moved\n\nA fresh conversion with other line numbers.\n")
+
+    refused = _export(project, tmp_path)
+
+    assert refused.exit_code == 2, refused.output
+    assert "1 whose article.md changed since extraction" in refused.output
+
+    allowed = _export(project, tmp_path, "--allow-stale")
+
+    assert allowed.exit_code == 0, allowed.output
+    (record,) = map(json.loads, (tmp_path / "audit.jsonl").read_text().splitlines())
+    assert "article.md changed after run" in record["drift"]["source"]
+    assert record["drift"]["schema"] is None
+
+
+def test_export_summary_counts_stale_runs_only_when_allowed(tmp_path: Path) -> None:
+    from litschema.config import load_config as _load
+    from litschema.export import ExportSummary, StaleRunsError, export_records
+
+    project = _project(tmp_path)
+    paper = _write_article(project, "a", {"article_id": "a", "study_type": "field_trial"})
+    (paper / "article.md").write_text("new text\n")
+    cfg = _load(project / "litschema.yaml", reload=True)
+
+    try:
+        export_records(cfg, "jsonl", io.StringIO())
+    except StaleRunsError as exc:
+        summary: ExportSummary = exc.summary
+    else:  # pragma: no cover - the assertion below reports it
+        raise AssertionError("export did not refuse a run whose text changed")
+
+    assert summary.stale_articles == ["a"]
+    assert (summary.schema_drift, summary.source_drift) == (0, 1)
+    out = io.StringIO()
+    assert export_records(cfg, "jsonl", out, allow_stale=True).stale_articles == ["a"]
+    assert json.loads(out.getvalue())["article_id"] == "a"

@@ -220,3 +220,25 @@ the suite).
 **Decision:** Lucide icons as a bundled SVG sprite replace Unicode symbols,
 which rendered at inconsistent sizes and as emoji. DM Sans and DM Mono ship as
 woff2. marked and Shoelace are removed.
+
+
+## 2026-11-05 — Source drift is reported beside the citations, never blocking
+
+**Context:** the review app rendered whatever `article.md` held and let the
+reasoning's `L<n>` citations index into it. After a re-conversion or a hand
+edit the old numbers still resolved, to lines the extractor never read, and
+every pane looked normal. The run records the hash of the text it cited.
+
+**Decision:** the listing, the markdown route and the rendered route each
+carry `source_drift`, the reason the current text is not the cited one or
+`null`. The overview marks the article and counts it; the document shows a
+notice above the text. Nothing is blocked and no count changes: the extracted
+values are unchanged, only the lines under them may have moved, and a reviewer
+can still check a value against the paper. This is the third condition beside
+unresolvable and drifted schemas, and independent of both.
+
+**Rejected:** refusing to open the document, which strands a reviewer over a
+change that may be one fixed header line; serving the text the run cited from
+a stored copy, since `article.md` is regenerable and the store keeps no text
+inside runs; and folding the flag into `schema_drift`, which blocks editing
+for a reason source drift does not share.

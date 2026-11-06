@@ -757,3 +757,76 @@ def test_status_counts_reviews_bound_to_the_active_run(tmp_path: Path, monkeypat
     output = runner.invoke(cli.app, ["status"]).output
     assert "1 articles with reviews" in output
     assert "(1 entries on active runs)" in output
+
+
+def test_assemble_recognises_the_same_pdf_under_another_filename(tmp_path: Path) -> None:
+    """One paper, two filenames, one article.
+
+    A publisher download and a Zotero rename hold the same bytes. Matching on
+    the slug alone assembled each as its own article, and a meta-analysis then
+    counted the paper twice. Content identity wins over the filename.
+    """
+    cfg = _cfg(tmp_path)
+    _drop_pdf(cfg, "smith-2024.pdf", "the same paper")
+    article_assembly.assemble(cfg)
+
+    _drop_pdf(cfg, "Smith et al. - 2024 - Enhanced weathering.pdf", "the same paper")
+    stats = article_assembly.assemble(cfg)
+
+    assert stats == {"inbox_pdfs": 1, "assembled": 0, "already_assembled": 1, "errors": 0}
+    assert [p.name for p in cfg.article_store_dir.glob("*") if p.is_dir()] == ["smith-2024"]
+    assert not (cfg.paper_inbox_dir / "Smith et al. - 2024 - Enhanced weathering.pdf").exists()
+    assert (
+        cfg.paper_inbox_dir / ".processed" / "Smith et al. - 2024 - Enhanced weathering.pdf"
+    ).read_text() == "the same paper"
+
+
+def test_assemble_reports_the_existing_article_for_a_renamed_duplicate(
+    tmp_path: Path,
+) -> None:
+    cfg = _cfg(tmp_path)
+    _drop_pdf(cfg, "paper.pdf", "bytes")
+    article_assembly.assemble(cfg)
+    _drop_pdf(cfg, "copy-of-paper.pdf", "bytes")
+    events = []
+
+    article_assembly.assemble(cfg, reporter=lambda event, payload: events.append((event, payload)))
+
+    (pdf_event,) = [payload for event, payload in events if event == "pdf"]
+    assert pdf_event["result"] == "already_assembled"
+    assert pdf_event["article_id"] == "paper"
+
+
+def test_agent_record_extraction_copies_the_schema_into_the_run(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """A hash cannot be read back; the files it covers can.
+
+    After the project schema moves on, the copy is what lets an old run be
+    validated and typed against the schema it was extracted with.
+    """
+    cfg, article_dir = _publishable_project(tmp_path)
+    monkeypatch.setattr(cli, "_require_project", lambda ctx=None: SimpleNamespace(config=cfg))
+
+    result = CliRunner().invoke(cli.app, ["agent", "record-extraction", "smith-2024"])
+
+    assert result.exit_code == 0, result.output
+    (run_dir,) = (article_dir / "extraction-runs").iterdir()
+    record = json.loads((run_dir / "run.json").read_text())
+    assert record["schema_files"] == ["extraction.yaml"]
+    copied = run_dir / "schema" / "extraction.yaml"
+    assert copied.read_bytes() == (tmp_path / "schema" / "extraction.yaml").read_bytes()
+
+
+def test_status_reports_runs_whose_text_changed(tmp_path: Path, monkeypatch) -> None:
+    cfg, article_dir = _publishable_project(tmp_path)
+    monkeypatch.setattr(cli, "_require_project", lambda ctx=None: SimpleNamespace(config=cfg))
+    runner = CliRunner()
+    assert runner.invoke(cli.app, ["agent", "record-extraction", "smith-2024"]).exit_code == 0
+
+    assert "changed:" not in runner.invoke(cli.app, ["status"]).output
+
+    (article_dir / "article.md").write_text("# Smith 2024\n\nRe-converted text.\n")
+
+    output = runner.invoke(cli.app, ["status"]).output
+    assert "changed:     1 active runs whose article.md changed since extraction" in output
