@@ -1086,6 +1086,16 @@ def multiline_edit_flow(page, path: str) -> None:
     cell = page.locator(f'#panel-right tr[data-path="{path}"] td.value-cell').first.bounding_box()
     check("the text box spans the value cell", bool(box and cell) and box["width"] > cell["width"] - 20,
           f"{box and box['width']} of {cell and cell['width']}")
+    # A field with several citations binds n/p and the arrow keys to citation
+    # navigation; inside the editor they must edit text instead.
+    page.evaluate("() => { state.sections = [{label: 'a'}, {label: 'b'}]; state.sectionIndex = 0; }")
+    control.fill("first lin")
+    control.press("ArrowLeft")
+    control.press("ArrowRight")
+    control.type("e np")
+    check("typing n, p and arrows edits the text, not the citation",
+          control.input_value() == "first line np"
+          and page.evaluate("() => state.sectionIndex") == 0, repr(control.input_value()))
     control.fill("first line")
     control.press("Shift+Enter")
     control.type("second line")

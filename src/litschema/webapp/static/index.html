@@ -6633,7 +6633,8 @@ document.addEventListener("keydown", (e) => {
 
   // Section navigation (when a field is selected)
   if (!state.selectedPath || state.sections.length < 2) return;
-  if (document.activeElement.tagName === "INPUT" || document.activeElement.tagName === "SELECT") return;
+  const active = document.activeElement;
+  if (active && (active.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(active.tagName))) return;
 
   if ((e.key === "n" || e.key === "ArrowRight") && !e.ctrlKey && !e.metaKey) {
     e.preventDefault();
