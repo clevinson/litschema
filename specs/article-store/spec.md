@@ -116,8 +116,10 @@ writes the folder the first time a run uses that hash, before the run itself,
 and never rewrites it. A hash cannot be read back; the stored files keep an
 old run interpretable after the project schema changes, so its values can
 still be validated and typed against the schema they were extracted with.
-Publication fails when a schema file cannot be copied. Runs published before
-0.1.3 have no stored schema.
+Publication rehashes the staged copy and fails if it doesn't match `<hash>`,
+which catches a schema edited mid-publish. It also fails when a schema file
+cannot be copied, or when two files would be kept under the same name. Runs
+published before 0.1.3 have no stored schema.
 
 `conversion` is optional. The publisher copies it from the article's
 `prepared-text.json` (see Text preparation), dropping the `figures` list and
@@ -332,7 +334,9 @@ Implementation coverage must pin:
 - assemble idempotence, including the same bytes under another filename,
   collision handling, offline operation, and atomic manifests;
 - the schema stored under `data/schemas/<hash>/` at publication, byte-equal to
-  the project schema files, written once per hash and never in run folders;
+  the project schema files, written once per hash and never in run folders,
+  and refused when the staged copy doesn't rehash to `<hash>` or two files
+  would share a stored name;
 - prepare-text on a real PDF: recorded options, repeated and small images
   dropped, refs rewritten, `<mark>` stripped, record hashes, `--force`
   replacing `figures/`, flat-mode paths, and the canonical-PDF fallback;

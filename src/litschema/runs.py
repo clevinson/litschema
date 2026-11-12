@@ -13,6 +13,7 @@ the publisher's: publishing a complete non-error run atomically activates it
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
@@ -433,6 +434,7 @@ def _schema_copies(cfg: LitSchemaConfig) -> list[tuple[str, Path]]:
     the hash uses.
     """
     copies = []
+    seen: dict[str, Path] = {}
     for path in schema_closure_paths(cfg):
         try:
             name = path.resolve().relative_to(cfg.schema_dir.resolve()).as_posix()
@@ -440,8 +442,24 @@ def _schema_copies(cfg: LitSchemaConfig) -> list[tuple[str, Path]]:
             name = path.name
         if not path.is_file():
             raise RunPublishError(f"cannot copy schema file {path}: it does not exist")
+        if name in seen:
+            raise RunPublishError(
+                f"cannot store the schema: {seen[name]} and {path} would both be kept as {name}; "
+                f"rename one of them"
+            )
+        seen[name] = path
         copies.append((name, path))
     return copies
+
+
+def _closure_digest(copies: list[tuple[str, Path]], root: Path) -> str:
+    """`schema_hash` recomputed over stored copies, in the same order and form."""
+    digest = hashlib.sha256()
+    for name, source in copies:
+        digest.update(source.name.encode())
+        digest.update(b"\0")
+        digest.update((root / name).read_bytes())
+    return "sha256:" + digest.hexdigest()
 
 
 def _store_schema(cfg: LitSchemaConfig, schema_sha: str) -> None:
@@ -463,6 +481,11 @@ def _store_schema(cfg: LitSchemaConfig, schema_sha: str) -> None:
             dest = staging / name
             dest.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(path, dest)
+        if _closure_digest(copies, staging) != schema_sha:
+            shutil.rmtree(staging, ignore_errors=True)
+            raise RunPublishError(
+                "the schema changed while the run was being published; publish again"
+            )
         os.replace(staging, target)
     except OSError:
         shutil.rmtree(staging, ignore_errors=True)

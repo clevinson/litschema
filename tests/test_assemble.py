@@ -856,3 +856,41 @@ def test_status_reports_runs_whose_text_changed(tmp_path: Path, monkeypatch) -> 
 
     output = runner.invoke(cli.app, ["status"]).output
     assert "changed:     1 active runs whose article.md changed since extraction" in output
+
+
+def test_record_extraction_refuses_a_schema_that_changed_while_publishing(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """Stored bytes must match the hash the folder is named by; nothing is published otherwise."""
+    from litschema import runs
+
+    cfg, article_dir = _publishable_project(tmp_path)
+    monkeypatch.setattr(cli, "_require_project", lambda ctx=None: SimpleNamespace(config=cfg))
+    monkeypatch.setattr(runs, "schema_hash", lambda _cfg: "sha256:" + "0" * 64)
+
+    result = CliRunner().invoke(cli.app, ["agent", "record-extraction", "smith-2024"])
+
+    assert result.exit_code != 0
+    assert "schema changed" in result.output
+    assert not (cfg.data_dir / "schemas" / ("0" * 64)).exists()
+    assert not list((cfg.data_dir / "schemas").glob(".staging-*"))
+    assert not (article_dir / "extraction-runs").exists() or not any(
+        p for p in (article_dir / "extraction-runs").iterdir() if not p.name.startswith(".")
+    )
+
+
+def test_schema_files_that_would_share_a_stored_name_are_refused(
+    tmp_path: Path, monkeypatch
+) -> None:
+    from litschema import runs
+
+    cfg, _article_dir = _publishable_project(tmp_path)
+    inside = tmp_path / "schema" / "base.yaml"
+    outside = tmp_path / "shared" / "base.yaml"
+    for path in (inside, outside):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("id: x\n")
+    monkeypatch.setattr(runs, "schema_closure_paths", lambda _cfg: [inside, outside])
+
+    with pytest.raises(runs.RunPublishError, match="would both be kept as base.yaml"):
+        runs._schema_copies(cfg)

@@ -186,7 +186,9 @@ fail `validate` with no way to recover the schema it was valid against.
 `data/schemas/<hash>/`, by path relative to the schema directory, the first
 time a run uses that hash. Later runs on the same schema write nothing, and a
 stored folder is never rewritten: its name is the hash of what it holds. The
-store is written before the run, so no run names a schema that isn't kept. A
+store is written before the run, so no run names a schema that isn't kept, and
+the staged copy is rehashed before it is moved into place, so a folder always
+holds what its name says. A
 schema file that cannot be copied fails publication like any other input.
 Supersedes "Git is the only schema history" in
 `specs/project-config/decisions.md` (2026-07-14).
