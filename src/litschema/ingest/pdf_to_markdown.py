@@ -51,6 +51,8 @@ FIGURE_FILTER = {
 
 # pymupdf4llm writes each image on its own line.
 _IMAGE_LINE = re.compile(r"^!\[[^\]]*\]\((?P<ref>.+)\)[ \t]*$", re.MULTILINE)
+# pymupdf4llm reads a drawn line through a span, often a table rule, as strikeout.
+_STRIKEOUT = re.compile(r"~~(.+?)~~")
 
 
 def _sha256_bytes(data: bytes) -> str:
@@ -87,7 +89,7 @@ def select_figures(figures_dir: Path) -> tuple[set[str], set[str]]:
 def postprocess_markdown(
     md_text: str, *, kept: set[str], dropped: set[str], figures_ref: str
 ) -> str:
-    """Rewrite kept image refs to ``figures_ref/<name>``, blank dropped ones, strip <mark>.
+    """Rewrite kept image refs to ``figures_ref/<name>``, blank dropped ones, strip <mark> and ~~.
 
     Dropped image lines stay as empty lines. Refs to files this conversion did
     not write are left alone.
@@ -102,7 +104,8 @@ def postprocess_markdown(
         return match.group(0)
 
     md_text = _IMAGE_LINE.sub(rewrite, md_text)
-    return md_text.replace("<mark>", "").replace("</mark>", "")
+    md_text = md_text.replace("<mark>", "").replace("</mark>", "")
+    return _STRIKEOUT.sub(r"\1", md_text)
 
 
 def convert_pdf(pdf_path: Path, out_path: Path, figures_dir: Path, record_path: Path) -> int:

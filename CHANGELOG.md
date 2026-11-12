@@ -62,6 +62,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
   DOI, run, model, litschema version, schema hash, review status (`complete`,
   `partial`, `unreviewed`) with counts, the current grade's flags, and the
   review entries. Data rows keep the schema's shape.
+- Sections in the review app's Audit table collapse. A collapsed section shows
+  a one-line summary: field count, verified, edited, unreviewed, and grader
+  flags. A section whose fields are all reviewed starts collapsed. One you
+  finish during a visit collapses when you select a field outside it.
+  Previous and Next open a collapsed section to reach its field.
+- Free-text fields edit in a box that wraps and grows with the value. Enter
+  saves, Shift+Enter adds a line break. Value cells keep line breaks.
 
 ### Changed
 
@@ -111,8 +118,30 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
   corrections applied, including unreviewed ones. It prints how many articles
   are fully, partly, and not reviewed.
 
+- The document pane's Rendered tab is called Markdown. It shows the formatted
+  text, or raw lines when a document can't be rendered.
+- The evidence box groups what the extraction said under "Extraction" and
+  shows the grade in a separate "Independent grader" block that names the
+  grader model and is ruled in its band colour.
+- The review app calls the `check` grade band Medium. Grade files keep the
+  `check` key.
+
+### Removed
+
+- The review app's "Flagged first" order. It pulled a document's flagged
+  fields out of their experiments and sections, so related values were read
+  apart. Fields keep document order; the Flags column and chip on the overview
+  still find graded documents with flags.
+- The Raw lines tab. The rendered view replaces it; raw lines still show when
+  a document can't be rendered.
+
 ### Fixed
 
+- `prepare-text` no longer marks table text as struck out. pymupdf4llm reads a
+  table rule drawn through a row as a strikeout and wrapped those cells in
+  `~~`; `prepare-text` now strips the markers and keeps the text. Re-run
+  `prepare-text --force` to regenerate affected articles. Line numbers don't
+  change, but the prepared-text hash does.
 - The version-pin error suggests `uv tool install litschema==<pin>` only when
   the pin is a release. For a dev-build pin it says the build isn't on PyPI.
   Its other option now works in either direction and includes the skills

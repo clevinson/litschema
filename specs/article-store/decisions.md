@@ -173,3 +173,22 @@ among runs but never destroy one.
 run directories by hand to learn the ID to pass; and auto-selecting the "best"
 run by heuristic such as measurement count, which would substitute a guess for
 the human judgment this exists to enable.
+
+## 2026-11-12 — prepare-text strips strikeout markers
+
+**Context:** te-pas-2023's Table 2 showed `~~Olivine~~<sup>~~a~~</sup>` in
+every header cell. The PDF has no strikeout: a grey table rule runs through the
+header row (y=113.1 against a text midline of 114.0), and pymupdf4llm reads any
+drawn line through a span as a strikeout. 76 erw-lit articles carry such
+markup. No extraction copied the markers into a value.
+
+**Decision:** post-processing strips paired `~~` markers and keeps the text,
+next to the `<mark>` strip that handles the same kind of misread for shaded
+cells. Fixing it in preparation corrects `article.md` for the extractor, the
+review app and anyone reading it. Markers sit inside lines, so line numbers and
+existing citations hold; the prepared-text hash changes, so affected runs need
+re-preparing.
+
+**Rejected:** parsing strikethrough in the review app's renderer and dropping
+the `<s>` tag (it fixes only the display and keeps a second code path for old
+text), and keeping real strikeouts (research papers don't use them).

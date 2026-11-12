@@ -239,7 +239,9 @@ as `empty`. Post-processing then:
   (logos, page furniture) and every image under 150 px wide or 100 px tall,
   deleting the file and blanking its markdown line (the line stays, empty);
 - rewrites each kept image ref to `![](figures/<name>)`;
-- strips `<mark>` and `</mark>` (MuPDF flags shaded form fields as highlights).
+- strips `<mark>` and `</mark>` (MuPDF flags shaded form fields as highlights);
+- strips paired `~~` strikeout markers and keeps the text (pymupdf4llm reads a
+  drawn line through a span, often a table rule, as a strikeout).
 
 Kept images go to `<article-id>/figures/`. A rerun with `--force` replaces the
 directory; a conversion that keeps no images leaves none.
@@ -318,7 +320,7 @@ Implementation coverage must pin:
 - assemble idempotence, collision handling, offline operation, and atomic
   manifests;
 - prepare-text on a real PDF: recorded options, repeated and small images
-  dropped, refs rewritten, `<mark>` stripped, record hashes, `--force`
+  dropped, refs rewritten, `<mark>` and `~~` stripped, record hashes, `--force`
   replacing `figures/`, flat-mode paths, and the canonical-PDF fallback;
 - the `conversion` block copied into `run.json`, its absence without a record,
   and refusal on a text hash mismatch.
