@@ -166,6 +166,7 @@ def test_postprocess_markdown_rewrites_blanks_and_strips() -> None:
     md = "\n".join(
         [
             "Intro <mark>shaded</mark> text",
+            "||~~Olivine~~<sup>~~a~~</sup>|~~Basalt~~|  ~10 µm",
             "![](/abs/dir with (parens)/x.pdf-0001-02.png)",
             "![alt](rel/x.pdf-0002-03.png)",
             "![](elsewhere/unknown.png)",
@@ -182,6 +183,7 @@ def test_postprocess_markdown_rewrites_blanks_and_strips() -> None:
 
     assert out.split("\n") == [
         "Intro shaded text",
+        "||Olivine<sup>a</sup>|Basalt|  ~10 µm",
         "",
         "![](figures/x.pdf-0002-03.png)",
         "![](elsewhere/unknown.png)",
