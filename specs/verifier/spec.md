@@ -6,7 +6,7 @@ Status: partially current.
 
 Live today: `litschema verify` serving a single-page app with a document
 switcher, the `?filter=` queue expression, the Audit/Data toggle for one
-article's extraction, Rendered, Raw lines, and PDF panes, review editing, and
+article's extraction, Markdown and PDF panes, review editing, and
 ORCID lookup. Its read API is the `/api/...` surface named under API ownership
 below.
 
@@ -198,29 +198,28 @@ valid active run reports `n_fields = 0`, review counts `0`, progress `0.0`, and
 
 ### Document pane
 
-The left pane has three tabs: Rendered (the default), Raw lines, and PDF. The
-choice persists per browser and can be set with `pane=` in the hash.
+The left pane has two tabs: Markdown (the default) and PDF. The choice
+persists per browser and can be set with `pane=` in the hash (`rendered` or
+`pdf`).
 
-Rendered shows prepared text as paragraphs, headings, tables, and figures from
+Markdown shows prepared text as paragraphs, headings, tables, and figures from
 `/api/rendered`. Selecting a field highlights the cited paragraph or figure, or
 only the cited rows of a table unless the citation covers the whole table. When
 the extracted value appears verbatim it is marked: a table cell that holds
 exactly the value gets a fill, otherwise the first match in the text gets an
 inline mark. A paraphrased value gets the highlight and no mark. If a citation
-falls outside every rendered block, the pane says so and points to Raw lines.
+falls outside every rendered block, the pane says so and points to the PDF.
 Text blocks keep a 64ch measure; tables and figures use the full pane width.
 Jumps farther than one viewport scroll instantly; nearer ones animate.
 
-Line numbers belong to Raw lines. In Rendered, the evidence box and source
-labels name the source ("source", "2 sources") instead of line ranges.
+The evidence box and source labels name the source ("source", "2 sources")
+instead of line ranges.
 
-If `/api/rendered` fails, `docPane()` reports Raw lines as the pane in use, so
-the document stays readable and every line-based label follows the pane
-actually shown.
-
-Raw lines shows article.md one numbered line at a time, with HTML shown as
-escaped text. Find in document searches whichever of the two text panes is
-showing.
+If `/api/rendered` fails, the Markdown tab falls back to raw lines:
+article.md one numbered line at a time, with HTML shown as escaped text.
+`docPane()` reports that fallback as the pane in use, so the document stays
+readable and line-based labels follow what is shown. Raw lines is not a tab.
+Find in document searches whichever text view is showing.
 
 Known limit: prepared text converted with old pymupdf4llm versions (for
 example erw-lit's April 2026 conversions) splits paragraphs at PDF line
@@ -295,6 +294,32 @@ That UI is deliberately unspecified here rather than specified-and-unbuilt.
 Its requirements, including why added values must render distinctly from
 uncited extracted ones, return to this spec when the affordance ships.
 
+#### Editing free text
+
+A string field without permissible values edits in a textarea that wraps and
+grows with its content, so a paragraph-long value can be read and changed
+whole. Enter saves, Shift+Enter adds a line break, Esc cancels. Value cells
+keep line breaks. While a row is edited, its last column holds save, cancel,
+and remove in place of the status controls, so the editor takes the whole
+value cell. The app shows no keyboard hints.
+
+#### Collapsible sections
+
+Every headed section of the Audit table (an object, or one item of an array
+of objects) has a toggle beside its label. A collapsed section hides its rows
+and shows one line: its field count, then verified, edited, and unreviewed
+counts, and flags (unreviewed fields graded low, check, or can't verify).
+Clicking the line opens the section. The section control stays in the heading
+either way.
+
+A section whose fields are all reviewed starts collapsed. A section finished
+during the visit stays open until the reviewer selects a field outside it,
+because a bulk verification leaves its fields armed to clear on the next click
+and a collapse would hide them. The reviewer's own toggle holds until the
+section is finished. Selecting a field, by click, Previous/Next, or evidence
+navigation, opens every collapsed section that holds it. Collapse state resets
+when the document changes.
+
 ## Queue filter trust boundary
 
 The local power-user queue filter may evaluate JavaScript against article
@@ -339,28 +364,27 @@ else the nearest ancestor's, the same resolution evidence uses. The band comes
 from the server (`band` on each field of `/api/grades`), so the app and
 `litschema grade` use the same thresholds.
 
+- Labels: the app shows the bands as High, Medium, Low, and Can't verify. The
+  stored `check` band reads as Medium.
 - Audit table: the Source cell carries a small band label. High shows nothing;
-  check is amber (`--accent`), low red (`--red`), can't verify grey
+  medium is amber (`--accent`), low red (`--red`), can't verify grey
   (`--text-dim`). A table row graded as a whole shows the label once, in its
   own Source cell.
-- Evidence box, graded field: the band and the grader's confidence as a
-  percentage ("Check · 72%"), naming the ancestor when the grade is inherited,
-  then the grader's `issue` if any. Can't verify and version-1 grades show no
-  percentage.
-- Evidence box, extractor side: "How it was extracted: <basis>" and, when the
-  basis is not stated, the extractor's `note`, shown open. Old runs without a
-  basis show their free-text reasoning plainly when ungraded and behind a
-  collapsed "How it was extracted" disclosure when graded. Only an ungraded old
-  run shows the extractor's own confidence score.
-- The field-level UI never names the grader model. When a current grade
-  exists, the run chip's tooltip reads "Extracted by <model> · checked by
-  <grader model>".
-- Review order: a "Flagged first" toggle in the review pane's header, next to
-  Audit/Data, shown only when a grade exists and on by default then. It lists
-  every leaf in groups (low, check, can't verify, values whose basis is
-  inferred or assumed, then the rest in document order), each row labelled
-  with its full path. Previous/Next follow that order. Turning it off restores
-  the sectioned table.
+- Evidence box: two groups. "Extraction" holds what the extraction said: the
+  value, "How it was extracted: <basis>" and, when the basis is not stated,
+  the extractor's `note`, shown open. Old runs without a basis show their
+  free-text reasoning plainly when ungraded and behind a collapsed "How it was
+  extracted" disclosure when graded. Only an ungraded old run shows the
+  extractor's own confidence score.
+- Below it, a graded field gets a separate "Independent grader" block, ruled
+  in its band colour. Its label names the grader model from the grade file.
+  Then the band and the grader's confidence as a percentage ("Medium · 72%"),
+  naming the ancestor when the grade is inherited, then the grader's `issue`
+  if any. Can't verify and version-1 grades show no percentage.
+- When a current grade exists, the run chip's tooltip reads "Extracted by
+  <model> · checked by <grader model>".
+- Review order: document order, graded or not. Previous/Next follow the
+  table.
 - Overview: a sortable Flags column counts check, low, and can't-verify fields
   in the current grade, with a dash for ungraded documents and `?` when the
   grade file is unreadable. A "Flagged" chip, shown when any document has
@@ -385,7 +409,7 @@ The target read surface retains `GET /api/articles`, `/api/markdown/{id}`,
 preceding paragraph reads as a caption, `caption_html` and `caption_lines`.
 HTML is sanitized with nh3 against a tag allowlist (text, tables, lists, `a`
 with `href`, `tr` with `data-line`). A missing article.md is 404; a render
-failure is 422, and the client falls back to Raw lines.
+failure is 422, and the client falls back to raw lines.
 
 `GET /api/figure/{id}/{name}` serves a bare image name (png, jpg, jpeg, webp)
 from the article's `figures/` folder. Anything else, including a path, is 404.
@@ -450,10 +474,14 @@ Implementation coverage must replace brittle source-substring assertions with:
 - grader band markers (none for high, inherited by a row's cells), the
   evidence box showing band, percentage, and issue, the extractor's basis and
   open note, no percentage for can't verify, no grader model in the evidence
-  box, the run chip tooltip naming the grader model, the flagged-first toggle
-  defaulting on with its group order and reordering rows both ways, the Flags
-  column count, sort, and chip, and a version-1 grade rendering as a band with
-  the old extractor note behind a closed disclosure;
+  box, the run chip tooltip naming the grader model, document order with no
+  flagged-first toggle, the Flags column count, sort, and chip, and a
+  version-1 grade rendering as a band with the old extractor note behind a
+  closed disclosure;
+- collapsible sections: the toggle and status summary, a fully reviewed
+  section starting collapsed, a section finished during the visit staying open
+  until a field outside it is selected, and Previous/Next opening a collapsed
+  section to reach its field;
 - silence from a bulk action that succeeds, and a stated failure when one does
   not;
 - clear-arming suppressed for a single verification's own control and not for

@@ -893,12 +893,9 @@ def rendered_flow(page, base: str, article: str) -> None:
     marks = left.locator(".val-mark, td.val-cell").count()
     check("and marks nothing", marks == 0, f"{marks} marks")
 
-    page.locator('#pane-tabs [data-pane="raw"]').click()
-    page.wait_for_timeout(600)
-    check("Raw lines shows HTML escaped", "<br>" in left.inner_text())
-    check("Raw lines shows line numbers", left.locator(".md-line[data-line]").count() > 0)
-    page.locator('#pane-tabs [data-pane="rendered"]').click()
-    page.wait_for_timeout(400)
+    tabs = [page.locator("#pane-tabs [data-pane]").nth(i).get_attribute("data-pane")
+            for i in range(page.locator("#pane-tabs [data-pane]").count())]
+    check("the document pane offers Rendered and PDF only", tabs == ["rendered", "pdf"], str(tabs))
 
     print("\n[overview table]")
     page.goto(f"{base}/#/", wait_until="networkidle")
@@ -928,20 +925,12 @@ def grade_flow(page, base: str, article: str) -> None:
     print("\n[grader bands]")
     page.goto(f"{base}/#/doc/{article}", wait_until="networkidle")
     await_document(page)
-    toggle = page.locator("#btn-review-order")
-    check("the review-order toggle shows when a grade exists", toggle.is_visible())
-    check("and defaults to flagged first", toggle.get_attribute("aria-pressed") == "true")
-    groups = page.locator("#panel-right [data-review-group]")
-    keys = [groups.nth(i).get_attribute("data-review-group") for i in range(groups.count())]
-    check("groups run low, check, can't verify, inferred or assumed, then the rest",
-          keys == ["low", "check", "cannot_verify", "unstated", "rest"], str(keys))
+    check("a graded document has no flagged-first toggle",
+          page.locator("#btn-review-order").count() == 0
+          and page.locator("#panel-right [data-review-group]").count() == 0)
     order = page.locator("#panel-right tr.clickable[data-path]")
-    check("the low row leads the table", order.first.get_attribute("data-path") == "replicates",
+    check("rows follow document order", order.first.get_attribute("data-path") == "site_name",
           str(order.first.get_attribute("data-path")))
-    unstated = page.locator('#panel-right [data-review-group="unstated"] + .tv-body tr[data-path]')
-    check("an inferred value sits in its own group",
-          unstated.count() == 1 and unstated.first.get_attribute("data-path") == "site_country",
-          str(unstated.count()))
     marks = {
         b: page.locator(f'#panel-right .grade-mark[data-band="{b}"]').count()
         for b in ("high", "check", "low", "cannot_verify")
@@ -957,7 +946,7 @@ def grade_flow(page, base: str, article: str) -> None:
     check("the run chip names the grader model", "checked by claude-flow-1" in chip_title,
           chip_title.replace("\n", " | ")[:90])
 
-    box = page.locator("#source-evidence-reasoning")
+    box = page.locator("#source-evidence-overlay")
     evidence = page.locator("#source-evidence-overlay")
 
     def select(path: str) -> str:
@@ -967,6 +956,14 @@ def grade_flow(page, base: str, article: str) -> None:
 
     text = select("site_name")
     check("a high field shows its band and confidence", "High \u00b7 97%" in text, text[:90])
+    extractor = page.locator("#source-evidence-extractor").inner_text()
+    graded = page.locator("#source-evidence-check")
+    check("the check sits in its own block, apart from the extraction",
+          graded.is_visible() and "High" in graded.inner_text()
+          and "independent grader" in graded.inner_text().lower()
+          and "High" not in extractor and "How it was extracted" in extractor,
+          f"{extractor[:60]!r} | {graded.inner_text()[:60]!r}")
+    check("the block carries its band", graded.get_attribute("data-band") == "high")
     check("and how it was extracted, with no note for a stated value",
           "How it was extracted: Stated" in text and box.locator(".evidence-basis-note").count() == 0,
           text[:120])
@@ -975,7 +972,7 @@ def grade_flow(page, base: str, article: str) -> None:
 
     text = select(check_cell)
     check("a check field shows its confidence and the grader's issue",
-          "Check \u00b7 72%" in text and "inferred from the table caption" in text, text[:90])
+          "Medium \u00b7 72%" in text and "inferred from the table caption" in text, text[:90])
     check("the extractor's basis and note are visible, not collapsed",
           "How it was extracted: Converted" in text
           and "Depth 0-20 cm split into min and max." in text
@@ -988,21 +985,15 @@ def grade_flow(page, base: str, article: str) -> None:
     text = select("site_country")
     check("an inferred value shows its note", "How it was extracted: Inferred" in text
           and "Country taken from the Nsukka place name." in text, text[:120])
-    all_text = evidence.inner_text()
-    check("the evidence box never names the grader model",
-          "claude-flow-1" not in all_text and "Grader" not in all_text, all_text[:90])
+    graded_text = page.locator("#source-evidence-check").inner_text()
+    check("the grader block names its model",
+          "independent grader" in graded_text.lower() and "claude-flow-1" in graded_text,
+          graded_text[:90])
+    check("and the extraction group doesn't",
+          "claude-flow-1" not in page.locator("#source-evidence-extractor").inner_text())
 
-    toggle.click()
-    page.wait_for_timeout(600)
-    check("the toggle switches to document order", toggle.get_attribute("aria-pressed") == "false")
-    check("rows follow the document again",
-          page.locator("#panel-right [data-review-group]").count() == 0
-          and order.first.get_attribute("data-path") == "site_name",
-          str(order.first.get_attribute("data-path")))
-    check("markers stay in document order",
-          page.locator('#panel-right .grade-mark[data-band="low"]').count() == 1)
-    toggle.click()
-    page.wait_for_timeout(400)
+    section_flow(page, "measurements[0]")
+    multiline_edit_flow(page, "site_name")
 
     print("\n[flags on the overview]")
     page.goto(f"{base}/#/", wait_until="networkidle")
@@ -1025,6 +1016,93 @@ def grade_flow(page, base: str, article: str) -> None:
     page.locator('#ov-chips [data-status="all"]').click()
 
 
+def section_flow(page, section_path: str) -> None:
+    print("\n[collapsible sections]")
+    section = page.locator(f'#panel-right .tv-section[data-section-path="{section_path}"]')
+    toggle = section.locator(":scope > .tv-heading .tv-section-toggle")
+    summary = section.locator(":scope > .tv-section-summary")
+    body = section.locator(":scope > .tv-body")
+    check("an unreviewed section starts open",
+          section.count() == 1 and body.is_visible() and not summary.is_visible())
+    toggle.click()
+    page.wait_for_timeout(200)
+    text = summary.inner_text() if summary.count() else ""
+    check("collapsing hides the rows and shows a status summary",
+          not body.is_visible() and summary.is_visible()
+          and "unreviewed" in text and "flags" in text, text)
+    check("the toggle reports the state", toggle.get_attribute("aria-expanded") == "false")
+    summary.click()
+    page.wait_for_timeout(200)
+    check("clicking the summary opens the section", body.is_visible())
+
+    section.locator(':scope > .tv-heading [data-section-action="verify"]').click()
+    page.wait_for_timeout(1200)
+    check("a section finished during the visit stays open", body.is_visible())
+    page.locator("#panel-right tr.clickable[data-path]").first.click()
+    page.wait_for_timeout(300)
+    text = summary.inner_text() if summary.count() else ""
+    check("and collapses once the reviewer selects a field outside it",
+          "is-collapsed" in (section.get_attribute("class") or "")
+          and "verified" in text and "unreviewed" not in text, text)
+    page.reload(wait_until="networkidle")
+    await_document(page)
+    check("a section complete on load starts collapsed",
+          "is-collapsed" in (section.get_attribute("class") or ""))
+    toggle.click()
+    page.wait_for_timeout(200)
+    check("and reopens when the reviewer asks", body.is_visible())
+    section.locator(':scope > .tv-heading [data-section-action="clear"]').click()
+    page.wait_for_timeout(1200)
+    check("clearing it leaves it open", body.is_visible())
+
+    rows = section.locator("tr.clickable[data-path]")
+    first = rows.first.get_attribute("data-path") if rows.count() else ""
+    toggle.click()
+    page.wait_for_timeout(200)
+    page.locator("#panel-right tr.clickable[data-path]").first.click()
+    page.wait_for_timeout(300)
+    for _ in range(40):
+        page.locator("#btn-next-unreviewed").click()
+        page.wait_for_timeout(150)
+        if page.locator("#panel-right tr.selected").first.get_attribute("data-path") == first:
+            break
+    check("Next opens a collapsed section to reach its field",
+          body.is_visible() and page.locator(f'#panel-right tr.selected[data-path="{first}"]').count() == 1,
+          str(first))
+
+
+def multiline_edit_flow(page, path: str) -> None:
+    print("\n[multiline edit]")
+    page.locator(f'#panel-right .row-edit-action[data-path="{path}"]').first.click()
+    page.wait_for_timeout(300)
+    control = page.locator(f'#panel-right .inline-edit-form[data-path="{path}"] .inline-edit-input')
+    check("free text edits in a textarea", control.evaluate("el => el.tagName") == "TEXTAREA")
+    actions = page.locator(f'#panel-right tr[data-path="{path}"] td.status-cell .inline-edit-actions button')
+    check("save, cancel and remove take the status cell",
+          actions.count() == 3
+          and page.locator(f'#panel-right tr[data-path="{path}"] td.status-cell .field-status').count() == 0,
+          str(actions.count()))
+    box = control.bounding_box()
+    cell = page.locator(f'#panel-right tr[data-path="{path}"] td.value-cell').first.bounding_box()
+    check("the text box spans the value cell", bool(box and cell) and box["width"] > cell["width"] - 20,
+          f"{box and box['width']} of {cell and cell['width']}")
+    control.fill("first line")
+    control.press("Shift+Enter")
+    control.type("second line")
+    check("Shift+Enter adds a line break and keeps editing",
+          control.is_visible() and control.input_value() == "first line\nsecond line",
+          repr(control.input_value()))
+    control.press("Enter")
+    page.wait_for_timeout(800)
+    cell = page.locator(f'#panel-right tr[data-path="{path}"] td.value-cell').first
+    check("Enter saves, and the cell keeps the line break",
+          cell.inner_text().strip() == "first line\nsecond line", repr(cell.inner_text()))
+    page.locator(f'#panel-right .row-clear-edit-action[data-path="{path}"]').first.click()
+    page.wait_for_timeout(800)
+    check("clearing the edit restores the extracted value",
+          "first line" not in cell.inner_text(), cell.inner_text()[:60])
+
+
 def version_1_grade_flow(page, base: str, article: str) -> None:
     print("\n[version-1 grades still render]")
     page.goto(f"{base}/#/doc/{article}", wait_until="networkidle")
@@ -1034,12 +1112,12 @@ def version_1_grade_flow(page, base: str, article: str) -> None:
     check("a partial verdict shows as check",
           page.locator('#panel-right .grade-mark[data-band="check"]').count() == 1
           and page.locator('#panel-right .grade-mark[data-band="high"]').count() == 0)
-    box = page.locator("#source-evidence-reasoning")
+    box = page.locator("#source-evidence-overlay")
     page.locator('#panel-right tr[data-path="site_name"] td.value-cell').first.click()
     page.wait_for_timeout(600)
     text = box.inner_text()
     check("its band and reason show, with no number",
-          "Check" in text and "%" not in text and "names a station, not a farm" in text, text[:90])
+          "Medium" in text and "%" not in text and "names a station, not a farm" in text, text[:90])
     details = box.locator("details.evidence-extraction")
     check("the old extractor note sits in a closed disclosure",
           details.count() == 1 and details.get_attribute("open") is None

@@ -1208,6 +1208,40 @@
     border-left: 1px solid var(--border-subtle);
   }
 
+  .tv-section.is-collapsed > .tv-body { display: none; }
+  .tv-section:not(.is-collapsed) > .tv-section-summary { display: none; }
+  .tv-section-toggle {
+    display: inline-flex;
+    align-items: center;
+    border: none;
+    background: none;
+    color: var(--text-dim);
+    padding: 0;
+    cursor: pointer;
+  }
+  .tv-section-toggle:hover { color: var(--text); }
+  .tv-section-toggle .icon { transition: transform 0.1s; }
+  .tv-section.is-collapsed > .tv-heading .tv-section-toggle .icon { transform: rotate(-90deg); }
+  .tv-section-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 12px;
+    width: 100%;
+    border: none;
+    background: none;
+    padding: 2px 0 6px;
+    font: inherit;
+    font-size: 12px;
+    color: var(--text-dim);
+    text-align: left;
+    cursor: pointer;
+  }
+  .tv-section-summary[data-depth]:not([data-depth="0"]) { margin-left: 28px; }
+  .tv-section-summary:hover { color: var(--text-secondary); }
+  .tv-section-summary .sum-verified { color: var(--green); }
+  .tv-section-summary .sum-edited { color: var(--yellow); }
+  .tv-section-summary .sum-flagged { color: var(--accent); }
+
   .ext-table {
     width: 100%;
     border-collapse: collapse;
@@ -1443,10 +1477,14 @@
 
   .inline-edit-form {
     display: grid;
-    grid-template-columns: minmax(120px, 1fr) 22px 22px 22px;
-    align-items: center;
-    gap: 8px;
+    grid-template-columns: minmax(0, 1fr);
     width: 100%;
+  }
+  /* While a row is edited, save, cancel and remove replace its status controls. */
+  .inline-edit-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
   }
 
   .inline-edit-input,
@@ -1460,6 +1498,15 @@
     padding: 5px 8px;
     min-width: 0;
   }
+
+  textarea.inline-edit-input {
+    resize: vertical;
+    line-height: 1.45;
+    max-height: 60vh;
+    overflow-y: auto;
+    white-space: pre-wrap;
+  }
+  .ext-table td.value-cell:not(.editing-value-cell) { white-space: pre-line; }
 
   .inline-edit-select {
     appearance: none;
@@ -2286,12 +2333,39 @@
     line-height: 1.45;
   }
 
+  .evidence-group-label {
+    margin-bottom: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+  }
+  /* The independent check is a separate pass: its own block, ruled in its band colour. */
+  .evidence-check {
+    margin-top: 10px;
+    padding: 6px 9px;
+    border-left: 3px solid var(--border);
+    border-radius: 0 var(--radius) var(--radius) 0;
+    background: var(--bg-overlay);
+  }
+  .evidence-check[hidden] { display: none; }
+  .evidence-grader-model {
+    margin-left: 6px;
+    font-family: var(--font-mono);
+    font-weight: 400;
+    letter-spacing: 0;
+    text-transform: none;
+  }
+  .evidence-check[data-band="check"] { border-left-color: var(--accent); }
+  .evidence-check[data-band="low"] { border-left-color: var(--red); }
+  .evidence-check[data-band="high"] { border-left-color: var(--green); }
   .evidence-grade {
-    font-size: 11px;
+    font-size: 12px;
     color: var(--text-dim);
   }
   .evidence-grade b { font-weight: 600; }
-  .evidence-grade-issue { margin-top: 1px; }
+  .evidence-grade-issue { margin-top: 2px; font-size: 12px; color: var(--text-secondary); }
   .evidence-basis {
     margin-top: 4px;
     font-size: 11px;
@@ -2332,9 +2406,6 @@
   .grade-band.band-low { color: var(--red); }
   .grade-band.band-cannot_verify { color: var(--text-dim); }
   .grade-band.band-high { color: var(--green); }
-  .review-order-toggle[hidden] { display: none; }
-  .panel-header.data-active .review-order-toggle { display: none; }
-  .review-group-count { color: var(--text-dim); font-weight: 400; margin-left: 6px; }
   .ov-flags.has-flags { color: var(--accent); font-weight: 600; }
   .ov-flags.clean { color: var(--text-dim); }
 
@@ -2657,8 +2728,7 @@
         </form>
       </div>
       <div class="pane-tabs" id="pane-tabs" role="tablist" aria-label="Document view">
-        <button type="button" role="tab" data-pane="rendered">Rendered</button>
-        <button type="button" role="tab" data-pane="raw">Raw lines</button>
+        <button type="button" role="tab" data-pane="rendered">Markdown</button>
         <button type="button" role="tab" data-pane="pdf">PDF</button>
       </div>
       <div class="panel-header-row search-row" id="search-row" style="display:none">
@@ -2686,12 +2756,16 @@
           </span>
         </div>
       </div>
-      <div class="source-evidence-value" id="source-evidence-value" style="display:none">
-        <span class="source-evidence-value-label" id="source-evidence-value-label">Value</span>
-        <span class="source-evidence-value-slot" id="source-evidence-value-text"></span>
+      <div class="evidence-group evidence-extractor" id="source-evidence-extractor">
+        <div class="evidence-group-label">Extraction</div>
+        <div class="source-evidence-value" id="source-evidence-value" style="display:none">
+          <span class="source-evidence-value-label" id="source-evidence-value-label">Value</span>
+          <span class="source-evidence-value-slot" id="source-evidence-value-text"></span>
+        </div>
+        <div class="source-evidence-confidence" id="source-evidence-confidence" style="display:none"></div>
+        <div class="source-evidence-reasoning" id="source-evidence-reasoning"></div>
       </div>
-      <div class="source-evidence-confidence" id="source-evidence-confidence" style="display:none"></div>
-      <div class="source-evidence-reasoning" id="source-evidence-reasoning"></div>
+      <div class="evidence-group evidence-check" id="source-evidence-check" hidden></div>
     </div>
   </div>
   <div class="panel panel-right">
@@ -2717,10 +2791,6 @@
           <div class="view-mode-toggle data-mode-toggle" aria-label="Data display mode">
             <button class="view-mode-btn active" id="data-mode-table" data-data-mode="table" type="button">Table</button>
             <button class="view-mode-btn" id="data-mode-json" data-data-mode="json" type="button">JSON</button>
-          </div>
-          <div class="view-mode-toggle review-order-toggle" id="review-order-toggle" hidden>
-            <button class="view-mode-btn" id="btn-review-order" type="button" aria-pressed="false"
-                    title="Low, check, and can't-verify fields first, then inferred or assumed values, then the rest">Flagged first</button>
           </div>
           <div class="view-mode-toggle" role="group" aria-label="Extraction view mode">
             <button class="view-mode-btn active" id="view-mode-review" data-view-mode="review" type="button">Audit</button>
@@ -2804,8 +2874,6 @@ const state = {
   // The run's current grade (specs/grading/spec.md) and its fields by path.
   grade: null,
   gradeByPath: {},
-  // null follows the default: flagged first whenever a grade exists.
-  reviewOrder: null,
   schemaFields: {},
   leftPane: "rendered",
   rendered: null,
@@ -2813,6 +2881,11 @@ const state = {
   annotations: {},  // path -> {path, state, override?, note?}
   selectedPath: null,
   editingPath: null,
+  // Section path -> collapsed, set when the reviewer toggles it. Unset
+  // sections follow sectionCollapsed().
+  sectionCollapse: {},
+  // Sections seen with unreviewed fields during this visit.
+  sectionsInProgress: new Set(),
   selectedSourceIndex: 0,
   sections: [],
   sectionIndex: 0,
@@ -3214,8 +3287,6 @@ async function init() {
   document.querySelectorAll(".view-mode-btn[data-data-mode]").forEach(btn => {
     btn.addEventListener("click", () => setDataMode(btn.dataset.dataMode));
   });
-  $("#btn-review-order").addEventListener("click", () =>
-    setReviewOrder(flaggedFirstActive() ? "document" : "flagged"));
   wireFilterControls();
   wireSelectedFieldActions();
 
@@ -3771,6 +3842,8 @@ async function loadArticle(id) {
   state.schemaError = null;
   state.selectedPath = null;
   state.editingPath = null;
+  state.sectionCollapse = {};
+  state.sectionsInProgress.clear();
   updateSelectedFieldBar(null);
 
   // Show the document route
@@ -4038,7 +4111,8 @@ $("#bib-sync-btn").addEventListener("click", async () => {
 });
 
 // ── Document pane ──
-const PANES = ["rendered", "raw", "pdf"];
+// Raw lines is no longer a tab; it only shows when rendering fails.
+const PANES = ["rendered", "pdf"];
 
 function initialLeftPane() {
   const fromUrl = new URLSearchParams(location.hash.split("?")[1] || "").get("pane");
@@ -4185,70 +4259,6 @@ function isPrimitiveArray(val) {
   return Array.isArray(val) && val.length > 0 && val.every(v => isLeaf(v));
 }
 
-function flaggedFirstActive() {
-  if (!state.grade) return false;
-  return state.reviewOrder === null ? true : state.reviewOrder === "flagged";
-}
-
-function syncReviewOrderToggle() {
-  const wrap = $("#review-order-toggle");
-  const btn = $("#btn-review-order");
-  if (!wrap || !btn) return;
-  wrap.hidden = !state.grade;
-  const on = flaggedFirstActive();
-  btn.classList.toggle("active", on);
-  btn.setAttribute("aria-pressed", on ? "true" : "false");
-}
-
-function setReviewOrder(order) {
-  state.reviewOrder = order;
-  renderExtractionPanel();
-}
-
-const UNSTATED_BASES = new Set(["inferred", "assumed"]);
-
-// Review order: low, check, can't verify, values the extractor inferred or
-// assumed, then the rest in document order.
-function reviewOrderGroups() {
-  const groups = [
-    { key: "low", label: "Low", paths: [] },
-    { key: "check", label: "Check", paths: [] },
-    { key: "cannot_verify", label: "Can't verify", paths: [] },
-    { key: "unstated", label: "Inferred or assumed", paths: [] },
-    { key: "rest", label: "Everything else", paths: [] },
-  ];
-  const byKey = Object.fromEntries(groups.map(g => [g.key, g]));
-  for (const path of collectLeafPaths(state.extraction)) {
-    const band = gradeFor(path)?.band;
-    const basis = reasoningFor(path)?.basis;
-    if (band && FLAG_BANDS.has(band)) byKey[band].paths.push(path);
-    else if (UNSTATED_BASES.has(basis)) byKey.unstated.paths.push(path);
-    else byKey.rest.paths.push(path);
-  }
-  return groups.filter(g => g.paths.length);
-}
-
-function renderReviewOrderTable(panel) {
-  let html = '<div class="table-view review-order-view">';
-  for (const group of reviewOrderGroups()) {
-    html += `<div class="tv-heading" data-depth="0" data-review-group="${group.key}">` +
-      `<span class="tv-heading-label">${escapeHtml(group.label)}<span class="review-group-count">${group.paths.length}</span></span></div>`;
-    html += '<div class="tv-body"><table class="ext-table">';
-    html += '<colgroup><col class="col-field"><col class="col-value"><col class="col-source"><col class="col-status"></colgroup>';
-    html += '<thead><tr><th>Field</th><th>Value</th><th>Source</th><th></th></tr></thead><tbody>';
-    for (const path of group.paths) {
-      const selectedCls = state.selectedPath === path ? " selected" : "";
-      html += `<tr class="clickable${selectedCls}" data-path="${path}">` +
-        `<td class="field-cell">${escapeHtml(pathLabelParts(path).join(" / "))}</td>` +
-        buildValueCells(getValueAtPath(state.extraction, path), path) + `</tr>`;
-    }
-    html += '</tbody></table></div>';
-  }
-  html += '</div>';
-  panel.innerHTML = html;
-  wireTableEvents(panel);
-}
-
 function renderReviewTable() {
   const panel = $("#panel-right");
   const data = state.extraction;
@@ -4256,11 +4266,6 @@ function renderReviewTable() {
     panel.innerHTML = '<div class="loading">No extraction data</div>';
     return;
   }
-  if (flaggedFirstActive()) {
-    renderReviewOrderTable(panel);
-    return;
-  }
-
   const skipKeys = new Set(["article_id"]);
   let html = '<div class="table-view">';
 
@@ -4610,11 +4615,13 @@ function buildHorizontalTable(arr, basePath, key) {
   const label = humanize(key);
   const hasExpandedCols = columns.some(c => c.isExpanded);
 
-  let html = '';
+  const collapsed = sectionCollapsed(basePath);
+  let html = `<div class="tv-section${collapsed ? " is-collapsed" : ""}" data-section-path="${basePath}">`;
   // Section heading
   html += `<div class="tv-heading" data-depth="0">`;
-  html += `<span class="tv-heading-label">${escapeHtml(label)}</span>${bulkActionHtml(basePath, "section")}`;
+  html += `${sectionToggleHtml(basePath, collapsed)}<span class="tv-heading-label">${escapeHtml(label)}</span>${bulkActionHtml(basePath, "section")}`;
   html += `</div>`;
+  html += sectionSummaryHtml(basePath, 0);
   html += `<div class="tv-body">`;
 
   html += '<table class="ext-table horizontal-table">';
@@ -4735,7 +4742,7 @@ function buildHorizontalTable(arr, basePath, key) {
   }
 
   html += '</tbody></table>';
-  html += '</div>';
+  html += '</div></div>';
   return html;
 }
 
@@ -4773,6 +4780,86 @@ function renderValue(key, val, basePath, depth) {
   return '';
 }
 
+// A section collapses once every field in it is reviewed. One finished during
+// this visit stays open until the reviewer selects a field outside it, so
+// fields a bulk verify just armed stay clickable. The reviewer's own toggle
+// wins until the section is finished.
+function sectionCollapsed(basePath) {
+  const chosen = state.sectionCollapse[basePath];
+  if (!sectionReviewState(basePath).complete) {
+    state.sectionsInProgress.add(basePath);
+    return chosen ?? false;
+  }
+  if (state.sectionsInProgress.has(basePath)) return chosen ?? false;
+  return chosen ?? !(state.selectedPath && pathInScope(state.selectedPath, basePath));
+}
+
+function collapseFinishedSections(selectedPath) {
+  for (const basePath of [...state.sectionsInProgress]) {
+    if (pathInScope(selectedPath, basePath)) continue;
+    if (!sectionReviewState(basePath).complete) continue;
+    state.sectionsInProgress.delete(basePath);
+    delete state.sectionCollapse[basePath];
+    const section = document.querySelector(`.tv-section[data-section-path="${CSS.escape(basePath)}"]`);
+    if (section) applySectionCollapsed(section, true);
+  }
+}
+
+function sectionCounts(basePath) {
+  const counts = { total: 0, verified: 0, edited: 0, unreviewed: 0, flagged: 0 };
+  for (const path of collectLeafPaths(state.extraction)) {
+    if (!pathInScope(path, basePath)) continue;
+    counts.total++;
+    const ann = controllingAnnotation(path);
+    if (isOverridden(ann)) counts.edited++;
+    else if (isVerified(ann)) counts.verified++;
+    else {
+      counts.unreviewed++;
+      if (flaggedGradeFor(path)) counts.flagged++;
+    }
+  }
+  return counts;
+}
+
+// Shown in place of a collapsed section's body; a click opens the section.
+function sectionSummaryHtml(basePath, depth) {
+  const c = sectionCounts(basePath);
+  const parts = [`<span>${c.total} ${c.total === 1 ? "field" : "fields"}</span>`];
+  if (c.verified) parts.push(`<span class="sum-verified">${c.verified} verified</span>`);
+  if (c.edited) parts.push(`<span class="sum-edited">${c.edited} edited</span>`);
+  if (c.unreviewed) parts.push(`<span>${c.unreviewed} unreviewed</span>`);
+  if (c.flagged) parts.push(`<span class="sum-flagged" title="Unreviewed fields graded low, check or can't verify">${c.flagged} ${c.flagged === 1 ? "flag" : "flags"}</span>`);
+  return `<button type="button" class="tv-section-summary" data-section-toggle="${basePath}" data-depth="${depth}" aria-label="Expand section">${parts.join("")}</button>`;
+}
+
+function sectionToggleHtml(basePath, collapsed) {
+  const label = collapsed ? "Expand section" : "Collapse section";
+  return `<button type="button" class="tv-section-toggle" data-section-toggle="${basePath}" aria-expanded="${collapsed ? "false" : "true"}" aria-label="${label}" title="${label}">${icon("chevron-down")}</button>`;
+}
+
+function setSectionCollapsed(section, collapsed) {
+  state.sectionCollapse[section.dataset.sectionPath] = collapsed;
+  applySectionCollapsed(section, collapsed);
+}
+
+function applySectionCollapsed(section, collapsed) {
+  section.classList.toggle("is-collapsed", collapsed);
+  const toggle = section.querySelector(":scope > .tv-heading .tv-section-toggle");
+  if (!toggle) return;
+  const label = collapsed ? "Expand section" : "Collapse section";
+  toggle.setAttribute("aria-expanded", collapsed ? "false" : "true");
+  toggle.setAttribute("aria-label", label);
+  toggle.title = label;
+}
+
+// Opens every collapsed section that holds the path, so a jump to a field
+// never lands on a hidden row.
+function revealPath(path) {
+  document.querySelectorAll(".tv-section.is-collapsed[data-section-path]").forEach(section => {
+    if (pathInScope(path, section.dataset.sectionPath)) setSectionCollapsed(section, false);
+  });
+}
+
 function bulkActionHtml(basePath, scope) {
   const reviewState = sectionReviewState(basePath);
   if (reviewState.total === 0) return "";
@@ -4793,10 +4880,12 @@ function bulkActionHtml(basePath, scope) {
 
 function buildHeadedSection(label, obj, basePath, depth) {
   const depthAttr = Math.min(depth, 3);
-  let html = '';
+  const collapsed = sectionCollapsed(basePath);
+  let html = `<div class="tv-section${collapsed ? " is-collapsed" : ""}" data-section-path="${basePath}">`;
   html += `<div class="tv-heading" data-depth="${depthAttr}">`;
-  html += `<span class="tv-heading-label">${escapeHtml(label)}</span>${bulkActionHtml(basePath, "section")}`;
+  html += `${sectionToggleHtml(basePath, collapsed)}<span class="tv-heading-label">${escapeHtml(label)}</span>${bulkActionHtml(basePath, "section")}`;
   html += `</div>`;
+  html += sectionSummaryHtml(basePath, depthAttr);
   html += `<div class="tv-body">`;
 
   const indent = depth > 0;
@@ -4830,7 +4919,7 @@ function buildHeadedSection(label, obj, basePath, depth) {
   }
 
   if (indent) html += '</div>';
-  html += '</div>';
+  html += '</div></div>';
   return html;
 }
 
@@ -4904,10 +4993,11 @@ function buildValueCells(value, path) {
   ].filter(Boolean).join(" ");
   const valueAttrs = ` class="${valueClass}"${isEditing ? "" : display.style}`;
   const valueHtml = isEditing ? buildInlineEditForm(path, value) : display.html;
+  const statusHtml = isEditing ? buildInlineEditActions(path) : buildStatusActions(path, annStatus);
 
   return `<td${valueAttrs}>${valueHtml}</td>
     <td class="source-cell">${sourceHtml}${gradeMarkHtml(path)}</td>
-    <td class="status-cell">${buildStatusActions(path, annStatus)}</td>`;
+    <td class="status-cell">${statusHtml}</td>`;
 }
 
 function buildInlineEditForm(path, value = getValueAtPath(state.extraction, path)) {
@@ -4916,8 +5006,11 @@ function buildInlineEditForm(path, value = getValueAtPath(state.extraction, path
   const current = supplied !== undefined ? supplied : value;
   const schemaField = schemaFieldForPath(path);
   const controlHtml = buildTypedEditControl(path, current, schemaField);
-  return `<span class="inline-edit-form" data-path="${path}">` +
-    controlHtml +
+  return `<span class="inline-edit-form" data-path="${path}">${controlHtml}</span>`;
+}
+
+function buildInlineEditActions(path) {
+  return `<span class="inline-edit-actions">` +
     `<button type="button" class="inline-edit-save" data-path="${path}" aria-label="Save edit" title="Save edit">${icon("check")}</button>` +
     `<button type="button" class="inline-edit-cancel" data-path="${path}" aria-label="Cancel edit" title="Cancel edit">${icon("x")}</button>` +
     `<button type="button" class="inline-edit-remove" data-path="${path}" aria-label="Remove field" title="Remove this field (extraction was wrong to include it)">${icon("delete")}</button>` +
@@ -4948,7 +5041,14 @@ function buildTypedEditControl(path, current, schemaField) {
     return `<select class="inline-edit-select inline-edit-boolean" data-path="${path}" aria-label="Edit value">` +
       `<option value="">Choose...</option>${opts}</select>`;
   }
-  return `<input class="inline-edit-input" data-path="${path}" value="${escapeHtml(displayFieldValue(current))}" aria-label="Edit value">`;
+  // Free text wraps and grows so a paragraph-long value can be read and edited
+  // whole. Enter saves; Shift+Enter adds a line break.
+  return `<textarea class="inline-edit-input inline-edit-text" data-path="${path}" rows="1" aria-label="Edit value">${escapeHtml(displayFieldValue(current))}</textarea>`;
+}
+
+function fitTextarea(el) {
+  el.style.height = "auto";
+  el.style.height = `${el.scrollHeight + 2}px`;
 }
 
 function buildEnumEditSelect(path, current, schemaField) {
@@ -5310,7 +5410,8 @@ function gradeFor(path) {
 // Bands are derived by the server (`band` on each grade field) from the
 // thresholds in litschema.grading.BANDS.
 const FLAG_BANDS = new Set(["low", "check", "cannot_verify"]);
-const BAND_LABELS = { high: "High", check: "Check", low: "Low", cannot_verify: "Can't verify" };
+// The stored band key stays `check` (specs/grading/spec.md); the app calls it Medium.
+const BAND_LABELS = { high: "High", check: "Medium", low: "Low", cannot_verify: "Can't verify" };
 const BASIS_LABELS = {
   stated: "Stated",
   converted: "Converted",
@@ -5320,7 +5421,7 @@ const BASIS_LABELS = {
   assumed: "Assumed",
 };
 
-// "Check · 72%"; version-1 grades and can't-verify fields show no number,
+// "Medium · 72%"; version-1 grades and can't-verify fields show no number,
 // since only a version-2 confidence is the probability the value is right.
 function gradeHeadline(grade) {
   const label = BAND_LABELS[grade.band] || grade.band;
@@ -5693,6 +5794,7 @@ function updateSourceEvidenceOverlay() {
   const prev = $("#btn-source-evidence-prev");
   const next = $("#btn-source-evidence-next");
   const reasoning = $("#source-evidence-reasoning");
+  const checkEl = $("#source-evidence-check");
   const confidenceEl = $("#source-evidence-confidence");
   const valueBox = $("#source-evidence-value");
   const valueLabel = $("#source-evidence-value-label");
@@ -5703,6 +5805,10 @@ function updateSourceEvidenceOverlay() {
     overlay.classList.remove("active");
     if (label) label.textContent = "No field selected";
     if (reasoning) reasoning.textContent = "";
+    if (checkEl) {
+      checkEl.hidden = true;
+      checkEl.innerHTML = "";
+    }
     if (confidenceEl) {
       confidenceEl.style.display = "none";
       confidenceEl.textContent = "";
@@ -5732,6 +5838,12 @@ function updateSourceEvidenceOverlay() {
     valueBox.style.display = "inline-flex";
   }
   if (reasoning) reasoning.innerHTML = evidenceNoteHtml(state.selectedPath);
+  if (checkEl) {
+    const grade = gradeFor(state.selectedPath);
+    checkEl.hidden = !grade;
+    checkEl.innerHTML = grade ? evidenceCheckHtml(grade) : "";
+    if (grade) checkEl.dataset.band = grade.band;
+  }
   if (confidenceEl) {
     // Only an ungraded old run shows the extractor's own score.
     const conf = gradeFor(state.selectedPath) ? null : selectedConfidence(state.selectedPath);
@@ -5765,20 +5877,26 @@ function updateSourceEvidenceOverlay() {
   if (next) next.disabled = ranges.length < 2;
 }
 
-// The grader's band, confidence, and issue lead; then how the extractor got
-// the value. Old runs have no basis, so their free-text note sits behind a
-// disclosure when a grade is shown.
+// The independent grader's model, band, confidence, and issue, shown apart
+// from what the extraction said.
+function evidenceCheckHtml(grade) {
+  const scope = grade.inheritedFrom ? ` \u00b7 for ${pathLabelParts(grade.inheritedFrom).join(" / ")}` : "";
+  const issue = gradeIssue(grade);
+  const model = state.grade?.grader?.model || state.grade?.grader?.requested_model || "";
+  const modelHtml = model ? `<span class="evidence-grader-model">${escapeHtml(model)}</span>` : "";
+  let html = `<div class="evidence-group-label">Independent grader${modelHtml}</div>` +
+    `<div class="evidence-grade"><b class="grade-band band-${grade.band}" data-band="${grade.band}">` +
+    `${escapeHtml(gradeHeadline(grade))}</b>${escapeHtml(scope)}</div>`;
+  if (issue) html += `<div class="evidence-grade-issue">${escapeHtml(issue)}</div>`;
+  return html;
+}
+
+// How the extractor got the value. Old runs have no basis, so their free-text
+// note sits behind a disclosure when a grade is shown.
 function evidenceNoteHtml(path) {
   const grade = gradeFor(path);
   const entry = reasoningFor(path);
   let html = "";
-  if (grade) {
-    const scope = grade.inheritedFrom ? ` \u00b7 for ${pathLabelParts(grade.inheritedFrom).join(" / ")}` : "";
-    const issue = gradeIssue(grade);
-    html += `<div class="evidence-grade"><b class="grade-band band-${grade.band}" data-band="${grade.band}">` +
-      `${escapeHtml(gradeHeadline(grade))}</b>${escapeHtml(scope)}</div>`;
-    if (issue) html += `<div class="evidence-grade-issue">${escapeHtml(issue)}</div>`;
-  }
   if (entry && entry.basis) {
     html += `<div class="evidence-basis" data-basis="${escapeHtml(entry.basis)}">How it was extracted: ` +
       `<b>${escapeHtml(BASIS_LABELS[entry.basis] || entry.basis)}</b></div>`;
@@ -5841,6 +5959,13 @@ function renderReviewState(path = state.selectedPath) {
 }
 
 function wireTableEvents(panel) {
+  panel.querySelectorAll("[data-section-toggle]").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const section = btn.closest(".tv-section");
+      if (section) setSectionCollapsed(section, !section.classList.contains("is-collapsed"));
+    });
+  });
   panel.querySelectorAll(".field-status[data-path]").forEach(btn => {
     btn.addEventListener("pointerleave", () => {
       if (!btn.dataset.path) return;
@@ -5883,8 +6008,14 @@ function wireTableEvents(panel) {
 
   panel.querySelectorAll(".inline-edit-input[data-path], .inline-edit-select[data-path]").forEach(input => {
     input.addEventListener("click", (e) => e.stopPropagation());
+    if (input.tagName === "TEXTAREA") {
+      fitTextarea(input);
+      input.addEventListener("input", () => fitTextarea(input));
+    }
     input.addEventListener("keydown", async (e) => {
-      if (e.key === "Enter") {
+      if (e.key === "Enter" && e.shiftKey && input.tagName === "TEXTAREA") {
+        return;
+      } else if (e.key === "Enter") {
         e.preventDefault();
         await saveInlineEdit(input.dataset.path);
       } else if (e.key === "Escape") {
@@ -6090,6 +6221,8 @@ function wireTableEvents(panel) {
 }
 
 function selectTableRow(path, rangeIndex) {
+  revealPath(path);
+  collapseFinishedSections(path);
   if (state.editingPath && state.editingPath !== path) {
     state.editingPath = null;
     renderExtractionPanel();
@@ -6405,7 +6538,7 @@ function highlightRenderedRange(start, end, value) {
     const panel = $("#panel-left .rendered");
     if (panel && !$("#cite-notice")) {
       panel.insertAdjacentHTML("afterbegin",
-        '<div class="cite-notice" id="cite-notice">The cited lines aren\'t shown in this view. Open Raw lines to see them.</div>');
+        '<div class="cite-notice" id="cite-notice">The cited lines aren\'t part of the formatted text. Check the PDF.</div>');
     }
     return null;
   }
@@ -7239,6 +7372,7 @@ function selectAdjacentReviewPath(direction) {
     nextIndex = (currentIndex + direction + paths.length) % paths.length;
   }
   const nextPath = paths[nextIndex];
+  revealPath(nextPath);
   const row = document.querySelector(`tr.clickable[data-path="${CSS.escape(nextPath)}"]`)
     || document.querySelector(`.cell-value[data-path="${CSS.escape(nextPath)}"]`)?.closest("tr.clickable");
   if (row) row.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -7431,7 +7565,6 @@ function renderNoExtractionPlaceholder() {
 }
 
 function renderExtractionPanel() {
-  syncReviewOrderToggle();
   const summary = state.articles.find(a => a.article_id === state.currentId);
   if (summary && summary.has_extraction === false) {
     renderNoExtractionPlaceholder();

@@ -220,3 +220,49 @@ the suite).
 **Decision:** Lucide icons as a bundled SVG sprite replace Unicode symbols,
 which rendered at inconsistent sizes and as emoji. DM Sans and DM Mono ship as
 woff2. marked and Shoelace are removed.
+
+## 2026-11-12 — Sections collapse; the flagged-first order goes
+
+**Context:** documents with many experiments or nested lists make the Audit
+table long, and finished sections take as much room as unfinished ones. The
+"Flagged first" order (on by default when a grade exists) listed flagged
+leaves by full path outside their sections, so values from different
+experiments sat next to each other. Cory found it confusing to read.
+
+**Decision:** headed sections collapse behind a toggle, and a collapsed
+section shows a status summary. Fully reviewed sections start collapsed. One
+finished during the visit waits until the reviewer selects a field outside it,
+so the fields a bulk verification armed stay clickable. The flagged-first
+order is removed; fields keep document order. This supersedes the review-order
+part of `specs/grading/decisions.md` "Can't-verify fields sort with the flagged
+ones" (2026-09-28); can't-verify fields still stay out of the Flags count.
+
+**Rejected:** collapsing the moment the last field is reviewed (it moves the
+table under the pointer and hides fields the bulk action just armed), and
+keeping flagged-first as an opt-in (it still splits sections, and the
+overview's Flags column and chip already find flagged documents).
+
+## 2026-11-12 — Free text edits in a textarea; evidence box splits extraction from check; Raw lines tab goes
+
+**Context:** some string values run to paragraphs (a CO2 quantification
+method), and a one-line input showed a sliver of them. The evidence box listed
+the grade first and the extractor's basis after it in one block, so a reader
+couldn't tell which statements came from the extraction and which from the
+grader. The rendered document view now covers what Raw lines was kept for.
+
+**Decision:** string fields without permissible values edit in an
+auto-growing textarea in the cell; Enter still saves and Shift+Enter adds a
+line break. The evidence box groups the extraction's value, basis and note
+under "Extraction" and puts the grade below in its own "Independent grader"
+block ruled in its band colour, labelled with the grader model so a reader
+knows which model made the call. The `check` band displays as Medium: "Check"
+read as an instruction rather than a level. The stored key stays `check`, so
+grade files and exports don't change. Raw lines stops being a tab but stays the fallback when
+rendering fails; a citation outside every rendered block points to the PDF.
+This supersedes "keep raw lines one click away" (2026-09-27). The Rendered
+tab is renamed Markdown, since it shows either the formatted text or that
+fallback.
+
+**Rejected:** a modal editor (it hides the evidence the reviewer is checking
+the value against), and dropping the raw-lines fallback (a document that fails
+to render would show nothing).

@@ -368,9 +368,12 @@ def test_verifier_section_headers_keep_status_and_bulk_action_together() -> None
     assert "bulk-section-actions" not in html
     assert "tv-toggle" not in html
     assert "tv-heading.collapsed" not in html
-    # Sections do not collapse; the document switcher is the only disclosure.
+    # Sections collapse behind one toggle; the switcher is the other disclosure.
     expanded = [line for line in html.splitlines() if "aria-expanded" in line]
-    assert all("switcher" in line for line in expanded), expanded
+    assert all("switcher" in line or "tv-section-toggle" in line or "toggle.setAttribute" in line
+               for line in expanded), expanded
+    assert "sectionSummaryHtml" in html
+    assert "revealPath(path)" in html
 
 
 def test_verifier_scopes_review_navigation_to_current_article() -> None:
