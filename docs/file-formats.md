@@ -21,9 +21,10 @@ One entry per extracted value. `note` is required unless `basis` is `stated`.
 ## `run.json`
 
 Written by litschema when it publishes a run. The agent never writes this file.
-`schema_files` names the copies of the schema files kept in the run's `schema/`
-folder, so the run can still be read against the schema it was extracted with
-after the project's schema changes.
+litschema keeps the schema files `schema_hash` names under
+`data/schemas/<hash>/`, one folder per schema version, so a run can still be
+read against the schema it was extracted with after the project's schema
+changes.
 
 ```json
 {
@@ -32,7 +33,6 @@ after the project's schema changes.
   "article_id": "beerling-2024",
   "created_at": "2026-07-26T18:04:11Z",
   "schema_hash": "sha256:9f2a…",
-  "schema_files": ["extraction.yaml"],
   "inputs": {
     "prepared_text": "sha256:c41d…",
     "domain_context": "sha256:7be0…",

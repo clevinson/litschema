@@ -116,11 +116,6 @@ class RunFiles:
     def review(self) -> Path:
         return self.run_dir / "review.json"
 
-    @property
-    def schema_dir(self) -> Path:
-        """The schema files this run was extracted against, copied at publish."""
-        return self.run_dir / "schema"
-
     def read_run_json(self) -> dict:
         return json.loads(self.run_json.read_text())
 
@@ -425,15 +420,17 @@ def _agent_attribution(provider: str | None, model: str | None) -> dict:
     return agent
 
 
-def _schema_copies(cfg: LitSchemaConfig) -> list[tuple[str, Path]]:
-    """``(name, source)`` for each schema file the run keeps a copy of.
+def stored_schema_dir(cfg: LitSchemaConfig, schema_sha: str) -> Path:
+    """Where the schema a run records as ``schema_hash`` is kept."""
+    return cfg.data_dir / "schemas" / schema_sha.removeprefix("sha256:")
 
-    The run records `schema_hash`, but a hash cannot be read back. Copying the
-    files the hash covers keeps an old run interpretable after the project
-    schema moves on: its values can be validated and typed against the schema
-    they were extracted with. Names are paths relative to the schema directory
-    where possible, so a multi-file schema keeps its layout; a file outside the
-    directory is kept by its file name, the same key the hash uses.
+
+def _schema_copies(cfg: LitSchemaConfig) -> list[tuple[str, Path]]:
+    """``(name, source)`` for each file `schema_hash` covers.
+
+    Names are paths relative to the schema directory, so a multi-file schema
+    keeps its layout; a file outside it is kept by its file name, the same key
+    the hash uses.
     """
     copies = []
     for path in schema_closure_paths(cfg):
@@ -445,6 +442,33 @@ def _schema_copies(cfg: LitSchemaConfig) -> list[tuple[str, Path]]:
             raise RunPublishError(f"cannot copy schema file {path}: it does not exist")
         copies.append((name, path))
     return copies
+
+
+def _store_schema(cfg: LitSchemaConfig, schema_sha: str) -> None:
+    """Keep the schema a run was extracted with, once per schema hash.
+
+    A hash cannot be read back, so the files it covers are stored under
+    `data/schemas/<hash>/` the first time a run uses them. Every later run on
+    the same schema shares the folder, and a folder is never rewritten: its
+    name is the hash of what it holds.
+    """
+    target = stored_schema_dir(cfg, schema_sha)
+    if target.is_dir():
+        return
+    copies = _schema_copies(cfg)
+    staging = target.parent / f".staging-{target.name}-{os.getpid()}"
+    shutil.rmtree(staging, ignore_errors=True)
+    try:
+        for name, path in copies:
+            dest = staging / name
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(path, dest)
+        os.replace(staging, target)
+    except OSError:
+        shutil.rmtree(staging, ignore_errors=True)
+        # A concurrent publish stored the same schema first.
+        if not target.is_dir():
+            raise
 
 
 def _conversion_block(files: ArticleFiles, text_sha256: str) -> dict | None:
@@ -551,14 +575,15 @@ def publish_run(
         "skill": _hash_file(resolve_skill_file(cfg, skill_file), "skill"),
     }
     conversion = _conversion_block(files, inputs["prepared_text"])
-    schema_copies = _schema_copies(cfg)
+    current_schema = schema_hash(cfg)
+    # Before the run exists, so no published run names a schema that isn't kept.
+    _store_schema(cfg, current_schema)
     record = {
         "version": RUN_JSON_VERSION,
         "run_id": new_run_id(),
         "article_id": files.article_id,
         "created_at": created_at,
-        "schema_hash": schema_hash(cfg),
-        "schema_files": [name for name, _path in schema_copies],
+        "schema_hash": current_schema,
         "inputs": inputs,
         "agent": _agent_attribution(provider, model),
         "litschema": {"version": installed_version(), **install_source().as_record()},
@@ -573,10 +598,6 @@ def publish_run(
         shutil.copy2(staged_extraction, staging / "agent-extraction.json")
         if staged_reasoning.is_file():
             shutil.copy2(staged_reasoning, staging / "agent-reasoning.json")
-        for name, path in schema_copies:
-            target = staging / "schema" / name
-            target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(path, target)
         (staging / "run.json").write_text(json.dumps(record, indent=2, sort_keys=True) + "\n")
         os.replace(staging, run.run_dir)
     except OSError:

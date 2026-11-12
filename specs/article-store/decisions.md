@@ -175,28 +175,31 @@ run by heuristic such as measurement count, which would substitute a guess for
 the human judgment this exists to enable.
 
 
-## 2026-11-05 — A run keeps the schema it was extracted with
+## 2026-11-05 — The schema a run used is kept, once per schema hash
 
 **Context:** `run.json` recorded `schema_hash`, and the hash was enough to
 notice that the project schema had changed. It was not enough to do anything
 about it: a hash cannot be read back, so after a rename an immutable run could
-fail `validate` with no way to recover the schema it was valid against. The
-2026-07-14 refinement decision rejected storing schema-history copies beside
-runs, when the schema was one file and Git history was expected to hold it.
+fail `validate` with no way to recover the schema it was valid against.
 
-**Decision:** publication copies every file `schema_hash` covers into the
-run's `schema/` directory and lists them in `schema_files`, by path relative
-to the schema directory. The copies are a few kilobytes per run, cost nothing
-to read, and make an old run interpretable on its own terms: its values can be
-validated and typed against the schema they were extracted with, without a
-repository or a history lookup. A schema file that cannot be copied fails
-publication like any other input.
+**Decision:** publication stores every file `schema_hash` covers under
+`data/schemas/<hash>/`, by path relative to the schema directory, the first
+time a run uses that hash. Later runs on the same schema write nothing, and a
+stored folder is never rewritten: its name is the hash of what it holds. The
+store is written before the run, so no run names a schema that isn't kept. A
+schema file that cannot be copied fails publication like any other input.
+Supersedes "Git is the only schema history" in
+`specs/project-config/decisions.md` (2026-07-14).
 
-**Rejected:** resolving old schemas from Git history by hash, which assumes a
-repository and a commit that still exists; a project-level schema archive
-keyed by hash, which is a second store to keep consistent; and leaving runs
-interpretable only under the current schema, which the export and review
-drift work showed is the state users reach without noticing.
+**Rejected:**
+- Resolving old schemas from Git history by hash. Runs record no commit, the
+  schema a run used is often an uncommitted edit, and litschema doesn't
+  assume a repository.
+- A copy inside every run (this PR's first version). erw-lit's schema is 36 KB
+  across six files against about 16 KB of run data, so each run grew from
+  three files to nine with identical copies.
+- Leaving runs interpretable only under the current schema, the state users
+  reach without noticing.
 
 
 ## 2026-11-05 — Assemble recognises the same PDF under another filename

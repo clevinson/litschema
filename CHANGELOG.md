@@ -63,9 +63,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
   was extracted, in the overview and above the document, since their line
   citations may point at other lines now. `/api/articles`, `/api/markdown` and
   `/api/rendered` carry `source_drift`. `litschema status` reports the count.
-- Each published run keeps a copy of the schema it was extracted with under
-  `extraction-runs/<run-id>/schema/`, listed in `run.json` as `schema_files`,
-  so an old run stays interpretable after the project schema changes.
+- Publishing a run keeps the schema it was extracted with under
+  `data/schemas/<hash>/`, once per schema version, so an old run stays
+  interpretable after the project schema changes.
 - `litschema assemble` recognises the same PDF under another filename and
   reports the article that already holds it, instead of creating a second
   article with the same content hash.

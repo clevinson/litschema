@@ -797,25 +797,51 @@ def test_assemble_reports_the_existing_article_for_a_renamed_duplicate(
     assert pdf_event["article_id"] == "paper"
 
 
-def test_agent_record_extraction_copies_the_schema_into_the_run(
-    tmp_path: Path, monkeypatch
-) -> None:
+def _restage(article_dir: Path) -> None:
+    (article_dir / "agent-extraction.json").write_text(
+        json.dumps({"article_id": "smith-2024", "title": "A title"})
+    )
+    (article_dir / "agent-reasoning.json").write_text(
+        json.dumps(
+            {"fields": [{"path": "title", "source_lines": "L3", "value": "A title", "basis": "stated"}]}
+        )
+    )
+
+
+def test_agent_record_extraction_stores_each_schema_once(tmp_path: Path, monkeypatch) -> None:
     """A hash cannot be read back; the files it covers can.
 
-    After the project schema moves on, the copy is what lets an old run be
-    validated and typed against the schema it was extracted with.
+    Runs on the same schema share one stored copy, and a schema edit adds a
+    second; run folders hold no schema files.
     """
+    from litschema.runs import stored_schema_dir
+    from litschema.schema_resolution import clear_schema_memo, schema_hash
+
     cfg, article_dir = _publishable_project(tmp_path)
     monkeypatch.setattr(cli, "_require_project", lambda ctx=None: SimpleNamespace(config=cfg))
+    runner = CliRunner()
+    schema_file = tmp_path / "schema" / "extraction.yaml"
 
-    result = CliRunner().invoke(cli.app, ["agent", "record-extraction", "smith-2024"])
+    assert runner.invoke(cli.app, ["agent", "record-extraction", "smith-2024"]).exit_code == 0
+    first = schema_hash(cfg)
+    stored = stored_schema_dir(cfg, first) / "extraction.yaml"
+    assert stored.read_bytes() == schema_file.read_bytes()
 
-    assert result.exit_code == 0, result.output
-    (run_dir,) = (article_dir / "extraction-runs").iterdir()
-    record = json.loads((run_dir / "run.json").read_text())
-    assert record["schema_files"] == ["extraction.yaml"]
-    copied = run_dir / "schema" / "extraction.yaml"
-    assert copied.read_bytes() == (tmp_path / "schema" / "extraction.yaml").read_bytes()
+    _restage(article_dir)
+    assert runner.invoke(cli.app, ["agent", "record-extraction", "smith-2024"]).exit_code == 0
+    assert [p.name for p in (cfg.data_dir / "schemas").iterdir()] == [stored.parent.name]
+
+    schema_file.write_text(schema_file.read_text() + "      year: {}\n")
+    clear_schema_memo()
+    _restage(article_dir)
+    assert runner.invoke(cli.app, ["agent", "record-extraction", "smith-2024"]).exit_code == 0
+    assert stored_schema_dir(cfg, schema_hash(cfg)).is_dir()
+    assert len(list((cfg.data_dir / "schemas").iterdir())) == 2
+    assert stored.read_bytes() != schema_file.read_bytes()  # the old copy is untouched
+
+    for run_dir in (article_dir / "extraction-runs").iterdir():
+        assert not (run_dir / "schema").exists()
+        assert "schema_files" not in json.loads((run_dir / "run.json").read_text())
 
 
 def test_status_reports_runs_whose_text_changed(tmp_path: Path, monkeypatch) -> None:
