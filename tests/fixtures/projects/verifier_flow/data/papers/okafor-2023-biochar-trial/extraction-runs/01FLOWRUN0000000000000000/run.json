@@ -10,7 +10,7 @@
   "created_at": "2026-03-04T10:15:00+00:00",
   "inputs": {
     "domain_context": "sha256:fixture",
-    "prepared_text": "sha256:fixture",
+    "prepared_text": "sha256:d401060a6dd78cbf8ba6c40a503901e0ec94f8cadb9adc0802d9ce4a0dcf7268",
     "skill": "sha256:fixture"
   },
   "run_id": "01FLOWRUN0000000000000000",

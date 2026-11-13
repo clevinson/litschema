@@ -81,8 +81,8 @@ This file records, for each value, where it came from and how you got it. Every 
 ```json
 {
   "fields": [
-    {"path": ".site_name", "value": "Nsukka Research Farm", "source_lines": "L5", "basis": "stated"},
-    {"path": ".latitude", "value": "6.87", "source_lines": "L6", "basis": "converted",
+    {"path": "site_name", "value": "Nsukka Research Farm", "source_lines": "L5", "basis": "stated"},
+    {"path": "latitude", "value": "6.87", "source_lines": "L6", "basis": "converted",
      "note": "Converted 6°52' N to decimal degrees."}
   ]
 }
@@ -90,7 +90,7 @@ This file records, for each value, where it came from and how you got it. Every 
 
 ### Reasoning format rules
 
-- **path**: jq-style dot notation starting with `.` (e.g., `.foo.bar[0].baz`)
+- **path**: the field's path from the extraction root, with no leading dot: property names joined by `.` and array positions in brackets (e.g., `foo.bar[0].baz`)
 - **value**: the extracted value rendered as text for cross-reference with the extraction JSON
 - **source_lines**: comma-separated line references from the markdown. Use `L{n}` for single lines, `L{start}-L{end}` for ranges. Example: `L23-L34,L55,L80-L90`
 - **basis** (required): how you got the value from the cited lines. One of:

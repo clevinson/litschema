@@ -757,3 +757,164 @@ def test_status_counts_reviews_bound_to_the_active_run(tmp_path: Path, monkeypat
     output = runner.invoke(cli.app, ["status"]).output
     assert "1 articles with reviews" in output
     assert "(1 entries on active runs)" in output
+
+
+def test_assemble_recognises_the_same_pdf_under_another_filename(tmp_path: Path) -> None:
+    """One paper, two filenames, one article.
+
+    A publisher download and a Zotero rename hold the same bytes. Matching on
+    the slug alone assembled each as its own article, and a meta-analysis then
+    counted the paper twice. Content identity wins over the filename.
+    """
+    cfg = _cfg(tmp_path)
+    _drop_pdf(cfg, "smith-2024.pdf", "the same paper")
+    article_assembly.assemble(cfg)
+
+    _drop_pdf(cfg, "Smith et al. - 2024 - Enhanced weathering.pdf", "the same paper")
+    stats = article_assembly.assemble(cfg)
+
+    assert stats == {"inbox_pdfs": 1, "assembled": 0, "already_assembled": 1, "errors": 0}
+    assert [p.name for p in cfg.article_store_dir.glob("*") if p.is_dir()] == ["smith-2024"]
+    assert not (cfg.paper_inbox_dir / "Smith et al. - 2024 - Enhanced weathering.pdf").exists()
+    assert (
+        cfg.paper_inbox_dir / ".processed" / "Smith et al. - 2024 - Enhanced weathering.pdf"
+    ).read_text() == "the same paper"
+
+
+def test_assemble_reports_the_existing_article_for_a_renamed_duplicate(
+    tmp_path: Path,
+) -> None:
+    cfg = _cfg(tmp_path)
+    _drop_pdf(cfg, "paper.pdf", "bytes")
+    article_assembly.assemble(cfg)
+    _drop_pdf(cfg, "copy-of-paper.pdf", "bytes")
+    events = []
+
+    article_assembly.assemble(cfg, reporter=lambda event, payload: events.append((event, payload)))
+
+    (pdf_event,) = [payload for event, payload in events if event == "pdf"]
+    assert pdf_event["result"] == "already_assembled"
+    assert pdf_event["article_id"] == "paper"
+
+
+def _restage(article_dir: Path) -> None:
+    (article_dir / "agent-extraction.json").write_text(
+        json.dumps({"article_id": "smith-2024", "title": "A title"})
+    )
+    (article_dir / "agent-reasoning.json").write_text(
+        json.dumps(
+            {"fields": [{"path": "title", "source_lines": "L3", "value": "A title", "basis": "stated"}]}
+        )
+    )
+
+
+def test_agent_record_extraction_stores_each_schema_once(tmp_path: Path, monkeypatch) -> None:
+    """A hash cannot be read back; the files it covers can.
+
+    Runs on the same schema share one stored copy, and a schema edit adds a
+    second; run folders hold no schema files.
+    """
+    from litschema.runs import stored_schema_dir
+    from litschema.schema_resolution import clear_schema_memo, schema_hash
+
+    cfg, article_dir = _publishable_project(tmp_path)
+    monkeypatch.setattr(cli, "_require_project", lambda ctx=None: SimpleNamespace(config=cfg))
+    runner = CliRunner()
+    schema_file = tmp_path / "schema" / "extraction.yaml"
+
+    assert runner.invoke(cli.app, ["agent", "record-extraction", "smith-2024"]).exit_code == 0
+    first = schema_hash(cfg)
+    stored = stored_schema_dir(cfg, first) / "extraction.yaml"
+    assert stored.read_bytes() == schema_file.read_bytes()
+
+    _restage(article_dir)
+    assert runner.invoke(cli.app, ["agent", "record-extraction", "smith-2024"]).exit_code == 0
+    assert [p.name for p in (cfg.data_dir / "schemas").iterdir()] == [stored.parent.name]
+
+    schema_file.write_text(schema_file.read_text() + "      year: {}\n")
+    clear_schema_memo()
+    _restage(article_dir)
+    assert runner.invoke(cli.app, ["agent", "record-extraction", "smith-2024"]).exit_code == 0
+    assert stored_schema_dir(cfg, schema_hash(cfg)).is_dir()
+    assert len(list((cfg.data_dir / "schemas").iterdir())) == 2
+    assert stored.read_bytes() != schema_file.read_bytes()  # the old copy is untouched
+
+    for run_dir in (article_dir / "extraction-runs").iterdir():
+        assert not (run_dir / "schema").exists()
+        assert "schema_files" not in json.loads((run_dir / "run.json").read_text())
+
+
+def test_status_reports_runs_whose_text_changed(tmp_path: Path, monkeypatch) -> None:
+    cfg, article_dir = _publishable_project(tmp_path)
+    monkeypatch.setattr(cli, "_require_project", lambda ctx=None: SimpleNamespace(config=cfg))
+    runner = CliRunner()
+    assert runner.invoke(cli.app, ["agent", "record-extraction", "smith-2024"]).exit_code == 0
+
+    assert "changed:" not in runner.invoke(cli.app, ["status"]).output
+
+    (article_dir / "article.md").write_text("# Smith 2024\n\nRe-converted text.\n")
+
+    output = runner.invoke(cli.app, ["status"]).output
+    assert "changed:     1 active runs whose article.md changed since extraction" in output
+
+
+def test_record_extraction_refuses_a_schema_that_changed_while_publishing(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """Stored bytes must match the hash the folder is named by; nothing is published otherwise."""
+    from litschema import runs
+
+    cfg, article_dir = _publishable_project(tmp_path)
+    monkeypatch.setattr(cli, "_require_project", lambda ctx=None: SimpleNamespace(config=cfg))
+    monkeypatch.setattr(runs, "schema_hash", lambda _cfg: "sha256:" + "0" * 64)
+
+    result = CliRunner().invoke(cli.app, ["agent", "record-extraction", "smith-2024"])
+
+    assert result.exit_code != 0
+    assert "schema changed" in result.output
+    assert not (cfg.data_dir / "schemas" / ("0" * 64)).exists()
+    assert not list((cfg.data_dir / "schemas").glob(".staging-*"))
+    assert not (article_dir / "extraction-runs").exists() or not any(
+        p for p in (article_dir / "extraction-runs").iterdir() if not p.name.startswith(".")
+    )
+
+
+def test_record_extraction_refuses_an_outside_import_even_when_the_schema_is_stored(
+    tmp_path: Path, monkeypatch
+) -> None:
+    from litschema import runs
+
+    cfg, article_dir = _publishable_project(tmp_path)
+    monkeypatch.setattr(cli, "_require_project", lambda ctx=None: SimpleNamespace(config=cfg))
+    stored = runs.stored_schema_dir(cfg, runs.schema_hash(cfg))
+    stored.mkdir(parents=True)
+    outside = tmp_path / "shared" / "base.yaml"
+    outside.parent.mkdir()
+    outside.write_text("id: x\n")
+    closure = runs.schema_closure_paths(cfg)
+    monkeypatch.setattr(runs, "schema_closure_paths", lambda _cfg: [*closure, outside])
+
+    result = CliRunner().invoke(cli.app, ["agent", "record-extraction", "smith-2024"])
+
+    assert result.exit_code != 0
+    assert "is outside" in result.output
+    assert not (article_dir / "extraction-runs").exists() or not any(
+        p for p in (article_dir / "extraction-runs").iterdir() if not p.name.startswith(".")
+    )
+
+
+def test_schema_files_outside_the_schema_directory_are_refused(
+    tmp_path: Path, monkeypatch
+) -> None:
+    from litschema import runs
+
+    cfg, _article_dir = _publishable_project(tmp_path)
+    inside = tmp_path / "schema" / "base.yaml"
+    outside = tmp_path / "shared" / "base.yaml"
+    for path in (inside, outside):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("id: x\n")
+    monkeypatch.setattr(runs, "schema_closure_paths", lambda _cfg: [inside, outside])
+
+    with pytest.raises(runs.RunPublishError, match="is outside .*move it into the schema"):
+        runs._schema_copies(cfg)

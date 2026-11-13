@@ -21,6 +21,10 @@ One entry per extracted value. `note` is required unless `basis` is `stated`.
 ## `run.json`
 
 Written by litschema when it publishes a run. The agent never writes this file.
+litschema keeps the schema files `schema_hash` names under
+`data/schemas/<hash>/`, one folder per schema version, so a run can still be
+read against the schema it was extracted with after the project's schema
+changes.
 
 ```json
 {

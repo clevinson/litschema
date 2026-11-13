@@ -13,6 +13,7 @@ the publisher's: publishing a complete non-error run atomically activates it
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
@@ -23,7 +24,7 @@ from pathlib import Path
 
 from .articles import ArticleFiles
 from .config import LitSchemaConfig
-from .schema_resolution import schema_hash
+from .schema_resolution import schema_closure_paths, schema_hash
 from .version import install_source, installed_version
 
 logger = logging.getLogger(__name__)
@@ -118,6 +119,89 @@ class RunFiles:
 
     def read_run_json(self) -> dict:
         return json.loads(self.run_json.read_text())
+
+
+@dataclass(frozen=True)
+class RunDrift:
+    """How a run stands against the project as it is now.
+
+    Each field is a reason, or None when nothing moved. Both are warnings, not
+    errors: the run is readable either way. `schema` means the project schema
+    no longer matches the hash the run records, so columns derived from today's
+    schema may not fit the run's values. `source` means `article.md` differs
+    from the text the run cites, so its line numbers may point at other lines.
+    """
+
+    schema: str | None
+    source: str | None
+
+    @property
+    def any(self) -> bool:
+        return bool(self.schema or self.source)
+
+
+def _recorded(run: RunFiles) -> dict:
+    try:
+        record = run.read_run_json()
+    except (OSError, ValueError):
+        return {}
+    return record if isinstance(record, dict) else {}
+
+
+def schema_drift(cfg: LitSchemaConfig, run: RunFiles, *, current: str | None = None) -> str | None:
+    """Why the project schema no longer matches this run, or None.
+
+    ``current`` lets a caller hash the schema once for a whole project. A run
+    that records no hash, or a schema that cannot be hashed, is reported as
+    drift too: the match cannot be shown, which is the claim this check makes.
+    """
+    if current is None:
+        try:
+            current = schema_hash(cfg)
+        except OSError as exc:
+            return f"the project's extraction schema cannot be read: {exc}"
+    recorded = _recorded(run).get("schema_hash")
+    if not isinstance(recorded, str) or not recorded.strip():
+        return f"run {run.run_id} records no usable schema hash"
+    if recorded != current:
+        return (
+            f"run {run.run_id} was extracted against a different schema "
+            f"({recorded[:14]}…, now {current[:14]}…)"
+        )
+    return None
+
+
+def source_drift(files: ArticleFiles, run: RunFiles) -> str | None:
+    """Why `article.md` is no longer the text this run cites, or None.
+
+    None when the article has no `article.md` (nothing to compare against) or
+    the run records no prepared-text hash. Those are gaps a reviewer can see;
+    a changed text under valid-looking citations is the one they cannot.
+    """
+    inputs = _recorded(run).get("inputs")
+    recorded = inputs.get("prepared_text") if isinstance(inputs, dict) else None
+    if not isinstance(recorded, str) or not recorded.strip():
+        return None
+    try:
+        current = _hash_file(files.markdown, "prepared text")
+    except RunPublishError:
+        return None
+    if current != recorded:
+        return (
+            f"article.md changed after run {run.run_id} was extracted "
+            f"({recorded[:14]}… then, {current[:14]}… now); its line citations may "
+            f"point at other lines"
+        )
+    return None
+
+
+def run_drift(
+    cfg: LitSchemaConfig, files: ArticleFiles, run: RunFiles, *, current_schema: str | None = None
+) -> RunDrift:
+    return RunDrift(
+        schema=schema_drift(cfg, run, current=current_schema),
+        source=source_drift(files, run),
+    )
 
 
 def run_files(files: ArticleFiles, run_id: str) -> RunFiles:
@@ -337,6 +421,76 @@ def _agent_attribution(provider: str | None, model: str | None) -> dict:
     return agent
 
 
+def stored_schema_dir(cfg: LitSchemaConfig, schema_sha: str) -> Path:
+    """Where the schema a run records as ``schema_hash`` is kept."""
+    return cfg.data_dir / "schemas" / schema_sha.removeprefix("sha256:")
+
+
+def _schema_copies(cfg: LitSchemaConfig) -> list[tuple[str, Path]]:
+    """``(name, source)`` for each file `schema_hash` covers.
+
+    Names are paths relative to the schema directory, so the stored copy keeps
+    its layout and its relative imports. Imports from outside the schema
+    directory are refused until sharing schemas across projects is designed.
+    """
+    copies = []
+    schema_dir = cfg.schema_dir.resolve()
+    for path in schema_closure_paths(cfg):
+        try:
+            name = path.resolve().relative_to(schema_dir).as_posix()
+        except ValueError:
+            raise RunPublishError(
+                f"cannot store the schema: {path} is outside {cfg.schema_dir}; "
+                f"move it into the schema directory"
+            ) from None
+        if not path.is_file():
+            raise RunPublishError(f"cannot copy schema file {path}: it does not exist")
+        copies.append((name, path))
+    return copies
+
+
+def _closure_digest(copies: list[tuple[str, Path]], root: Path) -> str:
+    """`schema_hash` recomputed over stored copies, in the same order and form."""
+    digest = hashlib.sha256()
+    for name, source in copies:
+        digest.update(source.name.encode())
+        digest.update(b"\0")
+        digest.update((root / name).read_bytes())
+    return "sha256:" + digest.hexdigest()
+
+
+def _store_schema(cfg: LitSchemaConfig, schema_sha: str) -> None:
+    """Keep the schema a run was extracted with, once per schema hash.
+
+    A hash cannot be read back, so the files it covers are stored under
+    `data/schemas/<hash>/` the first time a run uses them. Every later run on
+    the same schema shares the folder, and a folder is never rewritten: its
+    name is the hash of what it holds.
+    """
+    copies = _schema_copies(cfg)
+    target = stored_schema_dir(cfg, schema_sha)
+    if target.is_dir():
+        return
+    staging = target.parent / f".staging-{target.name}-{os.getpid()}"
+    shutil.rmtree(staging, ignore_errors=True)
+    try:
+        for name, path in copies:
+            dest = staging / name
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(path, dest)
+        if _closure_digest(copies, staging) != schema_sha:
+            shutil.rmtree(staging, ignore_errors=True)
+            raise RunPublishError(
+                "the schema changed while the run was being published; publish again"
+            )
+        os.replace(staging, target)
+    except OSError:
+        shutil.rmtree(staging, ignore_errors=True)
+        # A concurrent publish stored the same schema first.
+        if not target.is_dir():
+            raise
+
+
 def _conversion_block(files: ArticleFiles, text_sha256: str) -> dict | None:
     """The article's prepared-text.json as a run.json block, or None if absent.
 
@@ -441,12 +595,15 @@ def publish_run(
         "skill": _hash_file(resolve_skill_file(cfg, skill_file), "skill"),
     }
     conversion = _conversion_block(files, inputs["prepared_text"])
+    current_schema = schema_hash(cfg)
+    # Before the run exists, so no published run names a schema that isn't kept.
+    _store_schema(cfg, current_schema)
     record = {
         "version": RUN_JSON_VERSION,
         "run_id": new_run_id(),
         "article_id": files.article_id,
         "created_at": created_at,
-        "schema_hash": schema_hash(cfg),
+        "schema_hash": current_schema,
         "inputs": inputs,
         "agent": _agent_attribution(provider, model),
         "litschema": {"version": installed_version(), **install_source().as_record()},
