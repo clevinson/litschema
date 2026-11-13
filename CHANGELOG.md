@@ -20,8 +20,9 @@ What this means in practice:
 - **Extractions and prepared text can be regenerated** by re-running the
   pipeline. Doing so costs model time, not work.
 - **Human review is the thing to protect.** Reviews are the one artifact you
-  cannot regenerate. Keep your project in Git, and read the **Breaking changes**
-  section of any release before you update a project you have reviewed.
+  cannot regenerate. Keep your project in Git, and read the **Breaking
+  changes** section of any release before you update a project you have
+  reviewed.
 
 Each release below says plainly whether it breaks a format. Once litschema
 reaches 1.0, formats stop changing without a migration path.
@@ -42,9 +43,9 @@ kept honest is part of that case.
 
 Specs follow the same rule. A spec edit is listed only when it changes what the
 product does or admits; correcting a spec to match code that never moved is
-bookkeeping, not a release note. Where a spec described unbuilt behaviour, that
-belongs under **Known limits** rather than **Removed**, since nothing anyone relied
-on went away.
+bookkeeping, not a release note. Where a spec described unbuilt behaviour,
+that belongs under **Known limits** rather than **Removed**, since nothing
+anyone relied on went away.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
@@ -103,13 +104,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
   one message on what happens and a confirming question, then the skill does
   what the user decides. It still refuses to hand-edit published runs, publish
   an extraction that failed validation, or invent values.
-- `init` and `skills install --project` set the project up for each coding agent
-  whose config folder exists, as roborev does: `~/.claude` (or
+- `init` and `skills install --project` set the project up for each coding
+  agent whose config folder exists, as roborev does: `~/.claude` (or
   `$CLAUDE_CONFIG_DIR`) for Claude Code, `~/.codex` (or `$CODEX_HOME`) or
   `~/.agents` for Codex. When it finds neither, it asks for `--agent`, which
-  also overrides detection. Skills go where each agent looks: `.claude/skills/` for Claude
-  Code, `.agents/skills/` for Codex. For Codex, `init` also writes
-  `.codex/config.toml` allowing network access so DOI lookups work.
+  also overrides detection. Skills go where each agent looks:
+  `.claude/skills/` for Claude Code, `.agents/skills/` for Codex. For Codex,
+  `init` also writes `.codex/config.toml` allowing network access so DOI
+  lookups work.
 - `skills install --local` is now `skills install --project` (`--local` still
   works), matching the project/user scopes other agent tools use.
 - Project skills are gitignored: the pinned litschema version already fixes
@@ -160,20 +162,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
   shows Raw lines. ([#23](https://github.com/clevinson/litschema/pull/23))
 - Overview: summary strip, text filter and status chips, a Status column,
   sortable columns, and a header that stays visible while scrolling.
-  The filter, chip, and sort are kept in the URL, so reload keeps them. ([#23](https://github.com/clevinson/litschema/pull/23))
+  The filter, chip, and sort are kept in the URL, so reload keeps them.
+  ([#23](https://github.com/clevinson/litschema/pull/23))
 - `litschema grade` checks each extracted value against the lines it cites,
   using a separate model through your own `claude` CLI, and stores per field
   the probability that the value is right (`confidence`, null when it can't be
   judged) and a one-line `issue` below 0.9. Bands are derived: high >= 0.9,
-  check >= 0.6, low below, can't verify for null. `--all` skips runs already graded by the same
-  model; `--model claude-haiku-4-5` is a cheap pass (about $0.09 a paper in
-  the pilot). See `specs/grading/spec.md`. ([#26](https://github.com/clevinson/litschema/pull/26))
+  check >= 0.6, low below, can't verify for null. `--all` skips runs already
+  graded by the same model; `--model claude-haiku-4-5` is a cheap pass (about
+  $0.09 a paper in the pilot). See `specs/grading/spec.md`.
+  ([#26](https://github.com/clevinson/litschema/pull/26))
 - The app marks check, low, and can't-verify fields in the audit table, shows
   the band, confidence, and issue in the evidence box ("Check · 72%"), and
   orders a graded document's fields flagged first (low, check, can't verify,
   then inferred or assumed values), with a toggle beside Audit/Data. The
   overview has a Flags column and a Flagged chip. Grade files from before this
-  change still display, with verdicts mapped to bands. ([#26](https://github.com/clevinson/litschema/pull/26))
+  change still display, with verdicts mapped to bands.
+  ([#26](https://github.com/clevinson/litschema/pull/26))
 - Reasoning entries carry a required `basis` (stated, converted, normalized,
   calculated, inferred, assumed) and a one-line `note` on how the value was
   derived, required unless the basis is stated. The evidence box shows both.
@@ -183,7 +188,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 - `prepare-text` writes the PDF's figures to `figures/` beside `article.md`
   and links them as `![](figures/<name>)`. It drops logos repeated on 3 or more
   pages and images under 150x100 px. The `extract-article` skill opens a
-  figure when a value may sit in it or in an image-only table. ([#25](https://github.com/clevinson/litschema/pull/25))
+  figure when a value may sit in it or in an image-only table.
+  ([#25](https://github.com/clevinson/litschema/pull/25))
 - `prepare-text` writes `prepared-text.json`: converter name and version,
   options, and hashes of the PDF, the markdown, and each figure. Commit it; it
   holds no paper text. ([#25](https://github.com/clevinson/litschema/pull/25))
@@ -199,7 +205,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ### Changed
 
-- The app is titled "litschema", with a persistent top bar naming the project. ([#23](https://github.com/clevinson/litschema/pull/23))
+- The review app is titled "litschema", with a persistent top bar naming the
+  project. ([#23](https://github.com/clevinson/litschema/pull/23))
 - On a document page the app bar has an Overview button, a document switcher
   you can search by title, author, year, or id, and previous/next. Esc
   returns to the overview. The native article dropdown and the "All
@@ -208,9 +215,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 - The app loads nothing from the network: icons, fonts, and scripts are
   bundled. ([#23](https://github.com/clevinson/litschema/pull/23))
 - In the formatted view, evidence and source labels name the source instead
-  of line numbers; Raw lines still shows them. ([#23](https://github.com/clevinson/litschema/pull/23))
+  of line numbers; Raw lines still shows them.
+  ([#23](https://github.com/clevinson/litschema/pull/23))
 - The overview has one filter bar with Search and Expression modes. The
-  toolbar Filter button and the "Advanced filter" popover are gone. ([#23](https://github.com/clevinson/litschema/pull/23))
+  toolbar Filter button and the "Advanced filter" popover are gone.
+  ([#23](https://github.com/clevinson/litschema/pull/23))
 - `prepare-text` no longer runs OCR, and drops page headers and footers and
   `<mark>` highlight tags. Scanned PDFs now convert as `empty`. Re-run
   `prepare-text --all --force` to regenerate existing text; runs extracted
@@ -249,7 +258,8 @@ First release on PyPI.
   3. Projects created before 0.1.1 have no pin and get a warning until you add
   one.
 
-No data formats changed. Existing extractions, runs, and reviews load as before.
+No data formats changed. Existing extractions, runs, and reviews load as
+before.
 
 ### Added
 
@@ -276,9 +286,9 @@ Build and packaging changes with no effect on what the tool does.
 
 ## [0.1.0] — 2026-08-01
 
-First tagged release. Not published to PyPI — install from a checkout (see the
-README). There is no prior tag, so this entry describes what the release *is*
-rather than what changed.
+First tagged release. Not published to PyPI; install from a checkout (see
+the README). There is no prior tag, so this entry describes what the release
+*is* rather than what changed.
 
 ### Breaking changes
 
@@ -360,8 +370,8 @@ None — this is the first release.
 - Dev-override approval is recorded in your own config, keyed by project path
   and content hash. An approval marker committed inside a repository grants
   nothing, so a hostile checkout cannot approve its own command ([`391376f`](https://github.com/clevinson/litschema/commit/391376f), [`77ce8c9`](https://github.com/clevinson/litschema/commit/77ce8c9))
-- A `?filter=` expression arriving in a URL is displayed but never evaluated —
-  including by the live preview — until you press Apply ([`fc61b79`](https://github.com/clevinson/litschema/commit/fc61b79), [`27c091e`](https://github.com/clevinson/litschema/commit/27c091e))
+- A `?filter=` expression arriving in a URL is displayed but never evaluated,
+  including by the live preview, until you press Apply ([`fc61b79`](https://github.com/clevinson/litschema/commit/fc61b79), [`27c091e`](https://github.com/clevinson/litschema/commit/27c091e))
 - Overrides are refused when the run's schema identity cannot be established,
   rather than typed against the wrong schema ([`2bdd0d9`](https://github.com/clevinson/litschema/commit/2bdd0d9))
 
@@ -380,9 +390,9 @@ why its output can be trusted.
 
 - Schema resolution is memoized against a stamp of the schema files rather than
   recomputed per article. The verifier's listing was resolving the same schema
-  975 times to render one page — 19 seconds over a 326-paper project, now under
-  half a second. The stamp is checked on every call, so a schema edited while
-  the verifier runs is still picked up ([`715f569`](https://github.com/clevinson/litschema/commit/715f569))
+  975 times to render one page: 19 seconds over a 326-paper project, now
+  under half a second. The stamp is checked on every call, so a schema edited
+  while the verifier runs is still picked up ([`715f569`](https://github.com/clevinson/litschema/commit/715f569))
 
 **Tests**
 
