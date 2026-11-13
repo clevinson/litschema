@@ -879,6 +879,30 @@ def test_record_extraction_refuses_a_schema_that_changed_while_publishing(
     )
 
 
+def test_record_extraction_refuses_an_outside_import_even_when_the_schema_is_stored(
+    tmp_path: Path, monkeypatch
+) -> None:
+    from litschema import runs
+
+    cfg, article_dir = _publishable_project(tmp_path)
+    monkeypatch.setattr(cli, "_require_project", lambda ctx=None: SimpleNamespace(config=cfg))
+    stored = runs.stored_schema_dir(cfg, runs.schema_hash(cfg))
+    stored.mkdir(parents=True)
+    outside = tmp_path / "shared" / "base.yaml"
+    outside.parent.mkdir()
+    outside.write_text("id: x\n")
+    closure = runs.schema_closure_paths(cfg)
+    monkeypatch.setattr(runs, "schema_closure_paths", lambda _cfg: [*closure, outside])
+
+    result = CliRunner().invoke(cli.app, ["agent", "record-extraction", "smith-2024"])
+
+    assert result.exit_code != 0
+    assert "is outside" in result.output
+    assert not (article_dir / "extraction-runs").exists() or not any(
+        p for p in (article_dir / "extraction-runs").iterdir() if not p.name.startswith(".")
+    )
+
+
 def test_schema_files_outside_the_schema_directory_are_refused(
     tmp_path: Path, monkeypatch
 ) -> None:

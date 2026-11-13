@@ -467,10 +467,10 @@ def _store_schema(cfg: LitSchemaConfig, schema_sha: str) -> None:
     the same schema shares the folder, and a folder is never rewritten: its
     name is the hash of what it holds.
     """
+    copies = _schema_copies(cfg)
     target = stored_schema_dir(cfg, schema_sha)
     if target.is_dir():
         return
-    copies = _schema_copies(cfg)
     staging = target.parent / f".staging-{target.name}-{os.getpid()}"
     shutil.rmtree(staging, ignore_errors=True)
     try:
