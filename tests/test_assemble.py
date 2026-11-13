@@ -879,7 +879,7 @@ def test_record_extraction_refuses_a_schema_that_changed_while_publishing(
     )
 
 
-def test_schema_files_that_would_share_a_stored_name_are_refused(
+def test_schema_files_outside_the_schema_directory_are_refused(
     tmp_path: Path, monkeypatch
 ) -> None:
     from litschema import runs
@@ -892,5 +892,5 @@ def test_schema_files_that_would_share_a_stored_name_are_refused(
         path.write_text("id: x\n")
     monkeypatch.setattr(runs, "schema_closure_paths", lambda _cfg: [inside, outside])
 
-    with pytest.raises(runs.RunPublishError, match="would both be kept as base.yaml"):
+    with pytest.raises(runs.RunPublishError, match="is outside .*move it into the schema"):
         runs._schema_copies(cfg)

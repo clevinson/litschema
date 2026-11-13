@@ -429,25 +429,22 @@ def stored_schema_dir(cfg: LitSchemaConfig, schema_sha: str) -> Path:
 def _schema_copies(cfg: LitSchemaConfig) -> list[tuple[str, Path]]:
     """``(name, source)`` for each file `schema_hash` covers.
 
-    Names are paths relative to the schema directory, so a multi-file schema
-    keeps its layout; a file outside it is kept by its file name, the same key
-    the hash uses.
+    Names are paths relative to the schema directory, so the stored copy keeps
+    its layout and its relative imports. Imports from outside the schema
+    directory are refused until sharing schemas across projects is designed.
     """
     copies = []
-    seen: dict[str, Path] = {}
+    schema_dir = cfg.schema_dir.resolve()
     for path in schema_closure_paths(cfg):
         try:
-            name = path.resolve().relative_to(cfg.schema_dir.resolve()).as_posix()
+            name = path.resolve().relative_to(schema_dir).as_posix()
         except ValueError:
-            name = path.name
+            raise RunPublishError(
+                f"cannot store the schema: {path} is outside {cfg.schema_dir}; "
+                f"move it into the schema directory"
+            ) from None
         if not path.is_file():
             raise RunPublishError(f"cannot copy schema file {path}: it does not exist")
-        if name in seen:
-            raise RunPublishError(
-                f"cannot store the schema: {seen[name]} and {path} would both be kept as {name}; "
-                f"rename one of them"
-            )
-        seen[name] = path
         copies.append((name, path))
     return copies
 

@@ -189,7 +189,9 @@ stored folder is never rewritten: its name is the hash of what it holds. The
 store is written before the run, so no run names a schema that isn't kept, and
 the staged copy is rehashed before it is moved into place, so a folder always
 holds what its name says. A
-schema file that cannot be copied fails publication like any other input.
+schema file that cannot be copied fails publication like any other input, and
+so does an import from outside the schema directory: such a file has no path
+inside the store, and sharing schemas across projects needs its own design.
 Supersedes "Git is the only schema history" in
 `specs/project-config/decisions.md` (2026-07-14).
 
