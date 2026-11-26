@@ -175,37 +175,6 @@ run by heuristic such as measurement count, which would substitute a guess for
 the human judgment this exists to enable.
 
 
-## 2026-11-05 — The schema a run used is kept, once per schema hash
-
-**Context:** `run.json` recorded `schema_hash`, and the hash was enough to
-notice that the project schema had changed. It was not enough to do anything
-about it: a hash cannot be read back, so after a rename an immutable run could
-fail `validate` with no way to recover the schema it was valid against.
-
-**Decision:** publication stores every file `schema_hash` covers under
-`data/schemas/<hash>/`, by path relative to the schema directory, the first
-time a run uses that hash. Later runs on the same schema write nothing, and a
-stored folder is never rewritten: its name is the hash of what it holds. The
-store is written before the run, so no run names a schema that isn't kept, and
-the staged copy is rehashed before it is moved into place, so a folder always
-holds what its name says. A
-schema file that cannot be copied fails publication like any other input, and
-so does an import from outside the schema directory: such a file has no path
-inside the store, and sharing schemas across projects needs its own design.
-Supersedes "Git is the only schema history" in
-`specs/project-config/decisions.md` (2026-07-14).
-
-**Rejected:**
-- Resolving old schemas from Git history by hash. Runs record no commit, the
-  schema a run used is often an uncommitted edit, and litschema doesn't
-  assume a repository.
-- A copy inside every run (this PR's first version). erw-lit's schema is 36 KB
-  across six files against about 16 KB of run data, so each run grew from
-  three files to nine with identical copies.
-- Leaving runs interpretable only under the current schema, the state users
-  reach without noticing.
-
-
 ## 2026-11-05 — Assemble recognises the same PDF under another filename
 
 **Context:** `assemble` deduplicated within one filename slug: identical
@@ -222,3 +191,22 @@ re-drop as before. The slug rules are unchanged for new content.
 **Rejected:** warning and assembling anyway, which leaves the duplicate for a
 human to notice later; and renaming the existing article to the new filename,
 which would break every run and review bound to its id.
+
+
+## 2026-11-26 — Runs keep a schema hash and no schema copy
+
+**Context:** `run.json` records `schema_hash`, and a hash cannot be read back.
+After a schema change an old run may fail `validate`, and the schema it was
+valid against is not in the project unless Git has it.
+
+**Decision:** litschema stores no schema copies. A run is read, reviewed and
+exported through the project's current schema, and a differing `schema_hash`
+is reported as drift. "Git is the only schema history" in
+`specs/project-config/decisions.md` (2026-07-14) stands.
+
+**Rejected:**
+- A copy inside every run. erw-lit's schema is 36 KB across six files against
+  about 16 KB of run data, so each run grew from three files to nine.
+- One copy per hash under `data/schemas/<hash>/`. No command read it, and it
+  needed a rehash on write, a collision check and a refusal of imports from
+  outside the schema directory to stay correct.

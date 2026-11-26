@@ -13,7 +13,6 @@ the publisher's: publishing a complete non-error run atomically activates it
 
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
 import os
@@ -24,7 +23,7 @@ from pathlib import Path
 
 from .articles import ArticleFiles
 from .config import LitSchemaConfig
-from .schema_resolution import schema_closure_paths, schema_hash
+from .schema_resolution import schema_hash
 from .version import install_source, installed_version
 
 logger = logging.getLogger(__name__)
@@ -421,76 +420,6 @@ def _agent_attribution(provider: str | None, model: str | None) -> dict:
     return agent
 
 
-def stored_schema_dir(cfg: LitSchemaConfig, schema_sha: str) -> Path:
-    """Where the schema a run records as ``schema_hash`` is kept."""
-    return cfg.data_dir / "schemas" / schema_sha.removeprefix("sha256:")
-
-
-def _schema_copies(cfg: LitSchemaConfig) -> list[tuple[str, Path]]:
-    """``(name, source)`` for each file `schema_hash` covers.
-
-    Names are paths relative to the schema directory, so the stored copy keeps
-    its layout and its relative imports. Imports from outside the schema
-    directory are refused until sharing schemas across projects is designed.
-    """
-    copies = []
-    schema_dir = cfg.schema_dir.resolve()
-    for path in schema_closure_paths(cfg):
-        try:
-            name = path.resolve().relative_to(schema_dir).as_posix()
-        except ValueError:
-            raise RunPublishError(
-                f"cannot store the schema: {path} is outside {cfg.schema_dir}; "
-                f"move it into the schema directory"
-            ) from None
-        if not path.is_file():
-            raise RunPublishError(f"cannot copy schema file {path}: it does not exist")
-        copies.append((name, path))
-    return copies
-
-
-def _closure_digest(copies: list[tuple[str, Path]], root: Path) -> str:
-    """`schema_hash` recomputed over stored copies, in the same order and form."""
-    digest = hashlib.sha256()
-    for name, source in copies:
-        digest.update(source.name.encode())
-        digest.update(b"\0")
-        digest.update((root / name).read_bytes())
-    return "sha256:" + digest.hexdigest()
-
-
-def _store_schema(cfg: LitSchemaConfig, schema_sha: str) -> None:
-    """Keep the schema a run was extracted with, once per schema hash.
-
-    A hash cannot be read back, so the files it covers are stored under
-    `data/schemas/<hash>/` the first time a run uses them. Every later run on
-    the same schema shares the folder, and a folder is never rewritten: its
-    name is the hash of what it holds.
-    """
-    copies = _schema_copies(cfg)
-    target = stored_schema_dir(cfg, schema_sha)
-    if target.is_dir():
-        return
-    staging = target.parent / f".staging-{target.name}-{os.getpid()}"
-    shutil.rmtree(staging, ignore_errors=True)
-    try:
-        for name, path in copies:
-            dest = staging / name
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(path, dest)
-        if _closure_digest(copies, staging) != schema_sha:
-            shutil.rmtree(staging, ignore_errors=True)
-            raise RunPublishError(
-                "the schema changed while the run was being published; publish again"
-            )
-        os.replace(staging, target)
-    except OSError:
-        shutil.rmtree(staging, ignore_errors=True)
-        # A concurrent publish stored the same schema first.
-        if not target.is_dir():
-            raise
-
-
 def _conversion_block(files: ArticleFiles, text_sha256: str) -> dict | None:
     """The article's prepared-text.json as a run.json block, or None if absent.
 
@@ -596,8 +525,6 @@ def publish_run(
     }
     conversion = _conversion_block(files, inputs["prepared_text"])
     current_schema = schema_hash(cfg)
-    # Before the run exists, so no published run names a schema that isn't kept.
-    _store_schema(cfg, current_schema)
     record = {
         "version": RUN_JSON_VERSION,
         "run_id": new_run_id(),
