@@ -297,7 +297,7 @@ def test_export_refuses_a_run_extracted_against_an_older_schema(tmp_path: Path) 
     refused = _export(project, tmp_path)
 
     assert refused.exit_code == 2, refused.output
-    assert "1 extracted against an older schema" in refused.output
+    assert "1 active run(s) extracted against an older schema" in refused.output
     assert "old" in refused.output
     assert "--allow-stale" in refused.output
     # Nothing half-written: a refused export leaves no files behind.
@@ -307,19 +307,19 @@ def test_export_refuses_a_run_extracted_against_an_older_schema(tmp_path: Path) 
     allowed = _export(project, tmp_path, "--allow-stale")
 
     assert allowed.exit_code == 0, allowed.output
-    assert "stale: 1 article(s) exported anyway" in allowed.output
+    assert "stale: 1 article(s) on an older schema exported anyway" in allowed.output
     audit = {r["article_id"]: r for r in map(json.loads, (tmp_path / "audit.jsonl").read_text().splitlines())}
     assert "different schema" in audit["old"]["drift"]["schema"]
     assert audit["old"]["drift"]["source"] is None
     assert audit["fresh"]["drift"] == {"schema": None, "source": None}
 
 
-def test_export_refuses_a_run_whose_article_text_changed(tmp_path: Path) -> None:
+def test_export_warns_about_a_run_whose_article_text_changed(tmp_path: Path) -> None:
     """Line citations index into the text the run was extracted from.
 
     Re-converting or editing article.md after the run leaves every `L<n>`
-    pointing somewhere else. The run records the hash of the text it saw, so
-    the mismatch is checkable; before this nothing checked it.
+    pointing somewhere else, but the values are still what the run extracted,
+    so export warns and writes.
     """
     from .helpers import publish_test_run
 
@@ -334,26 +334,30 @@ def test_export_refuses_a_run_whose_article_text_changed(tmp_path: Path) -> None
 
     (paper / "article.md").write_text("# Moved\n\nA fresh conversion with other line numbers.\n")
 
-    refused = _export(project, tmp_path)
+    warned = _export(project, tmp_path)
 
-    assert refused.exit_code == 2, refused.output
-    assert "1 whose article.md changed since extraction" in refused.output
-
-    allowed = _export(project, tmp_path, "--allow-stale")
-
-    assert allowed.exit_code == 0, allowed.output
+    assert warned.exit_code == 0, warned.output
+    assert "changed: 1 article(s) whose article.md changed" in warned.output
     (record,) = map(json.loads, (tmp_path / "audit.jsonl").read_text().splitlines())
     assert "article.md changed after run" in record["drift"]["source"]
     assert record["drift"]["schema"] is None
 
 
-def test_export_summary_counts_stale_runs_only_when_allowed(tmp_path: Path) -> None:
+def test_export_summary_refuses_schema_drift_and_counts_source_drift(tmp_path: Path) -> None:
     from litschema.config import load_config as _load
     from litschema.export import ExportSummary, StaleRunsError, export_records
+
+    from .helpers import publish_test_run
 
     project = _project(tmp_path)
     paper = _write_article(project, "a", {"article_id": "a", "study_type": "field_trial"})
     (paper / "article.md").write_text("new text\n")
+    old = project / "data" / "papers" / "old"
+    old.mkdir(parents=True)
+    (old / "article-metadata.json").write_text(json.dumps({"id": "old"}))
+    publish_test_run(
+        old, {"article_id": "old", "study_type": "field_trial"}, schema_hash="sha256:older"
+    )
     cfg = _load(project / "litschema.yaml", reload=True)
 
     try:
@@ -361,10 +365,10 @@ def test_export_summary_counts_stale_runs_only_when_allowed(tmp_path: Path) -> N
     except StaleRunsError as exc:
         summary: ExportSummary = exc.summary
     else:  # pragma: no cover - the assertion below reports it
-        raise AssertionError("export did not refuse a run whose text changed")
+        raise AssertionError("export did not refuse a run on an older schema")
 
-    assert summary.stale_articles == ["a"]
-    assert (summary.schema_drift, summary.source_drift) == (0, 1)
+    assert summary.stale_articles == ["old"]
+    assert (summary.schema_drift, summary.source_drift) == (1, 1)
     out = io.StringIO()
-    assert export_records(cfg, "jsonl", out, allow_stale=True).stale_articles == ["a"]
-    assert json.loads(out.getvalue())["article_id"] == "a"
+    assert export_records(cfg, "jsonl", out, allow_stale=True).stale_articles == ["old"]
+    assert {json.loads(line)["article_id"] for line in out.getvalue().splitlines()} == {"a", "old"}

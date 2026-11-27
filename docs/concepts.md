@@ -32,10 +32,11 @@ longer matches the conversion record. A review belongs to one run, so it can't
 go stale.
 
 The project can move on from a run: the schema changes, or `article.md` is
-re-converted. litschema reports both. The review app marks the article and
-`status` counts it; `export` refuses to write until you pass `--allow-stale`,
-because a CSV shaped by the new schema has no column for an old value, and
-old line citations may name other lines. Re-extracting is the fix.
+re-converted. litschema reports both: the review app marks the article and
+`status` counts it. `export` refuses runs on an older schema until you pass
+`--allow-stale`, because a CSV shaped by the new schema has no column for an
+old value. A changed `article.md` only warns, since old line citations may
+name other lines but the values are unchanged. Re-extracting fixes both.
 
 ## How each value was extracted
 

@@ -94,5 +94,18 @@ cheap next to a dataset that quietly dropped a reviewed value.
 **Rejected:** warning without refusing, which the test showed people read
 past; refusing with no override, which blocks a user who has already judged
 the drift harmless (a comment added to the schema, a header line fixed in the
-text); and projecting the run through the schema it recorded, which the
-copied schema files now make possible but is reconciliation work, not export.
+text); and projecting the run through the schema it recorded, which is
+reconciliation work, not export.
+
+
+## 2026-11-27 — Export warns on source drift instead of refusing
+
+**Context:** export refused both kinds of drift. A changed `article.md` moves
+line citations but leaves the exported values as the run extracted them, and
+the review app already only warns about it. erw-lit has 18 articles whose text
+was re-converted after their runs, which would have blocked every export.
+
+**Decision:** export refuses only schema drift, where a value can lose its CSV
+column. Source drift prints a warning with the count and is recorded in the
+audit sidecar's `drift` key. `--allow-stale` now covers schema drift only.
+Amends "Export refuses stale runs unless told otherwise" (2026-11-05).

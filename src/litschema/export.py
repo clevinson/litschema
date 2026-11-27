@@ -47,12 +47,11 @@ class ExportSummary:
 
 
 class StaleRunsError(Exception):
-    """Some active runs no longer match the project; nothing was written.
+    """Some active runs were extracted against an older schema; nothing was written.
 
-    A run extracted against an older schema loses values in a CSV shaped by
-    today's schema, and a reviewer's correction with them, with no column to
-    land in. A run whose `article.md` changed cites lines that may now say
-    something else. Export refuses both unless told to go ahead.
+    Their values can lose their column in a CSV shaped by today's schema, and a
+    reviewer's correction with them. A changed `article.md` only moves line
+    citations, so it warns instead.
     """
 
     def __init__(self, summary: ExportSummary):
@@ -62,11 +61,9 @@ class StaleRunsError(Exception):
         if more > 0:
             shown += f" and {more} more"
         super().__init__(
-            f"{len(summary.stale_articles)} active run(s) no longer match the project: "
-            f"{summary.schema_drift} extracted against an older schema, "
-            f"{summary.source_drift} whose article.md changed since extraction "
-            f"({shown}). Re-extract them, or pass --allow-stale to export anyway; "
-            f"--audit-output marks each stale article."
+            f"{len(summary.stale_articles)} active run(s) extracted against an older "
+            f"schema ({shown}). Re-extract them, or pass --allow-stale to export "
+            f"anyway; --audit-output marks each stale article."
         )
 
 
@@ -105,7 +102,7 @@ def export_records(
             summary.schema_drift += 1
         if drift.source:
             summary.source_drift += 1
-        if drift.any:
+        if drift.schema:
             summary.stale_articles.append(item.article_id)
         summary.audit.append(audit)
 

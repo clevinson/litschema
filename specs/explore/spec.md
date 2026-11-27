@@ -45,13 +45,16 @@ against. Export checks every included article before writing anything:
   other lines now. An article with no `article.md`, or a run that records no
   text hash, is not drift.
 
-WHEN any included article is stale and `--allow-stale` is absent, THEN export
-exits 2 before writing data or audit output, names how many runs drifted in
-each way and which articles, and points at `--allow-stale` and
-`--audit-output`.
-WHEN `--allow-stale` is given, THEN export writes as usual, prints a warning
-with both counts, and each article's audit record says why it is stale under
-`drift`. Re-extraction is the fix; the flag is the user saying they know.
+WHEN any included article has schema drift and `--allow-stale` is absent, THEN
+export exits 2 before writing data or audit output, names how many runs and
+which articles, and points at `--allow-stale` and `--audit-output`.
+WHEN `--allow-stale` is given, THEN export writes as usual and prints a warning
+with the count. Re-extraction is the fix; the flag is the user saying they
+know.
+WHEN any included article has source drift, THEN export writes as usual and
+prints a warning with the count. The values are what the run extracted; only
+their line citations may be off.
+Each article's audit record says why it is stale under `drift`.
 
 ## Export views
 
@@ -136,8 +139,8 @@ Each key comes from one place. `doi` comes from the article's
 `bib_metadata`. `run_id`, `schema_hash`, and `extraction` come from the active
 run's `run.json`, never from the installed litschema. `drift` holds the reason
 the run is stale in each way (see Stale runs), or `null` for a run that still
-matches; both are `null` for every record an export without `--allow-stale`
-writes. `review` counts leaves as
+matches; `schema` is `null` for every record an export without
+`--allow-stale` writes. `review` counts leaves as
 the verifier does (`review_progress`, identifier slots excluded): `unreviewed`
 when none are reviewed, `complete` when all are, `partial` otherwise. `grade`
 counts bands from the run's current grade (`specs/grading/spec.md`); `flagged`
@@ -198,8 +201,8 @@ concern; required schema provenance in `run.json` does not unfreeze it.
 - Audit serialization is the compact canonical frontier, never expanded
   descendant state.
 - Export is deterministic.
-- A stale run is never exported silently: export refuses, or marks it in the
-  audit sidecar under `--allow-stale`.
+- A stale run is never exported silently: export refuses schema drift unless
+  `--allow-stale`, warns on source drift, and marks both in the audit sidecar.
 - DuckDB remains derived, read-only, and non-authoritative.
 
 ## Test obligations
@@ -220,10 +223,10 @@ Implementation coverage must pin:
 - deterministic JSONL and CSV, including literal JSON null placeholders, empty
   top-level cells, identifier replacement and removal refusal, audit-sidecar
   disambiguation, summaries, and repeated exports;
-- refusal with exit 2 and no files written when a run's schema hash or
-  `article.md` differs from what it records, export with a warning and
-  per-article `drift` reasons under `--allow-stale`, and null `drift` for a
-  matching run;
+- refusal with exit 2 and no files written when a run's schema hash differs
+  from the current schema, export with a warning under `--allow-stale`, a
+  warning and no refusal when `article.md` differs from what the run records,
+  per-article `drift` reasons, and null `drift` for a matching run;
 - schema-derived CSV/DuckDB shaping;
 - read-only MCP rejection and separation of deferred DuckDB schema staleness
   from required run provenance.

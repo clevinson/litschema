@@ -653,8 +653,7 @@ def export(
     allow_stale: bool = typer.Option(
         False,
         "--allow-stale",
-        help="Export runs extracted against an older schema, or whose article.md "
-        "changed since extraction, instead of refusing",
+        help="Export runs extracted against an older schema instead of refusing",
     ),
 ):
     from contextlib import ExitStack
@@ -706,9 +705,15 @@ def export(
     )
     if summary.stale_articles:
         typer.secho(
-            f"{WARN} stale: {len(summary.stale_articles)} article(s) exported anyway: "
-            f"{summary.schema_drift} on an older schema (values with no column in "
-            f"today's CSV are dropped), {summary.source_drift} with a changed article.md",
+            f"{WARN} stale: {len(summary.stale_articles)} article(s) on an older schema "
+            f"exported anyway; values with no column in today's CSV are dropped",
+            fg=typer.colors.YELLOW,
+            err=True,
+        )
+    if summary.source_drift:
+        typer.secho(
+            f"{WARN} changed: {summary.source_drift} article(s) whose article.md changed "
+            f"since extraction; their line citations may be off",
             fg=typer.colors.YELLOW,
             err=True,
         )

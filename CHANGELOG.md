@@ -53,11 +53,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ### Added
 
-- `litschema export` refuses to write when an active run no longer matches the
-  project: extracted against an older schema, or citing an `article.md` that
-  changed since. The message names the articles. `--allow-stale` exports
-  anyway and prints both counts, and the audit sidecar's new `drift` key says
-  why each article is stale. Before this, a renamed slot made export exit 0
+- `litschema export` refuses to write when an active run was extracted against
+  an older schema, and names the articles. `--allow-stale` exports anyway. A
+  run whose `article.md` changed since extraction exports with a warning. The
+  audit sidecar's new `drift` key says why each article is stale. Before this, a renamed slot made export exit 0
   with the value and its reviewer correction missing from the CSV.
 - The review app marks articles whose `article.md` changed after their run
   was extracted, in the overview and above the document, since their line

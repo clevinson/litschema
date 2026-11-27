@@ -12,7 +12,7 @@ litschema grade <id>|--all         score each value against its cited lines
 litschema runs list|activate       list published runs; choose the active one
 litschema verify [--port 8000]     local review app (loopback only)
 litschema export [-f jsonl|csv]    values with corrections, plus an audit file;
-                                   refuses stale runs unless --allow-stale
+                                   refuses older-schema runs unless --allow-stale
 litschema mcp                      DuckDB store served over MCP (experimental)
 litschema skills install           install the agent skills
 litschema agent ...                deterministic steps the extraction skill calls
