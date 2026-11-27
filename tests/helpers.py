@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 
@@ -72,6 +73,16 @@ def publish_test_run(
     """
     if schema_hash is None:
         schema_hash = _project_schema_hash(article_dir)
+    # The same rule for the prepared text: a run that cites an article.md the
+    # fixture wrote records that file's real hash, as a published run would.
+    # A placeholder made every fixture with text look like a run whose source
+    # changed, which is the state export and the verifier now flag.
+    markdown = article_dir / "article.md"
+    prepared_text = (
+        "sha256:" + hashlib.sha256(markdown.read_bytes()).hexdigest()
+        if markdown.is_file()
+        else "sha256:test"
+    )
     run_dir = article_dir / "extraction-runs" / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
     payload = extraction if isinstance(extraction, str) else json.dumps(extraction)
@@ -93,7 +104,7 @@ def publish_test_run(
                 "created_at": "2026-01-01T00:00:00+00:00",
                 "schema_hash": schema_hash,
                 "inputs": {
-                    "prepared_text": "sha256:test",
+                    "prepared_text": prepared_text,
                     "domain_context": "sha256:test",
                     "skill": "sha256:test",
                 },

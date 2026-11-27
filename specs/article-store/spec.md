@@ -39,6 +39,7 @@ data/papers/<article-id>/
       agent-reasoning.json
       run.json
       review.json
+      schema/
 ```
 
 `ArticleFiles` is the sole article-id-to-path chokepoint. Article IDs and run
@@ -106,6 +107,11 @@ they cannot become active. Partial directories are never runs.
   }
 }
 ```
+
+`schema_hash` identifies the schema a run was extracted with; litschema keeps
+no copy of it. A run is read, reviewed and exported through the project's
+current schema, and a differing hash is reported as schema drift. Git holds
+earlier versions of a committed schema.
 
 `conversion` is optional. The publisher copies it from the article's
 `prepared-text.json` (see Text preparation), dropping the `figures` list and
@@ -206,7 +212,9 @@ the directory, and atomically replace the file.
 
 `litschema assemble` remains offline. It slugifies the PDF filename stem,
 uses `article` for an empty slug, treats identical bytes as an idempotent
-re-drop, and gives different bytes that collide a short content-hash suffix.
+re-drop whatever the filename (the same PDF under a new name reports the
+article that already holds it), and gives different bytes that collide a short
+content-hash suffix.
 Each successful PDF moves to `<article-id>/<article-id>.pdf`, receives a
 manifest, and seeds automatic title metadata. Re-drops move to
 `papers-inbox/.processed/`. A bad PDF is counted and left in the inbox while
@@ -315,8 +323,9 @@ Implementation coverage must pin:
   tolerance of an unreadable `run.json`;
 - missing active selection as a normal unextracted state and broken selection
   as an integrity failure;
-- assemble idempotence, collision handling, offline operation, and atomic
-  manifests;
+- assemble idempotence, including the same bytes under another filename,
+  collision handling, offline operation, and atomic manifests;
+- publication writing no schema files, in the run folder or elsewhere;
 - prepare-text on a real PDF: recorded options, repeated and small images
   dropped, refs rewritten, `<mark>` stripped, record hashes, `--force`
   replacing `figures/`, flat-mode paths, and the canonical-PDF fallback;

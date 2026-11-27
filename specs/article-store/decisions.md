@@ -173,3 +173,40 @@ among runs but never destroy one.
 run directories by hand to learn the ID to pass; and auto-selecting the "best"
 run by heuristic such as measurement count, which would substitute a guess for
 the human judgment this exists to enable.
+
+
+## 2026-11-05 — Assemble recognises the same PDF under another filename
+
+**Context:** `assemble` deduplicated within one filename slug: identical
+bytes re-dropped under the same name were an idempotent re-drop, and
+different bytes under the same name got a hash suffix. The same bytes under a
+different name, a Zotero rename or a colleague's copy, became a second article
+with the same `file_sha256`, and a meta-analysis counted one paper twice.
+
+**Decision:** content identity wins. Assemble indexes every assembled
+article's `file_sha256` and treats a matching inbox PDF as already assembled
+under the article that holds it, whatever the new filename, archiving the
+re-drop as before. The slug rules are unchanged for new content.
+
+**Rejected:** warning and assembling anyway, which leaves the duplicate for a
+human to notice later; and renaming the existing article to the new filename,
+which would break every run and review bound to its id.
+
+
+## 2026-11-26 — Runs keep a schema hash and no schema copy
+
+**Context:** `run.json` records `schema_hash`, and a hash cannot be read back.
+After a schema change an old run may fail `validate`, and the schema it was
+valid against is not in the project unless Git has it.
+
+**Decision:** litschema stores no schema copies. A run is read, reviewed and
+exported through the project's current schema, and a differing `schema_hash`
+is reported as drift. "Git is the only schema history" in
+`specs/project-config/decisions.md` (2026-07-14) stands.
+
+**Rejected:**
+- A copy inside every run. erw-lit's schema is 36 KB across six files against
+  about 16 KB of run data, so each run grew from three files to nine.
+- One copy per hash under `data/schemas/<hash>/`. No command read it, and it
+  needed a rehash on write, a collision check and a refusal of imports from
+  outside the schema directory to stay correct.

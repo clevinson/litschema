@@ -201,3 +201,19 @@ def test_doctor_runs_with_no_agent_detected(tmp_path, config_dirs, monkeypatch) 
 
     assert "Traceback" not in doctor.output
     assert "litschema agent skills installed (project-local)" in doctor.output
+
+
+def test_bundled_extract_article_skill_writes_canonical_reasoning_paths() -> None:
+    """The skill teaches the path form the parser and reviews treat as canonical.
+
+    `review_paths.parse_path` defines `experiments[0].ph` with no leading dot
+    and accepts a leading dot only for older runs. A skill that still taught
+    the jq-style form kept every new run on the old dialect.
+    """
+    from pathlib import Path
+
+    skill = Path(__file__).resolve().parents[1] / "skills" / "extract-article" / "SKILL.md"
+    body = skill.read_text()
+    assert "no leading dot" in body
+    assert '"path": "."' not in body
+    assert "starting with `.`" not in body

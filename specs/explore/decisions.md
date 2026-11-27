@@ -72,3 +72,40 @@ top-level slot is absent.
 
 **Rejected:** array splicing; resurrecting removed identifiers; treating
 structural identifiers as audited; using empty CSV cells as array placeholders.
+
+
+## 2026-11-05 — Export refuses stale runs unless told otherwise
+
+**Context:** a hands-on test renamed a slot after a run had been published
+and reviewed, then exported CSV. Export exited 0 with no column for the old
+slot and a blank one for the new: the value and the reviewer's correction were
+gone, and nothing said so. The same test replaced `article.md` after a run and
+found no warning anywhere that its citations now pointed into other text. Both
+hashes needed for the check were already in `run.json`; nothing compared them.
+
+**Decision:** export compares every included run's `schema_hash` with the
+current schema and its recorded `inputs.prepared_text` with the article's
+`article.md`, before writing anything. Any mismatch refuses the export with
+exit 2 and names the articles. `--allow-stale` exports anyway, prints both
+counts, and records each reason in the audit sidecar's `drift` key. The
+default is refusal because the loss is silent and the fix (re-extract) is
+cheap next to a dataset that quietly dropped a reviewed value.
+
+**Rejected:** warning without refusing, which the test showed people read
+past; refusing with no override, which blocks a user who has already judged
+the drift harmless (a comment added to the schema, a header line fixed in the
+text); and projecting the run through the schema it recorded, which is
+reconciliation work, not export.
+
+
+## 2026-11-27 — Export warns on source drift instead of refusing
+
+**Context:** export refused both kinds of drift. A changed `article.md` moves
+line citations but leaves the exported values as the run extracted them, and
+the review app already only warns about it. erw-lit has 18 articles whose text
+was re-converted after their runs, which would have blocked every export.
+
+**Decision:** export refuses only schema drift, where a value can lose its CSV
+column. Source drift prints a warning with the count and is recorded in the
+audit sidecar's `drift` key. `--allow-stale` now covers schema drift only.
+Amends "Export refuses stale runs unless told otherwise" (2026-11-05).

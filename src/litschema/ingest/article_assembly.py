@@ -77,16 +77,37 @@ def _existing_sha(files: ArticleFiles) -> str | None:
     return str(sha) if sha else None
 
 
+def _content_index(cfg: LitSchemaConfig, existing_ids: set[str]) -> dict[str, str]:
+    """``file_sha256 -> article_id`` for every assembled article.
+
+    The same PDF arrives under more than one name: a publisher download, a
+    Zotero rename, a colleague's copy. Matching on the slug alone made each
+    name a new article, and a meta-analysis counted one paper twice.
+    """
+    index: dict[str, str] = {}
+    for article_id in sorted(existing_ids):
+        sha = _existing_sha(article_files(cfg, article_id))
+        if sha:
+            index.setdefault(sha, article_id)
+    return index
+
+
 def _resolve_article_id(
-    cfg: LitSchemaConfig, slug: str, sha: str, existing_ids: set[str]
+    cfg: LitSchemaConfig,
+    slug: str,
+    sha: str,
+    existing_ids: set[str],
+    content_index: dict[str, str] | None = None,
 ) -> tuple[str, bool]:
     """Return ``(article_id, already_assembled)`` for a PDF.
 
-    ``already_assembled`` is True when an article folder with the chosen id
-    already holds a PDF with the same content hash (an idempotent re-drop).
-    Slug collisions on *different* content are disambiguated with a short
+    ``already_assembled`` is True when an article already holds a PDF with the
+    same content hash: the same file re-dropped, under its old name or a new
+    one. Slug collisions on *different* content are disambiguated with a short
     content-hash suffix.
     """
+    if content_index is not None and sha in content_index:
+        return content_index[sha], True
     if slug not in existing_ids:
         return slug, False
     if _existing_sha(article_files(cfg, slug)) == sha:
@@ -114,12 +135,17 @@ def _archive_processed_inbox_pdf(pdf_path: Path) -> None:
 
 
 def _process_inbox_pdf(
-    cfg: LitSchemaConfig, pdf_path: Path, existing_ids: set[str]
+    cfg: LitSchemaConfig,
+    pdf_path: Path,
+    existing_ids: set[str],
+    content_index: dict[str, str] | None = None,
 ) -> tuple[str, str]:
     """Move one inbox PDF into its article folder. Returns ``(result, id)``."""
     sha = _sha256(pdf_path)
     slug = _slugify(pdf_path.stem)
-    article_id, already_assembled = _resolve_article_id(cfg, slug, sha, existing_ids)
+    article_id, already_assembled = _resolve_article_id(
+        cfg, slug, sha, existing_ids, content_index
+    )
     files = article_files(cfg, article_id)
 
     if already_assembled:
@@ -142,6 +168,8 @@ def _process_inbox_pdf(
         files, {"title": title_from_filename(pdf_path.stem)}, source="auto"
     )
     existing_ids.add(article_id)
+    if content_index is not None:
+        content_index.setdefault(sha, article_id)
     return "assembled", article_id
 
 
@@ -149,6 +177,7 @@ def assemble(cfg: LitSchemaConfig, reporter: AssembleReporter | None = None) -> 
     """Move every inbox PDF into a per-article folder. Offline and idempotent."""
     cfg.article_store_dir.mkdir(parents=True, exist_ok=True)
     existing_ids = {path.name for path in cfg.article_store_dir.glob("*") if path.is_dir()}
+    content_index = _content_index(cfg, existing_ids)
 
     stats = {"inbox_pdfs": 0, "assembled": 0, "already_assembled": 0, "errors": 0}
 
@@ -159,7 +188,7 @@ def assemble(cfg: LitSchemaConfig, reporter: AssembleReporter | None = None) -> 
         stats["inbox_pdfs"] += 1
         _report(reporter, "pdf_start", path=pdf_path, index=index, total=len(inbox_pdfs))
         try:
-            result, article_id = _process_inbox_pdf(cfg, pdf_path, existing_ids)
+            result, article_id = _process_inbox_pdf(cfg, pdf_path, existing_ids, content_index)
         except KeyboardInterrupt as exc:
             raise AssemblyInterrupted(pdf_path) from exc
         except Exception as exc:

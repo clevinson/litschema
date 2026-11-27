@@ -170,6 +170,17 @@ could retype an edit. Both conditions therefore block an override on the write
 path (see Document review), and neither blocks verification, which asserts what
 the extractor already produced and needs no schema at all.
 
+**Source drift** is the third condition, and independent of the schema. The
+run records the hash of the `article.md` it cited (`inputs.prepared_text`).
+WHEN the article's current `article.md` hashes differently, THEN the API sets
+`source_drift` to the reason on the article's listing entry and on the
+`/api/markdown/{id}` and `/api/rendered/{id}` payloads, and the client marks
+the article in the overview and shows a notice above the document before the
+reviewer reads a line number. Counts are unaffected and nothing is blocked:
+the values are what they were, only the lines they cite may have moved. An
+article with no `article.md`, no active run, or a run without a text hash
+reports `null`.
+
 For a valid active run with a resolved schema, it returns:
 
 - `field_paths`: canonical leaf paths in the raw active extraction plus the
@@ -379,7 +390,9 @@ exactly when a reviewer most needs it.
 The target read surface retains `GET /api/articles`, `/api/markdown/{id}`,
 `/api/pdf/{id}`, `/api/schema/fields`, and optional ORCID lookup.
 
-`GET /api/rendered/{id}` returns `{text_sha256, blocks}`. Each block has a
+`GET /api/rendered/{id}` returns `{text_sha256, blocks, source_drift}`, and
+`/api/markdown/{id}` returns `{markdown, source_drift}`; `source_drift` is the
+reason the text is not what the active run cited, or `null`. Each block has a
 `kind`, 1-based inclusive `lines`, and sanitized `html`; table rows carry
 `data-line` with their source line. Figure blocks carry `src` and, when the
 preceding paragraph reads as a caption, `caption_html` and `caption_lines`.
@@ -463,6 +476,9 @@ Implementation coverage must replace brittle source-substring assertions with:
 - exact active-run schema selection, unavailable-schema errors, and review
   metric formulas for no-run, zero-leaf, verified, overridden, parent-covered,
   terminal-container, invalid-path, and corrupt-review cases;
+- `source_drift` reported on the listing, markdown and rendered routes once
+  `article.md` changes after the run, with counts intact, and `null` without a
+  run or without text;
 - document selection, raw/effective values, inherited parent coverage,
   replace/remove overrides, notes, and no-active-run placeholders;
 - server-recomputed summaries after review writes, explicit refresh after CLI
